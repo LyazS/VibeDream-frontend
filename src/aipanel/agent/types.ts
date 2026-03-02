@@ -3,6 +3,7 @@ export enum ChatMessageType {
   USER = 'user',
   ASSISTANT = 'assistant', // 直接对应后端的 ASSISTANT
   AUTO_REPLY = 'auto_reply',
+  TOOL = 'tool', // 工具结果消息
 }
 
 // 用户消息内容类型
@@ -45,8 +46,17 @@ export interface ChatMessageAssistant {
   timestamp: string // ISO格式时间字符串
 }
 
+// 工具结果消息（对应后端的 ChatMessageTool）
+export interface ChatMessageTool {
+  id: string
+  type: ChatMessageType.TOOL
+  tool_call_id: string // 对应的工具调用 ID
+  content: string // 工具执行结果
+  timestamp: string // ISO格式时间字符串
+}
+
 // 统一的消息类型（联合类型，对应后端的 ChatMessage）
-export type ChatMessage = ChatMessageUser | ChatMessageAssistant
+export type ChatMessage = ChatMessageUser | ChatMessageAssistant | ChatMessageTool
 
 // 类型保护函数：判断消息是否为用户消息（包括自动回复）
 export function isUserMessage(message: ChatMessage): message is ChatMessageUser {
@@ -56,6 +66,11 @@ export function isUserMessage(message: ChatMessage): message is ChatMessageUser 
 // 类型保护函数：判断消息是否为助手消息
 export function isAssistantMessage(message: ChatMessage): message is ChatMessageAssistant {
   return message.type === ChatMessageType.ASSISTANT
+}
+
+// 类型保护函数：判断消息是否为工具结果消息
+export function isToolMessage(message: ChatMessage): message is ChatMessageTool {
+  return message.type === ChatMessageType.TOOL
 }
 
 // 类型保护函数：判断消息是否为纯用户消息（非自动回复）

@@ -12,6 +12,9 @@ const API_BASE_URL = import.meta.env.VITE_API_BASE_URL
 const DEBUG_FETCH = true
 const debugPrefix = '[TOKEN]'
 
+// 临时跳过认证开关（测试时设为 true）
+const SKIP_AUTH = true
+
 // 统一的fetch客户端
 export class FetchClient {
   private baseURL: string
@@ -29,8 +32,8 @@ export class FetchClient {
    * 发送GET请求
    */
   async get<T = any>(url: string, config: RequestConfig = {}): Promise<ApiResponse<T>> {
-    // 如果是API请求且不是认证相关的请求，使用带认证的方法
-    if (this.isApiRequest(url) && !this.isAuthRequest(url)) {
+    // 如果是API请求且不是认证相关的请求，使用带认证的方法（除非跳过认证）
+    if (!SKIP_AUTH && this.isApiRequest(url) && !this.isAuthRequest(url)) {
       return this.requestWithAuth<T>(url, { ...config, method: 'GET' })
     }
     return this.request<T>(url, { ...config, method: 'GET' })
@@ -44,8 +47,8 @@ export class FetchClient {
     data?: any,
     config: RequestConfig = {},
   ): Promise<ApiResponse<T>> {
-    // 如果是API请求且不是认证相关的请求，使用带认证的方法
-    if (this.isApiRequest(url) && !this.isAuthRequest(url)) {
+    // 如果是API请求且不是认证相关的请求，使用带认证的方法（除非跳过认证）
+    if (!SKIP_AUTH && this.isApiRequest(url) && !this.isAuthRequest(url)) {
       return this.requestWithAuth<T>(url, {
         ...config,
         method: 'POST',
@@ -63,8 +66,8 @@ export class FetchClient {
    * 发送DELETE请求
    */
   async delete<T = any>(url: string, config: RequestConfig = {}): Promise<ApiResponse<T>> {
-    // 如果是API请求且不是认证相关的请求，使用带认证的方法
-    if (this.isApiRequest(url) && !this.isAuthRequest(url)) {
+    // 如果是API请求且不是认证相关的请求，使用带认证的方法（除非跳过认证）
+    if (!SKIP_AUTH && this.isApiRequest(url) && !this.isAuthRequest(url)) {
       return this.requestWithAuth<T>(url, { ...config, method: 'DELETE' })
     }
     return this.request<T>(url, { ...config, method: 'DELETE' })
@@ -111,12 +114,12 @@ export class FetchClient {
   async stream<T>(
     method: 'GET' | 'POST',
     url: string,
-    onMessage: (message: T) => void,
+    onMessage: (message: T) => Promise<boolean | void> | boolean | void,
     data?: any,
     config: RequestConfig = {},
   ): Promise<void> {
-    // 如果是API请求且不是认证相关的请求，使用带认证的方法
-    if (this.isApiRequest(url) && !this.isAuthRequest(url)) {
+    // 如果是API请求且不是认证相关的请求，使用带认证的方法（除非跳过认证）
+    if (!SKIP_AUTH && this.isApiRequest(url) && !this.isAuthRequest(url)) {
       return this.streamWithAuth<T>(method, url, onMessage, data, config)
     }
     return this.streamWithoutAuth<T>(method, url, onMessage, data, config)
@@ -128,7 +131,7 @@ export class FetchClient {
   private async streamWithAuth<T>(
     method: 'GET' | 'POST',
     url: string,
-    onMessage: (message: T) => void,
+    onMessage: (message: T) => Promise<boolean | void> | boolean | void,
     data?: any,
     config: RequestConfig = {},
   ): Promise<void> {
@@ -218,7 +221,7 @@ export class FetchClient {
   private async streamWithoutAuth<T>(
     method: 'GET' | 'POST',
     url: string,
-    onMessage: (message: T) => boolean | void,
+    onMessage: (message: T) => Promise<boolean | void> | boolean | void,
     data?: any,
     config: RequestConfig = {},
   ): Promise<void> {
@@ -265,7 +268,7 @@ export class FetchClient {
 
         // 处理每个JSON消息
         for (const message of messages) {
-          const shouldStop = onMessage(message)
+          const shouldStop = await onMessage(message)
           if (shouldStop) {
             console.log('[FetchClient] 收到停止信号，提前退出流读取')
             return

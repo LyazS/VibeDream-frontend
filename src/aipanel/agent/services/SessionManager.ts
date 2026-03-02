@@ -12,6 +12,7 @@ import type {
   ChatMessage,
   ChatMessageUser,
   ChatMessageAssistant,
+  ChatMessageTool,
   ChatMessageUserContent,
   ChatMessageAssistantContent,
 } from '@/aipanel/agent/types'
@@ -20,8 +21,11 @@ import {
   ChatMessageUserContentType,
   ChatMessageAssistantContentType,
   isAssistantMessage,
+  isUserMessage,
+  isToolMessage,
 } from '@/aipanel/agent/types'
 import { useEditSDK } from '@/aipanel/agent/composables/useEditSDK'
+import { toolRegistry, registerBuiltinTools } from '@/aipanel/agent/tools'
 
 export interface SessionInfo {
   sessionId: string
@@ -52,6 +56,8 @@ export class SessionManager {
     // 初始化用户脚本执行函数引用
     const { executeUserScript } = useEditSDK()
     this.executeUserScript = executeUserScript
+    // 注册内置工具
+    registerBuiltinTools()
   }
 
   /**
@@ -115,17 +121,24 @@ export class SessionManager {
 
   /**
    * 处理流式JSON消息
+   * 返回 ChatMessage 表示需要继续处理（如工具结果需要发送回后端）
    */
   private async handleStreamMessage(message: StreamChunk): Promise<ChatMessage | undefined> {
     switch (message.type) {
       case StreamChunkType.TEXT:
         await this.handleTextMessage(message.content)
         break
+      case StreamChunkType.TOOL_CALL:
+        return await this.handleToolCallMessage(message)
+      case StreamChunkType.TOOL_RESULT:
+        // 后端工具执行结果，前端忽略
+        break
       case StreamChunkType.ERROR:
         await this.handleErrorMessage(message.content)
         break
-      case StreamChunkType.TOOL_USE:
-        return await this.handleToolMessage(message.content)
+      case StreamChunkType.DONE:
+        // 完成标记，不需要处理
+        break
       default:
         console.warn('未知的消息类型:', message.type)
         break
@@ -154,30 +167,60 @@ export class SessionManager {
     }
   }
   /**
-   * 处理工具消息
+   * 处理工具调用消息
+   * 判断是前端工具还是后端工具，执行相应操作
    */
-  private async handleToolMessage(content: string): Promise<ChatMessageUser> {
-    console.log('收到工具调用消息:', content)
-    // 实时更新AI消息内容，添加工具调用片段
-    const currentMessage = this.messages.value.find((msg) => msg.id === this.currentAIMessageId) as
-      | ChatMessageAssistant
-      | undefined
-    if (currentMessage && isAssistantMessage(currentMessage)) {
-      currentMessage.content.push({
-        type: ChatMessageAssistantContentType.TOOL_USE,
-        content: content,
-      })
+  private async handleToolCallMessage(message: StreamChunk): Promise<ChatMessageTool | undefined> {
+    const { tool_name, tool_args, tool_call_id, is_frontend_tool } = message
+
+    if (!tool_name) {
+      console.warn('工具调用消息缺少 tool_name')
+      return undefined
     }
-    return {
-      id: generateChatMessageId(ChatMessageType.AUTO_REPLY),
-      type: ChatMessageType.AUTO_REPLY,
-      content: [
-        {
-          type: ChatMessageUserContentType.TEXT,
-          content: '场景里有山有水，天空万里无云，是一个风景区',
-        },
-      ],
-      timestamp: new Date().toISOString(), // 使用ISO格式与后端保持一致
+
+    console.log(`收到工具调用: ${tool_name}`, tool_args, `is_frontend_tool: ${is_frontend_tool}`)
+
+    // 显示工具调用信息（让用户知道调用了工具）
+    this.appendAssistantContent({
+      type: ChatMessageAssistantContentType.TOOL_USE,
+      content: `${tool_name}(${JSON.stringify(tool_args || {})})`,
+    })
+
+    // 判断是否为前端工具
+    if (is_frontend_tool && toolRegistry.has(tool_name)) {
+      // 执行前端工具
+      const result = await toolRegistry.execute(tool_name, tool_args || {})
+
+      // 返回工具结果消息，用于继续对话
+      const toolResultMessage: ChatMessageTool = {
+        id: generateChatMessageId(ChatMessageType.TOOL),
+        type: ChatMessageType.TOOL,
+        tool_call_id: tool_call_id || '',
+        content: result.success
+          ? result.result
+          : `工具执行失败: ${result.error}`,
+        timestamp: new Date().toISOString(),
+      }
+      
+      console.log(`前端工具执行完成: ${tool_name}`, toolResultMessage.content)
+      return toolResultMessage
+    }
+
+    // 后端工具，不需要前端执行
+    console.log(`工具 ${tool_name} 为后端工具，等待后端执行结果`)
+    return undefined
+  }
+
+  /**
+   * 向当前 AI 消息追加内容
+   */
+  private appendAssistantContent(content: ChatMessageAssistantContent): void {
+    const currentMessage = this.messages.value.find(
+      (msg) => msg.id === this.currentAIMessageId
+    ) as ChatMessageAssistant | undefined
+
+    if (currentMessage && isAssistantMessage(currentMessage)) {
+      currentMessage.content.push(content)
     }
   }
   /**
@@ -224,25 +267,42 @@ export class SessionManager {
     this.isSending.value = true
     try {
       let needContinue = true
-      let sendMsg = message
+      let sendMsg: string | undefined = message
       let sendType = ChatMessageType.USER
+      let toolCallId: string | undefined = undefined
+      
       while (needContinue) {
         this.currentAbortController = new AbortController()
 
-        // 添加用户消息
-        const userMessage: ChatMessageUser = {
-          id: generateChatMessageId(sendType),
-          type: sendType as ChatMessageType.USER | ChatMessageType.AUTO_REPLY,
-          content: [
-            {
-              type: ChatMessageUserContentType.TEXT,
-              content: sendMsg,
-            },
-          ],
-          timestamp: new Date().toISOString(), // 使用ISO格式与后端保持一致
+        // 构建要发送的消息
+        let messageToSend: ChatMessageUser | ChatMessageTool
+        
+        if (sendType === ChatMessageType.TOOL && toolCallId !== undefined) {
+          // 工具结果消息
+          messageToSend = {
+            id: generateChatMessageId(ChatMessageType.TOOL),
+            type: ChatMessageType.TOOL,
+            tool_call_id: toolCallId,
+            content: sendMsg || '',
+            timestamp: new Date().toISOString(),
+          }
+        } else {
+          // 用户消息
+          messageToSend = {
+            id: generateChatMessageId(sendType as ChatMessageType.USER | ChatMessageType.AUTO_REPLY),
+            type: sendType as ChatMessageType.USER | ChatMessageType.AUTO_REPLY,
+            content: [
+              {
+                type: ChatMessageUserContentType.TEXT,
+                content: sendMsg || '',
+              },
+            ],
+            timestamp: new Date().toISOString(),
+          }
         }
+        
         if (sendType === ChatMessageType.USER) {
-          this.messages.value.push(userMessage)
+          this.messages.value.push(messageToSend as ChatMessageUser)
 
           // 添加助手消息占位符（初始为空内容）
           this.currentAIMessageId = generateChatMessageId('assistant')
@@ -256,29 +316,39 @@ export class SessionManager {
         }
 
         console.log(`发送消息到会话: ${sessionId}`)
-        console.log(`用户消息: `, userMessage.content)
+        console.log(`消息类型: ${sendType}`, messageToSend)
 
-        let continueMsg: ChatMessage | undefined
+        // 使用独立变量保存工具调用消息，避免被后续消息（如 DONE）覆盖
+        let pendingToolMessage: ChatMessageTool | undefined
+
         // 使用fetch客户端处理流式响应
         await fetchClient.stream<StreamChunk>(
           'POST',
           API_ENDPOINTS.sendMessage,
-          async (message: StreamChunk) => {
+          async (msg: StreamChunk) => {
             // 处理流式JSON消息
-            continueMsg = await this.handleStreamMessage(message)
+            const result = await this.handleStreamMessage(msg)
 
-            console.log('收到流式JSON消息:', message)
+            console.log('收到流式JSON消息:', msg)
+
+            // 只有工具调用消息才保存，避免被后续消息覆盖
+            if (result && isToolMessage(result)) {
+              pendingToolMessage = result
+            }
           },
           {
             session_id: sessionId,
-            message: userMessage, // 发送 ChatMessageUser 对象
+            message: messageToSend,
           },
           { signal: this.currentAbortController!.signal },
         )
-        if (continueMsg) {
+
+        // 流结束后，使用保存的工具消息
+        if (pendingToolMessage) {
           this.currentAbortController = null
-          sendType = continueMsg.type
-          sendMsg = continueMsg.content[0].content
+          sendType = ChatMessageType.TOOL
+          sendMsg = pendingToolMessage.content
+          toolCallId = pendingToolMessage.tool_call_id
         } else {
           needContinue = false
         }

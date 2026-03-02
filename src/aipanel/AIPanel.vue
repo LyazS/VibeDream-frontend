@@ -5,7 +5,7 @@
         <component :is="IconComponents.SPARKLING" size="16px" style="padding: 0" />
       </template>
       <n-tab name="ai-generate" :tab="t('aiPanel.aiGenerate')"> </n-tab>
-      <!-- <n-tab name="agent" :tab="t('aiPanel.agent')"> </n-tab> -->
+      <n-tab name="agent" :tab="t('aiPanel.agent')"> </n-tab>
       <n-tab v-if="unifiedStore.canShowCharacterEditor" name="character-editor" :tab="t('aiPanel.characterEditor')"> </n-tab>
       <template #suffix>
         <div class="header-buttons">
