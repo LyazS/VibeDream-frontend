@@ -74,10 +74,10 @@ export interface ASRRequestConfig {
 // ==================== 数据源接口定义 ====================
 
 /**
- * 后端 TaskResultData 类型
- * 对应 backend/schemas/tasks.py 中的 TaskResultData
+ * ASR 任务结果数据类型
+ * ASR 专用的任务结果数据结构
  */
-export interface TaskResultData {
+export interface ASRTaskResultData {
   url: string
   bltcy_task_id?: string
   sora2_username?: string
@@ -91,7 +91,7 @@ export interface BaseASRSourceData {
   readonly type: 'asr'
   asrTaskId: string // ASR 任务 ID
   requestConfig: ASRRequestConfig // 请求配置
-  resultData?: TaskResultData // 识别结果数据（与 AIGenerationProcessor 保持一致）
+  resultData?: ASRTaskResultData // 识别结果数据（ASR 专用类型）
   taskStatus: ASRTaskStatus // 任务状态
   sourceTimelineItemId?: string // 来源时间轴项目 ID
   placeholderTimelineItemId?: string // 占位符时间轴项目 ID（loading 状态的文本 item）
@@ -159,17 +159,6 @@ export type ASRStreamEvent = ASRProgressEvent | ASRFinalEvent | ASRErrorEvent
 // ==================== 后端 API 类型 ====================
 
 /**
- * 后端 TaskResultData 类型
- * 对应 backend/schemas/tasks.py 中的 TaskResultData
- */
-export interface TaskResultData {
-  url: string
-  bltcy_task_id?: string
-  sora2_username?: string
-  asr_result?: ASRQueryResponse // ASR 结果存储在 asr_result 字段中
-}
-
-/**
  * 后端 TaskStreamEvent 类型
  * 对应 backend/schemas/tasks.py 中的 TaskStreamEvent
  */
@@ -180,7 +169,7 @@ export interface BackendTaskStreamEvent {
   progress?: number
   estimated_time?: number
   content_type?: string
-  result_data?: TaskResultData
+  result_data?: ASRTaskResultData
   message?: string
   timestamp: string
 }

@@ -24,7 +24,7 @@ import { splitAllUtterancesToSubtitles, type SplitSubtitle } from '@/core/utils/
 import { ASRStreamEventType, ASRTaskStatus } from './types'
 import type {
   BackendTaskStreamEvent,
-  TaskResultData,
+  ASRTaskResultData,
   ASRQueryResponse,
   ASRRequestConfig,
 } from './types'
@@ -285,7 +285,7 @@ export class ASRProcessor extends DataSourceProcessor {
    * @returns 识别结果
    */
   private async handleFinalResult(
-    resultData: TaskResultData,
+    resultData: ASRTaskResultData,
     source: ASRSourceData,
   ): Promise<ASRQueryResponse> {
     // 保存 resultData 到 source（与 AIGenerationProcessor 保持一致）

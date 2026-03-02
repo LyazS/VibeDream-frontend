@@ -6,12 +6,11 @@
 // 导出类型定义
 export * from './types'
 
-// 导出数据源工厂和查询函数
+// 导出数据源工厂和类型守卫
 export {
   type ASRSourceData,
   ASRSourceFactory,
   ASRTypeGuards,
-  ASRQueries,
   extractASRSourceData,
 } from './ASRSource'
 

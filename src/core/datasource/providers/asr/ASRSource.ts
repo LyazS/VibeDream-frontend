@@ -1,5 +1,5 @@
 /**
- * ASR 数据源工厂函数和查询函数
+ * ASR 数据源工厂函数
  * 基于"核心数据与行为分离"的重构方案
  */
 
@@ -13,14 +13,8 @@ import { RuntimeStateFactory, SourceOrigin } from '@/core/datasource/core/BaseDa
 // 导出所有类型定义
 export * from './types'
 
-// 导入枚举（作为值）和类型
-import { ASRTaskStatus } from './types'
-
-import type {
-  ASRRequestConfig,
-  ASRUtterance,
-  BaseASRSourceData,
-} from './types'
+// 导入类型
+import type { BaseASRSourceData } from './types'
 
 // ==================== 数据源接口定义 ====================
 
@@ -59,76 +53,6 @@ export const ASRSourceFactory = {
 export const ASRTypeGuards = {
   isASRSource(source: BaseDataSourceData): source is ASRSourceData {
     return source.type === 'asr'
-  },
-}
-
-// ==================== ASR 特定查询函数 ====================
-
-/**
- * ASR 特定查询函数
- */
-export const ASRQueries = {
-  /**
-   * 获取 ASR 任务 ID
-   */
-  getASRTaskId(source: BaseDataSourceData): string | null {
-    return ASRTypeGuards.isASRSource(source) ? source.asrTaskId : null
-  },
-
-  /**
-   * 获取任务状态
-   */
-  getTaskStatus(source: ASRSourceData): ASRTaskStatus {
-    return source.taskStatus
-  },
-
-  /**
-   * 获取请求配置
-   */
-  getRequestConfig(source: ASRSourceData): ASRRequestConfig {
-    return source.requestConfig
-  },
-
-  /**
-   * 获取识别结果文本
-   */
-  getResultText(source: ASRSourceData): string | null {
-    return source.resultData?.result?.text || null
-  },
-
-  /**
-   * 获取分句信息
-   */
-  getUtterances(source: ASRSourceData): ASRUtterance[] {
-    return source.resultData?.result?.utterances || []
-  },
-
-  /**
-   * 获取音频时长
-   */
-  getAudioDuration(source: ASRSourceData): number | null {
-    return source.resultData?.audio_info?.duration || null
-  },
-
-  /**
-   * 检查任务是否完成
-   */
-  isTaskCompleted(source: ASRSourceData): boolean {
-    return source.taskStatus === ASRTaskStatus.COMPLETED
-  },
-
-  /**
-   * 检查任务是否失败
-   */
-  isTaskFailed(source: ASRSourceData): boolean {
-    return source.taskStatus === ASRTaskStatus.FAILED
-  },
-
-  /**
-   * 检查任务是否正在处理
-   */
-  isTaskProcessing(source: ASRSourceData): boolean {
-    return source.taskStatus === ASRTaskStatus.PROCESSING || source.taskStatus === ASRTaskStatus.PENDING
   },
 }
 
