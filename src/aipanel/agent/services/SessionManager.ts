@@ -2,11 +2,7 @@ import { ref } from 'vue'
 import { fetchClient } from '@/utils/fetchClient'
 import { generateChatMessageId } from '@/core/utils/idGenerator'
 import { API_ENDPOINTS } from '@/aipanel/agent/services/apiTypes'
-import type {
-  CreateSessionResponse,
-  AllSessionsResponse,
-  SessionSummary,
-} from '@/aipanel/agent/services/apiTypes'
+import type { CreateSessionResponse } from '@/aipanel/agent/services/apiTypes'
 import { StreamChunkType, type StreamChunk } from '@/utils/streamTypes'
 import type {
   ChatMessage,
@@ -14,6 +10,7 @@ import type {
   ChatMessageAssistant,
   ChatMessageTool,
   ChatMessageAssistantContent,
+  SessionSummary,
 } from '@/aipanel/agent/types'
 import {
   ChatMessageType,

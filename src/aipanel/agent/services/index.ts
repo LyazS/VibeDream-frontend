@@ -7,9 +7,6 @@ export { API_ENDPOINTS } from './apiTypes'
 export type {
   CreateSessionResponse,
   SendMessageRequest,
-  SessionHistoryResponse,
-  SessionSummary,
-  AllSessionsResponse,
   ApiError,
 } from './apiTypes'
 
