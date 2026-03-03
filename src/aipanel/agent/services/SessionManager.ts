@@ -25,11 +25,22 @@ import {
 } from '@/aipanel/agent/types'
 import { useEditSDK } from '@/aipanel/agent/composables/useEditSDK'
 import { toolRegistry, registerBuiltinTools } from '@/aipanel/agent/tools'
+import { indexedDBService } from '@/core/storage/IndexedDBService'
 
 export interface SessionInfo {
   sessionId: string
   createdAt: Date
   lastActivity: Date
+}
+
+/**
+ * 会话数据（存储在 IndexedDB 中）
+ */
+interface SessionData {
+  sessionId: string
+  messages: ChatMessage[]
+  createdAt: string
+  updatedAt: string
 }
 
 export class SessionManager {
@@ -92,7 +103,12 @@ export class SessionManager {
   async deleteSession(sessionId: string): Promise<void> {
     try {
       console.log(`删除会话: ${sessionId}`)
-      await fetchClient.delete(API_ENDPOINTS.deleteSession(sessionId))
+
+      // 删除本地存储
+      await this.deleteSessionFromDB(sessionId)
+
+      // 可选：通知后端删除（如果需要）
+      // await fetchClient.delete(API_ENDPOINTS.deleteSession(sessionId))
 
       // 如果删除的是当前会话，清空当前会话ID
       if (this.currentSessionId.value === sessionId) {
@@ -337,6 +353,10 @@ export class SessionManager {
       // 响应完成
       console.log('AI响应完成')
       this.isSending.value = false
+
+      // 保存会话到 IndexedDB
+      await this.saveSessionToDB()
+      console.log('会话已保存到本地存储')
     } catch (error) {
       console.error('发送消息失败:', error)
 
@@ -361,19 +381,17 @@ export class SessionManager {
       // 设置当前会话ID
       this.currentSessionId.value = sessionId
 
-      console.log(`获取会话历史: ${sessionId}`)
-      const response = await fetchClient.get<ChatMessage[]>(API_ENDPOINTS.getHistory(sessionId))
-      const messages = response.data
-      console.log(`成功获取会话历史: ${messages.length} 条消息`)
+      console.log(`从本地存储恢复会话: ${sessionId}`)
+      const sessionData = await this.getSessionFromDB(sessionId)
+
+      if (!sessionData) {
+        throw new Error('会话不存在')
+      }
 
       // 更新消息列表
-      this.messages.value = []
+      this.messages.value = sessionData.messages
 
-      // 后端现在直接返回 ChatMessageUser 和 ChatMessageAssistant 类型
-      // 时间戳已经是ISO格式，无需转换
-      this.messages.value.push(...messages)
-
-      console.log(`会话恢复成功: ${sessionId}`)
+      console.log(`会话恢复成功: ${sessionId}, ${sessionData.messages.length} 条消息`)
     } catch (error) {
       console.error(`恢复会话失败: ${sessionId}`, error)
       this.messages.value = []
@@ -386,17 +404,98 @@ export class SessionManager {
    */
   async getAllSessions(): Promise<SessionSummary[]> {
     try {
-      console.log('获取所有会话列表...')
-
-      const response = await fetchClient.get<AllSessionsResponse>(API_ENDPOINTS.getAllSessions)
-      const sessionsData = response.data
-
-      console.log(`成功获取会话列表: ${sessionsData.total_count} 个会话`)
-      return sessionsData.sessions
+      console.log('从本地存储获取会话列表...')
+      const summaries = await this.getAllSessionsFromDB()
+      console.log(`成功获取会话列表: ${summaries.length} 个会话`)
+      return summaries
     } catch (error) {
       console.error('获取会话列表失败:', error)
       throw new Error(`获取会话列表失败: ${error instanceof Error ? error.message : '未知错误'}`)
     }
+  }
+
+  // ==================== IndexedDB 操作方法 ====================
+
+  /**
+   * 保存会话（覆盖式）
+   */
+  private async saveSessionToDB(): Promise<void> {
+    if (!this.currentSessionId.value) return
+
+    const sessionId = this.currentSessionId.value
+
+    // 获取现有会话数据（保留 createdAt）
+    const existing = await this.getSessionFromDB(sessionId)
+    const now = new Date().toISOString()
+
+    // 将 Vue 响应式对象转换为纯 JSON 对象，以便 IndexedDB 可以克隆
+    const plainMessages = JSON.parse(JSON.stringify(this.messages.value)) as ChatMessage[]
+
+    const sessionData: SessionData = {
+      sessionId,
+      messages: plainMessages,
+      createdAt: existing?.createdAt || now,
+      updatedAt: now,
+    }
+
+    await indexedDBService.transaction('sessions', 'readwrite', (store) => store.put(sessionData))
+  }
+
+  /**
+   * 获取会话
+   */
+  private async getSessionFromDB(sessionId: string): Promise<SessionData | null> {
+    const result = await indexedDBService.transaction('sessions', 'readonly', (store) =>
+      store.get(sessionId),
+    )
+    return result || null
+  }
+
+  /**
+   * 获取所有会话摘要
+   */
+  private async getAllSessionsFromDB(): Promise<SessionSummary[]> {
+    const sessions = (await indexedDBService.transaction('sessions', 'readonly', (store) =>
+      store.getAll(),
+    )) as SessionData[]
+
+    const summaries: SessionSummary[] = sessions.map((s) => ({
+      session_id: s.sessionId,
+      created_at: s.createdAt,
+      updated_at: s.updatedAt,
+      message_count: s.messages.length,
+      preview_text: this.getPreviewText(s.messages),
+    }))
+
+    // 按更新时间倒序排列
+    summaries.sort(
+      (a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime(),
+    )
+    return summaries
+  }
+
+  /**
+   * 获取消息预览文本（第一条用户消息）
+   */
+  private getPreviewText(messages: ChatMessage[]): string {
+    if (messages.length === 0) return ''
+
+    // 找到第一条用户消息
+    const firstUserMessage = messages.find((msg) => isUserMessage(msg))
+    if (!firstUserMessage) return ''
+
+    return firstUserMessage.content
+      .filter((c) => c.type === ChatMessageUserContentType.TEXT)
+      .map((c) => c.content)
+      .join('')
+      .slice(0, 100)
+  }
+
+  /**
+   * 删除会话（从本地存储）
+   */
+  private async deleteSessionFromDB(sessionId: string): Promise<void> {
+    await indexedDBService.transaction('sessions', 'readwrite', (store) => store.delete(sessionId))
   }
 }
 

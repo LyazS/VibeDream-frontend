@@ -33,7 +33,7 @@
       <GeneratePanel />
     </div>
     <div v-show="unifiedStore.aiPanelActiveTab === 'agent'" style="flex: 1; display: flex; flex-direction: column; overflow: hidden;">
-      <AgentPanel :showHistory="showHistory" />
+      <AgentPanel v-model:showHistory="showHistory" />
     </div>
     <div v-show="unifiedStore.aiPanelActiveTab === 'character-editor'" style="flex: 1; display: flex; flex-direction: column; overflow: hidden;">
       <CharacterEditor />
@@ -78,6 +78,8 @@ onUnmounted(() => {
 // 处理新建聊天 - 只清空消息列表，不创建新会话
 const handleNewChat = async () => {
   try {
+    // 关闭历史记录面板
+    showHistory.value = false
     // 只清空当前会话的消息，不创建新会话
     SESSION_MANAGER.clearCurrentSession()
     console.log('消息列表已清空，准备开始新对话')

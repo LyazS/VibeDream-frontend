@@ -2,6 +2,7 @@ import type { IFileSystemAdapter, PermissionCheckResult, FileSystemEntry } from 
 import type { WorkspaceInfo } from '../core/types'
 import { FileSystemError } from '../errors/FileSystemError'
 import { ErrorCode } from '../errors/ErrorCodes'
+import { indexedDBService } from '@/core/storage/IndexedDBService'
 
 /**
  * File System Access API 适配器（内置权限管理）
@@ -10,8 +11,6 @@ import { ErrorCode } from '../errors/ErrorCodes'
 export class FileSystemAccessAdapter implements IFileSystemAdapter {
   private workspaceHandle: FileSystemDirectoryHandle | null = null
   private readonly STORAGE_KEY = 'workspace_directory_handle'
-  private readonly DB_NAME = 'VideoEditorDB'
-  private readonly DB_VERSION = 1
   private readonly STORE_NAME = 'handles'
 
   // ==================== 实现接口方法 ====================
@@ -376,18 +375,10 @@ export class FileSystemAccessAdapter implements IFileSystemAdapter {
     }
 
     try {
-      const db = await this.openDB()
-      const transaction = db.transaction([this.STORE_NAME], 'readonly')
-      const store = transaction.objectStore(this.STORE_NAME)
-
-      const handle = await new Promise<FileSystemDirectoryHandle | undefined>((resolve, reject) => {
-        const request = store.get(this.STORAGE_KEY)
-        request.onsuccess = () => resolve(request.result)
-        request.onerror = () => reject(request.error)
-      })
-
-      db.close()
-      return handle || null
+      const result = await indexedDBService.transaction(this.STORE_NAME, 'readonly', (store) =>
+        store.get(this.STORAGE_KEY),
+      )
+      return result || null
     } catch {
       return null
     }
@@ -401,17 +392,9 @@ export class FileSystemAccessAdapter implements IFileSystemAdapter {
       return
     }
 
-    const db = await this.openDB()
-    const transaction = db.transaction([this.STORE_NAME], 'readwrite')
-    const store = transaction.objectStore(this.STORE_NAME)
-
-    await new Promise<void>((resolve, reject) => {
-      const request = store.put(handle, this.STORAGE_KEY)
-      request.onsuccess = () => resolve()
-      request.onerror = () => reject(request.error)
-    })
-
-    db.close()
+    await indexedDBService.transaction(this.STORE_NAME, 'readwrite', (store) =>
+      store.put(handle, this.STORAGE_KEY),
+    )
   }
 
   /**
@@ -422,34 +405,9 @@ export class FileSystemAccessAdapter implements IFileSystemAdapter {
       return
     }
 
-    const db = await this.openDB()
-    const transaction = db.transaction([this.STORE_NAME], 'readwrite')
-    const store = transaction.objectStore(this.STORE_NAME)
-
-    await new Promise<void>((resolve, reject) => {
-      const request = store.delete(this.STORAGE_KEY)
-      request.onsuccess = () => resolve()
-      request.onerror = () => reject(request.error)
-    })
-
-    db.close()
-  }
-
-  /**
-   * 打开 IndexedDB
-   */
-  private openDB(): Promise<IDBDatabase> {
-    return new Promise((resolve, reject) => {
-      const request = indexedDB.open(this.DB_NAME, this.DB_VERSION)
-      request.onerror = () => reject(request.error)
-      request.onsuccess = () => resolve(request.result)
-      request.onupgradeneeded = (event) => {
-        const db = (event.target as IDBOpenDBRequest).result
-        if (!db.objectStoreNames.contains(this.STORE_NAME)) {
-          db.createObjectStore(this.STORE_NAME)
-        }
-      }
-    })
+    await indexedDBService.transaction(this.STORE_NAME, 'readwrite', (store) =>
+      store.delete(this.STORAGE_KEY),
+    )
   }
 
   // ==================== 文件系统辅助方法 ====================
