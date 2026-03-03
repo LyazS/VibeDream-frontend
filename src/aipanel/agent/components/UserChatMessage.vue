@@ -10,17 +10,18 @@
 </template>
 
 <script setup lang="ts">
-import type { ChatMessage } from '@/aipanel/agent/types'
+import type { ChatMessageUser } from '@/aipanel/agent/types'
+import { ChatMessageUserContentType } from '@/aipanel/agent/types'
 
 const props = defineProps<{
-  message: ChatMessage
+  message: ChatMessageUser
 }>()
 
 // 获取消息的文本内容（用户消息只包含文本）
 const getMessageText = () => {
   return props.message.content
-    .filter((item: any) => item.type === 'text')
-    .map((item: any) => item.content)
+    .filter((item) => item.type === ChatMessageUserContentType.TEXT)
+    .map((item) => item.content)
     .join('')
 }
 </script>

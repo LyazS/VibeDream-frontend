@@ -8,15 +8,23 @@
       <div class="message-content">
         <template v-for="(item, index) in message.content" :key="index">
           <div
-            v-if="item.type === 'text'"
+            v-if="item.type === ChatMessageAssistantContentType.TEXT"
             class="markdown-body"
             v-html="renderMarkdown(item.content)"
           ></div>
-          <div v-else-if="item.type === 'tool_use'" class="tool-component">
+          <div v-else-if="item.type === ChatMessageAssistantContentType.TOOL_USE" class="tool-component">
             <div class="status-dot"></div>
             <component :is="IconComponents.TOOLS_FILL" size="16px" class="tool-icon" />
             <span class="tool-title">工具调用</span>
             <span class="tool-params">{{ item.content }}</span>
+          </div>
+          <!-- 任务完成UI -->
+          <div v-else-if="item.type === ChatMessageAssistantContentType.TASK_COMPLETE" class="task-complete-component">
+            <div class="task-complete-header">
+              <component :is="IconComponents.SUCCESS" size="18px" class="check-icon" />
+              <span class="task-complete-title">任务完成</span>
+            </div>
+            <div class="task-complete-content markdown-body" v-html="renderMarkdown(item.content)"></div>
           </div>
         </template>
       </div>
@@ -25,9 +33,10 @@
 </template>
 
 <script setup lang="ts">
-import { computed, inject } from 'vue'
+import { inject } from 'vue'
 import 'github-markdown-css'
-import type { ChatMessage } from '../types'
+import type { ChatMessageAssistant } from '../types'
+import { ChatMessageAssistantContentType } from '../types'
 import { IconComponents } from '@/constants/iconComponents'
 
 // 注入markdown渲染函数
@@ -37,7 +46,7 @@ const renderMarkdown = inject<(content: string) => string>('renderMarkdown', (co
 })
 
 const props = defineProps<{
-  message: ChatMessage
+  message: ChatMessageAssistant
 }>()
 </script>
 
@@ -150,5 +159,41 @@ const props = defineProps<{
 .message-content > .markdown-body + .tool-component,
 .message-content > .tool-component + .markdown-body {
   margin-top: 12px;
+}
+
+/* 任务完成组件样式 */
+.task-complete-component {
+  margin: 12px 0;
+  padding: 12px 16px;
+  border-radius: 8px;
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.1) 0%, rgba(52, 211, 153, 0.05) 100%);
+  border: 1px solid rgba(16, 185, 129, 0.3);
+}
+
+.task-complete-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.check-icon {
+  color: #10b981;
+  flex-shrink: 0;
+}
+
+.task-complete-title {
+  font-weight: 600;
+  font-size: 14px;
+  color: #10b981;
+}
+
+.task-complete-content {
+  padding-left: 26px;
+  color: var(--color-text-primary);
+}
+
+.task-complete-content.markdown-body {
+  background: transparent;
 }
 </style>

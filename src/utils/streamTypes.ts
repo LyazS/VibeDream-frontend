@@ -2,9 +2,8 @@
 export enum StreamChunkType {
   TEXT = 'text',
   TOOL_CALL = 'tool_call',      // 工具调用
-  TOOL_RESULT = 'tool_result',  // 工具结果
   ERROR = 'error',
-  DONE = 'done',                // 完成标记
+  TASK_COMPLETE = 'task_complete',  // 任务完成
 }
 
 // 流式消息接口定义

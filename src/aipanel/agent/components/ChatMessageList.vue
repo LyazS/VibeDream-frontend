@@ -1,12 +1,12 @@
 <template>
   <div class="chat-messages-container" ref="messagesContainer">
     <AIChatMessage :message="welcomeMessage" />
-    <component
-      :is="getMessageComponent(message.type)"
-      v-for="message in messages"
-      :key="message.id"
-      :message="message"
-    />
+    <template v-for="message in messages" :key="message.id">
+      <UserChatMessage v-if="isUserMessage(message)" :message="message" />
+      <AIChatMessage v-else-if="isAssistantMessage(message)" :message="message" />
+    </template>
+    <!-- AI 正在思考指示器 -->
+    <ThinkingIndicator v-if="isSending" />
   </div>
 </template>
 
@@ -15,15 +15,14 @@ import { ref, nextTick, watch, provide, computed } from 'vue'
 import MarkdownIt from 'markdown-it'
 import UserChatMessage from './UserChatMessage.vue'
 import AIChatMessage from './AIChatMessage.vue'
+import ThinkingIndicator from './ThinkingIndicator.vue'
 import { SESSION_MANAGER } from '@/aipanel/agent/services'
-import { ChatMessageType, ChatMessageAssistantContentType } from '@/aipanel/agent/types'
+import { ChatMessageType, ChatMessageAssistantContentType, isUserMessage, isAssistantMessage } from '@/aipanel/agent/types'
 import type { ChatMessageAssistant } from '@/aipanel/agent/types'
 import { useAppI18n } from '@/core/composables/useI18n'
 
-// 根据消息类型返回对应的组件
-const getMessageComponent = (type: ChatMessageType) => {
-  return type === ChatMessageType.USER ? UserChatMessage : AIChatMessage
-}
+// AI 发送状态
+const isSending = computed(() => SESSION_MANAGER.isSending.value)
 
 // 创建共享的markdown-it实例
 const md = new MarkdownIt({
@@ -39,8 +38,12 @@ const renderMarkdown = (content: string) => {
 
 provide('renderMarkdown', renderMarkdown)
 
-// 直接从 SessionManager 获取消息列表
-const messages = computed(() => SESSION_MANAGER.messages.value)
+// 直接从 SessionManager 获取消息列表，过滤掉 TOOL 类型消息（内部使用）
+const messages = computed(() =>
+  SESSION_MANAGER.messages.value.filter(
+    (msg) => msg.type !== ChatMessageType.TOOL
+  )
+)
 
 // 使用国际化
 const { t } = useAppI18n()
