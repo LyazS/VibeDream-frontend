@@ -3,9 +3,8 @@ import type { ChatMessageUser } from '@/aipanel/agent/types'
 
 // API端点配置
 export const API_ENDPOINTS = {
-  createSession: '/api/chat/create-session',
-  sendMessage: '/api/chat/send-message',
-  healthCheck: '/health',
+  createSession: '/api/agent/create-session',
+  sendMessage: '/api/agent/send-message',
 } as const
 
 // API响应类型定义

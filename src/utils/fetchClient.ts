@@ -13,7 +13,7 @@ const DEBUG_FETCH = true
 const debugPrefix = '[TOKEN]'
 
 // 临时跳过认证开关（测试时设为 true）
-const SKIP_AUTH = true
+const SKIP_AUTH = false
 
 // 统一的fetch客户端
 export class FetchClient {
