@@ -8,6 +8,8 @@ import type { UnifiedTrackModule } from './UnifiedTrackModule'
 import type { UnifiedMediaModule } from './UnifiedMediaModule'
 import type { UnifiedConfigModule } from './UnifiedConfigModule'
 import type { UnifiedDirectoryModule } from './UnifiedDirectoryModule'
+import { globalMetaFileManager } from '@/core/managers/media/globalMetaFileManager'
+import type { UnifiedMediaItemData } from '@/core/mediaitem/types'
 
 /**
  * 自动保存配置
@@ -102,6 +104,122 @@ export function createUnifiedAutoSaveModule(
 
   // 监听器清理函数数组
   const unwatchFunctions: (() => void)[] = []
+
+  // ==================== MediaItem Watch 管理 ====================
+
+  /**
+   * MediaItem Watch 管理器
+   * key: mediaItemId, value: unwatch 函数
+   */
+  const mediaItemWatchers = new Map<string, () => void>()
+
+  /**
+   * 防抖保存函数
+   * key: mediaItemId, value: 防抖函数
+   */
+  const mediaItemSaveDebouncers = new Map<string, ReturnType<typeof debounce>>()
+
+  /**
+   * 为单个 mediaItem 设置 watch
+   * @param mediaItem 媒体项目
+   */
+  function setupMediaItemWatcher(mediaItem: UnifiedMediaItemData): void {
+    // 如果已经存在 watcher，先清理
+    const existingUnwatch = mediaItemWatchers.get(mediaItem.id)
+    if (existingUnwatch) {
+      existingUnwatch()
+    }
+
+    // 创建防抖保存函数
+    const debouncedSave = debounce(async () => {
+      try {
+        console.log(`💾 [AutoSave] 保存 metafile: ${mediaItem.name}`)
+        const success = await globalMetaFileManager.saveMetaFile(mediaItem)
+        if (success) {
+          console.log(`✅ [AutoSave] metafile 保存成功: ${mediaItem.name}`)
+        } else {
+          console.warn(`⚠️ [AutoSave] metafile 保存失败: ${mediaItem.name}`)
+        }
+      } catch (error) {
+        console.error(`❌ [AutoSave] metafile 保存失败: ${mediaItem.name}`, error)
+      }
+    }, 1000) // 1秒防抖
+
+    // 保存防抖函数
+    mediaItemSaveDebouncers.set(mediaItem.id, debouncedSave)
+
+    // 创建 watch
+    const unwatch = watch(
+      () => ({
+        name: mediaItem.name,
+        metadata: mediaItem.metadata,
+      }),
+      (newValues, oldValues) => {
+        // 检查是否有变化
+        const nameChanged = newValues.name !== oldValues.name
+        const metadataChanged =
+          JSON.stringify(newValues.metadata) !== JSON.stringify(oldValues.metadata)
+
+        if (nameChanged || metadataChanged) {
+          console.log(`📝 [AutoSave] 检测到 mediaItem 变化: ${mediaItem.id}`, {
+            nameChanged,
+            metadataChanged,
+            oldName: oldValues.name,
+            newName: newValues.name,
+          })
+          // 触发防抖保存
+          debouncedSave()
+        }
+      },
+      { deep: true }
+    )
+
+    // 保存 unwatch 函数
+    mediaItemWatchers.set(mediaItem.id, unwatch)
+    console.log(`👀 [AutoSave] 已设置 mediaItem watcher: ${mediaItem.id}`)
+  }
+
+  /**
+   * 清理单个 mediaItem 的 watch
+   * @param mediaItemId 媒体项目ID
+   */
+  function cleanupMediaItemWatcher(mediaItemId: string): void {
+    // 清理 watch
+    const unwatch = mediaItemWatchers.get(mediaItemId)
+    if (unwatch) {
+      unwatch()
+      mediaItemWatchers.delete(mediaItemId)
+      console.log(`🧹 [AutoSave] 已清理 mediaItem watcher: ${mediaItemId}`)
+    }
+
+    // 清理防抖函数
+    const debouncedSave = mediaItemSaveDebouncers.get(mediaItemId)
+    if (debouncedSave) {
+      debouncedSave.cancel()
+      mediaItemSaveDebouncers.delete(mediaItemId)
+    }
+  }
+
+  /**
+   * 清理所有 mediaItem 的 watch
+   */
+  function cleanupAllMediaItemWatchers(): void {
+    console.log(`🧹 [AutoSave] 清理所有 mediaItem watchers，共 ${mediaItemWatchers.size} 个`)
+
+    // 清理所有 watch
+    mediaItemWatchers.forEach((unwatch, mediaItemId) => {
+      unwatch()
+    })
+    mediaItemWatchers.clear()
+
+    // 清理所有防抖函数
+    mediaItemSaveDebouncers.forEach((debouncedSave) => {
+      debouncedSave.cancel()
+    })
+    mediaItemSaveDebouncers.clear()
+
+    console.log(`✅ [AutoSave] 所有 mediaItem watchers 已清理`)
+  }
 
   // ==================== 内部方法 ====================
 
@@ -303,6 +421,10 @@ export function createUnifiedAutoSaveModule(
   function destroy() {
     clearTimers()
     clearWatchers()
+
+    // 🌟 清理所有 mediaItem watchers
+    cleanupAllMediaItemWatchers()
+
     console.log('🧹 [AutoSave] 模块已销毁')
   }
 
@@ -356,28 +478,28 @@ export function createUnifiedAutoSaveModule(
     )
     unwatchFunctions.push(unwatchTracks)
 
-    // 监听媒体项目变化 - 内容变化
-    // ✅ 使用精确字段监听，只监听需要持久化的字段
-    const unwatchMediaItems = watch(
-      () => dataWatchers.mediaItems.value?.map(item => ({
-        id: item.id,
-        name: item.name,
-        createdAt: item.createdAt,
-        mediaStatus: item.mediaStatus,
-        mediaType: item.mediaType,
-        source: item.source,
-        duration: item.duration,
-        // ❌ 不监听 runtime（包括 runtime.bunny.waveformLOD）
-      })),
-      () => {
-        if (autoSaveState.value.isEnabled) {
-          // console.log('🔄 [AutoSave] 检测到媒体项目变化')
-          triggerAutoSave({ contentChanged: true })
-        }
-      },
-      { deep: true },
-    )
-    unwatchFunctions.push(unwatchMediaItems)
+    // ❌ 移除旧的 mediaItems 监听器（第481-502行）
+    // 现在使用新的 MediaItem Watch 机制来监听单个 mediaItem 的 name 和 metadata 变化
+    // const unwatchMediaItems = watch(
+    //   () => dataWatchers.mediaItems.value?.map(item => ({
+    //     id: item.id,
+    //     name: item.name,
+    //     createdAt: item.createdAt,
+    //     mediaStatus: item.mediaStatus,
+    //     mediaType: item.mediaType,
+    //     source: item.source,
+    //     duration: item.duration,
+    //     // ❌ 不监听 runtime（包括 runtime.bunny.waveformLOD）
+    //   })),
+    //   () => {
+    //     if (autoSaveState.value.isEnabled) {
+    //       // console.log('🔄 [AutoSave] 检测到媒体项目变化')
+    //       triggerAutoSave({ contentChanged: true })
+    //     }
+    //   },
+    //   { deep: true },
+    // )
+    // unwatchFunctions.push(unwatchMediaItems)
 
     // 监听项目配置变化 - 配置变化
     const unwatchProjectConfig = watch(
@@ -440,6 +562,11 @@ export function createUnifiedAutoSaveModule(
     triggerAutoSave,
     resetAutoSaveState,
     destroy,
+
+    // 🌟 新增：MediaItem Watch 管理方法
+    setupMediaItemWatcher,
+    cleanupMediaItemWatcher,
+    cleanupAllMediaItemWatchers,
   }
 }
 

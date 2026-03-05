@@ -166,6 +166,7 @@ export const useUnifiedStore = defineStore('unified', () => {
     getMediaItemBySourceId: unifiedMediaModule.getMediaItemBySourceId,
     updateMediaItemName: unifiedMediaModule.updateMediaItemName,
     updateMediaItem: unifiedMediaModule.updateMediaItem,
+    updateMediaItemMetadata: unifiedMediaModule.updateMediaItemMetadata,
     getAllMediaItems: unifiedMediaModule.getAllMediaItems,
 
     // 分辨率管理方法

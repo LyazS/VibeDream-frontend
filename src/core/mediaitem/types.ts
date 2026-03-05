@@ -67,6 +67,15 @@ export interface UnifiedMediaItemData {
 
   // ==================== 元数据（状态相关） ====================
   duration?: number // 媒体时长（帧数），可能在不同阶段获得：服务器提供、用户输入、解析等
+  metadata?: UnifiedMediaItemMetadata // AI 生成的元数据
+}
+
+/**
+ * 统一媒体项目元数据接口
+ */
+export interface UnifiedMediaItemMetadata {
+  /** AI 生成的描述 */
+  aiDescription?: string
 }
 
 // ==================== 专门的状态类型定义 ====================

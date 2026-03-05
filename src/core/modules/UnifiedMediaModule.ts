@@ -3,6 +3,7 @@ import {
   type UnifiedMediaItemData,
   type MediaStatus,
   type MediaType,
+  type UnifiedMediaItemMetadata,
   createUnifiedMediaItemData,
   MediaItemQueries,
   UnifiedMediaItemActions,
@@ -12,6 +13,7 @@ import type { ModuleRegistry } from '@/core/modules/ModuleRegistry'
 import { MODULE_NAMES } from '@/core/modules/ModuleRegistry'
 import type { UnifiedProjectModule } from '@/core/modules/UnifiedProjectModule'
 import type { UnifiedTimelineModule } from '@/core/modules/UnifiedTimelineModule'
+import type { UnifiedAutoSaveModule } from '@/core/modules/UnifiedAutoSaveModule'
 import { getDataSourceRegistry } from '@/core/datasource/registry'
 import { globalMetaFileManager } from '@/core/managers/media/globalMetaFileManager'
 
@@ -109,23 +111,27 @@ export function createUnifiedMediaModule(registry: ModuleRegistry) {
     if (index > -1) {
       const mediaItem = mediaItems.value[index]
 
-      // 1. 清理相关的时间轴项目（先清理使用该素材的时间轴项目）
+      // 1. 🌟 清理 watcher
+      const autoSaveModule = registry.get<UnifiedAutoSaveModule>(MODULE_NAMES.AUTOSAVE)
+      autoSaveModule.cleanupMediaItemWatcher(mediaItemId)
+
+      // 2. 清理相关的时间轴项目（先清理使用该素材的时间轴项目）
       await cleanupRelatedTimelineItems(mediaItemId)
 
-      // 2. 清理 bunnyMedia
+      // 3. 清理 bunnyMedia
       if (mediaItem.runtime.bunny?.bunnyMedia) {
         await mediaItem.runtime.bunny.bunnyMedia.dispose()
         mediaItem.runtime.bunny.bunnyMedia = undefined
         console.log(`🧹 [UnifiedMediaModule] bunnyMedia已清理: ${mediaItem.name}`)
       }
 
-      // 3. 清理缩略图URL
+      // 4. 清理缩略图URL
       if (mediaItem.runtime.bunny?.thumbnailUrl) {
         URL.revokeObjectURL(mediaItem.runtime.bunny.thumbnailUrl)
         console.log(`🧹 [UnifiedMediaModule] bunny缩略图URL已清理: ${mediaItem.name}`)
       }
 
-      // 4. 删除硬盘文件（媒体文件 + Meta文件）
+      // 5. 删除硬盘文件（媒体文件 + Meta文件）
       try {
         const deleteResult = await globalMetaFileManager.deleteMediaFiles(mediaItemId)
 
@@ -142,7 +148,7 @@ export function createUnifiedMediaModule(registry: ModuleRegistry) {
         // 即使文件删除失败，也继续从内存中移除
       }
 
-      // 5. 从数组中移除
+      // 6. 从数组中移除
       mediaItems.value.splice(index, 1)
 
       printUnifiedDebugInfo(
@@ -212,6 +218,32 @@ export function createUnifiedMediaModule(registry: ModuleRegistry) {
       mediaItems.value[index] = updatedMediaItem
       console.log(`统一媒体项目已更新: ${updatedMediaItem.id} -> ${updatedMediaItem.name}`)
     }
+  }
+
+  /**
+   * 更新媒体项的元数据
+   * @param mediaId 媒体项目ID
+   * @param metadata 元数据（部分更新）
+   */
+  function updateMediaItemMetadata(
+    mediaId: string,
+    metadata: Partial<UnifiedMediaItemMetadata>,
+  ) {
+    const mediaItem = getMediaItem(mediaId)
+    if (!mediaItem) return
+
+    // 初始化 metadata 对象（如果不存在）
+    if (!mediaItem.metadata) {
+      mediaItem.metadata = {}
+    }
+
+    // 合并元数据
+    mediaItem.metadata = {
+      ...mediaItem.metadata,
+      ...metadata,
+    }
+
+    console.log(`✅ [UnifiedMediaModule] 媒体项元数据已更新: ${mediaItem.name}`)
   }
 
   // ==================== 分辨率管理方法 ====================
@@ -299,6 +331,10 @@ export function createUnifiedMediaModule(registry: ModuleRegistry) {
    */
   function startMediaProcessing(mediaItem: UnifiedMediaItemData) {
     console.log(`🚀 [UnifiedMediaModule] 开始处理媒体项目: ${mediaItem.name}`)
+
+    // 🌟 为 mediaItem 设置 watch（监听 name 和 metadata 变化）
+    const autoSaveModule = registry.get<UnifiedAutoSaveModule>(MODULE_NAMES.AUTOSAVE)
+    autoSaveModule.setupMediaItemWatcher(mediaItem)
 
     // 直接使用数据源处理器注册中心（已在顶部静态导入）
     const dsRegistry = getDataSourceRegistry()
@@ -472,6 +508,7 @@ export function createUnifiedMediaModule(registry: ModuleRegistry) {
     getMediaItemBySourceId,
     updateMediaItemName,
     updateMediaItem,
+    updateMediaItemMetadata,
     getAllMediaItems,
 
     // 分辨率管理方法

@@ -62,6 +62,7 @@
     "delete": "删除",
     "open": "打开",
     "rename": "重命名",
+    "aiDescription": "AI分析",
     "folderNameLabel": "文件夹名称：",
     "folderNamePlaceholder": "请输入文件夹名称",
     "newNameLabel": "新名称：",

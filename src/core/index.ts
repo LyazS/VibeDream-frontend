@@ -64,10 +64,11 @@ export {
 export {
   // 基础类型定义
   type UnifiedMediaItemData,
+  type UnifiedMediaItemMetadata,
   type MediaStatus,
   type MediaType,
   type MediaTypeOrUnknown,
-  
+
   // 状态专门类型定义
   type ReadyMediaItem,
   type ProcessingMediaItem,

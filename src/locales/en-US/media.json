@@ -62,6 +62,7 @@
     "delete": "Delete",
     "open": "Open",
     "rename": "Rename",
+    "aiDescription": "AI Analysis",
     "folderNameLabel": "Folder Name:",
     "folderNamePlaceholder": "Enter folder name",
     "newNameLabel": "New Name:",

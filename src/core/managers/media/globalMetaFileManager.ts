@@ -157,6 +157,11 @@ class GlobalMetaFileManager {
         ...(terminalStatuses.includes(mediaItem.mediaStatus) && {
           mediaStatus: mediaItem.mediaStatus as 'ready' | 'error' | 'cancelled' | 'missing',
         }),
+        // 🌟 新增：保存 AI 生成的元数据
+        // 注意：需要将 Vue 响应式对象转换为纯 JSON 对象，否则序列化时会包含 Vue 内部属性
+        ...(mediaItem.metadata && {
+          metadata: JSON.parse(JSON.stringify(mediaItem.metadata)),
+        }),
       }
 
       // 2. 检查工作空间权限

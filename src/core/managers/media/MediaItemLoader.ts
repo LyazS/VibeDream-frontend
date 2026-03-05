@@ -121,6 +121,10 @@ export class MediaItemLoader {
         mediaType: metaData.mediaType,
         duration: metaData.duration,
         mediaStatus: metaData.mediaStatus || 'pending', // 🌟 如果 meta 文件中有终态状态，使用它；否则默认为 pending
+        // 🌟 新增：恢复 AI 生成的元数据
+        ...(metaData.metadata && {
+          metadata: metaData.metadata,
+        }),
       },
     )
 

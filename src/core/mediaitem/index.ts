@@ -9,6 +9,7 @@ export type {
   MediaType,
   MediaTypeOrUnknown,
   UnifiedMediaItemData,
+  UnifiedMediaItemMetadata,
   ReadyMediaItem,
   ProcessingMediaItem,
   ErrorMediaItem,

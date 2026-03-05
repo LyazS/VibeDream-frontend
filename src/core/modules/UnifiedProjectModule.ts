@@ -20,6 +20,7 @@ import type { UnifiedTrackModule } from './UnifiedTrackModule'
 import type { UnifiedMediaModule } from './UnifiedMediaModule'
 import type { UnifiedMediaBunnyModule } from './UnifiedMediaBunnyModule'
 import type { UnifiedDirectoryModule } from './UnifiedDirectoryModule'
+import type { UnifiedAutoSaveModule } from './UnifiedAutoSaveModule'
 
 /**
  * 统一项目管理模块
@@ -620,6 +621,10 @@ export function createUnifiedProjectModule(registry: ModuleRegistry) {
    */
   function clearCurrentProject(): void {
     console.log('🧹 已清除当前项目')
+
+    // 🌟 清理所有 mediaItem watchers
+    const autoSaveModule = registry.get<UnifiedAutoSaveModule>(MODULE_NAMES.AUTOSAVE)
+    autoSaveModule.cleanupAllMediaItemWatchers()
   }
 
   /**
