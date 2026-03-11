@@ -142,7 +142,7 @@ class GlobalMetaFileManager {
       console.log(`💾 [globalMetaFileManager] 保存 Meta 文件: ${mediaItem.id}`)
 
       // 定义终态列表
-      const terminalStatuses: MediaStatus[] = ['ready', 'error', 'cancelled', 'missing']
+      const terminalStatuses: MediaStatus[] = ['error', 'cancelled', 'missing']
 
       // 1. 提取持久化数据
       const metaData: MediaMetaFile = {
@@ -155,7 +155,7 @@ class GlobalMetaFileManager {
         duration: mediaItem.duration,
         // 🌟 只在终态时保存 mediaStatus
         ...(terminalStatuses.includes(mediaItem.mediaStatus) && {
-          mediaStatus: mediaItem.mediaStatus as 'ready' | 'error' | 'cancelled' | 'missing',
+          mediaStatus: mediaItem.mediaStatus as 'error' | 'cancelled' | 'missing',
         }),
         // 🌟 新增：保存 AI 生成的元数据
         // 注意：需要将 Vue 响应式对象转换为纯 JSON 对象，否则序列化时会包含 Vue 内部属性
