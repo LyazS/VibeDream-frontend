@@ -12,12 +12,10 @@
             class="markdown-body"
             v-html="renderMarkdown(item.content)"
           ></div>
-          <div v-else-if="item.type === ChatMessageAssistantContentType.TOOL_USE" class="tool-component">
-            <div class="status-dot"></div>
-            <component :is="IconComponents.TOOLS_FILL" size="16px" class="tool-icon" />
-            <span class="tool-title">工具调用</span>
-            <span class="tool-params">{{ item.content }}</span>
-          </div>
+          <ToolCallDisplay
+            v-else-if="item.type === ChatMessageAssistantContentType.TOOL_USE"
+            :item="item"
+          />
           <!-- 任务完成UI -->
           <div v-else-if="item.type === ChatMessageAssistantContentType.TASK_COMPLETE" class="task-complete-component">
             <div class="task-complete-header">
@@ -38,6 +36,7 @@ import 'github-markdown-css'
 import type { ChatMessageAssistant } from '../types'
 import { ChatMessageAssistantContentType } from '../types'
 import { IconComponents } from '@/constants/iconComponents'
+import ToolCallDisplay from './ToolCallDisplay.vue'
 
 // 注入markdown渲染函数
 const renderMarkdown = inject<(content: string) => string>('renderMarkdown', (content: string) => {
@@ -91,6 +90,7 @@ const props = defineProps<{
   font-size: var(--font-size-base);
   line-height: 1.4;
   margin-bottom: var(--spacing-xs);
+  width: 100%;
 }
 
 .markdown-body {
@@ -103,62 +103,12 @@ const props = defineProps<{
   overflow-x: auto;
 }
 
-.tool-component {
-  margin: 2px 0;
-  padding: 2px 12px;
-  border-radius: 6px;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  background-color: rgba(209, 213, 219, 0.1);
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  height: 20px;
-}
-
-.status-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background-color: #10b981;
-  flex-shrink: 0;
-}
-
-.tool-icon {
-  flex-shrink: 0;
-  color: #9ca3af;
-}
-
-.tool-title {
-  font-weight: 600;
-  font-size: 13px;
-  color: #cbd0d6;
-  flex-shrink: 0;
-}
-
-.tool-params {
-  font-size: 11px;
-  color: #adb3bd;
-  flex: 1;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
 .message-content > *:first-child {
   margin-top: 0;
 }
 
 .message-content > *:last-child {
   margin-bottom: 0;
-}
-
-.message-content > .tool-component + .tool-component {
-  margin-top: 8px;
-}
-
-.message-content > .markdown-body + .tool-component,
-.message-content > .tool-component + .markdown-body {
-  margin-top: 12px;
 }
 
 /* 任务完成组件样式 */

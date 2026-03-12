@@ -28,6 +28,10 @@ export interface ChatMessageUserContent {
 export interface ChatMessageAssistantContent {
   type: ChatMessageAssistantContentType
   content: string
+  // 工具调用专用字段
+  toolName?: string        // 工具名称
+  toolArgs?: string        // 序列化后的参数
+  isFrontendTool?: boolean // 是否为前端工具
 }
 
 // 用户消息（对应后端的 ChatMessageUser）

@@ -189,6 +189,10 @@ export class SessionManager {
     this.appendAssistantContent({
       type: ChatMessageAssistantContentType.TOOL_USE,
       content: `${tool_name}(${JSON.stringify(tool_args || {})})`,
+      // 工具调用专用字段
+      toolName: tool_name,
+      toolArgs: JSON.stringify(tool_args || {}, null, 2),
+      isFrontendTool: is_frontend_tool ?? false,
     })
 
     // 判断是否为前端工具

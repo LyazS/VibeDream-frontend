@@ -8,6 +8,8 @@
       autocomplete="off"
       @input="adjustTextareaHeight"
       @keydown.enter="handleEnterKey"
+      @compositionstart="isComposing = true"
+      @compositionend="isComposing = false"
     />
     <div class="chat-actions">
       <HoverButton
@@ -39,6 +41,7 @@ const { t } = useAppI18n()
 // ChatInput 现在完全自主，不需要发射任何事件
 
 const inputMessage = ref('')
+const isComposing = ref(false) // 跟踪输入法 composition 状态
 const textareaHeight = ref(72) // 初始高度 72px (3行 × 24px)
 
 // 检查是否有进行中的消息（使用响应式计算属性）
@@ -73,6 +76,11 @@ const adjustTextareaHeight = () => {
 }
 
 const handleEnterKey = (event: KeyboardEvent) => {
+  // 如果正在使用输入法，不处理 Enter 键
+  if (isComposing.value) {
+    return
+  }
+
   if (!event.shiftKey) {
     event.preventDefault() // 只有普通Enter才阻止默认行为
     handleSend()

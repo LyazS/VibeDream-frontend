@@ -2,6 +2,11 @@
   "aiPanel": {
     "aiGenerate": "AI生成",
     "agent": "智能助手",
+    "tools": {
+      "unknown": "未知工具",
+      "list_contents": "读取目录",
+      "read_media": "查看素材"
+    },
     "characterEditor": "角色编辑器",
     "selectConfig": "选择一个配置",
     "generate": "生成",

@@ -2,6 +2,11 @@
   "aiPanel": {
     "aiGenerate": "AI Generate",
     "agent": "Agent",
+    "tools": {
+      "unknown": "Unknown Tool",
+      "list_contents": "List Contents",
+      "read_media": "Read Media"
+    },
     "characterEditor": "Character Editor",
     "selectConfig": "Select a configuration",
     "generate": "Generate",
