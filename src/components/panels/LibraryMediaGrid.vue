@@ -261,8 +261,6 @@ import {
   shouldShowRechargePrompt,
   isRetryableError,
 } from '@/utils/errorMessageBuilder'
-import { BizyairFileUploader } from '@/core/utils/bizyairFileUploader'
-import type { FileData } from '@/core/datasource/providers/ai-generation/types'
 
 const unifiedStore = useUnifiedStore()
 const { t } = useAppI18n()
@@ -675,14 +673,6 @@ const currentMenuItems = computed((): MenuItem[] => {
           startRename(target)
           showContextMenu.value = false
         },
-      },
-      { type: 'separator' },
-      // 🆕 新增：AI 描述分析
-      {
-        label: t('media.aiDescription'),
-        icon: IconComponents.SPARKLING,
-        onClick: handleAIDescription,
-        disabled: !canAnalyze(target),
       },
       { type: 'separator' },
       // 🆕 新增：取消选项
@@ -1697,139 +1687,6 @@ async function handleBatchDelete(): Promise<void> {
 
 // ==================== AI 描述分析功能 ====================
 
-/**
- * 判断素材是否可以进行 AI 描述分析
- * 只有 ready 状态的视频或图片才能分析
- */
-function canAnalyze(item: DisplayItem): boolean {
-  if (item.type !== 'media') return false
-
-  const mediaItem = getMediaItem(item.id)
-  if (!mediaItem) return false
-
-  // 只有 ready 状态的素材才能分析
-  if (mediaItem.mediaStatus !== 'ready') return false
-
-  // 只支持视频和图片
-  return mediaItem.mediaType === 'video' || mediaItem.mediaType === 'image'
-}
-
-/**
- * 处理 AI 描述分析
- */
-async function handleAIDescription(): Promise<void> {
-  if (!contextMenuTarget.value || contextMenuTarget.value.type !== 'media') return
-
-  const mediaItem = getMediaItem(contextMenuTarget.value.id)
-  if (!mediaItem) return
-
-  showContextMenu.value = false
-
-  try {
-    console.log(`🔍 [AI描述] 开始分析素材: ${mediaItem.name}`)
-
-    // 1. 上传素材到 BizyAir
-    console.log(`📤 [AI描述] 正在上传素材到 BizyAir...`)
-    const uploadResult = await uploadMediaForAnalysis(mediaItem)
-
-    if (!uploadResult.success) {
-      throw new Error(uploadResult.error || '上传失败')
-    }
-    console.log(`✅ [AI描述] 上传完成, URL: ${uploadResult.url}`)
-
-    // 2. 调用后端 API 进行分析
-    console.log(`🤖 [AI描述] 正在调用 VLM 分析...`)
-    const analysisResult = await analyzeMediaContent(uploadResult.url!, mediaItem.mediaType as 'video' | 'image')
-
-    if (!analysisResult.success) {
-      throw new Error(analysisResult.error || '分析失败')
-    }
-    console.log(`✅ [AI描述] 分析完成, 描述长度: ${analysisResult.description?.length}`)
-
-    // 3. 保存描述到素材元数据
-    unifiedStore.updateMediaItemMetadata(mediaItem.id, {
-      aiDescription: analysisResult.description,
-    })
-
-    console.log(`✅ [AI描述] 描述已保存到素材元数据`)
-    unifiedStore.messageSuccess('AI 描述分析完成')
-
-  } catch (error) {
-    console.error('❌ [AI描述] 分析失败:', error)
-    unifiedStore.messageError(
-      `AI 描述分析失败: ${error instanceof Error ? error.message : '未知错误'}`
-    )
-  }
-}
-
-/**
- * 上传素材到 BizyAir 用于分析
- */
-async function uploadMediaForAnalysis(mediaItem: UnifiedMediaItemData): Promise<{
-  success: boolean
-  url?: string
-  error?: string
-}> {
-  try {
-    // 确保媒体类型是视频或图片
-    if (mediaItem.mediaType !== 'video' && mediaItem.mediaType !== 'image') {
-      throw new Error('只支持视频和图片类型的素材分析')
-    }
-
-    // 构建文件数据
-    const fileData: FileData = {
-      name: mediaItem.name,
-      mediaItemId: mediaItem.id,
-      source: 'media-item',
-      mediaType: mediaItem.mediaType as 'video' | 'image',
-      __type__: 'FileData',
-    }
-
-    // 使用现有的 BizyAir 上传器
-    const result = await BizyairFileUploader.uploadFile(
-      fileData,
-      unifiedStore.getMediaItem,
-      unifiedStore.getTimelineItem,
-      (stage, progress) => {
-        console.log(`上传进度: ${stage} - ${progress}%`)
-      },
-    )
-
-    return result
-  } catch (error) {
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : '上传失败',
-    }
-  }
-}
-
-/**
- * 调用后端 API 分析媒体内容
- */
-async function analyzeMediaContent(url: string, mediaType: 'video' | 'image'): Promise<{
-  success: boolean
-  description?: string
-  error?: string
-}> {
-  try {
-    const response = await fetchClient.post<{
-      success: boolean
-      description?: string
-      error?: string
-    }>('/api/media/analyze', {
-      url,
-      media_type: mediaType,
-    })
-
-    return response.data
-  } catch (error) {
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : '分析请求失败',
-    }
-  }
-}
 
 </script>
 

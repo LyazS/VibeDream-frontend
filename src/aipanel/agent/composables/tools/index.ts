@@ -4,6 +4,7 @@
  */
 
 import { listContentsTool } from './listContents'
+import { readMediaTool } from './readMedia'
 import type { ToolDefinition, ToolResult } from '../core/toolTypes'
 
 // 工具存储
@@ -18,6 +19,7 @@ function registerTool(tool: ToolDefinition): void {
 
 // 注册内置工具
 registerTool(listContentsTool)
+registerTool(readMediaTool)
 
 /**
  * 执行工具
@@ -64,5 +66,5 @@ export function listTools(): ToolDefinition[] {
 }
 
 // 导出工具定义供外部参考
-export { listContentsTool }
+export { listContentsTool, readMediaTool }
 export type { ToolDefinition, ToolResult }

@@ -226,15 +226,15 @@ export async function executeListContents(args: Record<string, any>): Promise<st
       const endIdx = Math.min(startIdx + limit, totalEntries)
       const pagedEntries = entries.slice(startIdx, endIdx)
 
-      // 6. 构建条目列表（带 ID 和类型标记）
+      // 6. 构建条目列表（XML 格式，避免 AI 误解 ID 格式）
       const entryLines: string[] = []
       for (const entry of pagedEntries) {
         if (entry.type === 'directory') {
-          // 目录格式：[id:dir_xxx] 名称/
-          entryLines.push(`[id:${entry.id}] ${entry.name}/`)
+          // 目录格式：<dir id="完整ID">名称</dir>
+          entryLines.push(`<dir id="${entry.id}">${entry.name}</dir>`)
         } else {
-          // 媒体格式：[id:media_xxx] 名称
-          entryLines.push(`[id:${entry.id}] ${entry.name}`)
+          // 媒体格式：<media id="完整ID">名称</media>
+          entryLines.push(`<media id="${entry.id}">${entry.name}</media>`)
         }
       }
 
