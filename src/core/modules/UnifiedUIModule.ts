@@ -50,7 +50,7 @@ export function createUnifiedUIModule(registry: ModuleRegistry): {
   const isChatPanelVisible = ref(true)
 
   // AI 面板当前激活的标签页
-  const aiPanelActiveTab = ref<'ai-generate' | 'agent' | 'character-editor'>('ai-generate')
+  const aiPanelActiveTab = ref<'ai-generate' | 'agent' | 'character-editor'>('agent')
 
   // 角色编辑器状态
   const characterEditorState = ref<CharacterEditorState>({

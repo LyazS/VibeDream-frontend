@@ -21,7 +21,6 @@ import {
   isToolMessage,
 } from '@/aipanel/agent/types'
 import { useEditSDK } from '@/aipanel/agent/composables/useEditSDK'
-import { toolRegistry, registerBuiltinTools } from '@/aipanel/agent/tools'
 import { indexedDBService } from '@/core/storage/IndexedDBService'
 
 export interface SessionInfo {
@@ -56,15 +55,12 @@ export class SessionManager {
   private currentAbortController: AbortController | null = null
   private currentAIMessageId: string | null = null
 
-  // 用户脚本执行函数引用
-  private executeUserScript: ReturnType<typeof useEditSDK>['executeUserScript']
+  // editSDK 实例（包含脚本执行和工具执行）
+  private editSDK: ReturnType<typeof useEditSDK>
 
   constructor() {
-    // 初始化用户脚本执行函数引用
-    const { executeUserScript } = useEditSDK()
-    this.executeUserScript = executeUserScript
-    // 注册内置工具
-    registerBuiltinTools()
+    // 初始化 editSDK 实例
+    this.editSDK = useEditSDK()
   }
 
   /**
@@ -196,9 +192,9 @@ export class SessionManager {
     })
 
     // 判断是否为前端工具
-    if (is_frontend_tool && toolRegistry.has(tool_name)) {
+    if (is_frontend_tool && this.editSDK.hasTool(tool_name)) {
       // 执行前端工具
-      const result = await toolRegistry.execute(tool_name, tool_args || {})
+      const result = await this.editSDK.executeTool(tool_name, tool_args || {})
 
       // 返回工具结果消息，用于继续对话
       const toolResultMessage: ChatMessageTool = {
@@ -333,7 +329,7 @@ export class SessionManager {
           API_ENDPOINTS.sendMessage,
           async (msg: StreamChunk) => {
             const result = await this.handleStreamMessage(msg)
-            console.log('收到流式JSON消息:', msg)
+            // console.log('收到流式JSON消息:', msg)
 
             // 只有工具调用消息才保存，用于下一次循环
             if (result && isToolMessage(result)) {

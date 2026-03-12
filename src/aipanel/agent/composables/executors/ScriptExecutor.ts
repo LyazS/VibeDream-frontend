@@ -4,7 +4,7 @@
  *
  * 设计为一次性使用，执行完成后自动清理资源
  */
-import type { LogMessage, ScriptExecutionResult } from '@/aipanel/agent/core/types'
+import type { LogMessage, ScriptExecutionResult } from '../core/types'
 
 export class ScriptExecutor {
   private worker: Worker | null = null

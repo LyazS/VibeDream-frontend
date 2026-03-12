@@ -1,8 +1,6 @@
-import { ScriptExecutor } from '@/aipanel/agent/executors/ScriptExecutor'
-import { useBatchCommandBuilder } from '@/aipanel/agent/composables/useBatchCommandBuilder'
-import { ConfigValidator } from '@/aipanel/agent/core/ConfigValidator'
-import { framesToTimecode } from '@/core/utils/timeUtils'
-import { calculateVisibleFrameRange } from '@/core/utils/timelineScaleUtils'
+import { ScriptExecutor } from './executors/ScriptExecutor'
+import { useBatchCommandBuilder } from './useBatchCommandBuilder'
+import { ConfigValidator } from './core/ConfigValidator'
 import { useUnifiedStore } from '@/core/unifiedStore'
 
 // 导入共享类型定义
@@ -13,7 +11,10 @@ import type {
   LogMessage,
   ValidationError,
   ScriptExecutionResult,
-} from '@/aipanel/agent/core/types'
+} from './core/types'
+
+// 导入工具管理
+import * as tools from './tools'
 
 type EditSDKReturn = ReturnType<typeof createEditSDK>
 
@@ -81,8 +82,8 @@ function createEditSDK() {
       // 阶段3: 命令构建
       const buildResult = await batchCommandBuilder.buildOperations(operations)
 
-      if (buildResult.buildResults.some((r) => !r.success)) {
-        buildOperationErrors = buildResult.buildResults.filter((r) => !r.success)
+      if (buildResult.buildResults.some((r: BuildOperationResult) => !r.success)) {
+        buildOperationErrors = buildResult.buildResults.filter((r: BuildOperationResult) => !r.success)
         const executionResult: ExecutionResult = {
           success: false,
           logs: allLogs,
@@ -239,6 +240,11 @@ function createEditSDK() {
   return {
     // 核心函数
     executeUserScript,
+    // 工具管理（从 tools 模块导入）
+    executeTool: tools.executeTool,
+    hasTool: tools.hasTool,
+    getTool: tools.getTool,
+    listTools: tools.listTools,
   }
 }
 
