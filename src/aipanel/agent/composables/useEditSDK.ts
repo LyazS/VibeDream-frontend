@@ -235,6 +235,36 @@ function createEditSDK() {
     return lines.join('\n')
   }
 
+  /**
+   * 获取被动注入的上下文信息
+   * 包括项目信息和环境信息，自动附加到用户消息中
+   */
+  function getPassiveContext(): string {
+    const parts: string[] = []
+
+    try {
+      // 项目信息（直接从 unifiedStore 获取）
+      const projectName = unifiedStore.projectName || '未命名项目'
+      const videoResolution = unifiedStore.videoResolution
+      const resolution = videoResolution
+        ? `${videoResolution.width}x${videoResolution.height}${videoResolution.aspectRatio ? ` (${videoResolution.aspectRatio})` : ''}`
+        : '未设置'
+
+      parts.push(`[当前项目信息]`)
+      parts.push(`- 项目名称: ${projectName}`)
+      parts.push(`- 视频分辨率: ${resolution}`)
+    } catch (error: any) {
+      console.error('获取项目信息失败:', error)
+      parts.push('[当前项目信息]')
+      parts.push('- 项目信息获取失败')
+    }
+
+    // 预留：后续可在此处添加环境信息（选中状态、播放头位置等）
+    // parts.push('\n[当前编辑环境]')
+
+    return parts.join('\n')
+  }
+
 
   // 返回组合式API接口
   return {
@@ -245,6 +275,8 @@ function createEditSDK() {
     hasTool: tools.hasTool,
     getTool: tools.getTool,
     listTools: tools.listTools,
+    // 被动信息获取
+    getPassiveContext,
   }
 }
 

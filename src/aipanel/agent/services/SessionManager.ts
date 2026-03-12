@@ -288,6 +288,9 @@ export class SessionManager {
     // 设置发送状态
     this.isSending.value = true
     try {
+      // 获取被动注入的上下文信息
+      const passiveContext = this.editSDK.getPassiveContext()
+
       // 定义待发送消息（初始化为用户消息）
       let pendingMessage: ChatMessageUser | ChatMessageTool | undefined = {
         id: generateChatMessageId(ChatMessageType.USER),
@@ -296,6 +299,10 @@ export class SessionManager {
           {
             type: ChatMessageUserContentType.TEXT,
             content: message,
+          },
+          {
+            type: ChatMessageUserContentType.PASSIVE,
+            content: passiveContext,
           },
         ],
         timestamp: new Date().toISOString(),

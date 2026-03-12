@@ -9,6 +9,7 @@ export enum ChatMessageType {
 export enum ChatMessageUserContentType {
   TEXT = 'text',
   IMAGE = 'image',
+  PASSIVE = 'passive', // 被动注入的上下文信息（如项目信息、环境信息），前端UI隐藏，后端处理时转换为TEXT
 }
 
 // 助手消息内容类型

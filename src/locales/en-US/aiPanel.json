@@ -5,7 +5,10 @@
     "tools": {
       "unknown": "Unknown Tool",
       "list_contents": "List Contents",
-      "read_media": "Read Media"
+      "read_media": "Read Media",
+      "list_tracks": "List Tracks",
+      "read_track": "Read Track",
+      "read_timelineitem": "Read Timeline Item"
     },
     "characterEditor": "Character Editor",
     "selectConfig": "Select a configuration",
