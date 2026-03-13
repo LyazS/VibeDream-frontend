@@ -202,7 +202,7 @@ export function useHistoryOperations(
 
     // 获取当前位置和轨道
     const oldPositionFrames = timelineItem.timeRange.timelineStartTime // 帧数
-    const oldTrackId = timelineItem.trackId || 'default-track' // 提供默认值
+    const oldTrackId = timelineItem.trackId
     const finalNewTrackId = newTrackId !== undefined ? newTrackId : oldTrackId
 
     // 检查是否有实际变化
@@ -374,7 +374,7 @@ export function useHistoryOperations(
     // 使用 TimelineItemFactory 复制项目
     const duplicatedItem = duplicateTimelineItem(
       timelineItem,
-      newTrackId || timelineItem.trackId || 'default-track',
+      newTrackId || timelineItem.trackId,
       timeOffset,
     )
 

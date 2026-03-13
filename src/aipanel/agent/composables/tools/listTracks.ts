@@ -47,15 +47,9 @@ export async function executeListTracks(args: Record<string, any>): Promise<stri
     lines.push('')
 
     for (const track of trackInfos) {
-      const typeLabel = {
-        video: '视频',
-        audio: '音频',
-        text: '文字',
-      }[track.type]
-
       lines.push(`[ID: ${track.id}]`)
       lines.push(`  名称: ${track.name}`)
-      lines.push(`  类型: ${typeLabel}`)
+      lines.push(`  类型: ${track.type}`)
       lines.push('')
     }
 

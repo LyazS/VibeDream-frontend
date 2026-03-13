@@ -60,17 +60,11 @@ export async function executeReadTrack(args: Record<string, any>): Promise<strin
     }
 
     // 2. 构建轨道基本信息
-    const typeLabel = {
-      video: '视频',
-      audio: '音频',
-      text: '文字',
-    }[track.type]
-
     const lines: string[] = []
     lines.push(`=== 轨道详情 ===`)
     lines.push(`ID: ${track.id}`)
     lines.push(`名称: ${track.name}`)
-    lines.push(`类型: ${typeLabel}`)
+    lines.push(`类型: ${track.type}`)
     lines.push(`可见: ${track.isVisible ? '是' : '否'}`)
     lines.push(`静音: ${track.isMuted ? '是' : '否'}`)
 

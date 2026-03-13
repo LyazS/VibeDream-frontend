@@ -391,7 +391,7 @@ function debugTimeline() {
   console.group('🎞️ 完整时间轴项目列表 (' + timelineItems.value.length + ' 个)')
   timelineItems.value.forEach((item, index) => {
     const mediaItem = unifiedStore.getMediaItem(item.mediaItemId)
-    const track = unifiedStore.getTrack(item.trackId || '')
+    const track = unifiedStore.getTrack(item.trackId)
     const timeRange = item.timeRange
     const duration = timeRange.timelineEndTime - timeRange.timelineStartTime
 

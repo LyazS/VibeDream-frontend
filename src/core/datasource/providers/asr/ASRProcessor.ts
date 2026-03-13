@@ -364,6 +364,16 @@ export class ASRProcessor extends DataSourceProcessor {
     // 5. 批量创建文本items
     let createdCount = 0
 
+    // 🆕 验证目标轨道是否存在
+    if (!trackId) {
+      throw new Error('[ASRProcessor] trackId 不能为空')
+    }
+
+    const targetTrack = unifiedStore.getTrack(trackId)
+    if (!targetTrack) {
+      throw new Error(`[ASRProcessor] 目标轨道不存在: ${trackId}`)
+    }
+
     for (const subtitle of subtitles) {
       // 将毫秒转换为帧数
       const subtitleStartFrames = startTimeFrames + Math.round(subtitle.start_time / 1000 * RENDERER_FPS)
@@ -385,7 +395,7 @@ export class ASRProcessor extends DataSourceProcessor {
             backgroundColor: 'rgba(0, 0, 0, 0.5)',
           },
           subtitleStartFrames,
-          trackId || '',
+          trackId,
           subtitleDurationFrames,
         )
 

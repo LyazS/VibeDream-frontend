@@ -140,7 +140,7 @@ export class CommandFactory {
 
     // 获取当前位置和轨道
     const oldPositionFrames = timelineItem.timeRange.timelineStartTime
-    const oldTrackId = timelineItem.trackId!
+    const oldTrackId = timelineItem.trackId
 
     // 时间码转帧
     const newPositionFrames = this.timecodeToFrames(params.newPosition)

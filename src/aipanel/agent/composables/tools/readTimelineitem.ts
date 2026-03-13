@@ -81,20 +81,12 @@ export async function executeReadTimelineitem(args: Record<string, any>): Promis
     }
 
     // 2. 构建基本信息
-    const typeLabel = {
-      video: '视频',
-      image: '图片',
-      audio: '音频',
-      text: '文字',
-      error: '错误',
-    }[item.mediaType]
-
     const lines: string[] = []
     lines.push(`=== 时间轴项目详情 ===`)
     lines.push(`ID: ${item.id}`)
     lines.push(`素材ID: ${item.mediaItemId || '(无)'}`)
     lines.push(`轨道ID: ${item.trackId || '(未分配)'}`)
-    lines.push(`媒体类型: ${typeLabel}`)
+    lines.push(`媒体类型: ${item.mediaType}`)
     lines.push(`状态: ${item.timelineStatus}`)
 
     // 3. 时间范围信息

@@ -104,7 +104,7 @@ export interface UnifiedTimelineItemData<T extends MediaType = MediaType> {
   // ==================== 核心属性 ====================
   readonly id: string
   mediaItemId: MediaItemIdType<T> // 关联的统一媒体项目ID，类型根据 MediaType 自动推断
-  trackId?: string
+  trackId: string
 
   // ==================== 状态管理 ====================
   timelineStatus: TimelineItemStatus // 仅3状态：ready|loading|error

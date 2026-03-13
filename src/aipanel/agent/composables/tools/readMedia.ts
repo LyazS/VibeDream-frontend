@@ -106,7 +106,6 @@ interface MediaDetail {
   mediaType: 'video' | 'image' | 'audio'
   duration?: string  // HH:MM:SS.FF 格式
   description: string
-  descriptionStatus: 'ready' | 'generating' | 'error'
 }
 
 // ==================== 主执行函数 ====================
@@ -167,7 +166,6 @@ export async function executeReadMedia(args: Record<string, any>): Promise<strin
           mediaType: suggestedItem.mediaType as 'video' | 'image' | 'audio',
           duration: formatDuration(suggestedItem.duration),
           description: `⚠️ 未找到 ID "${mediaId}" 的素材。你是不是要寻找 ID "${suggestedItem.id}"？请使用完整的 ID 重试。`,
-          descriptionStatus: 'error'
         })
         continue
       }
@@ -178,14 +176,13 @@ export async function executeReadMedia(args: Record<string, any>): Promise<strin
         name: 'Unknown',
         mediaType: 'video',
         description: `未找到 ID "${mediaId}" 的素材。请使用 list_contents 查看正确的素材 ID。`,
-        descriptionStatus: 'error'
       })
       continue
     }
 
     // 3. 检查已有描述
     if (mediaItem.metadata?.aiDescription) {
-      results.push(formatMediaDetail(mediaItem, 'ready'))
+      results.push(formatMediaDetail(mediaItem))
       continue
     }
 
@@ -197,12 +194,12 @@ export async function executeReadMedia(args: Record<string, any>): Promise<strin
     } else if (mediaItem.mediaType === 'audio') {
       // 音频特殊处理
       results.push({
-        ...formatMediaDetail(mediaItem, 'ready'),
+        ...formatMediaDetail(mediaItem),
         description: '[音频素材暂不支持 AI 描述]'
       })
     } else {
       // 其他类型
-      results.push(formatMediaDetail(mediaItem, 'ready'))
+      results.push(formatMediaDetail(mediaItem))
     }
   }
 
@@ -270,7 +267,6 @@ async function generateAIDescription(
       mediaType: mediaItem.mediaType as 'video' | 'image',
       duration: formatDuration(mediaItem.duration),
       description: analysisResult.description || '',
-      descriptionStatus: 'ready',
     }
   } catch (error) {
     // 5. 错误处理
@@ -281,7 +277,6 @@ async function generateAIDescription(
       mediaType: mediaItem.mediaType as 'video' | 'image',
       duration: formatDuration(mediaItem.duration),
       description: '',
-      descriptionStatus: 'error',
     }
   }
 }
@@ -292,8 +287,7 @@ async function generateAIDescription(
  * 格式化媒体详情
  */
 function formatMediaDetail(
-  mediaItem: UnifiedMediaItemData,
-  status: 'ready' | 'generating' | 'error'
+  mediaItem: UnifiedMediaItemData
 ): MediaDetail {
   return {
     id: mediaItem.id,
@@ -301,7 +295,6 @@ function formatMediaDetail(
     mediaType: mediaItem.mediaType as 'video' | 'image' | 'audio',
     duration: formatDuration(mediaItem.duration),
     description: mediaItem.metadata?.aiDescription || '',
-    descriptionStatus: status,
   }
 }
 
@@ -317,29 +310,66 @@ function formatDuration(duration?: number): string | undefined {
 
 /**
  * 格式化结果输出
+ * 按"成功读取"和"读取失败"分组显示
  */
 function formatResults(details: MediaDetail[]): string {
   const lines: string[] = []
 
-  lines.push(`=== 素材详情 (${details.length}个) ===`)
-  lines.push('')
+  // 分组：成功读取 vs 读取失败
+  const successGroup: MediaDetail[] = []
+  const failedGroup: MediaDetail[] = []
 
   for (const detail of details) {
-    lines.push(`[ID: ${detail.id}] ${detail.name}`)
-    lines.push(`  类型: ${detail.mediaType}`)
-
-    if (detail.duration) {
-      lines.push(`  时长: ${detail.duration}`)
+    // 判断是否成功读取description
+    if (detail.description && !detail.description.startsWith('⚠️') && !detail.description.startsWith('[音频素材')) {
+      successGroup.push(detail)
+    } else {
+      failedGroup.push(detail)
     }
+  }
 
-    lines.push(`  描述状态: ${detail.descriptionStatus}`)
+  // 输出成功读取的分组
+  if (successGroup.length > 0) {
+    lines.push('=== ✅ 读取成功的素材 ===')
+    lines.push('')
 
-    if (detail.description) {
+    for (const detail of successGroup) {
+      lines.push(`[ID: ${detail.id}] ${detail.name}`)
+      lines.push(`  类型: ${detail.mediaType}`)
+
+      if (detail.duration) {
+        lines.push(`  时长: ${detail.duration}`)
+      }
+
       lines.push(`  描述: ${detail.description}`)
-    } else if (detail.descriptionStatus === 'error') {
-      lines.push(`  描述: AI 描述生成失败。提示：请再次调用 read_media 重新尝试。`)
+      lines.push('')
+    }
+  }
+
+  // 输出读取失败的分组
+  if (failedGroup.length > 0) {
+    lines.push('=== ❌ 读取失败的素材 ===')
+    lines.push('')
+
+    for (const detail of failedGroup) {
+      lines.push(`[ID: ${detail.id}] ${detail.name}`)
+      lines.push(`  类型: ${detail.mediaType}`)
+
+      if (detail.duration) {
+        lines.push(`  时长: ${detail.duration}`)
+      }
+
+      lines.push('')
     }
 
+    // 在失败分组末尾添加提示信息
+    lines.push('（对于读取失败的素材，请再次调用 read_media 重新尝试读取该素材）')
+    lines.push('')
+  }
+
+  // 如果全部为空
+  if (successGroup.length === 0 && failedGroup.length === 0) {
+    lines.push('=== 素材详情 (0个) ===')
     lines.push('')
   }
 

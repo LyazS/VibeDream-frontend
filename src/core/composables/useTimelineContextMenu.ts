@@ -557,7 +557,7 @@ export function useTimelineContextMenu(
     const targetTrackId = await findOrCreateAvailableTextTrack(
       startTimeFrames,
       startTimeFrames + durationFrames,
-      sourceTimelineItem.trackId || '',
+      sourceTimelineItem.trackId,
     )
 
     // 3. 创建占位符文本item

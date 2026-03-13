@@ -353,7 +353,7 @@ export function createUnifiedMediaBunnyModule(
         TimelineItemQueries.isVideoTimelineItem(item) ||
         TimelineItemQueries.isAudioTimelineItem(item)
       ) {
-        const track = trackModule.getTrack(item.trackId || '')
+        const track = trackModule.getTrack(item.trackId)
         const isTrackMuted = track?.isMuted ?? false
 
         // ✅ 使用辅助函数获取渲染配置（包含动画插值后的音量）
