@@ -60,7 +60,7 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { ScriptExecutor } from '@/aipanel/agent/executors/ScriptExecutor'
+import { ScriptExecutor } from '@/aipanel/agent/composables/executors/ScriptExecutor'
 
 type OperationConfig = {
   type: string

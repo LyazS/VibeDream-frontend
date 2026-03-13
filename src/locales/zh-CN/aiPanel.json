@@ -8,7 +8,8 @@
       "read_media": "查看素材",
       "list_tracks": "列出轨道",
       "read_track": "查看轨道",
-      "read_timelineitem": "查看片段"
+      "read_timelineitem": "查看片段",
+      "edit_sdk": "剪辑操作"
     },
     "characterEditor": "角色编辑器",
     "selectConfig": "选择一个配置",

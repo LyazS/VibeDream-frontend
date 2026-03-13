@@ -59,145 +59,94 @@ console.debug = (...args: any[]) => {
   originalConsole.debug(...args)
 }
 
-// 构建API对象 - 直接定义函数避免字符串转换
+// 构建API对象 - 只保留添加时间轴项目功能
 const buildAPI = () => {
   return {
-    // 时间轴项目操作
-    addTimelineItem: (item: any) => {
-      const result = { type: 'addTimelineItem', params: item }
+    addTimelineItem: (mediaItemId: string, trackId: string, position: string) => {
+      const result = { type: 'addTimelineItem', params: { mediaItemId, trackId, position } }
       operations.push(result)
       return result
     },
 
-    rmTimelineItem: (id: string) => {
-      const result = { type: 'rmTimelineItem', params: { timelineItemId: id } }
+    rmTimelineItem: (itemId: string) => {
+      const result = { type: 'rmTimelineItem', params: { itemId } }
       operations.push(result)
       return result
     },
 
-    mvTimelineItem: (id: string, position: number, trackId: string) => {
-      const result = {
-        type: 'mvTimelineItem',
-        params: { timelineItemId: id, newPosition: position, newTrackId: trackId },
+    mvTimelineItem: (itemId: string, newPosition: string, newTrackId?: string) => {
+      const params: any = { itemId, newPosition }
+      if (newTrackId !== undefined) {
+        params.newTrackId = newTrackId
       }
+      const result = { type: 'mvTimelineItem', params }
       operations.push(result)
       return result
     },
 
-    // 轨道操作
-    addTrack: (type: string = 'video', position?: number) => {
-      const result = { type: 'addTrack', params: { type, position } }
+    resizeTimelineItem: (itemId: string, newStartTime?: string, newEndTime?: string) => {
+      const params: any = { itemId }
+      if (newStartTime !== undefined) params.newStartTime = newStartTime
+      if (newEndTime !== undefined) params.newEndTime = newEndTime
+      const result = { type: 'resizeTimelineItem', params }
       operations.push(result)
       return result
     },
 
-    rmTrack: (id: string) => {
-      const result = { type: 'rmTrack', params: { trackId: id } }
+    // === 轨道操作 ===
+
+    addTrack: (trackType: 'video' | 'audio' | 'image', position?: number) => {
+      const params: any = { trackType }
+      if (position !== undefined) params.position = position
+      const result = { type: 'addTrack', params }
       operations.push(result)
       return result
     },
 
-    renameTrack: (id: string, name: string) => {
-      const result = { type: 'renameTrack', params: { trackId: id, newName: name } }
+    removeTrack: (trackId: string) => {
+      const result = { type: 'removeTrack', params: { trackId } }
       operations.push(result)
       return result
     },
 
-    // 文本操作
-    updateTextContent: (id: string, text: string, style?: any) => {
-      const result = {
-        type: 'updateTextContent',
-        params: { timelineItemId: id, newText: text, newStyle: style },
-      }
+    renameTrack: (trackId: string, newName: string) => {
+      const result = { type: 'renameTrack', params: { trackId, newName } }
       operations.push(result)
       return result
     },
 
-    updateTextStyle: (id: string, style: any) => {
-      const result = { type: 'updateTextStyle', params: { timelineItemId: id, newStyle: style } }
+    toggleTrackMute: (trackId: string, targetMuteState?: boolean) => {
+      const params: any = { trackId }
+      if (targetMuteState !== undefined) params.targetMuteState = targetMuteState
+      const result = { type: 'toggleTrackMute', params }
       operations.push(result)
       return result
     },
 
-    // 关键帧操作
-    createKeyframe: (id: string, position: number) => {
-      const result = { type: 'createKeyframe', params: { timelineItemId: id, position } }
+    toggleTrackVisibility: (trackId: string, targetVisible?: boolean) => {
+      const params: any = { trackId }
+      if (targetVisible !== undefined) params.targetVisible = targetVisible
+      const result = { type: 'toggleTrackVisibility', params }
       operations.push(result)
       return result
     },
 
-    deleteKeyframe: (id: string, position: number) => {
-      const result = { type: 'deleteKeyframe', params: { timelineItemId: id, position } }
-      operations.push(result)
-      return result
-    },
+    // === 时间轴项目属性更新 ===
 
-    updateKeyframeProperty: (id: string, position: number, property: string, value: any) => {
-      const result = {
-        type: 'updateKeyframeProperty',
-        params: { timelineItemId: id, position, property, value },
-      }
-      operations.push(result)
-      return result
-    },
-
-    clearAllKeyframes: (id: string) => {
-      const result = { type: 'clearAllKeyframes', params: { timelineItemId: id } }
-      operations.push(result)
-      return result
-    },
-
-    // 其他操作
-    splitTimelineItem: (id: string, position: number) => {
-      const result = {
-        type: 'splitTimelineItem',
-        params: { timelineItemId: id, splitPosition: position },
-      }
-      operations.push(result)
-      return result
-    },
-
-    cpTimelineItem: (id: string, position: number, trackId: string) => {
-      const result = {
-        type: 'cpTimelineItem',
-        params: { timelineItemId: id, newPosition: position, newTrackId: trackId },
-      }
-      operations.push(result)
-      return result
-    },
-
-    resizeTimelineItem: (id: string, timeRange: any) => {
-      const result = {
-        type: 'resizeTimelineItem',
-        params: { timelineItemId: id, newTimeRange: timeRange },
-      }
-      operations.push(result)
-      return result
-    },
-
-    updateTimelineItemTransform: (id: string, transform: any) => {
-      const result = {
-        type: 'updateTimelineItemTransform',
-        params: { timelineItemId: id, newTransform: transform },
-      }
-      operations.push(result)
-      return result
-    },
-
-    autoArrangeTrack: (id: string) => {
-      const result = { type: 'autoArrangeTrack', params: { trackId: id } }
-      operations.push(result)
-      return result
-    },
-
-    toggleTrackVisibility: (id: string, visible: boolean) => {
-      const result = { type: 'toggleTrackVisibility', params: { trackId: id, visible } }
-      operations.push(result)
-      return result
-    },
-
-    toggleTrackMute: (id: string, muted: boolean) => {
-      const result = { type: 'toggleTrackMute', params: { trackId: id, muted } }
+    updateTimelineItem: (itemId: string, options: {
+      x?: number
+      y?: number
+      width?: number
+      height?: number
+      rotation?: number
+      opacity?: number
+      proportionalScale?: boolean
+      volume?: number
+      isMuted?: boolean
+      duration?: number
+      playbackRate?: number
+    }) => {
+      const result = { type: 'updateTimelineItem', params: { itemId, ...options } }
       operations.push(result)
       return result
     },

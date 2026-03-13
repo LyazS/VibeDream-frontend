@@ -8,7 +8,8 @@
       "read_media": "Read Media",
       "list_tracks": "List Tracks",
       "read_track": "Read Track",
-      "read_timelineitem": "Read Timeline Item"
+      "read_timelineitem": "Read Timeline Item",
+      "edit_sdk": "Edit Operation"
     },
     "characterEditor": "Character Editor",
     "selectConfig": "Select a configuration",

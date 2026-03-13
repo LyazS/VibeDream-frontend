@@ -3,7 +3,6 @@
  * 将操作配置转换为具体命令，专注于命令构建，不负责执行
  */
 
-import type { SimpleCommand } from '@/core/modules/commands/types'
 import { useUnifiedStore } from '@/core/unifiedStore'
 
 // 导入共享类型定义
@@ -11,7 +10,10 @@ import type {
   OperationConfig,
   BuildOperationResult,
   BuildResult,
-} from '../core/types'
+} from './core/types'
+
+// 导入命令工厂
+import { CommandFactory } from './core/CommandFactory'
 
 /**
  * 批量命令构建器组合式函数
@@ -21,16 +23,20 @@ export function useBatchCommandBuilder() {
   // 使用统一存储
   const unifiedStore = useUnifiedStore()
 
+  // 创建命令工厂实例
+  const commandFactory = new CommandFactory()
+
   /**
    * 构建批量操作命令
+   * 注意：此方法现在是异步的，以支持 addTimelineItem 中的 pending 状态等待
    */
-  function buildOperations(operations: OperationConfig[]): BuildResult {
+  async function buildOperations(operations: OperationConfig[]): Promise<BuildResult> {
     const batchBuilder = unifiedStore.startBatch('用户脚本批量操作')
     const buildResults: BuildOperationResult[] = []
 
     for (const op of operations) {
       try {
-        const command = createCommandFromOperation(op)
+        const command = await commandFactory.createCommand(op)
         batchBuilder.addCommand(command)
         buildResults.push({ success: true, operation: op })
       } catch (error: any) {
@@ -48,16 +54,7 @@ export function useBatchCommandBuilder() {
     }
   }
 
-  /**
-   * 根据操作类型创建对应的命令
-   * 当前不实现任何命令
-   */
-  function createCommandFromOperation(op: OperationConfig): SimpleCommand {
-    throw new Error(`不支持的操作类型: ${op.type}`)
-  }
-
   return {
     buildOperations,
-    createCommandFromOperation,
   }
 }

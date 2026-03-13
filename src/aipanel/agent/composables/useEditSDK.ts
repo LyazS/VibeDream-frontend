@@ -237,7 +237,7 @@ function createEditSDK() {
 
   /**
    * 获取被动注入的上下文信息
-   * 包括项目信息和环境信息，自动附加到用户消息中
+   * 包括项目信息、选中状态和播放头位置，自动附加到用户消息中
    */
   function getPassiveContext(): string {
     const parts: string[] = []
@@ -259,8 +259,75 @@ function createEditSDK() {
       parts.push('- 项目信息获取失败')
     }
 
-    // 预留：后续可在此处添加环境信息（选中状态、播放头位置等）
-    // parts.push('\n[当前编辑环境]')
+    // 选中状态信息
+    try {
+      const hasTimelineSelection = unifiedStore.hasSelection
+      const hasMediaSelection = unifiedStore.hasMediaSelection
+
+      if (hasTimelineSelection || hasMediaSelection) {
+        parts.push('')
+        parts.push('[当前选中状态]')
+
+        // 时间轴项目选中信息
+        if (hasTimelineSelection) {
+          const selectedIds = Array.from(unifiedStore.selectedTimelineItemIds)
+          const count = selectedIds.length
+
+          if (count === 1) {
+            // 单选：显示详细信息
+            const selectedItem = unifiedStore.getSelectedTimelineItem()
+            if (selectedItem) {
+              parts.push(`- 时间轴选中: 1 个项目`)
+              parts.push(`  - ID: ${selectedItem.id}`)
+              parts.push(`  - 媒体类型: ${selectedItem.mediaType}`)
+              if (selectedItem.trackId) {
+                parts.push(`  - 轨道ID: ${selectedItem.trackId}`)
+              }
+              parts.push(`  - 时间范围: ${selectedItem.timeRange.timelineStartTime / 1000000}s - ${selectedItem.timeRange.timelineEndTime / 1000000}s`)
+              if (selectedItem.mediaItemId) {
+                parts.push(`  - 媒体项ID: ${selectedItem.mediaItemId}`)
+              }
+            }
+          } else {
+            // 多选：只显示数量和ID列表
+            parts.push(`- 时间轴选中: ${count} 个项目`)
+            parts.push(`  - ID列表: ${selectedIds.join(', ')}`)
+          }
+        }
+
+        // 媒体项目选中信息
+        if (hasMediaSelection) {
+          const selectedMediaIds = Array.from(unifiedStore.selectedMediaItemIds)
+          const mediaCount = selectedMediaIds.length
+          parts.push(`- 媒体库选中: ${mediaCount} 个项目`)
+          if (mediaCount === 1) {
+            const mediaId = selectedMediaIds[0]
+            if (mediaId) {
+              parts.push(`  - ID: ${mediaId}`)
+              const mediaItem = unifiedStore.getMediaItem(mediaId)
+              if (mediaItem) {
+                parts.push(`  - 名称: ${mediaItem.name}`)
+                parts.push(`  - 类型: ${mediaItem.mediaType}`)
+              }
+            }
+          } else {
+            parts.push(`  - ID列表: ${selectedMediaIds.join(', ')}`)
+          }
+        }
+      }
+    } catch (error: any) {
+      console.error('获取选中状态失败:', error)
+    }
+
+    // 播放头位置信息
+    try {
+      const currentFrame = unifiedStore.currentFrame
+      parts.push('')
+      parts.push('[播放头位置]')
+      parts.push(`- 当前帧: ${currentFrame}`)
+    } catch (error: any) {
+      console.error('获取播放头位置失败:', error)
+    }
 
     return parts.join('\n')
   }
