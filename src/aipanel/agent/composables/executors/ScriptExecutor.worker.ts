@@ -64,8 +64,16 @@ console.debug = (...args: any[]) => {
 // 构建API对象 - 只保留添加时间轴项目功能
 const buildAPI = () => {
   return {
-    addTimelineItem: (mediaItemId: string, trackId: string, position: string) => {
-      const result = { type: 'addTimelineItem', params: { mediaItemId, trackId, position } }
+    // === 时间轴操作 ===
+
+    addMediaToTimeline: (mediaItemId: string, trackId: string, position: string) => {
+      const result = { type: 'addMediaToTimeline', params: { mediaItemId, trackId, position } }
+      operations.push(result)
+      return result
+    },
+
+    addTextToTimeline: (text: string, trackId: string, position: string, duration: string) => {
+      const result = { type: 'addTextToTimeline', params: { text, trackId, position, duration } }
       operations.push(result)
       return result
     },
@@ -97,7 +105,7 @@ const buildAPI = () => {
 
     // === 轨道操作 ===
 
-    addTrack: (trackType: 'video' | 'audio' | 'image', position?: number) => {
+    addTrack: (trackType: 'video' | 'audio' | 'text', position?: number) => {
       const params: any = { trackType }
       if (position !== undefined) params.position = position
       const result = { type: 'addTrack', params }

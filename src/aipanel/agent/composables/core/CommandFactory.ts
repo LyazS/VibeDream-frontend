@@ -22,6 +22,9 @@ import type { UnifiedTimelineItemData } from '@/core/timelineitem/type'
 import { MediaItemQueries } from '@/core/mediaitem'
 import { generateTimelineItemId } from '@/core/utils/idGenerator'
 import { computed } from 'vue'
+import { createTextTimelineItem } from '@/core/utils/textTimelineUtils'
+import { setupTimelineItemBunny } from '@/core/bunnyUtils/timelineItemSetup'
+import { FRAME_RATE } from '@/constants/TimeConstants'
 
 /**
  * 命令工厂类
@@ -30,16 +33,15 @@ import { computed } from 'vue'
 export class CommandFactory {
   /**
    * 将操作配置转换为命令
-   * Phase 2：支持 addTimelineItem, rmTimelineItem, mvTimelineItem, resizeTimelineItem 操作
-   * Phase 3：支持 addTrack, removeTrack, renameTrack, toggleTrackMute, toggleTrackVisibility 操作
-   * 注意：此方法现在是异步的，以支持 addTimelineItem 中的 pending 状态等待
    */
   async createCommand(op: OperationConfig): Promise<SimpleCommand> {
     const { type, params } = op
 
     switch (type) {
-      case 'addTimelineItem':
+      case 'addMediaToTimeline':
         return await this.createAddTimelineItemCommand(params)
+      case 'addTextToTimeline':
+        return await this.createAddTextItemCommand(params)
       case 'rmTimelineItem':
         return this.createRmTimelineItemCommand(params)
       case 'mvTimelineItem':
@@ -106,6 +108,60 @@ export class CommandFactory {
   }
 
   /**
+   * 创建添加文本时间轴项目命令
+   */
+  private async createAddTextItemCommand(params: any): Promise<SimpleCommand> {
+    const unifiedStore = useUnifiedStore()
+
+    // 验证轨道存在且为文本类型
+    const targetTrack = unifiedStore.getTrack(params.trackId)
+    if (!targetTrack) {
+      throw new Error(`目标轨道不存在: ${params.trackId}`)
+    }
+
+    if (targetTrack.type !== 'text') {
+      throw new Error(
+        `轨道类型不匹配：addTextItem 只能添加到文本轨道，当前轨道类型为 ${targetTrack.type}`
+      )
+    }
+
+    // 时间码转帧
+    const positionFrames = this.timecodeToFrames(params.position)
+    const durationFrames = this.timecodeToFrames(params.duration)
+
+    // 创建文本时间轴项目
+    const timelineItem = await createTextTimelineItem(
+      params.text, // 文本内容
+      {}, // 使用默认样式（空 Partial<TextStyleConfig>）
+      positionFrames, // 开始时间
+      params.trackId, // 轨道ID
+      durationFrames, // 时长
+    )
+
+    // ✅ 为文本项目设置 bunny 对象（创建 textBitmap）
+    await setupTimelineItemBunny(timelineItem)
+
+    // ✅ 从 textBitmap 获取实际宽高并设置到 config
+    if (timelineItem.runtime.textBitmap) {
+      timelineItem.config.width = timelineItem.runtime.textBitmap.width
+      timelineItem.config.height = timelineItem.runtime.textBitmap.height
+    }
+
+    // 获取模块引用
+    const timelineModule = this.getTimelineModule()
+    const mediaModule = this.getMediaModule()
+    const configModule = this.getConfigModule()
+
+    // 创建命令
+    return new AddTimelineItemCommand(
+      timelineItem,
+      timelineModule,
+      mediaModule,
+      configModule,
+    )
+  }
+
+  /**
    * 创建删除时间轴项目命令
    */
   private createRmTimelineItemCommand(params: any): SimpleCommand {
@@ -147,10 +203,10 @@ export class CommandFactory {
 
     // 如果提供了 newTrackId，验证轨道存在
     const newTrackId: string = params.newTrackId ?? timelineItem.trackId
-    if (params.newTrackId) {
-      const targetTrack = unifiedStore.tracks.find(track => track.id === params.newTrackId)
+    if (newTrackId !== oldTrackId) {
+      const targetTrack = unifiedStore.getTrack(newTrackId)
       if (!targetTrack) {
-        throw new Error(`目标轨道不存在: ${params.newTrackId}`)
+        throw new Error(`目标轨道不存在: ${newTrackId}`)
       }
 
       // 验证轨道类型兼容性
@@ -198,11 +254,11 @@ export class CommandFactory {
     // 构建新的时间范围
     const newTimeRange: any = { ...timelineItem.timeRange }
 
-    if (params.newStartTime !== undefined) {
+    if (params.newStartTime != null) {
       newTimeRange.timelineStartTime = this.timecodeToFrames(params.newStartTime)
     }
 
-    if (params.newEndTime !== undefined) {
+    if (params.newEndTime != null) {
       newTimeRange.timelineEndTime = this.timecodeToFrames(params.newEndTime)
     }
 
@@ -260,19 +316,33 @@ export class CommandFactory {
 
   /**
    * 时间码转帧数
-   * 格式: HH:MM:SS.FF → frames
-   * 假设帧率为 30fps
+   * 支持格式:
+   * - HH:MM:SS.FF (完整格式)
+   * - MM:SS.FF (短格式，小时默认为 0)
    */
   private timecodeToFrames(timecode: string): number {
     const parts = timecode.split(':')
-    const hours = parseInt(parts[0]) || 0
-    const minutes = parseInt(parts[1]) || 0
-    const secondsParts = (parts[2] || '0').split('.')
-    const seconds = parseInt(secondsParts[0]) || 0
-    const frames = parseInt(secondsParts[1]) || 0
 
-    const frameRate = 30 // TODO: 从项目配置获取
-    return (hours * 3600 + minutes * 60 + seconds) * frameRate + frames
+    let hours = 0, minutes: number, seconds: number, frames: number
+
+    if (parts.length === 3) {
+      // 完整格式 HH:MM:SS.FF
+      hours = parseInt(parts[0]) || 0
+      minutes = parseInt(parts[1]) || 0
+      const secondsParts = parts[2].split('.')
+      seconds = parseInt(secondsParts[0]) || 0
+      frames = parseInt(secondsParts[1]) || 0
+    } else if (parts.length === 2) {
+      // 短格式 MM:SS.FF，小时默认为 0
+      minutes = parseInt(parts[0]) || 0
+      const secondsParts = parts[1].split('.')
+      seconds = parseInt(secondsParts[0]) || 0
+      frames = parseInt(secondsParts[1]) || 0
+    } else {
+      throw new Error(`无效的时间码格式: ${timecode}`)
+    }
+
+    return (hours * 3600 + minutes * 60 + seconds) * FRAME_RATE + frames
   }
 
   /**
@@ -415,7 +485,7 @@ export class CommandFactory {
     const unifiedStore = useUnifiedStore()
 
     // 验证轨道类型
-    const validTypes = ['video', 'audio', 'image']
+    const validTypes = ['video', 'audio', 'text']
     if (!validTypes.includes(params.trackType)) {
       throw new Error(`无效的轨道类型: ${params.trackType}`)
     }
@@ -428,7 +498,7 @@ export class CommandFactory {
     }
 
     // 创建命令
-    return new AddTrackCommand(params.trackType as any, params.position, trackModule)
+    return new AddTrackCommand(params.trackType as any, params.position ?? undefined, trackModule)
   }
 
   /**
@@ -438,7 +508,7 @@ export class CommandFactory {
     const unifiedStore = useUnifiedStore()
 
     // 验证轨道存在
-    const track = unifiedStore.tracks.find(t => t.id === params.trackId)
+    const track = unifiedStore.getTrack(params.trackId)
     if (!track) {
       throw new Error(`轨道不存在: ${params.trackId}`)
     }
@@ -476,7 +546,7 @@ export class CommandFactory {
     const unifiedStore = useUnifiedStore()
 
     // 验证轨道存在
-    const track = unifiedStore.tracks.find(t => t.id === params.trackId)
+    const track = unifiedStore.getTrack(params.trackId)
     if (!track) {
       throw new Error(`轨道不存在: ${params.trackId}`)
     }
@@ -503,7 +573,7 @@ export class CommandFactory {
     const unifiedStore = useUnifiedStore()
 
     // 验证轨道存在
-    const track = unifiedStore.tracks.find(t => t.id === params.trackId)
+    const track = unifiedStore.getTrack(params.trackId)
     if (!track) {
       throw new Error(`轨道不存在: ${params.trackId}`)
     }
@@ -529,7 +599,7 @@ export class CommandFactory {
     const unifiedStore = useUnifiedStore()
 
     // 验证轨道存在
-    const track = unifiedStore.tracks.find(t => t.id === params.trackId)
+    const track = unifiedStore.getTrack(params.trackId)
     if (!track) {
       throw new Error(`轨道不存在: ${params.trackId}`)
     }

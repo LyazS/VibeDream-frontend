@@ -36,8 +36,11 @@ export class ConfigValidator {
     }
 
     switch (op.type) {
-      case 'addTimelineItem':
-        this.validateAddTimelineItem(op.params)
+      case 'addMediaToTimeline':
+        this.validateAddMediaToTimeline(op.params)
+        break
+      case 'addTextToTimeline':
+        this.validateAddTextToTimeline(op.params)
         break
       case 'rmTimelineItem':
         this.validateRmTimelineItem(op.params)
@@ -72,22 +75,34 @@ export class ConfigValidator {
   }
 
   /**
-   * 验证时间码格式 (HH:MM:SS.FF)
+   * 验证时间码格式 (HH:MM:SS.FF 或 MM:SS.FF)
+   * 当省略小时时，默认为 0
    */
   private validateTimecode(timecode: string): void {
     if (typeof timecode !== 'string') {
       throw new Error('时间码必须是字符串')
     }
 
-    const timecodeRegex = /^(\d{2}):(\d{2}):(\d{2})\.(\d{2})$/
-    if (!timecodeRegex.test(timecode)) {
-      throw new Error(`无效的时间码格式: ${timecode}，应为 HH:MM:SS.FF 格式`)
-    }
+    // 支持两种格式：HH:MM:SS.FF 或 MM:SS.FF
+    const fullFormatRegex = /^(\d{2}):(\d{2}):(\d{2})\.(\d{2})$/
+    const shortFormatRegex = /^(\d{2}):(\d{2})\.(\d{2})$/
 
-    const [, hours, minutes, seconds, frames] = timecode.match(timecodeRegex)!
-    const h = parseInt(hours, 10)
-    const m = parseInt(minutes, 10)
-    const s = parseInt(seconds, 10)
+    let h = 0, m: number, s: number
+
+    if (fullFormatRegex.test(timecode)) {
+      // 完整格式 HH:MM:SS.FF
+      const [, hours, minutes, seconds] = timecode.match(fullFormatRegex)!
+      h = parseInt(hours, 10)
+      m = parseInt(minutes, 10)
+      s = parseInt(seconds, 10)
+    } else if (shortFormatRegex.test(timecode)) {
+      // 简短格式 MM:SS.FF，小时默认为 0
+      const [, minutes, seconds] = timecode.match(shortFormatRegex)!
+      m = parseInt(minutes, 10)
+      s = parseInt(seconds, 10)
+    } else {
+      throw new Error(`无效的时间码格式: ${timecode}，应为 HH:MM:SS.FF 或 MM:SS.FF 格式`)
+    }
 
     if (h < 0 || m < 0 || m > 59 || s < 0 || s > 59) {
       throw new Error(`无效的时间码值: ${timecode}`)
@@ -95,9 +110,9 @@ export class ConfigValidator {
   }
 
   /**
-   * 验证时间轴项目数据
+   * 验证添加媒体到时间轴操作
    */
-  private validateAddTimelineItem(params: any): void {
+  private validateAddMediaToTimeline(params: any): void {
     if (!params.mediaItemId || typeof params.mediaItemId !== 'string') {
       throw new Error('mediaItemId 不能为空且必须是字符串')
     }
@@ -111,6 +126,30 @@ export class ConfigValidator {
     }
 
     this.validateTimecode(params.position)
+  }
+
+  /**
+   * 验证添加文本到时间轴操作
+   */
+  private validateAddTextToTimeline(params: any): void {
+    if (!params.text || typeof params.text !== 'string') {
+      throw new Error('text 不能为空且必须是字符串')
+    }
+
+    if (!params.trackId || typeof params.trackId !== 'string') {
+      throw new Error('trackId 不能为空且必须是字符串')
+    }
+
+    if (!params.position || typeof params.position !== 'string') {
+      throw new Error('position 不能为空且必须是字符串')
+    }
+
+    if (!params.duration || typeof params.duration !== 'string') {
+      throw new Error('duration 不能为空且必须是字符串')
+    }
+
+    this.validateTimecode(params.position)
+    this.validateTimecode(params.duration)
   }
 
   /**
@@ -149,17 +188,27 @@ export class ConfigValidator {
       throw new Error('itemId 不能为空且必须是字符串')
     }
 
-    const hasTimeParam = params.newStartTime || params.newEndTime
+    const hasStartTime = params.newStartTime !== undefined
+    const hasEndTime = params.newEndTime !== undefined
 
-    if (!hasTimeParam) {
-      throw new Error('必须提供至少一个时间参数（newStartTime/newEndTime）')
+    // 至少需要提供一个时间参数
+    if (!hasStartTime && !hasEndTime) {
+      throw new Error('必须提供至少一个时间参数（newStartTime 或 newEndTime），可同时提供')
     }
 
-    if (params.newStartTime && typeof params.newStartTime === 'string') {
+    // 如果提供了 newStartTime，验证格式
+    if (hasStartTime) {
+      if (typeof params.newStartTime !== 'string') {
+        throw new Error('newStartTime 必须是字符串')
+      }
       this.validateTimecode(params.newStartTime)
     }
 
-    if (params.newEndTime && typeof params.newEndTime === 'string') {
+    // 如果提供了 newEndTime，验证格式
+    if (hasEndTime) {
+      if (typeof params.newEndTime !== 'string') {
+        throw new Error('newEndTime 必须是字符串')
+      }
       this.validateTimecode(params.newEndTime)
     }
   }
@@ -172,7 +221,7 @@ export class ConfigValidator {
       throw new Error('trackType 不能为空且必须是字符串')
     }
 
-    const validTypes = ['video', 'audio', 'image']
+    const validTypes = ['video', 'audio', 'text']
     if (!validTypes.includes(params.trackType)) {
       throw new Error(`trackType 必须是以下值之一: ${validTypes.join(', ')}`)
     }

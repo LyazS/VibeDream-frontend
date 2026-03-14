@@ -166,33 +166,53 @@ function createEditSDK() {
   /**
    * 生成执行结果报告
    *
-   * 根据ExecutionResult生成详细的执行报告，根据错误字段的递进关系决定显示哪些阶段
+   * 根据ExecutionResult生成详细的执行报告，使用 markdown 格式
    */
   function generateExecutionReport(result: ExecutionResult): string {
     const lines: string[] = []
 
     // 标题
-    lines.push(`音视频编辑: ${result.success ? '✅ 成功' : '❌ 失败'}`)
+    lines.push(`# 音视频编辑执行结果`)
+    lines.push('')
+    lines.push(`**状态**: ${result.success ? '✅ 成功' : '❌ 失败'}`)
     lines.push('')
 
     // 操作数量信息
     if (result.operationCount !== undefined && result.operationCount > 0) {
-      lines.push(`操作数量: ${result.operationCount}`)
+      lines.push(`**操作数量**: ${result.operationCount}`)
+      lines.push('')
     }
 
     // 脚本执行阶段 - 总是显示
     if (result.scriptExecutionError) {
-      lines.push(`❌ 代码执行报错:`)
+      lines.push(`## ❌ 代码执行错误`)
+      lines.push('')
+      lines.push(`**错误消息**:`)
+      lines.push('```')
       lines.push(result.scriptExecutionError)
+      lines.push('```')
+
+      // 添加堆栈信息
+      if (result.scriptExecutionStack) {
+        lines.push('')
+        lines.push(`**错误堆栈**:`)
+        lines.push('```')
+        lines.push(result.scriptExecutionStack)
+        lines.push('```')
+      }
+      lines.push('')
     }
 
     // 验证阶段 - 只有在没有脚本执行错误时才显示
     if (!result.scriptExecutionError) {
       if (result.validationErrors && result.validationErrors.length > 0) {
-        lines.push(`❌ 验证失败 (${result.validationErrors.length} 个错误):`)
+        lines.push(`## ❌ 验证失败`)
+        lines.push('')
         result.validationErrors.forEach((error, index) => {
-          lines.push(`  ${index + 1}. 操作类型: ${error.operation.type}`)
-          lines.push(`     错误: ${error.error}`)
+          lines.push(`### ${index + 1}. ${error.operation.type}`)
+          lines.push('')
+          lines.push(`- **错误**: ${error.error}`)
+          lines.push('')
         })
       }
     }
@@ -203,12 +223,27 @@ function createEditSDK() {
       (!result.validationErrors || result.validationErrors.length === 0)
     ) {
       if (result.buildOperationErrors && result.buildOperationErrors.length > 0) {
-        lines.push(`❌ 构建失败 (${result.buildOperationErrors.length} 个错误):`)
+        lines.push(`## ❌ 构建失败`)
+        lines.push('')
         result.buildOperationErrors.forEach((error, index) => {
-          lines.push(`  ${index + 1}. 操作类型: ${error.operation.type}`)
+          lines.push(`### ${index + 1}. ${error.operation.type}`)
+          lines.push('')
+
+          // 错误消息
           if (error.error) {
-            lines.push(`     错误: ${error.error}`)
+            lines.push(`- **错误**: ${error.error}`)
+          } else {
+            lines.push(`- **错误**: 未知构建错误`)
           }
+
+          // 堆栈信息
+          if (error.stack) {
+            lines.push(`- **堆栈**:`)
+            lines.push('```')
+            lines.push(error.stack)
+            lines.push('```')
+          }
+          lines.push('')
         })
       }
     }
@@ -220,27 +255,35 @@ function createEditSDK() {
       (!result.buildOperationErrors || result.buildOperationErrors.length === 0)
     ) {
       if (result.batchExecutionError) {
-        lines.push(`❌ 执行失败: ${result.batchExecutionError}`)
+        lines.push(`## ❌ 批量执行失败`)
+        lines.push('')
+        lines.push(`**错误**: ${result.batchExecutionError}`)
+        lines.push('')
       }
     }
 
     // 日志信息 - 总是显示
     if (result.logs && result.logs.length > 0) {
+      lines.push('---')
       lines.push('')
-      lines.push('--- 代码执行日志 ---')
-      result.logs.forEach((log, index) => {
-        lines.push(`[${log.type.toUpperCase()}] ${log.message}`)
+      lines.push(`## 执行日志`)
+      lines.push('')
+      result.logs.forEach((log) => {
+        lines.push(`- \`[${log.type.toUpperCase()}]\` ${log.message}`)
       })
+      lines.push('')
     }
 
-    // 添加提示信息
+    // 添加分隔线和提示信息
+    lines.push('---')
     lines.push('')
-    lines.push('（提示：你已经调用了\'edit_sdk\'工具改动了环境，请使用相应读取工具检查你的执行结果）')
+    lines.push('> （提示：你已经调用了\'edit_sdk\'工具改动了环境，请使用相应读取工具检查你的执行结果）')
 
     // 检测片段重叠
     const overlappingCount = countOverlappingItems(unifiedStore.timelineItems)
     if (overlappingCount > 0) {
-      lines.push(`（警告：检测到 ${overlappingCount} 处片段重叠，建议使用时间轴读取工具查看并调整）`)
+      lines.push('')
+      lines.push(`> （警告：检测到 ${overlappingCount} 处片段重叠，建议使用时间轴读取工具查看并调整）`)
     }
 
     return lines.join('\n')

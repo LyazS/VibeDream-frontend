@@ -13,14 +13,27 @@ export interface BaseOperationConfig {
 }
 
 /**
- * 添加时间轴项目操作
+ * 添加媒体到时间轴操作
  */
-export interface AddTimelineItemOperation extends BaseOperationConfig {
-  type: 'addTimelineItem'
+export interface AddMediaToTimelineOperation extends BaseOperationConfig {
+  type: 'addMediaToTimeline'
   params: {
     mediaItemId: string
     trackId: string
     position: string // 时间轴位置（时间码）
+  }
+}
+
+/**
+ * 添加文本到时间轴操作
+ */
+export interface AddTextToTimelineOperation extends BaseOperationConfig {
+  type: 'addTextToTimeline'
+  params: {
+    text: string // 文本内容
+    trackId: string // 轨道ID（必须是文本类型轨道）
+    position: string // 时间轴位置（时间码格式 HH:MM:SS.FF）
+    duration: string // 显示时长（时间码格式 HH:MM:SS.FF）
   }
 }
 
@@ -66,7 +79,7 @@ export interface ResizeTimelineItemOperation extends BaseOperationConfig {
 export interface AddTrackOperation extends BaseOperationConfig {
   type: 'addTrack'
   params: {
-    trackType: 'video' | 'audio' | 'image' // 轨道类型
+    trackType: 'video' | 'audio' | 'text' // 轨道类型（video 轨道也兼容 image 素材）
     position?: number // 插入位置（可选，默认添加到末尾）
   }
 }
@@ -143,7 +156,8 @@ export interface UpdateTimelineItemOperation extends BaseOperationConfig {
  * 操作配置联合类型 - 所有支持的操作类型
  */
 export type OperationConfig =
-  | AddTimelineItemOperation
+  | AddMediaToTimelineOperation
+  | AddTextToTimelineOperation
   | RmTimelineItemOperation
   | MvTimelineItemOperation
   | ResizeTimelineItemOperation
@@ -169,6 +183,7 @@ export interface BuildOperationResult {
   success: boolean
   operation: OperationConfig
   error?: string
+  stack?: string
 }
 
 /**
@@ -195,6 +210,7 @@ export interface ExecutionResult {
   operationCount?: number // 操作数量
   logs?: LogMessage[] // 脚本执行的调试打印日志
   scriptExecutionError?: string // 脚本执行阶段的详细错误信息
+  scriptExecutionStack?: string // 脚本执行阶段的错误堆栈
   validationErrors?: ValidationError[] // 验证阶段的错误信息
   buildOperationErrors?: BuildOperationResult[] // 构建阶段的错误信息
   batchExecutionError?: string // 批量命令执行阶段的错误信息
