@@ -2,6 +2,7 @@ import { ScriptExecutor } from './executors/ScriptExecutor'
 import { useBatchCommandBuilder } from './useBatchCommandBuilder'
 import { ConfigValidator } from './core/ConfigValidator'
 import { useUnifiedStore } from '@/core/unifiedStore'
+import { countOverlappingItems } from '@/core/utils/timeOverlapUtils'
 
 // 导入共享类型定义
 import type {
@@ -230,6 +231,16 @@ function createEditSDK() {
       result.logs.forEach((log, index) => {
         lines.push(`[${log.type.toUpperCase()}] ${log.message}`)
       })
+    }
+
+    // 添加提示信息
+    lines.push('')
+    lines.push('（提示：你已经调用了\'edit_sdk\'工具改动了环境，请使用相应读取工具检查你的执行结果）')
+
+    // 检测片段重叠
+    const overlappingCount = countOverlappingItems(unifiedStore.timelineItems)
+    if (overlappingCount > 0) {
+      lines.push(`（警告：检测到 ${overlappingCount} 处片段重叠，建议使用时间轴读取工具查看并调整）`)
     }
 
     return lines.join('\n')

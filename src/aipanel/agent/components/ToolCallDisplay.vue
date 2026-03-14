@@ -12,16 +12,20 @@
     </div>
     <!-- 展开的参数区域 -->
     <div v-if="isFrontendTool && isExpanded" class="tool-params-expanded">
-      <pre>{{ formattedArgs }}</pre>
+      <!-- edit_sdk 工具使用 markdown 渲染代码块 -->
+      <div v-if="isEditSdkTool && editSdkScript" class="markdown-body" v-html="renderMarkdown('```javascript\n' + editSdkScript + '\n```')"></div>
+      <!-- 其他工具显示原始 JSON -->
+      <pre v-else>{{ formattedArgs }}</pre>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, inject } from 'vue'
 import { useAppI18n } from '@/core/composables/useI18n'
 import { IconComponents } from '@/constants/iconComponents'
 import type { ChatMessageAssistantContent } from '../types'
+import 'github-markdown-css'
 
 const props = defineProps<{
   item: ChatMessageAssistantContent
@@ -30,7 +34,24 @@ const props = defineProps<{
 const { t } = useAppI18n()
 const isExpanded = ref(false)
 
+// 注入 markdown 渲染函数
+const renderMarkdown = inject<(content: string) => string>('renderMarkdown', (content: string) => content)
+
 const isFrontendTool = computed(() => props.item.isFrontendTool ?? false)
+
+// 检测是否是 edit_sdk 工具
+const isEditSdkTool = computed(() => props.item.toolName === 'edit_sdk')
+
+// 解析 edit_sdk 工具的 script 字段
+const editSdkScript = computed(() => {
+  if (!isEditSdkTool.value) return ''
+  try {
+    const args = JSON.parse(props.item.toolArgs || '{}')
+    return args.script || ''
+  } catch {
+    return ''
+  }
+})
 
 const displayName = computed(() => {
   const toolName = props.item.toolName

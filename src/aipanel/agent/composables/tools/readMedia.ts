@@ -335,10 +335,10 @@ function formatResults(details: MediaDetail[]): string {
 
     for (const detail of successGroup) {
       lines.push(`[ID: ${detail.id}] ${detail.name}`)
-      lines.push(`  类型: ${detail.mediaType}`)
+      lines.push(`  类型: '${detail.mediaType}'`)
 
       if (detail.duration) {
-        lines.push(`  时长: ${detail.duration}`)
+        lines.push(`  时长: '${detail.duration}'`)
       }
 
       lines.push(`  描述: ${detail.description}`)
@@ -353,10 +353,10 @@ function formatResults(details: MediaDetail[]): string {
 
     for (const detail of failedGroup) {
       lines.push(`[ID: ${detail.id}] ${detail.name}`)
-      lines.push(`  类型: ${detail.mediaType}`)
+      lines.push(`  类型: '${detail.mediaType}'`)
 
       if (detail.duration) {
-        lines.push(`  时长: ${detail.duration}`)
+        lines.push(`  时长: '${detail.duration}'`)
       }
 
       lines.push('')

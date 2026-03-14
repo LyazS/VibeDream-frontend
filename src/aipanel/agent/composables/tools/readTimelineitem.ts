@@ -126,7 +126,7 @@ function formatTimelineItemDetail(item: UnifiedTimelineItemData): string {
   }
   lines.push('')
   lines.push(`=== 时间范围 ===`)
-  lines.push(`时间轴: ${timelineTimeRange.start} - ${timelineTimeRange.end}`)
+  lines.push(`时间轴: '${timelineTimeRange.start}' - '${timelineTimeRange.end}'`)
 
   // 源时间范围（视频/音频/图片）
   if (item.mediaType === 'video' || item.mediaType === 'audio') {

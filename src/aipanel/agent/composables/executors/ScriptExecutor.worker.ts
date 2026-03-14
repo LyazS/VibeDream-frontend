@@ -1,4 +1,6 @@
 // 脚本执行Worker - 在沙箱环境中执行用户代码
+import { timecodeToFrames, framesToTimecode } from '@/core/utils/timeUtils'
+
 let operations: any[] = []
 
 // 保存原始的console方法
@@ -149,6 +151,55 @@ const buildAPI = () => {
       const result = { type: 'updateTimelineItem', params: { itemId, ...options } }
       operations.push(result)
       return result
+    },
+
+    // === 时间码计算方法 ===
+
+    /**
+     * 时间码加法
+     * @param timecode1 第一个时间码 (格式: HH:MM:SS.FF)
+     * @param timecode2 第二个时间码 (格式: HH:MM:SS.FF)
+     * @returns 相加后的时间码字符串
+     */
+    addTimecodes: (timecode1: string, timecode2: string) => {
+      try {
+        const frames1 = timecodeToFrames(timecode1)
+        const frames2 = timecodeToFrames(timecode2)
+        const result = frames1 + frames2
+        const resultTimecode = framesToTimecode(result)
+        console.log(`addTimecodes('${timecode1}', '${timecode2}') = '${resultTimecode}'`)
+        return resultTimecode
+      } catch (error) {
+        throw new Error(`时间码加法失败: ${error instanceof Error ? error.message : String(error)}`)
+      }
+    },
+
+    /**
+     * 时间码减法
+     * @param timecode1 被减时间码 (格式: HH:MM:SS.FF)
+     * @param timecode2 减数时间码 (格式: HH:MM:SS.FF)
+     * @returns 相减后的时间码字符串,负数结果会带负号
+     */
+    subtractTimecodes: (timecode1: string, timecode2: string) => {
+      try {
+        const frames1 = timecodeToFrames(timecode1)
+        const frames2 = timecodeToFrames(timecode2)
+        const result = frames1 - frames2
+
+        // 处理负数结果
+        let resultTimecode: string
+        if (result < 0) {
+          const absResult = Math.abs(result)
+          resultTimecode = `-${framesToTimecode(absResult)}`
+        } else {
+          resultTimecode = framesToTimecode(result)
+        }
+
+        console.log(`subtractTimecodes('${timecode1}', '${timecode2}') = '${resultTimecode}'`)
+        return resultTimecode
+      } catch (error) {
+        throw new Error(`时间码减法失败: ${error instanceof Error ? error.message : String(error)}`)
+      }
     },
   }
 }
