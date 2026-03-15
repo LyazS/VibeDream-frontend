@@ -43,6 +43,7 @@ import {
   type TimelineModule as KeyframeTimelineModule,
   type PlaybackControls,
 } from '@/core/modules/commands/keyframeCommands'
+import { ToggleProportionalScaleCommand } from '@/core/modules/commands/ToggleProportionalScaleCommand'
 
 // 变换属性类型定义
 interface TransformProperties {
@@ -914,6 +915,33 @@ export function useHistoryOperations(
     }
   }
 
+  /**
+   * 带历史记录的切换等比缩放方法
+   * @param timelineItemId 时间轴项目ID
+   * @param frame 当前帧
+   */
+  async function toggleProportionalScaleWithHistory(timelineItemId: string, frame: number) {
+    try {
+      console.log('🎬 [useHistoryOperations] 切换等比缩放:', { timelineItemId, frame })
+
+      const command = new ToggleProportionalScaleCommand(
+        timelineItemId,
+        frame,
+        {
+          getTimelineItem: unifiedTimelineModule.getTimelineItem,
+          getMediaItem: unifiedMediaModule.getMediaItem,
+        },
+      )
+
+      await unifiedHistoryModule.executeCommand(command)
+
+      console.log('✅ [useHistoryOperations] 等比缩放切换成功')
+    } catch (error) {
+      console.error('❌ [useHistoryOperations] 等比缩放切换失败:', error)
+      throw error
+    }
+  }
+
   return {
     addTimelineItemWithHistory,
     removeTimelineItemWithHistory,
@@ -937,5 +965,6 @@ export function useHistoryOperations(
     updatePropertyWithHistory,
     clearAllKeyframesWithHistory,
     toggleKeyframeWithHistory,
+    toggleProportionalScaleWithHistory,
   }
 }

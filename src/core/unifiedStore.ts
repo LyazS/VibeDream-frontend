@@ -154,6 +154,7 @@ export const useUnifiedStore = defineStore('unified', () => {
     updatePropertyWithHistory: historyOperations.updatePropertyWithHistory,
     clearAllKeyframesWithHistory: historyOperations.clearAllKeyframesWithHistory,
     toggleKeyframeWithHistory: historyOperations.toggleKeyframeWithHistory,
+    toggleProportionalScaleWithHistory: historyOperations.toggleProportionalScaleWithHistory,
 
     // ==================== 统一媒体模块状态和方法 ====================
 

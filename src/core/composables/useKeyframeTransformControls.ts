@@ -442,26 +442,19 @@ export function useUnifiedKeyframeTransformControls(
   // ==================== 缩放控制方法 ====================
 
   /**
-   * 切换等比缩放
+   * 切换等比缩放（带历史记录）
    */
-  const toggleProportionalScale = () => {
-    // 先切换状态
-    proportionalScale.value = !proportionalScale.value
-
-    // 如果刚刚开启等比缩放，使用当前X缩放值作为统一缩放值，同时更新Y缩放
+  const toggleProportionalScale = async () => {
     if (
-      proportionalScale.value &&
-      selectedTimelineItem.value &&
-      TimelineItemQueries.hasVisualProperties(selectedTimelineItem.value)
-    ) {
-      // 使用统一的获取原始尺寸方法
-      const { width: originalWidth, height: originalHeight } = getOriginalDimensions()
-      const newSize = {
-        width: originalWidth * scaleX.value,
-        height: originalHeight * scaleX.value, // 使用X缩放值保持等比
-      }
-      updateTransform({ width: newSize.width, height: newSize.height })
-    }
+      !selectedTimelineItem.value ||
+      !TimelineItemQueries.hasVisualProperties(selectedTimelineItem.value)
+    )
+      return
+
+    await unifiedStore.toggleProportionalScaleWithHistory(
+      selectedTimelineItem.value.id,
+      currentFrame.value,
+    )
   }
 
   /**
