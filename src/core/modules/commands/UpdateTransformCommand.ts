@@ -196,9 +196,9 @@ export class UpdateTransformCommand implements SimpleCommand {
     }
 
     if (this.newValues.rotation !== undefined && this.oldValues.rotation !== undefined) {
-      // 将弧度转换为角度显示
-      const oldDegrees = ((this.oldValues.rotation * 180) / Math.PI).toFixed(1)
-      const newDegrees = ((this.newValues.rotation * 180) / Math.PI).toFixed(1)
+      // 直接使用角度值（无需转换）
+      const oldDegrees = this.oldValues.rotation.toFixed(1)
+      const newDegrees = this.newValues.rotation.toFixed(1)
       changes.push(`旋转: ${oldDegrees}° → ${newDegrees}°`)
     }
 

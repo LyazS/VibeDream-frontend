@@ -5,7 +5,7 @@
 
 import { computed, readonly, type Ref } from 'vue'
 import { useUnifiedStore } from '@/core/unifiedStore'
-import { uiDegreesToRotationRadians, rotationRadiansToUIDegrees } from '@/core/utils/rotationTransform'
+import { normalizeAngle } from '@/core/utils/rotationTransform'
 import type { UnifiedTimelineItemData } from '@/core/timelineitem'
 import { TimelineItemQueries } from '@/core/timelineitem/queries'
 import type {
@@ -170,8 +170,7 @@ export function useUnifiedKeyframeTransformControls(
       return 0
     // ✅ 使用辅助函数获取渲染配置
     const config = TimelineItemQueries.getRenderConfig(selectedTimelineItem.value)
-    const radians = config.rotation
-    return rotationRadiansToUIDegrees(radians)
+    return config.rotation  // ✅ 直接返回角度值
   })
 
   const opacity = computed(() => {
@@ -602,7 +601,7 @@ export function useUnifiedKeyframeTransformControls(
   }
 
   /**
-   * 设置旋转绝对值的方法（输入角度，转换为弧度）
+   * 设置旋转绝对值的方法（输入角度）
    */
   const setRotationDeferred = (value: number) => {
     if (
@@ -612,7 +611,7 @@ export function useUnifiedKeyframeTransformControls(
       return
 
     const config = TimelineItemQueries.getRenderConfig(selectedTimelineItem.value)
-    const newRotationRadians = uiDegreesToRotationRadians(value)
+    const newRotation = normalizeAngle(value)  // ✅ 标准化角度
 
     // 检查是否第一次 @input（拖动开始）
     const isFirstInput = deferredUpdate.dragState.value.pendingUpdates.size === 0
@@ -625,19 +624,19 @@ export function useUnifiedKeyframeTransformControls(
     const buttonState = getKeyframeButtonState(selectedTimelineItem.value, currentFrame.value)
 
     if (buttonState === 'none') {
-      ;(selectedTimelineItem.value.config as any).rotation = newRotationRadians
+      ;(selectedTimelineItem.value.config as any).rotation = newRotation
     } else if (buttonState === 'on-keyframe') {
       const keyframe = findKeyframeAtFrame(selectedTimelineItem.value, currentFrame.value)
       if (keyframe && 'rotation' in keyframe.properties) {
-        ;(keyframe.properties as any).rotation = newRotationRadians
+        ;(keyframe.properties as any).rotation = newRotation
       }
     } else if (buttonState === 'between-keyframes' && deferredUpdate.dragState.value.createdKeyframe) {
       if ('rotation' in deferredUpdate.dragState.value.createdKeyframe!.properties) {
-        ;(deferredUpdate.dragState.value.createdKeyframe.properties as any).rotation = newRotationRadians
+        ;(deferredUpdate.dragState.value.createdKeyframe.properties as any).rotation = newRotation
       }
     }
 
-    deferredUpdate.updateDuringDrag('rotation', newRotationRadians)
+    deferredUpdate.updateDuringDrag('rotation', newRotation)
   }
 
   /**
@@ -805,9 +804,9 @@ export function useUnifiedKeyframeTransformControls(
 
   /**
    * 设置旋转角度的延迟更新方法（用于拖拽旋转）
-   * 输入弧度值
+   * 输入角度值
    */
-  const setTransformRotationDeferred = (rotationRadians: number) => {
+  const setTransformRotationDeferred = (rotationDegrees: number) => {
     if (
       !selectedTimelineItem.value ||
       !TimelineItemQueries.hasVisualProperties(selectedTimelineItem.value)
@@ -816,8 +815,8 @@ export function useUnifiedKeyframeTransformControls(
 
     const config = TimelineItemQueries.getRenderConfig(selectedTimelineItem.value)
 
-    // 标准化角度到 -π 到 π
-    const normalizedRotation = normalizeRadians(rotationRadians)
+    // 标准化角度到 -180° 到 180°
+    const normalizedRotation = normalizeAngle(rotationDegrees)
 
     // 检查是否第一次拖动
     const isFirstInput = deferredUpdate.dragState.value.pendingUpdates.size === 0
@@ -849,13 +848,13 @@ export function useUnifiedKeyframeTransformControls(
   /**
    * 角度标准化工具函数
    */
-  function normalizeRadians(radians: number): number {
-    // 标准化到 -π 到 π
-    let normalized = radians % (2 * Math.PI)
-    if (normalized > Math.PI) {
-      normalized -= 2 * Math.PI
-    } else if (normalized < -Math.PI) {
-      normalized += 2 * Math.PI
+  function normalizeAngle(degrees: number): number {
+    // 标准化到 -180° 到 180°
+    let normalized = degrees % 360
+    if (normalized > 180) {
+      normalized -= 360
+    } else if (normalized < -180) {
+      normalized += 360
     }
     return normalized
   }
@@ -1024,7 +1023,7 @@ export function useUnifiedKeyframeTransformControls(
 
   /**
    * 直接设置旋转（用于 NumberInput）
-   * 接收UI角度值，转换为弧度后记录历史
+   * 接收角度值，标准化后记录历史
    */
   const setRotationDirectly = async (degrees: number) => {
     if (
@@ -1033,13 +1032,13 @@ export function useUnifiedKeyframeTransformControls(
     )
       return
 
-    const newRotationRadians = uiDegreesToRotationRadians(degrees)
+    const newRotation = normalizeAngle(degrees)  // ✅ 标准化角度
 
     await unifiedStore.updatePropertyWithHistory(
       selectedTimelineItem.value.id,
       currentFrame.value,
       'rotation',
-      newRotationRadians
+      newRotation
     )
   }
 

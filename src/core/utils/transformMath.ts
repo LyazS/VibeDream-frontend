@@ -3,6 +3,8 @@
  * 提供缩放和旋转的数学计算功能
  */
 
+import { degreesToRadians } from './rotationTransform'
+
 export interface ScaleCalculationOptions {
   initialWidth: number
   initialHeight: number
@@ -46,9 +48,10 @@ export function calculateScaledSize(options: ScaleCalculationOptions): ScaleResu
   // 如果元素有旋转，先将增量反向旋转到元素的局部坐标系
   let localDeltaX = deltaX
   let localDeltaY = deltaY
-  
+
   if (elementRotation !== 0) {
     const rotated = scaleWithRotation(deltaX, deltaY, elementRotation)
+    // elementRotation 现在是角度，scaleWithRotation 内部会转换
     localDeltaX = rotated.deltaX
     localDeltaY = rotated.deltaY
   }
@@ -135,14 +138,15 @@ export function calculateScaledSize(options: ScaleCalculationOptions): ScaleResu
   // 如果元素有旋转，需要将局部坐标系的位置偏移转换回全局坐标系
   let newX = initialX
   let newY = initialY
-  
+
   if (elementRotation !== 0 && (localOffsetX !== 0 || localOffsetY !== 0)) {
     // 将局部偏移量旋转到全局坐标系
-    const cos = Math.cos(elementRotation)
-    const sin = Math.sin(elementRotation)
+    const rotationRadians = degreesToRadians(elementRotation)
+    const cos = Math.cos(rotationRadians)
+    const sin = Math.sin(rotationRadians)
     const globalOffsetX = localOffsetX * cos - localOffsetY * sin
     const globalOffsetY = localOffsetX * sin + localOffsetY * cos
-    
+
     newX = initialX + globalOffsetX
     newY = initialY + globalOffsetY
   } else {
@@ -166,10 +170,11 @@ export function calculateScaledSize(options: ScaleCalculationOptions): ScaleResu
 export function scaleWithRotation(
   deltaX: number,
   deltaY: number,
-  elementRotation: number
+  elementRotation: number  // 现在接收角度值
 ): { deltaX: number; deltaY: number } {
-  const cos = Math.cos(-elementRotation)
-  const sin = Math.sin(-elementRotation)
+  const rotationRadians = degreesToRadians(elementRotation)
+  const cos = Math.cos(-rotationRadians)
+  const sin = Math.sin(-rotationRadians)
 
   const localDeltaX = deltaX * cos - deltaY * sin
   const localDeltaY = deltaX * sin + deltaY * cos
@@ -183,7 +188,7 @@ export function scaleWithRotation(
  * @param mouseY 鼠标Y坐标（Canvas坐标系）
  * @param centerX 旋转中心X坐标（Canvas坐标系）
  * @param centerY 旋转中心Y坐标（Canvas坐标系）
- * @returns 旋转角度（弧度）
+ * @returns 旋转角度（角度制，范围：-180° 到 180°）
  */
 export function calculateRotationAngle(
   mouseX: number,
@@ -191,14 +196,25 @@ export function calculateRotationAngle(
   centerX: number,
   centerY: number
 ): number {
-  // 计算鼠标相对于元素中心的角度
-  const angle = Math.atan2(mouseY - centerY, mouseX - centerX)
+  // 计算鼠标相对于元素中心的角度（弧度）
+  const angleRadians = Math.atan2(mouseY - centerY, mouseX - centerX)
 
   // 调整角度基准：atan2返回的0°是正右方向，我们需要0°是正上方向
   // 加上90度（π/2弧度）使其顺时针旋转
-  const adjustedAngle = angle + Math.PI / 2
+  const adjustedRadians = angleRadians + Math.PI / 2
 
-  return adjustedAngle
+  // 转换为角度，不进行标准化，保持连续性
+  const degrees = (adjustedRadians * 180) / Math.PI
+
+  // 标准化到 -180 到 180 范围，但保持平滑过渡
+  let normalized = degrees % 360
+  if (normalized > 180) {
+    normalized -= 360
+  } else if (normalized < -180) {
+    normalized += 360
+  }
+
+  return normalized
 }
 
 /**
@@ -221,10 +237,11 @@ export function normalizeRadians(radians: number): number {
 export function getAABB(
   width: number,
   height: number,
-  rotation: number
+  rotation: number  // 现在接收角度值
 ): { width: number; height: number } {
-  const cos = Math.abs(Math.cos(rotation))
-  const sin = Math.abs(Math.sin(rotation))
+  const rotationRadians = degreesToRadians(rotation)
+  const cos = Math.abs(Math.cos(rotationRadians))
+  const sin = Math.abs(Math.sin(rotationRadians))
 
   return {
     width: width * cos + height * sin,

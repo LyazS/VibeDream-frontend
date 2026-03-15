@@ -6,6 +6,7 @@ export interface VisualProps {
   y: number
   width: number
   height: number
+  /** 旋转角度（角度制，范围：-180° 到 180°） */
   rotation: number
   opacity: number
   /** 等比缩放状态（每个clip独立） */
@@ -27,6 +28,7 @@ export interface VisualAnimatableProps {
   y: number
   width: number
   height: number
+  /** 旋转角度（角度制，范围：-180° 到 180°） */
   rotation: number
   opacity: number
 }

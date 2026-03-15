@@ -75,6 +75,7 @@ import { useUnifiedStore } from '@/core/unifiedStore'
 import { TimelineItemQueries } from '@/core/timelineitem/queries'
 import type { VisualProps } from '@/core/timelineitem/bunnytype'
 import type { MediaType } from '@/core/mediaitem'
+import { degreesToRadians } from '@/core/utils/rotationTransform'
 
 interface Props {
   selectedTimelineItemId: string | null
@@ -209,7 +210,10 @@ function convertCanvasToDOM(
   const left = domX - domWidth / 2
   const top = domY - domHeight / 2
 
-  return { left, top, width: domWidth, height: domHeight, rotation: config.rotation }
+  // 转换旋转角度：角度 → 弧度（用于 CSS transform）
+  const rotationRadians = degreesToRadians(config.rotation)
+
+  return { left, top, width: domWidth, height: domHeight, rotation: rotationRadians }
 }
 
 /**

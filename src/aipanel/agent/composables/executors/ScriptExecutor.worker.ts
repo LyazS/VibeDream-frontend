@@ -1,5 +1,6 @@
 // 脚本执行Worker - 在沙箱环境中执行用户代码
 import { timecodeToFrames, framesToTimecode } from '@/core/utils/timeUtils'
+import { normalizeAngle } from '@/core/utils/rotationTransform'
 
 let operations: any[] = []
 
@@ -165,8 +166,8 @@ const buildAPI = () => {
       // 处理参数：将 rotation 从角度转换为弧度
       const processedOptions = { ...options }
       if (options.rotation !== undefined) {
-        // 角度转弧度：Agent 传递角度（如 90），底层需要弧度（如 Math.PI / 2）
-        processedOptions.rotation = (options.rotation * Math.PI) / 180
+        // Agent 和存储都是角度，只需要标准化
+        processedOptions.rotation = normalizeAngle(options.rotation)
       }
 
       const result = { type: 'updateTimelineItem', params: { itemId, ...processedOptions } }

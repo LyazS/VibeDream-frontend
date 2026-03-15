@@ -6,6 +6,7 @@
  */
 
 import type { UnifiedTimelineItemData } from '@/core/timelineitem/type'
+import { degreesToRadians } from '@/core/utils/rotationTransform'
 import type { MediaType, UnifiedMediaItemData } from '@/core/mediaitem/types'
 import type { VisualProps } from '@/core/timelineitem/bunnytype'
 import { TimelineItemQueries } from '@/core/timelineitem/queries'
@@ -112,7 +113,8 @@ export function renderItem(
       }
     }
     if (visualConfig.rotation !== 0) {
-      ctx.rotate(visualConfig.rotation)
+      const rotationRadians = degreesToRadians(visualConfig.rotation)
+      ctx.rotate(rotationRadians)  // ✅ 转换为弧度后使用
     }
 
     // 3. 应用不透明度

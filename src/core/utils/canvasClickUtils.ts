@@ -2,6 +2,8 @@
  * Canvas 点击检测工具函数
  */
 
+import { degreesToRadians } from './rotationTransform'
+
 interface Point2D {
   x: number
   y: number
@@ -110,7 +112,7 @@ export function isPointInRotatedBoundingBox(
     y: number
     width: number
     height: number
-    rotation: number // 弧度值
+    rotation: number // 角度值
   },
 ): boolean {
   // 1. 计算点击点相对于元素中心的偏移
@@ -118,10 +120,9 @@ export function isPointInRotatedBoundingBox(
   const dy = point.y - elementBox.y
 
   // 2. 逆旋转：将点击点转换到元素的局部坐标系
-  // 逆旋转矩阵：[cos(-θ), -sin(-θ)]   [cos(θ),  sin(θ)]
-  //            [sin(-θ),  cos(-θ)] = [-sin(θ), cos(θ)]
-  const cos = Math.cos(-elementBox.rotation)
-  const sin = Math.sin(-elementBox.rotation)
+  const rotationRadians = degreesToRadians(elementBox.rotation)
+  const cos = Math.cos(-rotationRadians)
+  const sin = Math.sin(-rotationRadians)
   const localX = dx * cos - dy * sin
   const localY = dx * sin + dy * cos
 

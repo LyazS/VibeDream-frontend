@@ -193,8 +193,8 @@ function extractTransformInfo(config: VisualProps | AudioProps | TextProps): Tra
     info.scaleY = config.height
   }
   if ('rotation' in config && config.rotation !== undefined) {
-    // 弧度转角度：底层存储弧度，Agent 读取时显示为角度
-    info.rotation = (config.rotation * 180) / Math.PI
+    // 存储和 Agent 都是角度，直接使用
+    info.rotation = config.rotation
   }
   if ('opacity' in config && config.opacity !== undefined) {
     info.opacity = config.opacity
