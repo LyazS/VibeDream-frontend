@@ -27,10 +27,10 @@ interface TransformInfo {
   x?: number
   /** Y位置（像素） */
   y?: number
-  /** 缩放比例 */
-  scaleX?: number
-  /** 缩放比例 */
-  scaleY?: number
+  /** 宽度（像素） */
+  width?: number
+  /** 高度（像素） */
+  height?: number
   /** 旋转角度（度） */
   rotation?: number
   /** 不透明度（0-1） */
@@ -125,7 +125,7 @@ function formatTimelineItemDetail(item: UnifiedTimelineItemData): string {
     end: framesToTimecode(item.timeRange.timelineEndTime),
   }
   lines.push('')
-  lines.push(`=== 时间范围 ===`)
+  lines.push(`=== 时间范围（HH:MM:SS.FF格式） ===`)
   lines.push(`时间轴: '${timelineTimeRange.start}' - '${timelineTimeRange.end}'`)
 
   // 源时间范围（视频/音频/图片）
@@ -146,8 +146,8 @@ function formatTimelineItemDetail(item: UnifiedTimelineItemData): string {
       lines.push(`=== 变换属性 ===`)
       if (transformInfo.x !== undefined) lines.push(`X位置: ${transformInfo.x}px`)
       if (transformInfo.y !== undefined) lines.push(`Y位置: ${transformInfo.y}px`)
-      if (transformInfo.scaleX !== undefined) lines.push(`X缩放: ${transformInfo.scaleX}`)
-      if (transformInfo.scaleY !== undefined) lines.push(`Y缩放: ${transformInfo.scaleY}`)
+      if (transformInfo.width !== undefined) lines.push(`宽度: ${transformInfo.width}px`)
+      if (transformInfo.height !== undefined) lines.push(`高度: ${transformInfo.height}px`)
       if (transformInfo.rotation !== undefined) lines.push(`旋转: ${transformInfo.rotation}°`)
       if (transformInfo.opacity !== undefined) lines.push(`不透明度: ${(transformInfo.opacity * 100).toFixed(0)}%`)
       if (transformInfo.volume !== undefined) lines.push(`音量: ${(transformInfo.volume * 100).toFixed(0)}%`)
@@ -185,12 +185,10 @@ function extractTransformInfo(config: VisualProps | AudioProps | TextProps): Tra
     info.y = config.y
   }
   if ('width' in config && config.width !== undefined) {
-    // VisualProps 使用 width/height 而不是 scaleX/scaleY
-    // 但为了向后兼容，我们仍然可以导出这些信息
-    info.scaleX = config.width
+    info.width = config.width
   }
   if ('height' in config && config.height !== undefined) {
-    info.scaleY = config.height
+    info.height = config.height
   }
   if ('rotation' in config && config.rotation !== undefined) {
     // 存储和 Agent 都是角度，直接使用

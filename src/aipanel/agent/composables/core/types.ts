@@ -139,6 +139,17 @@ export interface ToggleTrackVisibilityOperation extends BaseOperationConfig {
 }
 
 /**
+ * 切换等比缩放操作
+ */
+export interface ToggleProportionalScaleOperation extends BaseOperationConfig {
+  type: 'toggleProportionalScale'
+  params: {
+    itemId: string // 时间轴项目 ID
+    enabled?: boolean // 目标状态（可选，不提供则切换当前状态）
+  }
+}
+
+/**
  * 更新时间轴项目属性操作
  * 支持更新变换属性（位置、大小、旋转、透明度）和音频属性（音量、静音）
  */
@@ -179,6 +190,7 @@ export type OperationConfig =
   | MoveTrackOperation
   | ToggleTrackMuteOperation
   | ToggleTrackVisibilityOperation
+  | ToggleProportionalScaleOperation
 
 /**
  * 验证错误接口

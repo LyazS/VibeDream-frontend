@@ -69,6 +69,9 @@ export class ConfigValidator {
       case 'toggleTrackVisibility':
         this.validateToggleTrackVisibility(op.params)
         break
+      case 'toggleProportionalScale':
+        this.validateToggleProportionalScale(op.params)
+        break
       case 'updateTimelineItem':
         this.validateUpdateTimelineItem(op.params)
         break
@@ -303,6 +306,19 @@ export class ConfigValidator {
 
     if (params.targetVisible !== undefined && typeof params.targetVisible !== 'boolean') {
       throw new Error('targetVisible 必须是布尔值')
+    }
+  }
+
+  /**
+   * 验证切换等比缩放操作
+   */
+  private validateToggleProportionalScale(params: any): void {
+    if (!params.itemId || typeof params.itemId !== 'string') {
+      throw new Error('itemId 不能为空且必须是字符串')
+    }
+
+    if (params.enabled !== undefined && typeof params.enabled !== 'boolean') {
+      throw new Error('enabled 必须是布尔值')
     }
   }
 

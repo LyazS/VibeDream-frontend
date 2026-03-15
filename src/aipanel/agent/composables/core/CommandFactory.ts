@@ -17,6 +17,7 @@ import { RenameTrackCommand } from '@/core/modules/commands/RenameTrackCommand'
 import { MoveTrackCommand } from '@/core/modules/commands/MoveTrackCommand'
 import { ToggleTrackMuteCommand } from '@/core/modules/commands/ToggleTrackMuteCommand'
 import { ToggleTrackVisibilityCommand } from '@/core/modules/commands/ToggleTrackVisibilityCommand'
+import { ToggleProportionalScaleCommand } from '@/core/modules/commands/ToggleProportionalScaleCommand'
 import { UpdateTransformCommand } from '@/core/modules/commands/UpdateTransformCommand'
 import type { MediaType } from '@/core/mediaitem/types'
 import type { UnifiedTimelineItemData } from '@/core/timelineitem/type'
@@ -61,6 +62,8 @@ export class CommandFactory {
         return this.createToggleTrackMuteCommand(params)
       case 'toggleTrackVisibility':
         return this.createToggleTrackVisibilityCommand(params)
+      case 'toggleProportionalScale':
+        return this.createToggleProportionalScaleCommand(params)
       case 'updateTimelineItem':
         return this.createUpdateTimelineItemCommand(params)
       default:
@@ -651,6 +654,41 @@ export class CommandFactory {
       params.trackId,
       trackModule,
       params.targetVisible,
+    )
+  }
+
+  /**
+   * 创建切换等比缩放命令
+   */
+  private createToggleProportionalScaleCommand(params: any): SimpleCommand {
+    const unifiedStore = useUnifiedStore()
+
+    // 验证项目存在
+    const item = unifiedStore.getTimelineItem(params.itemId)
+    if (!item) {
+      throw new Error(`时间轴项目不存在: ${params.itemId}`)
+    }
+
+    // 获取当前帧
+    const currentFrame = unifiedStore.currentFrame
+
+    // 获取模块引用
+    const timelineModule = {
+      getTimelineItem: unifiedStore.getTimelineItem.bind(unifiedStore),
+    }
+
+    const mediaModule = {
+      getMediaItem: unifiedStore.getMediaItem.bind(unifiedStore),
+    }
+
+    // 创建命令
+    return new ToggleProportionalScaleCommand(
+      params.itemId,
+      currentFrame,
+      {
+        ...timelineModule,
+        ...mediaModule,
+      },
     )
   }
 

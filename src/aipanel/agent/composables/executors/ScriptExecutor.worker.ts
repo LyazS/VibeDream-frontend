@@ -148,6 +148,16 @@ const buildAPI = () => {
       return result
     },
 
+    // === 时间轴项目操作 ===
+
+    toggleProportionalScale: (itemId: string, enabled?: boolean) => {
+      const params: any = { itemId }
+      if (enabled !== undefined) params.enabled = enabled
+      const result = { type: 'toggleProportionalScale', params }
+      operations.push(result)
+      return result
+    },
+
     // === 时间轴项目属性更新 ===
 
     updateTimelineItem: (itemId: string, options: {
