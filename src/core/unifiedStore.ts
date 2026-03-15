@@ -141,6 +141,7 @@ export const useUnifiedStore = defineStore('unified', () => {
     addTrackWithHistory: historyOperations.addTrackWithHistory,
     removeTrackWithHistory: historyOperations.removeTrackWithHistory,
     renameTrackWithHistory: historyOperations.renameTrackWithHistory,
+    moveTrackWithHistory: historyOperations.moveTrackWithHistory,
     autoArrangeTrackWithHistory: historyOperations.autoArrangeTrackWithHistory,
     toggleTrackVisibilityWithHistory: historyOperations.toggleTrackVisibilityWithHistory,
     toggleTrackMuteWithHistory: historyOperations.toggleTrackMuteWithHistory,

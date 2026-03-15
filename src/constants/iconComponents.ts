@@ -38,6 +38,7 @@ import {
   RiDeleteBinLine,
   RiPushpinFill,
   RiUnpinLine,
+  RiDraggable,
 
   // 关键帧控制
   RiCheckboxBlankCircleLine,
@@ -170,6 +171,7 @@ export const IconComponents = {
   DELETE: RiDeleteBinLine,
   SNAP_ON: RiPushpinFill,
   SNAP_OFF: RiUnpinLine,
+  DRAGGABLE: RiDraggable,
 
   // 关键帧
   KEYFRAME: RiCheckboxBlankCircleLine,

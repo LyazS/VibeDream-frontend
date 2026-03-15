@@ -57,23 +57,44 @@
           :style="{ height: track.height + 'px' }"
         >
           <!-- 左侧轨道控制 -->
-          <div class="track-controls">
+          <div
+            class="track-controls"
+            :class="{
+              'drag-over': dragOverTrackId === track.id,
+              'drag-over-before': dragOverTrackId === track.id && insertPosition === 'before',
+              'drag-over-after': dragOverTrackId === track.id && insertPosition === 'after'
+            }"
+            :data-track-id="track.id"
+            @dragover="handleTrackDragOver($event, track.id)"
+            @drop="handleTrackDrop($event, track.id)"
+            @dragleave="handleTrackDragLeave($event, track.id)"
+          >
+            <!-- 拖拽提示蒙版 -->
+            <div
+              v-if="dragOverTrackId === track.id"
+              class="drag-hint-overlay"
+              :class="insertPosition"
+            >
+              <div class="drag-hint-text">
+                {{ insertPosition === 'before' ? t('common.trackDrag.dragToTop') : t('common.trackDrag.dragToBottom') }}
+              </div>
+            </div>
+
             <!-- 轨道颜色标识 -->
             <div class="track-color-indicator" :class="`track-color-${track.type}`"></div>
 
             <!-- 轨道名称 -->
             <div class="track-name">
-              <!-- 轨道类型图标和片段数量 -->
+              <!-- 拖拽手柄图标 -->
               <div
-                class="track-type-info"
-                :title="`${t('timeline.' + track.type + 'Track')}，${t('timeline.clips')} ${getClipsForTrack(track.id).length}`"
+                class="track-drag-handle"
+                :class="{ 'dragging': draggingTrackId === track.id }"
+                draggable="true"
+                @dragstart="handleTrackDragStart($event, track.id)"
+                @dragend="handleTrackDragEnd"
+                :title="t('common.trackDrag.dragHandle')"
               >
-                <div class="track-type-icon">
-                  <component :is="getTrackTypeIcon(track.type)" size="14px" />
-                </div>
-                <div class="clip-count">
-                  {{ getClipsForTrack(track.id).length }}
-                </div>
+                <component :is="IconComponents.DRAGGABLE" size="24px" />
               </div>
 
               <input
@@ -100,6 +121,19 @@
             </div>
 
             <div class="track-buttons">
+              <!-- 轨道类型图标和片段数量 -->
+              <div
+                class="track-type-info"
+                :title="`${t('timeline.' + track.type + 'Track')}，${t('timeline.clips')} ${getClipsForTrack(track.id).length}`"
+              >
+                <div class="track-type-icon">
+                  <component :is="getTrackTypeIcon(track.type)" size="14px" />
+                </div>
+                <div class="clip-count">
+                  {{ getClipsForTrack(track.id).length }}
+                </div>
+              </div>
+
               <!-- 轨道快捷操作按钮 -->
               <div class="track-status">
                 <!-- 可见性切换按钮 - 音频轨道不显示 -->
@@ -328,6 +362,11 @@ const {
   getClipsForTrack,
 } = useTimelineTrackManagement()
 
+// 轨道拖拽排序状态
+const draggingTrackId = ref<string | null>(null)
+const dragOverTrackId = ref<string | null>(null)
+const insertPosition = ref<'before' | 'after' | null>(null)
+
 // 初始化右键菜单模块
 const {
   showContextMenu,
@@ -430,6 +469,129 @@ function renderTimelineItem(item: UnifiedTimelineItemData, track: UnifiedTrackDa
 
   // 使用统一的 UnifiedTimelineClip 组件
   return h(UnifiedTimelineClip, commonProps)
+}
+
+// ========== 轨道拖拽排序 ==========
+
+/**
+ * 处理轨道拖拽开始
+ */
+function handleTrackDragStart(event: DragEvent, trackId: string) {
+  draggingTrackId.value = trackId
+
+  // 设置拖拽数据（必需）
+  if (event.dataTransfer) {
+    event.dataTransfer.effectAllowed = 'move'
+    event.dataTransfer.setData('text/plain', trackId)
+  }
+
+  console.log('🎵 开始拖拽轨道:', trackId)
+}
+
+/**
+ * 处理轨道拖拽结束
+ */
+function handleTrackDragEnd() {
+  draggingTrackId.value = null
+  dragOverTrackId.value = null
+  insertPosition.value = null
+
+  console.log('✅ 结束拖拽轨道')
+}
+
+/**
+ * 处理拖拽悬停
+ */
+function handleTrackDragOver(event: DragEvent, targetTrackId: string) {
+  event.preventDefault() // 允许放置
+
+  // 不允许拖拽到自己身上
+  if (draggingTrackId.value === targetTrackId) {
+    return
+  }
+
+  // 计算插入位置（根据鼠标Y坐标）
+  const targetElement = event.currentTarget as HTMLElement
+  const rect = targetElement.getBoundingClientRect()
+  const relativeY = event.clientY - rect.top
+  const position: 'before' | 'after' = relativeY < rect.height / 2 ? 'before' : 'after'
+
+  dragOverTrackId.value = targetTrackId
+  insertPosition.value = position
+
+  // 设置放置效果
+  if (event.dataTransfer) {
+    event.dataTransfer.dropEffect = 'move'
+  }
+}
+
+/**
+ * 处理拖拽放置
+ */
+async function handleTrackDrop(event: DragEvent, targetTrackId: string) {
+  event.preventDefault()
+
+  const sourceTrackId = draggingTrackId.value
+  if (!sourceTrackId || sourceTrackId === targetTrackId) {
+    handleTrackDragEnd()
+    return
+  }
+
+  // 获取所有轨道
+  const allTracks = tracks.value
+
+  // 找到源轨道和目标轨道的当前位置
+  const fromIndex = allTracks.findIndex((t) => t.id === sourceTrackId)
+  const toIndex = allTracks.findIndex((t) => t.id === targetTrackId)
+
+  if (fromIndex === -1 || toIndex === -1) {
+    console.error('❌ 找不到轨道')
+    handleTrackDragEnd()
+    return
+  }
+
+  // 计算新位置
+  let newPosition = toIndex
+  if (insertPosition.value === 'after') {
+    newPosition = toIndex + 1
+  }
+
+  // 如果从目标前面移动到后面，需要调整索引
+  if (fromIndex < newPosition) {
+    newPosition -= 1
+  }
+
+  // 使用历史记录执行移动
+  try {
+    await unifiedStore.moveTrackWithHistory(sourceTrackId, newPosition)
+
+    console.log('✅ 轨道移动完成:', {
+      from: fromIndex,
+      to: newPosition,
+      insertPosition: insertPosition.value,
+    })
+  } catch (error) {
+    console.error('❌ 轨道移动失败:', error)
+  }
+
+  handleTrackDragEnd()
+}
+
+/**
+ * 处理拖拽离开
+ */
+function handleTrackDragLeave(event: DragEvent, trackId: string) {
+  const targetElement = event.currentTarget as HTMLElement
+  const rect = targetElement.getBoundingClientRect()
+  const x = event.clientX
+  const y = event.clientY
+
+  // 只有当鼠标真正离开元素边界时才清除状态
+  // 防止子元素触发 dragleave 事件
+  if (x < rect.left || x > rect.right || y < rect.top || y > rect.bottom) {
+    dragOverTrackId.value = null
+    insertPosition.value = null
+  }
 }
 
 // ResizeObserver 实例
@@ -581,6 +743,16 @@ onUnmounted(() => {
   bottom: 0;
   width: 4px;
   border-radius: 0 2px 2px 0;
+  transition: all var(--transition-fast);
+}
+
+/* 拖拽悬停时高亮轨道颜色标识 - 过渡成纯绿色 */
+.track-controls.drag-over .track-color-indicator {
+  width: 6px;
+  background: #22c55e;
+  box-shadow: 6px 0 6px -2px rgba(255, 255, 255, 0.8),
+              4px 0 4px -2px rgba(255, 255, 255, 0.6);
+  opacity: 1;
 }
 
 .track-color-indicator.track-color-video {
@@ -790,5 +962,90 @@ onUnmounted(() => {
 .snap-indicator-line {
   background-image: linear-gradient(to bottom, #22c55e, #22c55e);
   box-shadow: 0 0 2px rgba(34, 197, 94, 0.5);
+}
+
+/* ========== 轨道拖拽排序样式 ========== */
+
+/* 拖拽手柄样式 */
+.track-drag-handle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  margin-right: 6px;
+  cursor: grab;
+  color: #9ca3af;
+  border-radius: 4px;
+  transition: all var(--transition-fast);
+  flex-shrink: 0;
+}
+
+.track-drag-handle:hover {
+  background-color: rgba(156, 163, 175, 0.25);
+  color: #6b7280;
+}
+
+.track-drag-handle.dragging {
+  opacity: 0.5;
+  cursor: grabbing;
+}
+
+
+/* 拖拽提示蒙版 */
+.drag-hint-overlay {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  z-index: 1001;
+  animation: fadeIn 0.15s ease-out;
+}
+
+.drag-hint-overlay.before {
+  top: 0;
+}
+
+.drag-hint-overlay.after {
+  bottom: 0;
+}
+
+.drag-hint-text {
+  background-color: rgba(34, 197, 94, 0.95);
+  color: white;
+  padding: 4px 12px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 500;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+  white-space: nowrap;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* 插入指示器线条 */
+.track-controls.drag-over::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background-color: #22c55e;
+  pointer-events: none;
+  z-index: 1000;
+  box-shadow: 0 0 4px rgba(34, 197, 94, 0.5);
 }
 </style>

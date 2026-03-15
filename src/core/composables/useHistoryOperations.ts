@@ -29,6 +29,7 @@ import {
   SelectTimelineItemsCommand,
 } from '@/core/modules/commands/timelineCommands'
 import { BatchAutoArrangeTrackCommand } from '@/core/modules/commands/batchCommands'
+import { MoveTrackCommand } from '@/core/modules/commands/MoveTrackCommand'
 import { TimelineItemQueries } from '@/core/timelineitem/'
 import { duplicateTimelineItem } from '@/core/timelineitem/factory'
 import { UpdateTextCommand } from '@/core/modules/commands/UpdateTextCommand'
@@ -536,6 +537,29 @@ export function useHistoryOperations(
   }
 
   /**
+   * 带历史记录的移动轨道方法
+   * @param trackId 要移动的轨道ID
+   * @param newPosition 新位置索引
+   */
+  async function moveTrackWithHistory(trackId: string, newPosition: number) {
+    // 获取当前轨道位置
+    const currentPosition = unifiedTrackModule.trackIndexMap.value.get(trackId)
+    if (currentPosition === undefined) {
+      console.warn(`⚠️ 轨道位置未知，无法移动: ${trackId}`)
+      return
+    }
+
+    // 检查位置是否真的改变了
+    if (currentPosition === newPosition) {
+      console.log('ℹ️ 轨道位置未改变，跳过移动')
+      return
+    }
+
+    const command = new MoveTrackCommand(trackId, currentPosition, newPosition, unifiedTrackModule)
+    await unifiedHistoryModule.executeCommand(command)
+  }
+
+  /**
    * 带历史记录的更新文本内容方法
    * @param timelineItemId 要更新的时间轴项目ID
    * @param newText 新的文本内容
@@ -904,6 +928,7 @@ export function useHistoryOperations(
     autoArrangeTrackWithHistory,
     toggleTrackVisibilityWithHistory,
     toggleTrackMuteWithHistory,
+    moveTrackWithHistory,
     updateTextContentWithHistory,
     updateTextStyleWithHistory,
     selectTimelineItemsWithHistory,

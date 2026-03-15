@@ -108,6 +108,50 @@ export function createUnifiedTrackModule(registry: ModuleRegistry) {
   }
 
   /**
+   * 移动轨道到新位置
+   * @param trackId 要移动的轨道ID
+   * @param newPosition 新位置索引（0-based）
+   */
+  function moveTrack(trackId: string, newPosition: number) {
+    const track = tracks.value.find((t) => t.id === trackId)
+    if (!track) {
+      console.warn('⚠️ 找不到轨道:', trackId)
+      return
+    }
+
+    const currentPosition = trackIndexMap.value.get(trackId)
+    if (currentPosition === undefined) {
+      console.warn('⚠️ 轨道位置未知:', trackId)
+      return
+    }
+
+    // 验证新位置
+    if (newPosition < 0 || newPosition >= tracks.value.length) {
+      console.warn('⚠️ 无效的轨道位置:', newPosition)
+      return
+    }
+
+    // 检查位置是否真的改变了
+    if (currentPosition === newPosition) {
+      console.log('ℹ️ 轨道位置未改变，跳过移动')
+      return
+    }
+
+    // 从当前位置移除
+    tracks.value.splice(currentPosition, 1)
+
+    // 在新位置插入
+    tracks.value.splice(newPosition, 0, track)
+
+    console.log('🔄 移动轨道:', {
+      trackId,
+      trackName: track.name,
+      from: currentPosition,
+      to: newPosition,
+    })
+  }
+
+  /**
    * 切换轨道可见性
    * @param trackId 轨道ID
    * @param targetVisibleState 目标可见性状态（可选），如果提供则将轨道设置为指定状态
@@ -278,6 +322,7 @@ export function createUnifiedTrackModule(registry: ModuleRegistry) {
     // 基础方法
     addTrack,
     removeTrack,
+    moveTrack,
     toggleTrackVisibility,
     toggleTrackMute,
     renameTrack,
