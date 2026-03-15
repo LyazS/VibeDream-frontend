@@ -122,7 +122,7 @@
       "fontStyleItalic": "斜体"
     },
     "timecodes": {
-      "timecodeFormat": "HH:MM:SS.FF",
+      "timecodeFormat": "HH:MM:SS+FF",
       "frameRate": "帧率"
     },
     "placeholders": {
@@ -142,7 +142,7 @@
       "textStyleUpdateFailed": "文本样式更新失败，请重试",
       "textUpdateSuccess": "文本内容更新成功",
       "textStyleSuccess": "文本样式更新成功",
-      "invalidTimecodeFormat": "请使用正确的时间码格式：HH:MM:SS.FF",
+      "invalidTimecodeFormat": "请使用正确的时间码格式：HH:MM:SS+FF",
       "formatError": "格式错误",
       "example": "示例",
       "timecodeExample": "00:01:30.15（1分30秒15帧）",

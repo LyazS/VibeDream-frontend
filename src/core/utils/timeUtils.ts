@@ -83,7 +83,7 @@ export function microsecondsToFrames(microseconds: number): number {
 /**
  * 帧数转换为时间码字符串
  * @param frames 帧数
- * @returns 时间码字符串 "HH:MM:SS.FF"
+ * @returns 时间码字符串 "HH:MM:SS+FF"
  */
 export function framesToTimecode(frames: number): string {
   const totalSeconds = Math.floor(frames / TimeConstants.FRAME_RATE)
@@ -93,13 +93,13 @@ export function framesToTimecode(frames: number): string {
   const minutes = Math.floor((totalSeconds % 3600) / 60)
   const seconds = totalSeconds % 60
 
-  return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}.${remainingFrames.toString().padStart(2, '0')}`
+  return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}+${remainingFrames.toString().padStart(2, '0')}`
 }
 
 /**
  * 帧数转换为压缩时间码字符串（小时为0时不显示小时）
  * @param frames 帧数
- * @returns 时间码字符串 "MM:SS.FF" 或 "HH:MM:SS.FF"
+ * @returns 时间码字符串 "MM:SS+FF" 或 "HH:MM:SS+FF"
  */
 export function framesToTimecodeCompact(frames: number): string {
   const totalSeconds = Math.floor(frames / TimeConstants.FRAME_RATE)
@@ -110,21 +110,21 @@ export function framesToTimecodeCompact(frames: number): string {
   const seconds = totalSeconds % 60
 
   if (hours === 0) {
-    return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}.${remainingFrames.toString().padStart(2, '0')}`
+    return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}+${remainingFrames.toString().padStart(2, '0')}`
   }
-  return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}.${remainingFrames.toString().padStart(2, '0')}`
+  return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}+${remainingFrames.toString().padStart(2, '0')}`
 }
 
 /**
  * 时间码字符串转换为帧数
- * @param timecode 时间码字符串 "HH:MM:SS.FF"
+ * @param timecode 时间码字符串 "HH:MM:SS+FF"
  * @returns 帧数
  * @throws Error 如果时间码格式无效
  */
 export function timecodeToFrames(timecode: string): number {
-  const match = timecode.match(/^(\d{2}):(\d{2}):(\d{2})\.(\d{2})$/)
+  const match = timecode.match(/^(\d{2}):(\d{2}):(\d{2})\+(\d{2})$/)
   if (!match) {
-    throw new Error(`Invalid timecode format: ${timecode}. Expected format: HH:MM:SS.FF`)
+    throw new Error(`Invalid timecode format: ${timecode}. Expected format: HH:MM:SS+FF`)
   }
 
   const [, hours, minutes, seconds, frames] = match.map(Number)

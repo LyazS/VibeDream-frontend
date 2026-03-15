@@ -17,7 +17,7 @@ interface TrackItemInfo {
   /** 关联的素材ID */
   mediaItemId: string
   /** 时间轴时间范围 */
-  timeRange: string // "00:00:00.00 - 00:00:10.00"
+  timeRange: string // "00:00:00+00 - 00:00:10+00"
 }
 
 /**

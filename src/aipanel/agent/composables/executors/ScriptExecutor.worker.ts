@@ -189,8 +189,8 @@ const buildAPI = () => {
 
     /**
      * 时间码加法
-     * @param timecode1 第一个时间码 (格式: HH:MM:SS.FF)
-     * @param timecode2 第二个时间码 (格式: HH:MM:SS.FF)
+     * @param timecode1 第一个时间码 (格式: HH:MM:SS+FF)
+     * @param timecode2 第二个时间码 (格式: HH:MM:SS+FF)
      * @returns 相加后的时间码字符串
      */
     addTimecodes: (timecode1: string, timecode2: string) => {
@@ -208,8 +208,8 @@ const buildAPI = () => {
 
     /**
      * 时间码减法
-     * @param timecode1 被减时间码 (格式: HH:MM:SS.FF)
-     * @param timecode2 减数时间码 (格式: HH:MM:SS.FF)
+     * @param timecode1 被减时间码 (格式: HH:MM:SS+FF)
+     * @param timecode2 减数时间码 (格式: HH:MM:SS+FF)
      * @returns 相减后的时间码字符串,负数结果会带负号
      */
     subtractTimecodes: (timecode1: string, timecode2: string) => {

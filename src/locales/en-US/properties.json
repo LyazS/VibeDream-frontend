@@ -122,7 +122,7 @@
       "fontStyleItalic": "Italic"
     },
     "timecodes": {
-      "timecodeFormat": "HH:MM:SS.FF",
+      "timecodeFormat": "HH:MM:SS+FF",
       "frameRate": "fps"
     },
     "placeholders": {
@@ -142,7 +142,7 @@
       "textStyleUpdateFailed": "Text style update failed, please try again",
       "textUpdateSuccess": "Text content update successful",
       "textStyleSuccess": "Text style update successful",
-      "invalidTimecodeFormat": "Please use correct timecode format: HH:MM:SS.FF",
+      "invalidTimecodeFormat": "Please use correct timecode format: HH:MM:SS+FF",
       "formatError": "Format error",
       "example": "Example",
       "timecodeExample": "00:01:30.15 (1 minute 30 seconds 15 frames)",

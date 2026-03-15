@@ -104,7 +104,7 @@ interface MediaDetail {
   id: string
   name: string
   mediaType: 'video' | 'image' | 'audio'
-  duration?: string  // HH:MM:SS.FF 格式
+  duration?: string  // HH:MM:SS+FF 格式
   description: string
 }
 

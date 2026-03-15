@@ -81,7 +81,7 @@ export class ConfigValidator {
   }
 
   /**
-   * 验证时间码格式 (HH:MM:SS.FF 或 MM:SS.FF)
+   * 验证时间码格式 (HH:MM:SS+FF 或 MM:SS+FF)
    * 当省略小时时，默认为 0
    */
   private validateTimecode(timecode: string): void {
@@ -89,25 +89,25 @@ export class ConfigValidator {
       throw new Error('时间码必须是字符串')
     }
 
-    // 支持两种格式：HH:MM:SS.FF 或 MM:SS.FF
-    const fullFormatRegex = /^(\d{2}):(\d{2}):(\d{2})\.(\d{2})$/
-    const shortFormatRegex = /^(\d{2}):(\d{2})\.(\d{2})$/
+    // 支持两种格式：HH:MM:SS+FF 或 MM:SS+FF
+    const fullFormatRegex = /^(\d{2}):(\d{2}):(\d{2})\+(\d{2})$/
+    const shortFormatRegex = /^(\d{2}):(\d{2})\+(\d{2})$/
 
     let h = 0, m: number, s: number
 
     if (fullFormatRegex.test(timecode)) {
-      // 完整格式 HH:MM:SS.FF
+      // 完整格式 HH:MM:SS+FF
       const [, hours, minutes, seconds] = timecode.match(fullFormatRegex)!
       h = parseInt(hours, 10)
       m = parseInt(minutes, 10)
       s = parseInt(seconds, 10)
     } else if (shortFormatRegex.test(timecode)) {
-      // 简短格式 MM:SS.FF，小时默认为 0
+      // 简短格式 MM:SS+FF，小时默认为 0
       const [, minutes, seconds] = timecode.match(shortFormatRegex)!
       m = parseInt(minutes, 10)
       s = parseInt(seconds, 10)
     } else {
-      throw new Error(`无效的时间码格式: ${timecode}，应为 HH:MM:SS.FF 或 MM:SS.FF 格式`)
+      throw new Error(`无效的时间码格式: ${timecode}，应为 HH:MM:SS+FF 或 MM:SS+FF 格式`)
     }
 
     if (h < 0 || m < 0 || m > 59 || s < 0 || s > 59) {

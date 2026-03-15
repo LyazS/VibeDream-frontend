@@ -83,8 +83,8 @@ addTimelineItem({
   mediaItemId: "video-1",
   trackId: "track-1",
   timeRange: {
-    start: "00:00:00.00",
-    end: "00:00:10.00"
+    start: "00:00:00+00",
+    end: "00:00:10+00"
   }
 });
 addTrack("audio", 1);
@@ -92,8 +92,8 @@ addTimelineItem({
   mediaItemId: "audio-1",
   trackId: "track-2",
   timeRange: {
-    start: "00:00:00.00",
-    end: "00:00:03.00"
+    start: "00:00:00+00",
+    end: "00:00:03+00"
   }
 });`,
 
@@ -103,8 +103,8 @@ addTimelineItem({
   mediaItemId: "text-1",
   trackId: "track-3",
   timeRange: {
-    start: "00:00:00.00",
-    end: "00:00:02.00"
+    start: "00:00:00+00",
+    end: "00:00:02+00"
   }
 });
 updateTextContent("text-1", "Updated Text", {
@@ -122,16 +122,16 @@ addTimelineItem({
   mediaItemId: "video-1",
   trackId: "track-1",
   timeRange: {
-    start: "00:00:00.00",
-    end: "00:00:10.00"
+    start: "00:00:00+00",
+    end: "00:00:10+00"
   }
 });
-createKeyframe("video-1", "00:00:01.00");
-createKeyframe("video-1", "00:00:05.00");
-createKeyframe("video-1", "00:00:09.00");
-updateKeyframeProperty("video-1", "00:00:01.00", "opacity", 0);
-updateKeyframeProperty("video-1", "00:00:05.00", "opacity", 0.5);
-updateKeyframeProperty("video-1", "00:00:09.00", "opacity", 1);`,
+createKeyframe("video-1", "00:00:01+00");
+createKeyframe("video-1", "00:00:05+00");
+createKeyframe("video-1", "00:00:09+00");
+updateKeyframeProperty("video-1", "00:00:01+00", "opacity", 0);
+updateKeyframeProperty("video-1", "00:00:05+00", "opacity", 0.5);
+updateKeyframeProperty("video-1", "00:00:09+00", "opacity", 1);`,
 
   example4: `// 死循环测试 - while(true)
 let counter = 0;
@@ -172,24 +172,24 @@ addTimelineItem({
   mediaItemId: "video-1",
   trackId: "track-1",
   timeRange: {
-    start: "00:00:00.00",
-    end: "00:00:03.00"
+    start: "00:00:00+00",
+    end: "00:00:03+00"
   }
 });
 addTimelineItem({
   mediaItemId: "audio-1",
   trackId: "track-2",
   timeRange: {
-    start: "00:00:00.00",
-    end: "00:00:02.00"
+    start: "00:00:00+00",
+    end: "00:00:02+00"
   }
 });
 addTimelineItem({
   mediaItemId: "text-1",
   trackId: "track-3",
   timeRange: {
-    start: "00:00:00.00",
-    end: "00:00:01.30"
+    start: "00:00:00+00",
+    end: "00:00:01+30"
   }
 });`,
 
@@ -211,8 +211,8 @@ addTimelineItem({
   mediaItemId: "video-1",
   trackId: "track-1",
   timeRange: {
-    start: "00:00:00.00",
-    end: "00:00:10.00"
+    start: "00:00:00+00",
+    end: "00:00:10+00"
   }
 });`,
 
@@ -222,8 +222,8 @@ addTimelineItem({
   mediaItemId: "text-1",
   trackId: "text-track-1",
   timeRange: {
-    start: "00:00:00.00",
-    end: "00:00:05.00"
+    start: "00:00:00+00",
+    end: "00:00:05+00"
   }
 });
 updateTextContent("text-1", "Hello World", {
@@ -238,8 +238,8 @@ addTimelineItem({
   mediaItemId: "video-1",
   trackId: "video-track-1",
   timeRange: {
-    start: "00:00:00.00",
-    end: "00:00:10.00"
+    start: "00:00:00+00",
+    end: "00:00:10+00"
   }
 });
 updateTimelineItemTransform("video-1", {
@@ -273,8 +273,8 @@ addTimelineItem({
   mediaItemId: "main-video-1",
   trackId: "track-1",
   timeRange: {
-    start: "00:00:00.00",
-    end: "00:02:30.00"
+    start: "00:00:00+00",
+    end: "00:02:30+00"
   }
 });
 
@@ -283,8 +283,8 @@ addTimelineItem({
   mediaItemId: "overlay-video-1",
   trackId: "main-video",
   timeRange: {
-    start: "00:00:15.00",
-    end: "00:00:45.00"
+    start: "00:00:15+00",
+    end: "00:00:45+00"
   }
 });
 
@@ -293,8 +293,8 @@ addTimelineItem({
   mediaItemId: "narration-1",
   trackId: "narration-audio",
   timeRange: {
-    start: "00:00:00.00",
-    end: "00:02:00.00"
+    start: "00:00:00+00",
+    end: "00:02:00+00"
   }
 });
 
@@ -303,8 +303,8 @@ addTimelineItem({
   mediaItemId: "title-text-1",
   trackId: "titles-text",
   timeRange: {
-    start: "00:00:05.00",
-    end: "00:00:25.00"
+    start: "00:00:05+00",
+    end: "00:00:25+00"
   }
 });
 
@@ -313,8 +313,8 @@ addTimelineItem({
   mediaItemId: "bg-music-1",
   trackId: "background-audio",
   timeRange: {
-    start: "00:00:10.00",
-    end: "02:00:00.00"
+    start: "00:00:10+00",
+    end: "02:00:00+00"
   }
 });
 
@@ -340,17 +340,17 @@ updateTextStyle("title-text-1", {
 });
 
 // 创建关键帧动画
-createKeyframe("main-video-1", "00:00:10.00");
-createKeyframe("main-video-1", "00:00:30.00");
-createKeyframe("main-video-1", "00:01:00.00");
+createKeyframe("main-video-1", "00:00:10+00");
+createKeyframe("main-video-1", "00:00:30+00");
+createKeyframe("main-video-1", "00:01:00+00");
 
 // 设置关键帧属性
-updateKeyframeProperty("main-video-1", "00:00:10.00", "opacity", 0.8);
-updateKeyframeProperty("main-video-1", "00:00:30.00", "opacity", 0.6);
-updateKeyframeProperty("main-video-1", "00:01:00.00", "opacity", 1.0);
-updateKeyframeProperty("main-video-1", "00:00:10.00", "rotation", 0);
-updateKeyframeProperty("main-video-1", "00:00:30.00", "rotation", 45);
-updateKeyframeProperty("main-video-1", "00:01:00.00", "rotation", 0);
+updateKeyframeProperty("main-video-1", "00:00:10+00", "opacity", 0.8);
+updateKeyframeProperty("main-video-1", "00:00:30+00", "opacity", 0.6);
+updateKeyframeProperty("main-video-1", "00:01:00+00", "opacity", 1.0);
+updateKeyframeProperty("main-video-1", "00:00:10+00", "rotation", 0);
+updateKeyframeProperty("main-video-1", "00:00:30+00", "rotation", 45);
+updateKeyframeProperty("main-video-1", "00:01:00+00", "rotation", 0);
 
 // 更新视频变换属性
 updateTimelineItemTransform("overlay-video-1", {
@@ -360,7 +360,7 @@ updateTimelineItemTransform("overlay-video-1", {
   height: 240,
   opacity: 0.9,
   zIndex: 10,
-  duration: "00:00:30.00",
+  duration: "00:00:30+00",
   playbackRate: 1.2,
   volume: 0.8,
   isMuted: false,
@@ -370,16 +370,16 @@ updateTimelineItemTransform("overlay-video-1", {
 
 // 调整时间轴项目大小
 resizeTimelineItem("overlay-video-1", {
-  timelineStart: "00:00:15.00",
-  timelineEnd: "00:00:45.00",
-  clipStart: "00:00:10.00",
-  clipEnd: "00:00:30.00"
+  timelineStart: "00:00:15+00",
+  timelineEnd: "00:00:45+00",
+  clipStart: "00:00:10+00",
+  clipEnd: "00:00:30+00"
 });
 
 // 分割和复制项目
-splitTimelineItem("bg-music-1", "00:00:30.00");
-cpTimelineItem("overlay-video-1", "00:01:30.00", "track-1");
-mvTimelineItem("overlay-video-1", "00:01:20.00", "track-1");
+splitTimelineItem("bg-music-1", "00:00:30+00");
+cpTimelineItem("overlay-video-1", "00:01:30+00", "track-1");
+mvTimelineItem("overlay-video-1", "00:01:20+00", "track-1");
 
 // 轨道控制操作
 autoArrangeTrack("main-video");
@@ -387,18 +387,18 @@ toggleTrackVisibility("background-audio", true);
 toggleTrackMute("background-audio", false);
 
 // 删除不用的关键帧
-deleteKeyframe("main-video-1", "00:00:10.00");
+deleteKeyframe("main-video-1", "00:00:10+00");
 // 清除所有关键帧测试
 clearAllKeyframes("overlay-video-1");
 // 然后重新创建一些
-createKeyframe("overlay-video-1", "00:00:20.00");
-createKeyframe("overlay-video-1", "00:00:40.00");
+createKeyframe("overlay-video-1", "00:00:20+00");
+createKeyframe("overlay-video-1", "00:00:40+00");
 
 // 最终轨道重命名
 renameTrack("track-1", "final-main-video");
 
 console.log("=== 视频项目构建完成 ===");
-console.log("总视频长度: 02:30:00.00");
+console.log("总视频长度: 02:30:00+00");
 console.log("轨道数量: 5个");
 console.log("时间轴项目: 5个");
 console.log("关键帧动画: 8个");

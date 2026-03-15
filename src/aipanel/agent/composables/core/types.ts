@@ -32,8 +32,8 @@ export interface AddTextToTimelineOperation extends BaseOperationConfig {
   params: {
     text: string // 文本内容
     trackId: string // 轨道ID（必须是文本类型轨道）
-    position: string // 时间轴位置（时间码格式 HH:MM:SS.FF）
-    duration: string // 显示时长（时间码格式 HH:MM:SS.FF）
+    position: string // 时间轴位置（时间码格式 HH:MM:SS+FF）
+    duration: string // 显示时长（时间码格式 HH:MM:SS+FF）
   }
 }
 
@@ -54,7 +54,7 @@ export interface MvTimelineItemOperation extends BaseOperationConfig {
   type: 'mvTimelineItem'
   params: {
     itemId: string // 要移动的时间轴项目 ID
-    newPosition: string // 新位置（时间码格式 HH:MM:SS.FF）
+    newPosition: string // 新位置（时间码格式 HH:MM:SS+FF）
     newTrackId?: string // 新轨道 ID（可选，不提供则保持在原轨道）
   }
 }
@@ -66,10 +66,10 @@ export interface ResizeTimelineItemOperation extends BaseOperationConfig {
   type: 'resizeTimelineItem'
   params: {
     itemId: string // 要调整的时间轴项目 ID
-    newStartTime?: string // 新时间轴开始时间（可选）
-    newEndTime?: string // 新时间轴结束时间（可选）
-    newClipStartTime?: string // 新裁剪开始时间（可选）
-    newClipEndTime?: string // 新裁剪结束时间（可选）
+    newStartTime?: string // 新时间轴开始时间（可选，格式 HH:MM:SS+FF）
+    newEndTime?: string // 新时间轴结束时间（可选，格式 HH:MM:SS+FF）
+    newClipStartTime?: string // 新裁剪开始时间（可选，格式 HH:MM:SS+FF）
+    newClipEndTime?: string // 新裁剪结束时间（可选，格式 HH:MM:SS+FF）
   }
 }
 

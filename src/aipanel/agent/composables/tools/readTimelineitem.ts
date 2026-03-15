@@ -125,7 +125,7 @@ function formatTimelineItemDetail(item: UnifiedTimelineItemData): string {
     end: framesToTimecode(item.timeRange.timelineEndTime),
   }
   lines.push('')
-  lines.push(`=== 时间范围（HH:MM:SS.FF格式） ===`)
+  lines.push(`=== 时间范围（HH:MM:SS+FF格式） ===`)
   lines.push(`时间轴: '${timelineTimeRange.start}' - '${timelineTimeRange.end}'`)
 
   // 源时间范围（视频/音频/图片）

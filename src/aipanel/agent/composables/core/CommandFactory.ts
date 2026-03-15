@@ -323,8 +323,8 @@ export class CommandFactory {
   /**
    * 时间码转帧数
    * 支持格式:
-   * - HH:MM:SS.FF (完整格式)
-   * - MM:SS.FF (短格式，小时默认为 0)
+   * - HH:MM:SS+FF (完整格式)
+   * - MM:SS+FF (短格式，小时默认为 0)
    */
   private timecodeToFrames(timecode: string): number {
     const parts = timecode.split(':')
@@ -332,16 +332,16 @@ export class CommandFactory {
     let hours = 0, minutes: number, seconds: number, frames: number
 
     if (parts.length === 3) {
-      // 完整格式 HH:MM:SS.FF
+      // 完整格式 HH:MM:SS+FF
       hours = parseInt(parts[0]) || 0
       minutes = parseInt(parts[1]) || 0
-      const secondsParts = parts[2].split('.')
+      const secondsParts = parts[2].split('+')
       seconds = parseInt(secondsParts[0]) || 0
       frames = parseInt(secondsParts[1]) || 0
     } else if (parts.length === 2) {
-      // 短格式 MM:SS.FF，小时默认为 0
+      // 短格式 MM:SS+FF，小时默认为 0
       minutes = parseInt(parts[0]) || 0
-      const secondsParts = parts[1].split('.')
+      const secondsParts = parts[1].split('+')
       seconds = parseInt(secondsParts[0]) || 0
       frames = parseInt(secondsParts[1]) || 0
     } else {
