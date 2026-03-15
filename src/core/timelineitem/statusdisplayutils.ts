@@ -71,7 +71,7 @@ export class TimelineStatusDisplayUtils {
         }
         return { hasProgress: true, percent: 50 } // 解析阶段显示50%
       case 'decoding':
-        return { hasProgress: true, percent: 75 } // WebAV解析阶段显示75%
+        return { hasProgress: true, percent: 75 } // 解码阶段显示75%
       default:
         return { hasProgress: false, percent: 0 }
     }

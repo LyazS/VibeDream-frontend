@@ -54,7 +54,7 @@ export function createSnapshot(item: UnifiedTimelineItemData): KeyframeSnapshot 
 
 /**
  * 通用的状态快照应用函数
- * 适配新架构的数据流向：UI → WebAV → TimelineItem
+ * 适配新架构的数据流向：UI → TimelineItem
  * 基于旧架构的完整实现进行改进
  */
 export async function applyKeyframeSnapshot(

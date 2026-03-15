@@ -228,7 +228,7 @@ export class RemoveTrackCommand implements SimpleCommand {
       // 如果没有指定timelineItemId或者项目ID匹配，则更新该项目
       const config = timelineItem.config as any
 
-      // 从 webav 对象中获取原始尺寸信息
+      // 从 bunny 对象中获取原始尺寸信息
       if (
         mediaData.runtime.bunny?.originalWidth !== undefined &&
         mediaData.runtime.bunny?.originalHeight !== undefined

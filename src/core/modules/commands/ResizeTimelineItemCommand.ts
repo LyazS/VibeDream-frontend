@@ -115,7 +115,7 @@ export class ResizeTimelineItemCommand implements SimpleCommand {
       )
     }
 
-    // 如果有动画，更新WebAV动画时长
+    // 如果有动画，更新动画时长
     if (this.hasAnimation) {
       // 动画时长更新已迁移到 Bunny 组件，无需手动更新
       console.log(

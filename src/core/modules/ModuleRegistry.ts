@@ -22,7 +22,6 @@ export const MODULE_NAMES = {
   MEDIA: 'media',
   TRACK: 'track',
   PLAYBACK: 'playback',
-  WEBAV: 'webav',
   TIMELINE: 'timeline',
   VIEWPORT: 'viewport',
   PROJECT: 'project',

@@ -89,7 +89,7 @@ export class RemoveTimelineItemCommand implements SimpleCommand {
         await this.mediaSync.setup()
       }
 
-      // 删除时间轴项目（这会自动处理sprite的清理和WebAV画布移除）
+      // 删除时间轴项目（这会自动处理相关资源的清理）
       await this.timelineModule.removeTimelineItem(this.timelineItemId)
       console.log(`↩️ 已删除时间轴项目: ${this.timelineItemId}`)
     } catch (error) {
@@ -166,7 +166,7 @@ export class RemoveTimelineItemCommand implements SimpleCommand {
     if (this.originalTimelineItemData) {
       const config = this.originalTimelineItemData.config as any
 
-      // 从 webav 对象中获取原始尺寸信息
+      // 从 bunny 对象中获取原始尺寸信息
       if (
         mediaData.runtime.bunny?.originalWidth !== undefined &&
         mediaData.runtime.bunny?.originalHeight !== undefined

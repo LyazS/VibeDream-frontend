@@ -1,11 +1,11 @@
 /**
  * UnifiedMediaBunnyModule - MediaBunny 渲染系统模块
  *
- * 完全替代 WebAV 的渲染系统，使用 MediaBunny 实现自定义渲染循环
+ * 使用 MediaBunny 实现自定义渲染循环
  *
  * 核心特点：
- * - 完全替代 WebAV 渲染
- * - 自实现渲染循环（不依赖 WebAV 的 AVCanvas）
+ * - 自定义渲染系统
+ * - 自实现渲染循环
  * - Canvas 由 Vue 组件管理，通过 setCanvas() 传入
  * - 使用 runtime.bunnyClip (视频/音频)、runtime.textBitmap (文本)、runtime.bunny.imageClip (图片)
  * - 暂不支持导出功能（未来可扩展）

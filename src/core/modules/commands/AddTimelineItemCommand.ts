@@ -141,7 +141,7 @@ export class AddTimelineItemCommand implements SimpleCommand {
     if (this.originalTimelineItemData) {
       const config = this.originalTimelineItemData.config as any
 
-      // 从 webav 对象中获取原始尺寸信息
+      // 从 bunny 对象中获取原始尺寸信息
       if (
         mediaData.runtime.bunny?.originalWidth !== undefined &&
         mediaData.runtime.bunny?.originalHeight !== undefined

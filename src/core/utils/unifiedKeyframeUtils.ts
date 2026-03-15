@@ -394,7 +394,7 @@ export function toggleKeyframe(item: UnifiedTimelineItemData, currentFrame: numb
 // ==================== 属性修改处理 ====================
 
 /**
- * 通过WebAV更新属性值（遵循正确的数据流向）
+ * 更新属性值（遵循正确的数据流向）
  * 直接设置进 item.config 的对应位置
  */
 async function updateProperty(
@@ -436,10 +436,10 @@ async function handlePropertyChange_NoAnimation(
   property: string,
   value: any,
 ): Promise<void> {
-  // 通过WebAV更新属性值，propsChange事件会自动同步到TimelineItem
+  // 更新属性值，直接设置到 item.config
   await updateProperty(item, property, value)
 
-  console.log('🎬 [Unified Keyframe] Property updated without animation via WebAV:', {
+  console.log('🎬 [Unified Keyframe] Property updated without animation:', {
     itemId: item.id,
     property,
     value,
@@ -455,8 +455,8 @@ async function handlePropertyChange_OnKeyframe(
   property: string,
   value: any,
 ): Promise<void> {
-  // 🎯 关键修复：先更新关键帧数据，再触发WebAV更新
-  // 这样可以避免WebAV动画系统用旧的关键帧数据覆盖新设置的值
+  // 🎯 关键修复：先更新关键帧数据，再触发渲染更新
+  // 这样可以避免动画系统用旧的关键帧数据覆盖新设置的值
 
   // 1. 先找到当前帧的关键帧并更新关键帧数据
   const keyframe = findKeyframeAtFrame(item, currentFrame)
@@ -496,7 +496,7 @@ async function handlePropertyChange_BetweenKeyframes(
   property: string,
   value: any,
 ): Promise<void> {
-  // 🎯 关键修复：先创建关键帧，再更新WebAV动画
+  // 🎯 关键修复：先创建关键帧，再更新动画
 
   // 1. 在当前帧创建新关键帧（包含所有属性的当前值，但使用新的属性值）
   const keyframe = createKeyframe(item, currentFrame)

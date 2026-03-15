@@ -67,7 +67,6 @@ export type TransformDataEx = TransformData & {
  */
 export interface UnifiedTimelineItemRuntime<T extends MediaType = MediaType> {
   /** 与时间轴项目生命周期一致 */
-  // sprite?: Raw<UnifiedSprite> // 旧的webav的sprite对象
   bunnyClip?: Raw<BunnyClip> // mediabunny的clip对象
   textBitmap?: ImageBitmap // 专门用于文本渲染的ImageBitmap
   /** 动画插值后的临时配置（运行时数据，不持久化） */

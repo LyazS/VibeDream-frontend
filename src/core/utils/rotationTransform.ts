@@ -1,8 +1,8 @@
 /**
- * WebAV与Vue项目的旋转角度转换工具
+ * 旋转角度转换工具
  *
- * WebAV使用弧度制 (radians)，范围：-π 到 π
- * Vue项目界面使用角度制 (degrees)，范围：-180° 到 180°
+ * 内部使用弧度制 (radians)，范围：-π 到 π
+ * UI界面使用角度制 (degrees)，范围：-180° 到 180°
  */
 
 /**
@@ -44,23 +44,23 @@ export function radiansToDegrees(radians: number): number {
 }
 
 /**
- * 将Vue界面的角度值转换为WebAV的弧度值
- * 用于：属性面板输入 → WebAV sprite.rect.angle
+ * 将UI界面的角度值转换为内部弧度值
+ * 用于：属性面板输入 → 内部旋转属性
  * @param uiDegrees 界面输入的角度值（任意值，如 450°、-270° 等）
- * @returns WebAV使用的弧度值（自动标准化到 -π 到 π）
+ * @returns 内部使用的弧度值（自动标准化到 -π 到 π）
  */
-export function uiDegreesToWebAVRadians(uiDegrees: number): number {
+export function uiDegreesToRotationRadians(uiDegrees: number): number {
   return degreesToRadians(uiDegrees)
 }
 
 /**
- * 将WebAV的弧度值转换为Vue界面的角度值
- * 用于：WebAV sprite.rect.angle → 属性面板显示
- * @param webavRadians WebAV的弧度值
+ * 将内部弧度值转换为UI界面的角度值
+ * 用于：内部旋转属性 → 属性面板显示
+ * @param rotationRadians 内部的弧度值
  * @returns 界面显示的角度值
  */
-export function webAVRadiansToUIDegrees(webavRadians: number): number {
-  return radiansToDegrees(webavRadians)
+export function rotationRadiansToUIDegrees(rotationRadians: number): number {
+  return radiansToDegrees(rotationRadians)
 }
 
 /**

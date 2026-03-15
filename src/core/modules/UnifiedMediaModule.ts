@@ -249,7 +249,7 @@ export function createUnifiedMediaModule(registry: ModuleRegistry) {
   // ==================== 分辨率管理方法 ====================
 
   /**
-   * 获取视频原始分辨率（从WebAV对象获取）
+   * 获取视频原始分辨率
    * @param mediaItemId 素材ID（可以为null，此时返回默认分辨率）
    * @returns 视频分辨率对象
    */
@@ -266,7 +266,7 @@ export function createUnifiedMediaModule(registry: ModuleRegistry) {
   }
 
   /**
-   * 获取图片原始分辨率（从WebAV对象获取）
+   * 获取图片原始分辨率
    * @param mediaItemId 素材ID（可以为null，此时返回默认分辨率）
    * @returns 图片分辨率对象
    */

@@ -61,7 +61,7 @@ export function secondsToFrames(seconds: number): number {
 }
 
 /**
- * 帧数转换为微秒（WebAV接口）
+ * 帧数转换为微秒
  * @param frames 帧数
  * @returns 微秒数
  */
@@ -71,7 +71,7 @@ export function framesToMicroseconds(frames: number): number {
 }
 
 /**
- * 微秒转换为帧数（WebAV接口）
+ * 微秒转换为帧数
  * @param microseconds 微秒数
  * @returns 帧数（四舍五入到最近整数）
  */

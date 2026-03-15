@@ -5,7 +5,7 @@
 
 import { computed, readonly, type Ref } from 'vue'
 import { useUnifiedStore } from '@/core/unifiedStore'
-import { uiDegreesToWebAVRadians, webAVRadiansToUIDegrees } from '@/core/utils/rotationTransform'
+import { uiDegreesToRotationRadians, rotationRadiansToUIDegrees } from '@/core/utils/rotationTransform'
 import type { UnifiedTimelineItemData } from '@/core/timelineitem'
 import { TimelineItemQueries } from '@/core/timelineitem/queries'
 import type {
@@ -171,7 +171,7 @@ export function useUnifiedKeyframeTransformControls(
     // ✅ 使用辅助函数获取渲染配置
     const config = TimelineItemQueries.getRenderConfig(selectedTimelineItem.value)
     const radians = config.rotation
-    return webAVRadiansToUIDegrees(radians)
+    return rotationRadiansToUIDegrees(radians)
   })
 
   const opacity = computed(() => {
@@ -612,7 +612,7 @@ export function useUnifiedKeyframeTransformControls(
       return
 
     const config = TimelineItemQueries.getRenderConfig(selectedTimelineItem.value)
-    const newRotationRadians = uiDegreesToWebAVRadians(value)
+    const newRotationRadians = uiDegreesToRotationRadians(value)
 
     // 检查是否第一次 @input（拖动开始）
     const isFirstInput = deferredUpdate.dragState.value.pendingUpdates.size === 0
@@ -1033,7 +1033,7 @@ export function useUnifiedKeyframeTransformControls(
     )
       return
 
-    const newRotationRadians = uiDegreesToWebAVRadians(degrees)
+    const newRotationRadians = uiDegreesToRotationRadians(degrees)
 
     await unifiedStore.updatePropertyWithHistory(
       selectedTimelineItem.value.id,

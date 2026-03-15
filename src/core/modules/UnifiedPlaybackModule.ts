@@ -10,7 +10,6 @@ import type { UnifiedMediaBunnyModule } from '@/core/modules/UnifiedMediaBunnyMo
  * 架构说明：
  * - UnifiedPlaybackModule 作为主控，管理所有播放状态
  * - 通过 MediaBunny 模块进行实际的渲染
- * - 完全移除 WebAV 依赖
  */
 export function createUnifiedPlaybackModule(registry: ModuleRegistry) {
   // ==================== 状态定义 ====================
