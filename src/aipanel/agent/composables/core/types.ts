@@ -106,6 +106,17 @@ export interface RenameTrackOperation extends BaseOperationConfig {
 }
 
 /**
+ * 移动轨道操作
+ */
+export interface MoveTrackOperation extends BaseOperationConfig {
+  type: 'moveTrack'
+  params: {
+    trackId: string // 要移动的轨道 ID
+    newPosition: number // 新位置索引
+  }
+}
+
+/**
  * 切换轨道静音状态操作
  */
 export interface ToggleTrackMuteOperation extends BaseOperationConfig {
@@ -165,6 +176,7 @@ export type OperationConfig =
   | AddTrackOperation
   | RemoveTrackOperation
   | RenameTrackOperation
+  | MoveTrackOperation
   | ToggleTrackMuteOperation
   | ToggleTrackVisibilityOperation
 

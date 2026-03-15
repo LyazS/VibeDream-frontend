@@ -704,9 +704,9 @@ function findTimelineItemAtPosition(
   })
   const sortedItems = sortTimelineItemsByTrackIndex(visibleItems, trackIndexMap)
 
-  // 4. 从最上层（轨道索引最大）开始检测碰撞
-  // 倒序遍历，因为 sortedItems 是从小到大排序的
-  for (let i = sortedItems.length - 1; i >= 0; i--) {
+  // 4. 从最上层（轨道索引最小）开始检测碰撞
+  // 正序遍历，因为 sortedItems 是从大到小排序的
+  for (let i = 0; i < sortedItems.length; i++) {
     const item = sortedItems[i]
 
     // 检查是否有视觉属性（过滤掉纯音频项目）

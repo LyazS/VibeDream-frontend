@@ -202,6 +202,7 @@ export const useUnifiedStore = defineStore('unified', () => {
     addTrack: unifiedTrackModule.addTrack,
     removeTrack: unifiedTrackModule.removeTrack,
     renameTrack: unifiedTrackModule.renameTrack,
+    moveTrack: unifiedTrackModule.moveTrack,
     getTrack: unifiedTrackModule.getTrack,
     setTrackHeight: unifiedTrackModule.setTrackHeight,
     toggleTrackVisibility: unifiedTrackModule.toggleTrackVisibility,

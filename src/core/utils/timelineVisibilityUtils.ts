@@ -53,8 +53,8 @@ export function getVisibleTimelineItems(
 }
 
 /**
- * 按轨道索引对时间轴项排序（从下到上）
- * 轨道索引小的在下层，索引大的在上层
+ * 按轨道索引对时间轴项排序（从上到下）
+ * 返回的数组中，索引小的在前面，索引大的在后面
  *
  * @param items 时间轴项数组
  * @param trackIndexMap 轨道ID到索引的映射

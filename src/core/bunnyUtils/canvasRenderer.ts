@@ -215,7 +215,7 @@ export function renderToCanvas(
   })
 
   // 4. 按轨道顺序排序（使用计算属性优化性能）
-  // 索引小的先渲染（在下层），索引大的后渲染（在上层）
+  // 索引大的先渲染（在下层），索引小的后渲染（在最上层）
   const sortedItems = renderableItems.sort((a, b) => {
     // 获取轨道索引，如果没有 trackId 或找不到则返回 -Infinity（排在最前面）
     const getTrackIndex = (trackId: string | undefined): number => {
@@ -223,7 +223,7 @@ export function renderToCanvas(
       return trackIndexMap.get(trackId) ?? -Infinity
     }
 
-    return getTrackIndex(a.trackId) - getTrackIndex(b.trackId)
+    return getTrackIndex(b.trackId) - getTrackIndex(a.trackId)
   })
 
   // 5. 渲染每个项目

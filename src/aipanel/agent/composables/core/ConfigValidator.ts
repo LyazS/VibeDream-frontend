@@ -60,6 +60,9 @@ export class ConfigValidator {
       case 'renameTrack':
         this.validateRenameTrack(op.params)
         break
+      case 'moveTrack':
+        this.validateMoveTrack(op.params)
+        break
       case 'toggleTrackMute':
         this.validateToggleTrackMute(op.params)
         break
@@ -257,6 +260,23 @@ export class ConfigValidator {
 
     if (!params.newName.trim()) {
       throw new Error('newName 不能为空字符串')
+    }
+  }
+
+  /**
+   * 验证移动轨道操作
+   */
+  private validateMoveTrack(params: any): void {
+    if (!params.trackId || typeof params.trackId !== 'string') {
+      throw new Error('trackId 不能为空且必须是字符串')
+    }
+
+    if (params.newPosition === undefined || typeof params.newPosition !== 'number') {
+      throw new Error('newPosition 不能为空且必须是数字')
+    }
+
+    if (params.newPosition < 0) {
+      throw new Error('newPosition 必须是非负数')
     }
   }
 

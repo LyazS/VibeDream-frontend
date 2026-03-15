@@ -14,6 +14,7 @@ import { ResizeTimelineItemCommand } from '@/core/modules/commands/ResizeTimelin
 import { AddTrackCommand } from '@/core/modules/commands/AddTrackCommand'
 import { RemoveTrackCommand } from '@/core/modules/commands/RemoveTrackCommand'
 import { RenameTrackCommand } from '@/core/modules/commands/RenameTrackCommand'
+import { MoveTrackCommand } from '@/core/modules/commands/MoveTrackCommand'
 import { ToggleTrackMuteCommand } from '@/core/modules/commands/ToggleTrackMuteCommand'
 import { ToggleTrackVisibilityCommand } from '@/core/modules/commands/ToggleTrackVisibilityCommand'
 import { UpdateTransformCommand } from '@/core/modules/commands/UpdateTransformCommand'
@@ -54,6 +55,8 @@ export class CommandFactory {
         return this.createRemoveTrackCommand(params)
       case 'renameTrack':
         return this.createRenameTrackCommand(params)
+      case 'moveTrack':
+        return this.createMoveTrackCommand(params)
       case 'toggleTrackMute':
         return this.createToggleTrackMuteCommand(params)
       case 'toggleTrackVisibility':
@@ -564,6 +567,39 @@ export class CommandFactory {
 
     // 创建命令
     return new RenameTrackCommand(params.trackId, params.newName, trackModule)
+  }
+
+  /**
+   * 创建移动轨道命令
+   */
+  private createMoveTrackCommand(params: any): SimpleCommand {
+    const unifiedStore = useUnifiedStore()
+
+    // 验证轨道存在
+    const track = unifiedStore.getTrack(params.trackId)
+    if (!track) {
+      throw new Error(`轨道不存在: ${params.trackId}`)
+    }
+
+    // 从 tracks 数组中获取当前轨道位置
+    const currentPosition = unifiedStore.tracks.findIndex(t => t.id === params.trackId)
+    if (currentPosition === -1) {
+      throw new Error(`无法获取轨道位置: ${params.trackId}`)
+    }
+
+    // 验证新位置有效
+    if (typeof params.newPosition !== 'number' || params.newPosition < 0) {
+      throw new Error(`无效的新位置: ${params.newPosition}`)
+    }
+
+    // 获取模块引用
+    const trackModule = {
+      moveTrack: unifiedStore.moveTrack.bind(unifiedStore),
+      getTrack: (trackId: string) => unifiedStore.tracks.find(track => track.id === trackId),
+    }
+
+    // 创建命令
+    return new MoveTrackCommand(params.trackId, currentPosition, params.newPosition, trackModule)
   }
 
   /**

@@ -125,6 +125,12 @@ const buildAPI = () => {
       return result
     },
 
+    moveTrack: (trackId: string, newPosition: number) => {
+      const result = { type: 'moveTrack', params: { trackId, newPosition } }
+      operations.push(result)
+      return result
+    },
+
     toggleTrackMute: (trackId: string, targetMuteState?: boolean) => {
       const params: any = { trackId }
       if (targetMuteState !== undefined) params.targetMuteState = targetMuteState

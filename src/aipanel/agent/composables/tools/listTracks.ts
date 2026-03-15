@@ -46,12 +46,13 @@ export async function executeListTracks(args: Record<string, any>): Promise<stri
     lines.push(`=== 轨道列表 (${trackInfos.length}个) ===`)
     lines.push('')
 
-    for (const track of trackInfos) {
+    trackInfos.forEach((track, index) => {
       lines.push(`[ID: ${track.id}]`)
       lines.push(`  名称: ${track.name}`)
       lines.push(`  类型: ${track.type}`)
+      lines.push(`  索引: ${index}`)
       lines.push('')
-    }
+    })
 
     return lines.join('\n')
   } catch (error: any) {
