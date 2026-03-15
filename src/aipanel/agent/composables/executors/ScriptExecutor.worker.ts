@@ -162,7 +162,14 @@ const buildAPI = () => {
       duration?: number
       playbackRate?: number
     }) => {
-      const result = { type: 'updateTimelineItem', params: { itemId, ...options } }
+      // 处理参数：将 rotation 从角度转换为弧度
+      const processedOptions = { ...options }
+      if (options.rotation !== undefined) {
+        // 角度转弧度：Agent 传递角度（如 90），底层需要弧度（如 Math.PI / 2）
+        processedOptions.rotation = (options.rotation * Math.PI) / 180
+      }
+
+      const result = { type: 'updateTimelineItem', params: { itemId, ...processedOptions } }
       operations.push(result)
       return result
     },
