@@ -5,6 +5,7 @@
 
 import { useUnifiedStore } from '@/core/unifiedStore'
 import { framesToTimecode } from '@/core/utils/timeUtils'
+import { MediaItemQueries } from '@/core/mediaitem/queries'
 import type { ToolDefinition } from '../core/toolTypes'
 import type { UnifiedTimelineItemData } from '@/core/timelineitem/type'
 import type { VisualProps, AudioProps, TextProps } from '@/core/timelineitem/bunnytype'
@@ -17,6 +18,18 @@ interface TimeRangeInfo {
   start: string
   /** 结束时间（时间码格式） */
   end: string
+}
+
+/**
+ * 原始属性
+ */
+interface OriginalInfo {
+  /** 原始宽度（像素） */
+  width?: number
+  /** 原始高度（像素） */
+  height?: number
+  /** 原始时长（帧数） */
+  duration?: number
 }
 
 /**
@@ -94,8 +107,12 @@ export async function executeReadTimelineitem(args: Record<string, any>): Promis
         continue
       }
 
+      // 获取关联的 mediaItem 和原始属性
+      const mediaItem = item.mediaItemId ? store.getMediaItem(item.mediaItemId) : null
+      const originalInfo = extractOriginalInfo(mediaItem, item)
+
       // 成功找到，使用格式化函数
-      results.push(formatTimelineItemDetail(item))
+      results.push(formatTimelineItemDetail(item, originalInfo))
     }
 
     // 3. 返回按顺序拼接的结果
@@ -108,7 +125,7 @@ export async function executeReadTimelineitem(args: Record<string, any>): Promis
 /**
  * 格式化单个时间轴项目详情
  */
-function formatTimelineItemDetail(item: UnifiedTimelineItemData): string {
+function formatTimelineItemDetail(item: UnifiedTimelineItemData, originalInfo: OriginalInfo): string {
   const lines: string[] = []
 
   // 1. 基本信息
@@ -137,7 +154,20 @@ function formatTimelineItemDetail(item: UnifiedTimelineItemData): string {
     lines.push(`源素材: ${sourceTimeRange.start} - ${sourceTimeRange.end}`)
   }
 
-  // 3. 变换属性
+  // 3. 原始属性
+  if (Object.keys(originalInfo).length > 0) {
+    lines.push('')
+    lines.push(`=== 原始属性 ===`)
+    if (originalInfo.width !== undefined) lines.push(`原始宽度: ${originalInfo.width}px`)
+    if (originalInfo.height !== undefined) lines.push(`原始高度: ${originalInfo.height}px`)
+    if (originalInfo.duration !== undefined) {
+      // duration 是帧数，直接转换为时间码格式
+      const durationTimecode = framesToTimecode(originalInfo.duration)
+      lines.push(`原始时长: ${durationTimecode}`)
+    }
+  }
+
+  // 4. 变换属性
   const config = item.config
   if (config) {
     const transformInfo = extractTransformInfo(config)
@@ -169,6 +199,53 @@ function formatTimelineItemDetail(item: UnifiedTimelineItemData): string {
   }
 
   return lines.join('\n')
+}
+
+/**
+ * 从媒体项目和时间轴项目中提取原始属性
+ */
+function extractOriginalInfo(mediaItem: any, timelineItem: UnifiedTimelineItemData): OriginalInfo {
+  const info: OriginalInfo = {}
+
+  // 根据时间轴项目的媒体类型获取不同的原始属性
+  switch (timelineItem.mediaType) {
+    case 'video':
+    case 'image':
+      // 视频和图片：从 mediaItem 获取原始宽高
+      if (!mediaItem) break
+      const size = MediaItemQueries.getOriginalSize(mediaItem)
+      if (size) {
+        info.width = size.width
+        info.height = size.height
+      }
+      // 只有视频有原始时长，图片没有
+      if (timelineItem.mediaType === 'video' && mediaItem.duration !== undefined && mediaItem.duration > 0) {
+        info.duration = mediaItem.duration
+      }
+      break
+
+    case 'audio':
+      // 音频：从 mediaItem 获取时长
+      if (!mediaItem) break
+      if (mediaItem.duration !== undefined && mediaItem.duration > 0) {
+        info.duration = mediaItem.duration
+      }
+      break
+
+    case 'text':
+      // 文本类型：从 timelineItem.runtime.textBitmap 获取原始宽高
+      if (timelineItem.runtime?.textBitmap) {
+        info.width = timelineItem.runtime.textBitmap.width
+        info.height = timelineItem.runtime.textBitmap.height
+      }
+      break
+
+    default:
+      // 未知类型或其他
+      break
+  }
+
+  return info
 }
 
 /**

@@ -67,14 +67,14 @@ const buildAPI = () => {
   return {
     // === 时间轴操作 ===
 
-    addMediaToTimeline: (mediaItemId: string, trackId: string, position: string) => {
-      const result = { type: 'addMediaToTimeline', params: { mediaItemId, trackId, position } }
+    addMediaToTimeline: (mediaItemId: string, trackId: string, timelineStart: string) => {
+      const result = { type: 'addMediaToTimeline', params: { mediaItemId, trackId, timelineStart } }
       operations.push(result)
       return result
     },
 
-    addTextToTimeline: (text: string, trackId: string, position: string, duration: string) => {
-      const result = { type: 'addTextToTimeline', params: { text, trackId, position, duration } }
+    addTextToTimeline: (text: string, trackId: string, timelineStart: string, duration: string) => {
+      const result = { type: 'addTextToTimeline', params: { text, trackId, timelineStart, duration } }
       operations.push(result)
       return result
     },
@@ -85,8 +85,8 @@ const buildAPI = () => {
       return result
     },
 
-    mvTimelineItem: (itemId: string, newPosition: string, newTrackId?: string) => {
-      const params: any = { itemId, newPosition }
+    mvTimelineItem: (itemId: string, newTimelineStart: string, newTrackId?: string) => {
+      const params: any = { itemId, newTimelineStart }
       if (newTrackId !== undefined) {
         params.newTrackId = newTrackId
       }
@@ -95,11 +95,27 @@ const buildAPI = () => {
       return result
     },
 
-    resizeTimelineItem: (itemId: string, newStartTime?: string, newEndTime?: string) => {
-      const params: any = { itemId }
-      if (newStartTime !== undefined) params.newStartTime = newStartTime
-      if (newEndTime !== undefined) params.newEndTime = newEndTime
+    resizeTimelineItem: (
+      itemId: string,
+      timelineStart: string,
+      timelineEnd: string,
+      clipStart: string,
+      clipEnd: string
+    ) => {
+      const params = {
+        itemId,
+        timelineStart,
+        timelineEnd,
+        clipStart,
+        clipEnd
+      }
       const result = { type: 'resizeTimelineItem', params }
+      operations.push(result)
+      return result
+    },
+
+    splitTimelineItem: (itemId: string, splitTimecodes: string[]) => {
+      const result = { type: 'splitTimelineItem', params: { itemId, splitTimecodes } }
       operations.push(result)
       return result
     },

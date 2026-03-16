@@ -20,7 +20,7 @@ export interface AddMediaToTimelineOperation extends BaseOperationConfig {
   params: {
     mediaItemId: string
     trackId: string
-    position: string // 时间轴位置（时间码）
+    timelineStart: string // 时间轴开始位置（时间码）
   }
 }
 
@@ -32,7 +32,7 @@ export interface AddTextToTimelineOperation extends BaseOperationConfig {
   params: {
     text: string // 文本内容
     trackId: string // 轨道ID（必须是文本类型轨道）
-    position: string // 时间轴位置（时间码格式 HH:MM:SS+FF）
+    timelineStart: string // 时间轴开始位置（时间码格式 HH:MM:SS+FF）
     duration: string // 显示时长（时间码格式 HH:MM:SS+FF）
   }
 }
@@ -54,7 +54,7 @@ export interface MvTimelineItemOperation extends BaseOperationConfig {
   type: 'mvTimelineItem'
   params: {
     itemId: string // 要移动的时间轴项目 ID
-    newPosition: string // 新位置（时间码格式 HH:MM:SS+FF）
+    newTimelineStart: string // 新时间轴开始位置（时间码格式 HH:MM:SS+FF）
     newTrackId?: string // 新轨道 ID（可选，不提供则保持在原轨道）
   }
 }
@@ -66,10 +66,10 @@ export interface ResizeTimelineItemOperation extends BaseOperationConfig {
   type: 'resizeTimelineItem'
   params: {
     itemId: string // 要调整的时间轴项目 ID
-    newStartTime?: string // 新时间轴开始时间（可选，格式 HH:MM:SS+FF）
-    newEndTime?: string // 新时间轴结束时间（可选，格式 HH:MM:SS+FF）
-    newClipStartTime?: string // 新裁剪开始时间（可选，格式 HH:MM:SS+FF）
-    newClipEndTime?: string // 新裁剪结束时间（可选，格式 HH:MM:SS+FF）
+    timelineStart: string // 时间轴开始时间（必需，格式 HH:MM:SS+FF）
+    timelineEnd: string // 时间轴结束时间（必需，格式 HH:MM:SS+FF）
+    clipStart: string // 素材裁剪开始时间（必需，格式 HH:MM:SS+FF）
+    clipEnd: string // 素材裁剪结束时间（必需，格式 HH:MM:SS+FF）
   }
 }
 
@@ -152,6 +152,23 @@ export interface ToggleProportionalScaleOperation extends BaseOperationConfig {
 /**
  * 更新时间轴项目属性操作
  * 支持更新变换属性（位置、大小、旋转、透明度）和音频属性（音量、静音）
+ *
+ * 宽高设置规则（自动保持原始比例）：
+ * - 只能提供 width 或 height 中的一个
+ * - 提供其中一个时，另一个会根据原始宽高比自动计算
+ * - 同时提供两者会抛出 ValidationError
+ *
+ * @example
+ * // ✅ 正确：只设置宽度，高度自动计算
+ * updateTimelineItem('item-1', { width: 800 })
+ *
+ * @example
+ * // ✅ 正确：只设置高度，宽度自动计算
+ * updateTimelineItem('item-1', { height: 600 })
+ *
+ * @example
+ * // ❌ 错误：同时设置宽度和高度
+ * updateTimelineItem('item-1', { width: 800, height: 600 }) // 抛出错误
  */
 export interface UpdateTimelineItemOperation extends BaseOperationConfig {
   type: 'updateTimelineItem'
@@ -160,8 +177,8 @@ export interface UpdateTimelineItemOperation extends BaseOperationConfig {
     // 视觉属性（可选）
     x?: number // X 位置
     y?: number // Y 位置
-    width?: number // 宽度
-    height?: number // 高度
+    width?: number // 宽度，提供时会自动根据原始宽高比计算高度
+    height?: number // 高度，提供时会自动根据原始宽高比计算宽度
     rotation?: number // 旋转角度（弧度）
     opacity?: number // 透明度 (0-1)
     proportionalScale?: boolean // 等比缩放状态
@@ -175,6 +192,18 @@ export interface UpdateTimelineItemOperation extends BaseOperationConfig {
 }
 
 /**
+ * 分割时间轴项目操作
+ * 支持在多个时间点分割时间轴项目，产生多个片段
+ */
+export interface SplitTimelineItemOperation extends BaseOperationConfig {
+  type: 'splitTimelineItem'
+  params: {
+    itemId: string // 要分割的时间轴项目 ID
+    splitTimecodes: string[] // 分割时间点数组（时间码格式 HH:MM:SS+FF）
+  }
+}
+
+/**
  * 操作配置联合类型 - 所有支持的操作类型
  */
 export type OperationConfig =
@@ -184,6 +213,7 @@ export type OperationConfig =
   | MvTimelineItemOperation
   | ResizeTimelineItemOperation
   | UpdateTimelineItemOperation
+  | SplitTimelineItemOperation
   | AddTrackOperation
   | RemoveTrackOperation
   | RenameTrackOperation

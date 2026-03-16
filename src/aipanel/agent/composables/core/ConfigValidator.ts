@@ -75,6 +75,9 @@ export class ConfigValidator {
       case 'updateTimelineItem':
         this.validateUpdateTimelineItem(op.params)
         break
+      case 'splitTimelineItem':
+        this.validateSplitTimelineItem(op.params)
+        break
       default:
         throw new Error(`不支持的操作类型: ${op.type}`)
     }
@@ -127,11 +130,11 @@ export class ConfigValidator {
       throw new Error('trackId 不能为空且必须是字符串')
     }
 
-    if (!params.position || typeof params.position !== 'string') {
-      throw new Error('position 不能为空且必须是字符串')
+    if (!params.timelineStart || typeof params.timelineStart !== 'string') {
+      throw new Error('timelineStart 不能为空且必须是字符串')
     }
 
-    this.validateTimecode(params.position)
+    this.validateTimecode(params.timelineStart)
   }
 
   /**
@@ -146,15 +149,15 @@ export class ConfigValidator {
       throw new Error('trackId 不能为空且必须是字符串')
     }
 
-    if (!params.position || typeof params.position !== 'string') {
-      throw new Error('position 不能为空且必须是字符串')
+    if (!params.timelineStart || typeof params.timelineStart !== 'string') {
+      throw new Error('timelineStart 不能为空且必须是字符串')
     }
 
     if (!params.duration || typeof params.duration !== 'string') {
       throw new Error('duration 不能为空且必须是字符串')
     }
 
-    this.validateTimecode(params.position)
+    this.validateTimecode(params.timelineStart)
     this.validateTimecode(params.duration)
   }
 
@@ -175,11 +178,11 @@ export class ConfigValidator {
       throw new Error('itemId 不能为空且必须是字符串')
     }
 
-    if (!params.newPosition || typeof params.newPosition !== 'string') {
-      throw new Error('newPosition 不能为空且必须是字符串')
+    if (!params.newTimelineStart || typeof params.newTimelineStart !== 'string') {
+      throw new Error('newTimelineStart 不能为空且必须是字符串')
     }
 
-    this.validateTimecode(params.newPosition)
+    this.validateTimecode(params.newTimelineStart)
 
     if (params.newTrackId !== undefined && typeof params.newTrackId !== 'string') {
       throw new Error('newTrackId 必须是字符串')
@@ -194,28 +197,16 @@ export class ConfigValidator {
       throw new Error('itemId 不能为空且必须是字符串')
     }
 
-    const hasStartTime = params.newStartTime !== undefined
-    const hasEndTime = params.newEndTime !== undefined
-
-    // 至少需要提供一个时间参数
-    if (!hasStartTime && !hasEndTime) {
-      throw new Error('必须提供至少一个时间参数（newStartTime 或 newEndTime），可同时提供')
-    }
-
-    // 如果提供了 newStartTime，验证格式
-    if (hasStartTime) {
-      if (typeof params.newStartTime !== 'string') {
-        throw new Error('newStartTime 必须是字符串')
+    // 验证所有 4 个必需参数
+    const requiredParams = ['timelineStart', 'timelineEnd', 'clipStart', 'clipEnd']
+    for (const param of requiredParams) {
+      if (!params[param]) {
+        throw new Error(`${param} 是必需参数`)
       }
-      this.validateTimecode(params.newStartTime)
-    }
-
-    // 如果提供了 newEndTime，验证格式
-    if (hasEndTime) {
-      if (typeof params.newEndTime !== 'string') {
-        throw new Error('newEndTime 必须是字符串')
+      if (typeof params[param] !== 'string') {
+        throw new Error(`${param} 必须是字符串`)
       }
-      this.validateTimecode(params.newEndTime)
+      this.validateTimecode(params[param])
     }
   }
 
@@ -338,14 +329,25 @@ export class ConfigValidator {
       params.height !== undefined ||
       params.rotation !== undefined ||
       params.opacity !== undefined ||
-      params.proportionalScale !== undefined ||
       params.volume !== undefined ||
       params.isMuted !== undefined ||
-      params.duration !== undefined ||
       params.playbackRate !== undefined
 
     if (!hasPropertyToUpdate) {
       throw new Error('必须提供至少一个要更新的属性')
+    }
+
+    // 宽高互斥验证
+    const hasWidth = params.width !== undefined
+    const hasHeight = params.height !== undefined
+
+    if (hasWidth && hasHeight) {
+      throw new Error(
+        'width 和 height 不能同时提供。' +
+        '只提供一个，另一个会根据原始宽高比自动计算。\n' +
+        '正确用法：updateTimelineItem(id, { width: 800 })\n' +
+        '或：updateTimelineItem(id, { height: 600 })'
+      )
     }
 
     // 验证数值类型的属性
@@ -357,12 +359,20 @@ export class ConfigValidator {
       throw new Error('y 必须是数字')
     }
 
-    if (params.width !== undefined && typeof params.width !== 'number') {
+    if (hasWidth && typeof params.width !== 'number') {
       throw new Error('width 必须是数字')
     }
 
-    if (params.height !== undefined && typeof params.height !== 'number') {
+    if (hasWidth && params.width <= 0) {
+      throw new Error('width 必须大于 0')
+    }
+
+    if (hasHeight && typeof params.height !== 'number') {
       throw new Error('height 必须是数字')
+    }
+
+    if (hasHeight && params.height <= 0) {
+      throw new Error('height 必须大于 0')
     }
 
     if (params.rotation !== undefined && typeof params.rotation !== 'number') {
@@ -373,10 +383,6 @@ export class ConfigValidator {
       throw new Error('opacity 必须是 0-1 之间的数字')
     }
 
-    if (params.proportionalScale !== undefined && typeof params.proportionalScale !== 'boolean') {
-      throw new Error('proportionalScale 必须是布尔值')
-    }
-
     if (params.volume !== undefined && (typeof params.volume !== 'number' || params.volume < 0 || params.volume > 1)) {
       throw new Error('volume 必须是 0-1 之间的数字')
     }
@@ -385,12 +391,38 @@ export class ConfigValidator {
       throw new Error('isMuted 必须是布尔值')
     }
 
-    if (params.duration !== undefined && (typeof params.duration !== 'number' || params.duration <= 0)) {
-      throw new Error('duration 必须是正数')
-    }
-
     if (params.playbackRate !== undefined && (typeof params.playbackRate !== 'number' || params.playbackRate <= 0)) {
       throw new Error('playbackRate 必须是正数')
     }
+  }
+
+  /**
+   * 验证分割时间轴项目操作
+   */
+  private validateSplitTimelineItem(params: any): void {
+    if (!params.itemId || typeof params.itemId !== 'string') {
+      throw new Error('itemId 不能为空且必须是字符串')
+    }
+
+    if (!params.splitTimecodes || !Array.isArray(params.splitTimecodes)) {
+      throw new Error('splitTimecodes 不能为空且必须是数组')
+    }
+
+    if (params.splitTimecodes.length === 0) {
+      throw new Error('splitTimecodes 必须包含至少一个时间点')
+    }
+
+    // 验证每个时间码格式
+    for (let i = 0; i < params.splitTimecodes.length; i++) {
+      const timecode = params.splitTimecodes[i]
+      if (typeof timecode !== 'string') {
+        throw new Error(`splitTimecodes[${i}] 必须是字符串`)
+      }
+      this.validateTimecode(timecode)
+    }
+
+    // 验证时间码是否按时间顺序排列
+    // 由于我们只有时间码字符串，这里只做基本验证，不进行实际值比较
+    // 值的比较会在 CommandFactory 中进行（转换为帧数后）
   }
 }

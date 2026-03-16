@@ -109,7 +109,7 @@ const formatTimestamp = (timestamp: string) => {
 }
 
 .message-timestamp {
-  font-size: var(--font-size-xs);
+  font-size: var(--font-size-xxs);
   opacity: 0.7;
   text-align: right;
 }

@@ -19,9 +19,11 @@ import { ToggleTrackMuteCommand } from '@/core/modules/commands/ToggleTrackMuteC
 import { ToggleTrackVisibilityCommand } from '@/core/modules/commands/ToggleTrackVisibilityCommand'
 import { ToggleProportionalScaleCommand } from '@/core/modules/commands/ToggleProportionalScaleCommand'
 import { UpdateTransformCommand } from '@/core/modules/commands/UpdateTransformCommand'
+import { SplitTimelineItemCommand } from '@/core/modules/commands/SplitTimelineItemCommand'
 import type { MediaType } from '@/core/mediaitem/types'
 import type { UnifiedTimelineItemData } from '@/core/timelineitem/type'
 import { MediaItemQueries } from '@/core/mediaitem'
+import { hasVisualProperties, hasAudioProperties } from '@/core/timelineitem/queries'
 import { generateTimelineItemId } from '@/core/utils/idGenerator'
 import { computed } from 'vue'
 import { createTextTimelineItem } from '@/core/utils/textTimelineUtils'
@@ -66,6 +68,8 @@ export class CommandFactory {
         return this.createToggleProportionalScaleCommand(params)
       case 'updateTimelineItem':
         return this.createUpdateTimelineItemCommand(params)
+      case 'splitTimelineItem':
+        return this.createSplitTimelineItemCommand(params)
       default:
         throw new Error(`不支持的操作类型: ${type}`)
     }
@@ -132,7 +136,7 @@ export class CommandFactory {
     }
 
     // 时间码转帧
-    const positionFrames = this.timecodeToFrames(params.position)
+    const positionFrames = this.timecodeToFrames(params.timelineStart)
     const durationFrames = this.timecodeToFrames(params.duration)
 
     // 创建文本时间轴项目
@@ -205,7 +209,7 @@ export class CommandFactory {
     const oldTrackId = timelineItem.trackId
 
     // 时间码转帧
-    const newPositionFrames = this.timecodeToFrames(params.newPosition)
+    const newPositionFrames = this.timecodeToFrames(params.newTimelineStart)
 
     // 如果提供了 newTrackId，验证轨道存在
     const newTrackId: string = params.newTrackId ?? timelineItem.trackId
@@ -248,6 +252,11 @@ export class CommandFactory {
   private createResizeTimelineItemCommand(params: any): SimpleCommand {
     const unifiedStore = useUnifiedStore()
 
+    // 验证必需参数
+    if (!params.timelineStart || !params.timelineEnd || !params.clipStart || !params.clipEnd) {
+      throw new Error('resizeTimelineItem 必须提供所有 4 个参数: timelineStart, timelineEnd, clipStart, clipEnd')
+    }
+
     // 验证片段存在
     const timelineItem = unifiedStore.getTimelineItem(params.itemId)
     if (!timelineItem) {
@@ -260,17 +269,20 @@ export class CommandFactory {
     // 构建新的时间范围
     const newTimeRange: any = { ...timelineItem.timeRange }
 
-    if (params.newStartTime != null) {
-      newTimeRange.timelineStartTime = this.timecodeToFrames(params.newStartTime)
-    }
+    // 处理时间轴位置参数
+    newTimeRange.timelineStartTime = this.timecodeToFrames(params.timelineStart)
+    newTimeRange.timelineEndTime = this.timecodeToFrames(params.timelineEnd)
 
-    if (params.newEndTime != null) {
-      newTimeRange.timelineEndTime = this.timecodeToFrames(params.newEndTime)
-    }
+    // 处理素材裁剪位置参数
+    newTimeRange.clipStartTime = this.timecodeToFrames(params.clipStart)
+    newTimeRange.clipEndTime = this.timecodeToFrames(params.clipEnd)
 
     // 验证时间范围逻辑
     if (newTimeRange.timelineStartTime >= newTimeRange.timelineEndTime) {
       throw new Error('timelineStartTime 必须小于 timelineEndTime')
+    }
+    if (newTimeRange.clipStartTime >= newTimeRange.clipEndTime) {
+      throw new Error('clipStartTime 必须小于 clipEndTime')
     }
 
     // 获取模块引用
@@ -398,7 +410,7 @@ export class CommandFactory {
     const config = this.createDefaultTimelineItemConfig(mediaItem.mediaType, originalResolution)
 
     // 时间码转帧
-    const positionFrames = this.timecodeToFrames(params.position)
+    const positionFrames = this.timecodeToFrames(params.timelineStart)
 
     // 创建时间轴项目数据
     const timelineItemData: UnifiedTimelineItemData = {
@@ -711,8 +723,26 @@ export class CommandFactory {
     const newValues: any = {}
 
     // 视觉属性（仅对 video、image、text 类型有效）
-    if (timelineItem.mediaType !== 'audio') {
-      const config = timelineItem.config as any
+    if (hasVisualProperties(timelineItem)) {
+      const config = timelineItem.config
+
+      // 宽高自动计算逻辑：只提供其中一个时，根据原始宽高比自动计算另一个
+      const hasWidth = params.width !== undefined
+      const hasHeight = params.height !== undefined
+
+      if (hasWidth || hasHeight) {
+        // 计算当前宽高比（从现有配置获取）
+        const aspectRatio = config.width / config.height
+
+        if (hasWidth && !hasHeight) {
+          // 只提供宽度：计算高度
+          params.height = params.width / aspectRatio
+        } else if (hasHeight && !hasWidth) {
+          // 只提供高度：计算宽度
+          params.width = params.height * aspectRatio
+        }
+        // 同时提供宽高的情况已在验证层拦截，不会到达这里
+      }
 
       if (params.x !== undefined) {
         oldValues.x = config.x
@@ -738,15 +768,11 @@ export class CommandFactory {
         oldValues.opacity = config.opacity
         newValues.opacity = params.opacity
       }
-      if (params.proportionalScale !== undefined) {
-        oldValues.proportionalScale = config.proportionalScale
-        newValues.proportionalScale = params.proportionalScale
-      }
     }
 
     // 音频属性（仅对 video 和 audio 类型有效）
-    if (timelineItem.mediaType === 'video' || timelineItem.mediaType === 'audio') {
-      const config = timelineItem.config as any
+    if (hasAudioProperties(timelineItem)) {
+      const config = timelineItem.config
 
       if (params.volume !== undefined) {
         oldValues.volume = config.volume
@@ -758,39 +784,56 @@ export class CommandFactory {
       }
     }
 
-    // 扩展属性
-    if (params.duration !== undefined) {
-      const currentDuration =
-        timelineItem.timeRange.timelineEndTime - timelineItem.timeRange.timelineStartTime
-      oldValues.duration = currentDuration
-      newValues.duration = params.duration
-    }
-
-    if (params.playbackRate !== undefined) {
-      oldValues.playbackRate = 1 // 默认倍速为 1
-      newValues.playbackRate = params.playbackRate
-    }
-
     // 获取模块引用
     const timelineModule: any = {
       updateTimelineItemTransform: unifiedStore.updateTimelineItemTransform.bind(unifiedStore),
       getTimelineItem: (id: string) => unifiedStore.getTimelineItem(id),
     }
 
-    // 只有当需要更新 playbackRate 且该方法存在时才添加
-    if (
-      params.playbackRate !== undefined &&
-      'updateTimelineItemPlaybackRate' in unifiedStore &&
-      typeof (unifiedStore as any).updateTimelineItemPlaybackRate === 'function'
-    ) {
-      timelineModule.updateTimelineItemPlaybackRate = (unifiedStore as any).updateTimelineItemPlaybackRate.bind(
-        unifiedStore,
-      )
-    }
-
     const mediaModule = this.getMediaModule()
 
     // 创建命令
     return new UpdateTransformCommand(params.itemId, oldValues, newValues, timelineModule, mediaModule)
+  }
+
+  /**
+   * 创建分割时间轴项目命令
+   */
+  private createSplitTimelineItemCommand(params: any): SimpleCommand {
+    const unifiedStore = useUnifiedStore()
+
+    // 验证片段存在
+    const timelineItem = unifiedStore.getTimelineItem(params.itemId)
+    if (!timelineItem) {
+      throw new Error(`时间轴项目不存在: ${params.itemId}`)
+    }
+
+    // 时间码转帧
+    const splitTimeFrames = params.splitTimecodes.map((tc: string) => this.timecodeToFrames(tc))
+
+    // 验证分割点在时间范围内
+    const { timelineStartTime, timelineEndTime } = timelineItem.timeRange
+    for (const frames of splitTimeFrames) {
+      if (frames <= timelineStartTime || frames >= timelineEndTime) {
+        throw new Error(`分割点 ${frames} 必须在片段时间范围内 (${timelineStartTime}, ${timelineEndTime})`)
+      }
+    }
+
+    // 获取模块引用
+    const timelineModule = {
+      addTimelineItem: unifiedStore.addTimelineItem.bind(unifiedStore),
+      removeTimelineItem: unifiedStore.removeTimelineItem.bind(unifiedStore),
+      getTimelineItem: (id: string) => unifiedStore.getTimelineItem(id),
+    }
+    const mediaModule = this.getMediaModule()
+
+    // 创建命令
+    return new SplitTimelineItemCommand(
+      params.itemId,
+      timelineItem,
+      splitTimeFrames,
+      timelineModule,
+      mediaModule
+    )
   }
 }
