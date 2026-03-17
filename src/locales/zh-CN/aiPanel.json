@@ -65,6 +65,7 @@
       "analyzingCharacter": "正在分析角色特征...",
       "generatingAvatar": "正在生成角色头像...",
       "characterCreated": "角色创建完成"
-    }
+    },
+    "taskComplete": "任务完成"
   }
 }

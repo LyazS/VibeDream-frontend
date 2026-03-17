@@ -20,7 +20,7 @@
           <div v-else-if="item.type === ChatMessageAssistantContentType.TASK_COMPLETE" class="task-complete-component">
             <div class="task-complete-header">
               <component :is="IconComponents.SUCCESS" size="18px" class="check-icon" />
-              <span class="task-complete-title">任务完成</span>
+              <span class="task-complete-title">{{ t('aiPanel.taskComplete') }}</span>
             </div>
             <div class="task-complete-content markdown-body" v-html="renderMarkdown(item.content)"></div>
           </div>
@@ -37,6 +37,9 @@ import type { ChatMessageAssistant } from '../types'
 import { ChatMessageAssistantContentType } from '../types'
 import { IconComponents } from '@/constants/iconComponents'
 import ToolCallDisplay from './ToolCallDisplay.vue'
+import { useAppI18n } from '@/core/composables/useI18n'
+
+const { t } = useAppI18n()
 
 // 注入markdown渲染函数
 const renderMarkdown = inject<(content: string) => string>('renderMarkdown', (content: string) => {

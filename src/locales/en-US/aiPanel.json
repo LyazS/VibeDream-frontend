@@ -65,6 +65,7 @@
       "analyzingCharacter": "Analyzing character features...",
       "generatingAvatar": "Generating character avatar...",
       "characterCreated": "Character created successfully"
-    }
+    },
+    "taskComplete": "Task Complete"
   }
 }
