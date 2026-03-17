@@ -5,6 +5,7 @@
  * 设计为一次性使用，执行完成后自动清理资源
  */
 import type { LogMessage, ScriptExecutionResult } from '../core/types'
+import ScriptExecutorWorker from './ScriptExecutor.worker.ts?worker'
 
 export class ScriptExecutor {
   private worker: Worker | null = null
@@ -22,9 +23,9 @@ export class ScriptExecutor {
       this.worker.terminate()
     }
 
-    // 创建Worker实例
-    const workerUrl = new URL('./ScriptExecutor.worker.ts', import.meta.url)
-    this.worker = new Worker(workerUrl, { type: 'module' })
+    // 创建Worker实例 - 使用 Vite 的 ?worker 导入语法
+    // 这样 Vite 会正确编译 TypeScript 为 JavaScript 并输出 .js 文件
+    this.worker = new ScriptExecutorWorker()
   }
 
   /**
