@@ -23,6 +23,24 @@ export function normalizeAngle(degrees: number): number {
 }
 
 /**
+ * 将媒体顺时针旋转角度收敛到 0 / 90 / 180 / 270。
+ * 非 90 度步进的值统一按 0 处理。
+ */
+export function normalizeClockwiseRotation(rotation: number): number {
+  const normalized = normalizeAngle(rotation)
+  if (normalized === 0 || normalized === 90) {
+    return normalized
+  }
+  if (normalized === 180 || normalized === -180) {
+    return 180
+  }
+  if (normalized === -90) {
+    return 270
+  }
+  return 0
+}
+
+/**
  * 将角度转换为弧度（用于渲染/计算层）
  * @param degrees 角度值
  * @returns 弧度值

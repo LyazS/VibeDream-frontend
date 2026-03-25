@@ -35,11 +35,10 @@ import type { WrappedAudioBuffer } from 'mediabunny'
 import { applyAnimationToConfig } from '@/core/utils/animationInterpolation'
 import { TimelineItemQueries } from '@/core/timelineitem/queries'
 import {
-  renderToCanvas,
   type FrameData,
-  type RenderContext,
-} from '@/core/bunnyUtils/canvasRenderer'
+} from '@/core/webgl2/types'
 import { TimelineItemsBufferManager } from '@/core/mediabunny/TimelineItemsBufferManager'
+import { TimelineWebGLRenderer } from '@/core/webgl2/renderer/TimelineWebGLRenderer'
 
 if (!(await canEncodeAudio('mp3'))) {
   registerMp3Encoder()
@@ -63,7 +62,7 @@ export function createUnifiedMediaBunnyModule(
 
   // Canvas 相关（由外部传入）
   let mCanvas: HTMLCanvasElement | null = null
-  let mCtx: CanvasRenderingContext2D | null = null
+  let mWebGLRenderer: TimelineWebGLRenderer | null = null
 
   // 渲染循环相关
   let mRenderLoopCleanup: (() => void) | null = null
@@ -106,11 +105,12 @@ export function createUnifiedMediaBunnyModule(
 
       // 设置 Canvas 引用
       mCanvas = canvasElement
-      mCtx = mCanvas.getContext('2d')
-
-      if (!mCtx) {
-        throw new Error('无法获取 Canvas 2D 上下文')
-      }
+      mWebGLRenderer = new TimelineWebGLRenderer({
+        canvas: mCanvas,
+        getTrack: (trackId: string) => trackModule.getTrack(trackId),
+        getMediaItem: (mediaItemId: string) => mediaModule.getMediaItem(mediaItemId),
+        trackIndexMap: () => trackModule.trackIndexMap.value,
+      })
 
       console.log('✅ Canvas 元素已设置', {
         width: mCanvas.width,
@@ -153,8 +153,8 @@ export function createUnifiedMediaBunnyModule(
     stopAllAudioNodes()
 
     // 清空 Canvas（如果存在）
-    if (mCanvas && mCtx) {
-      mCtx.clearRect(0, 0, mCanvas.width, mCanvas.height)
+    if (mCanvas && mWebGLRenderer) {
+      mWebGLRenderer.clear()
     }
 
     // 关闭 AudioContext
@@ -176,8 +176,9 @@ export function createUnifiedMediaBunnyModule(
     }
 
     // 清理引用（不删除 canvas 元素，由 Vue 组件管理）
+    mWebGLRenderer?.dispose()
+    mWebGLRenderer = null
     mCanvas = null
-    mCtx = null
     mGainNode = null
 
     // 清理状态
@@ -385,20 +386,10 @@ export function createUnifiedMediaBunnyModule(
     timelineItems: UnifiedTimelineItemData<MediaType>[],
     currentTimeN: number,
   ): void {
-    if (!mCanvas || !mCtx) return
-
-    // 构建渲染上下文
-    const renderContext: RenderContext = {
-      canvas: mCanvas,
-      ctx: mCtx,
-      bunnyCurFrameMap: mBunnyCurFrameMap,
-      getTrack: (trackId: string) => trackModule.getTrack(trackId),
-      getMediaItem: (mediaItemId: string) => mediaModule.getMediaItem(mediaItemId),
-      trackIndexMap: trackModule.trackIndexMap.value,
-    }
-
-    // 调用独立的渲染函数
-    renderToCanvas(renderContext, timelineItems, currentTimeN)
+    // 上游仍然沿用 MediaBunny 的解码与时间推进；这里只把“最终如何画到 canvas”
+    // 切换为 WebGL2 RenderChain 后端。
+    if (!mCanvas || !mWebGLRenderer) return
+    mWebGLRenderer.render(timelineItems, currentTimeN, mBunnyCurFrameMap)
   }
 
   // ==================== 音频系统 ====================
@@ -567,7 +558,7 @@ export function createUnifiedMediaBunnyModule(
    * @returns 是否可用
    */
   function isMediaBunnyAvailable(): boolean {
-    return !!(mCanvas && mCtx && isMediaBunnyReady.value && !mediaBunnyError.value)
+    return !!(mCanvas && mWebGLRenderer && isMediaBunnyReady.value && !mediaBunnyError.value)
   }
 
   /**
@@ -585,7 +576,7 @@ export function createUnifiedMediaBunnyModule(
    * @returns Promise<Blob> 返回截取的 Blob 对象
    */
   async function captureCanvasFrame(filename?: string): Promise<Blob> {
-    if (!mCanvas || !mCtx) {
+    if (!mCanvas || !mWebGLRenderer) {
       throw new Error('Canvas 未初始化，无法截帧')
     }
 

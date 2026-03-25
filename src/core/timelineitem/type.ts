@@ -50,7 +50,11 @@ export type TimelineItemStatus =
 // ==================== 配置类型映射 ====================
 
 /**
- * 变换数据接口（保持兼容性）
+ * 变换数据接口。
+ *
+ * 视觉坐标语义：
+ * - x/y 以画布中心为原点
+ * - y > 0 表示向上
  */
 export type TransformData = Partial<VisualProps> & Partial<AudioProps>
 export type TransformDataEx = TransformData & {
@@ -69,6 +73,7 @@ export interface UnifiedTimelineItemRuntime<T extends MediaType = MediaType> {
   /** 与时间轴项目生命周期一致 */
   bunnyClip?: Raw<BunnyClip> // mediabunny的clip对象
   textBitmap?: ImageBitmap // 专门用于文本渲染的ImageBitmap
+  textBitmapVersion?: number // 文本位图重建版本，用于驱动 WebGL 纹理重新上传
   /** 动画插值后的临时配置（运行时数据，不持久化） */
   renderConfig?: GetConfigs<T>
 

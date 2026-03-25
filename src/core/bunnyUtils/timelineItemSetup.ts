@@ -36,6 +36,7 @@ export async function setupTimelineItemBunny(
         const textConfig = timelineItem.config as TextMediaConfig
         const bmap = await textToImageBitmap2(textConfig.text, textConfig.style)
         timelineItem.runtime.textBitmap = bmap
+        timelineItem.runtime.textBitmapVersion = (timelineItem.runtime.textBitmapVersion ?? 0) + 1
         // console.log(`✅ [timelineItemSetup] 文本 bunny 对象创建完成`)
         break
       }

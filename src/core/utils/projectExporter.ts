@@ -38,12 +38,9 @@ import { TimelineItemQueries } from '@/core/timelineitem/queries'
 import { AudioSegmentRenderer } from '@/core/mediabunny/audio-segment-renderer'
 import { RENDERER_FPS, AUDIO_DEFAULT_SAMPLE_RATE } from '@/core/mediabunny/constant'
 import { applyAnimationToConfig } from '@/core/utils/animationInterpolation'
-import {
-  renderToCanvas,
-  type FrameData,
-  type RenderContext,
-} from '@/core/bunnyUtils/canvasRenderer'
 import { setupTimelineItemBunny } from '@/core/bunnyUtils/timelineItemSetup'
+import { WebGLExportRenderer } from '@/core/utils/WebGLExportRenderer'
+import type { FrameData } from '@/core/webgl2/types'
 
 /**
  * 导出类型
@@ -124,7 +121,7 @@ export class ExportCancelledError extends Error {
 export class ExportManager {
   // Canvas 相关
   private canvas: HTMLCanvasElement | null = null
-  private ctx: CanvasRenderingContext2D | null = null
+  private webglRenderer: WebGLExportRenderer | null = null
 
   // MediaBunny 组件
   private output: Output | null = null
@@ -164,17 +161,23 @@ export class ExportManager {
    */
   private createCanvas(width: number, height: number): void {
     // 创建离屏 Canvas（不添加到 DOM）
-    this.canvas = document.createElement('canvas')
-    this.canvas.width = width
-    this.canvas.height = height
+    this.webglRenderer = new WebGLExportRenderer({
+      width,
+      height,
+      getTrack: (trackId: string) => {
+        const track = this.config.tracks.find((item) => item.id === trackId)
+        return track
+          ? {
+              isVisible: track.isVisible,
+            }
+          : undefined
+      },
+      getMediaItem: this.config.getMediaItem,
+      trackIndexMap: () => new Map(this.config.tracks.map((track, index) => [track.id, index])),
+    })
+    this.canvas = this.webglRenderer.canvas
 
-    const ctx = this.canvas.getContext('2d')
-    if (!ctx) {
-      throw new Error('无法创建 Canvas 2D 上下文')
-    }
-    this.ctx = ctx
-
-    console.log(`✅ 创建导出 Canvas: ${width}x${height}`)
+    console.log(`✅ 创建导出 WebGL Canvas: ${width}x${height}`)
   }
 
   /**
@@ -298,23 +301,11 @@ export class ExportManager {
     )
 
     // 2. 渲染到 Canvas
-    if (!this.canvas || !this.ctx) {
-      throw new Error('Canvas 未初始化')
+    if (!this.webglRenderer) {
+      throw new Error('WebGL 导出渲染器未初始化')
     }
 
-    const renderContext: RenderContext = {
-      canvas: this.canvas,
-      ctx: this.ctx,
-      bunnyCurFrameMap: this.bunnyCurFrameMap,
-      getTrack: (trackId: string) => {
-        const track = this.config.tracks.find((t) => t.id === trackId)
-        return track ? { isVisible: track.isVisible } : undefined
-      },
-      getMediaItem: this.config.getMediaItem,
-      trackIndexMap: new Map(this.config.tracks.map((track, index) => [track.id, index])),
-    }
-
-    renderToCanvas(renderContext, this.clonedTimelineItems, frameIn30fps)
+    this.webglRenderer.render(this.clonedTimelineItems, frameIn30fps, this.bunnyCurFrameMap)
 
     return audioBuffersMap
   }
@@ -647,6 +638,9 @@ export class ExportManager {
     }
 
     // Canvas 会被垃圾回收，无需手动清理
+    this.webglRenderer?.dispose()
+    this.webglRenderer = null
+    this.canvas = null
 
     this.isExporting = false
     console.log('✅ 导出资源清理完成')

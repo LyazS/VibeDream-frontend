@@ -3,6 +3,7 @@ import type { TextStyleConfig } from './texttype'
 
 export interface VisualProps {
   x: number
+  /** 相对画布中心的 Y 坐标；y > 0 表示向上。 */
   y: number
   width: number
   height: number
@@ -25,6 +26,7 @@ export interface TextProps {
 
 export interface VisualAnimatableProps {
   x: number
+  /** 相对画布中心的 Y 坐标；y > 0 表示向上。 */
   y: number
   width: number
   height: number

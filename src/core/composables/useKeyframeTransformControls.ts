@@ -943,7 +943,7 @@ export function useUnifiedKeyframeTransformControls(
       switch (alignment) {
         case 'top':
           // 顶对齐：元素上边缘贴画布上边缘
-          newProjectY = -canvasHeight / 2 + elementHeight / 2
+          newProjectY = canvasHeight / 2 - elementHeight / 2
           break
         case 'middle':
           // 居中：元素中心对齐画布中心
@@ -951,7 +951,7 @@ export function useUnifiedKeyframeTransformControls(
           break
         case 'bottom':
           // 底对齐：元素下边缘贴画布下边缘
-          newProjectY = canvasHeight / 2 - elementHeight / 2
+          newProjectY = -canvasHeight / 2 + elementHeight / 2
           break
       }
 

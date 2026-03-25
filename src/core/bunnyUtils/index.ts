@@ -9,10 +9,3 @@ export * from './thumbGenerator'
 export * from './thumbUtils'
 export * from './timelineItemSetup'
 export * from './ToBitmap'
-export {
-  renderToCanvas,
-  renderItem,
-  isInBounds,
-  type FrameData,
-  type RenderContext,
-} from './canvasRenderer'

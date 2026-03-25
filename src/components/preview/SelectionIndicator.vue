@@ -190,9 +190,9 @@ function convertCanvasToDOM(
   const scaleX = canvasDisplaySize.width / canvasResolution.width
   const scaleY = canvasDisplaySize.height / canvasResolution.height
 
-  // 转换位置（Canvas 内部坐标系）
+  // 转换位置（项目坐标 Y 向上为正；DOM/Canvas 内部 Y 向下为正）
   const canvasX = (config.x + canvasResolution.width / 2) * scaleX
-  const canvasY = (config.y + canvasResolution.height / 2) * scaleY
+  const canvasY = (canvasResolution.height / 2 - config.y) * scaleY
 
   // 计算 Canvas 在容器中的居中偏移
   const offsetX = (containerSize.width - canvasDisplaySize.width) / 2

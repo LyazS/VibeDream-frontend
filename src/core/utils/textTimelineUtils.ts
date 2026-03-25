@@ -89,6 +89,7 @@ export async function createTextTimelineItem(
     runtime: {
       // ✅ 文本项目不依赖外部媒体，直接完成初始化
       isInitialized: true,
+      textBitmapVersion: 0,
     },
   })
 

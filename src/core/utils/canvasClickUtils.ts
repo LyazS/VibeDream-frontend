@@ -19,7 +19,7 @@ interface Size2D {
  *
  * 坐标系统说明：
  * - DOM 坐标：左上角为原点 (0, 0)，向右向下为正
- * - Canvas 坐标：中心为原点 (0, 0)，向右向下为正
+ * - Canvas 坐标：中心为原点 (0, 0)，向右向上为正
  *
  * 转换步骤：
  * 1. DOM坐标 → Canvas显示坐标（减去居中偏移）
@@ -31,7 +31,7 @@ interface Size2D {
  * @param canvasResolution Canvas 原始分辨率
  * @param canvasDisplaySize Canvas 显示尺寸
  * @param containerSize 容器尺寸
- * @returns Canvas 中心坐标系中的坐标
+ * @returns Canvas 中心坐标系中的坐标（Y 向上为正）
  */
 export function domToCanvasCoordinates(
   domX: number,
@@ -62,9 +62,9 @@ export function domToCanvasCoordinates(
   const canvasInternalY = canvasDisplayY / scaleY
 
   // 5. 转换到 Canvas 中心坐标（减去中心点偏移）
-  // Canvas 内部坐标原点在左上角，中心坐标原点在画布中心
+  // Canvas 内部坐标原点在左上角，项目坐标原点在画布中心，且 Y 向上为正。
   const canvasCenterX = canvasInternalX - canvasResolution.width / 2
-  const canvasCenterY = canvasInternalY - canvasResolution.height / 2
+  const canvasCenterY = canvasResolution.height / 2 - canvasInternalY
 
   return { x: canvasCenterX, y: canvasCenterY }
 }
@@ -119,10 +119,11 @@ export function isPointInRotatedBoundingBox(
   const dx = point.x - elementBox.x
   const dy = point.y - elementBox.y
 
-  // 2. 逆旋转：将点击点转换到元素的局部坐标系
+  // 2. 逆旋转：项目坐标已切到 Y 向上为正，但 rotation 正值仍表示顺时针，
+  // 因此这里使用正角度的标准旋转矩阵把全局点还原到局部坐标系。
   const rotationRadians = degreesToRadians(elementBox.rotation)
-  const cos = Math.cos(-rotationRadians)
-  const sin = Math.sin(-rotationRadians)
+  const cos = Math.cos(rotationRadians)
+  const sin = Math.sin(rotationRadians)
   const localX = dx * cos - dy * sin
   const localY = dx * sin + dy * cos
 
@@ -140,7 +141,7 @@ export function isPointInRotatedBoundingBox(
  * @param domDeltaY DOM 坐标系 Y 方向移动量
  * @param canvasDisplaySize Canvas 显示尺寸
  * @param canvasResolution Canvas 分辨率
- * @returns Canvas 中心坐标系中的位置增量
+ * @returns Canvas 中心坐标系中的位置增量（Y 向上为正）
  */
 export function domDeltaToCanvasDelta(
   domDeltaX: number,
@@ -157,9 +158,9 @@ export function domDeltaToCanvasDelta(
   const scaleX = canvasDisplaySize.width / canvasResolution.width
   const scaleY = canvasDisplaySize.height / canvasResolution.height
 
-  // 将 DOM 增量除以缩放比例得到 Canvas 增量
+  // DOM 向下为正，项目坐标向上为正，因此 Y 增量需要翻转。
   return {
     x: domDeltaX / scaleX,
-    y: domDeltaY / scaleY,
+    y: -domDeltaY / scaleY,
   }
 }

@@ -95,6 +95,7 @@ export class UpdateTextCommand implements SimpleCommand {
       // 7. 更新 runtime.textBitmap
       item.runtime.textBitmap?.close()
       item.runtime.textBitmap = newTextBitmap
+      item.runtime.textBitmapVersion = (item.runtime.textBitmapVersion ?? 0) + 1
     } catch (error) {
       console.error(`❌ 更新文本失败:`, error)
       throw error
@@ -126,6 +127,7 @@ export class UpdateTextCommand implements SimpleCommand {
         // 3. 更新 runtime.textBitmap
         item.runtime.textBitmap?.close()
         item.runtime.textBitmap = newTextBitmap
+        item.runtime.textBitmapVersion = (item.runtime.textBitmapVersion ?? 0) + 1
 
         console.log(`✅ 文本撤销成功: ${this.timelineItemId}`, {
           restoredText: originalText.substring(0, 20) + '...',

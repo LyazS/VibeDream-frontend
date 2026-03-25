@@ -59,51 +59,26 @@ export function calculateScaledSize(options: ScaleCalculationOptions): ScaleResu
   // 根据控制点位置计算新的尺寸和位置
   let newWidth = initialWidth
   let newHeight = initialHeight
-  let localOffsetX = 0  // 局部坐标系中的位置偏移
+  let localOffsetX = 0
   let localOffsetY = 0
 
+  // 局部坐标系与项目坐标系一致：X 向右为正，Y 向上为正。
   // 角点缩放 - 保持对角点固定
   if (handlePosition === 'top-left') {
     // 拖拽左上角，右下角固定
     if (isProportional) {
-      const scale = 1 - (localDeltaX + localDeltaY) / (initialWidth + initialHeight)
-      newWidth = Math.max(MIN_SIZE, initialWidth * scale)
-      newHeight = Math.max(MIN_SIZE, initialHeight * scale)
-    } else {
-      newWidth = Math.max(MIN_SIZE, initialWidth - localDeltaX * 2)
-      newHeight = Math.max(MIN_SIZE, initialHeight - localDeltaY * 2)
-    }
-    // 右下角固定，所以中心向左上移动
-    localOffsetX = -(newWidth - initialWidth) / 2
-    localOffsetY = -(newHeight - initialHeight) / 2
-  } else if (handlePosition === 'top-right') {
-    // 拖拽右上角，左下角固定
-    if (isProportional) {
-      const scale = 1 + (localDeltaX - localDeltaY) / (initialWidth + initialHeight)
-      newWidth = Math.max(MIN_SIZE, initialWidth * scale)
-      newHeight = Math.max(MIN_SIZE, initialHeight * scale)
-    } else {
-      newWidth = Math.max(MIN_SIZE, initialWidth + localDeltaX * 2)
-      newHeight = Math.max(MIN_SIZE, initialHeight - localDeltaY * 2)
-    }
-    // 左下角固定，所以中心向右上移动
-    localOffsetX = (newWidth - initialWidth) / 2
-    localOffsetY = -(newHeight - initialHeight) / 2
-  } else if (handlePosition === 'bottom-left') {
-    // 拖拽左下角，右上角固定
-    if (isProportional) {
-      const scale = 1 + (-localDeltaX + localDeltaY) / (initialWidth + initialHeight)
+      const scale = 1 - (localDeltaX - localDeltaY) / (initialWidth + initialHeight)
       newWidth = Math.max(MIN_SIZE, initialWidth * scale)
       newHeight = Math.max(MIN_SIZE, initialHeight * scale)
     } else {
       newWidth = Math.max(MIN_SIZE, initialWidth - localDeltaX * 2)
       newHeight = Math.max(MIN_SIZE, initialHeight + localDeltaY * 2)
     }
-    // 右上角固定，所以中心向左下移动
+    // 右下角固定，所以中心向左上移动
     localOffsetX = -(newWidth - initialWidth) / 2
     localOffsetY = (newHeight - initialHeight) / 2
-  } else if (handlePosition === 'bottom-right') {
-    // 拖拽右下角，左上角固定
+  } else if (handlePosition === 'top-right') {
+    // 拖拽右上角，左下角固定
     if (isProportional) {
       const scale = 1 + (localDeltaX + localDeltaY) / (initialWidth + initialHeight)
       newWidth = Math.max(MIN_SIZE, initialWidth * scale)
@@ -112,19 +87,45 @@ export function calculateScaledSize(options: ScaleCalculationOptions): ScaleResu
       newWidth = Math.max(MIN_SIZE, initialWidth + localDeltaX * 2)
       newHeight = Math.max(MIN_SIZE, initialHeight + localDeltaY * 2)
     }
-    // 左上角固定，所以中心向右下移动
+    // 左下角固定，所以中心向右上移动
     localOffsetX = (newWidth - initialWidth) / 2
     localOffsetY = (newHeight - initialHeight) / 2
+  } else if (handlePosition === 'bottom-left') {
+    // 拖拽左下角，右上角固定
+    if (isProportional) {
+      const scale = 1 - (localDeltaX + localDeltaY) / (initialWidth + initialHeight)
+      newWidth = Math.max(MIN_SIZE, initialWidth * scale)
+      newHeight = Math.max(MIN_SIZE, initialHeight * scale)
+    } else {
+      newWidth = Math.max(MIN_SIZE, initialWidth - localDeltaX * 2)
+      newHeight = Math.max(MIN_SIZE, initialHeight - localDeltaY * 2)
+    }
+    // 右上角固定，所以中心向左下移动
+    localOffsetX = -(newWidth - initialWidth) / 2
+    localOffsetY = -(newHeight - initialHeight) / 2
+  } else if (handlePosition === 'bottom-right') {
+    // 拖拽右下角，左上角固定
+    if (isProportional) {
+      const scale = 1 + (localDeltaX - localDeltaY) / (initialWidth + initialHeight)
+      newWidth = Math.max(MIN_SIZE, initialWidth * scale)
+      newHeight = Math.max(MIN_SIZE, initialHeight * scale)
+    } else {
+      newWidth = Math.max(MIN_SIZE, initialWidth + localDeltaX * 2)
+      newHeight = Math.max(MIN_SIZE, initialHeight - localDeltaY * 2)
+    }
+    // 左上角固定，所以中心向右下移动
+    localOffsetX = (newWidth - initialWidth) / 2
+    localOffsetY = -(newHeight - initialHeight) / 2
   }
   // 边中点缩放 - 保持对边固定
   else if (handlePosition === 'top') {
     // 拖拽顶边，底边固定
-    newHeight = Math.max(MIN_SIZE, initialHeight - localDeltaY * 2)
-    localOffsetY = -(newHeight - initialHeight) / 2
-  } else if (handlePosition === 'bottom') {
-    // 拖拽底边，顶边固定
     newHeight = Math.max(MIN_SIZE, initialHeight + localDeltaY * 2)
     localOffsetY = (newHeight - initialHeight) / 2
+  } else if (handlePosition === 'bottom') {
+    // 拖拽底边，顶边固定
+    newHeight = Math.max(MIN_SIZE, initialHeight - localDeltaY * 2)
+    localOffsetY = -(newHeight - initialHeight) / 2
   } else if (handlePosition === 'left') {
     // 拖拽左边，右边固定
     newWidth = Math.max(MIN_SIZE, initialWidth - localDeltaX * 2)
@@ -140,8 +141,9 @@ export function calculateScaledSize(options: ScaleCalculationOptions): ScaleResu
   let newY = initialY
 
   if (elementRotation !== 0 && (localOffsetX !== 0 || localOffsetY !== 0)) {
-    // 将局部偏移量旋转到全局坐标系
-    const rotationRadians = degreesToRadians(elementRotation)
+    // `rotation` 继续维持现有用户体感：正值表现为顺时针。
+    // 在 Y 向上的项目坐标系中，局部 -> 全局需要使用负角度做标准旋转。
+    const rotationRadians = degreesToRadians(-elementRotation)
     const cos = Math.cos(rotationRadians)
     const sin = Math.sin(rotationRadians)
     const globalOffsetX = localOffsetX * cos - localOffsetY * sin
@@ -170,11 +172,13 @@ export function calculateScaledSize(options: ScaleCalculationOptions): ScaleResu
 export function scaleWithRotation(
   deltaX: number,
   deltaY: number,
-  elementRotation: number  // 现在接收角度值
+  elementRotation: number
 ): { deltaX: number; deltaY: number } {
+  // 这里要把全局增量逆变换到元素局部坐标系。
+  // `rotation` 正值仍表示顺时针，因此逆变换使用正角度的标准旋转矩阵。
   const rotationRadians = degreesToRadians(elementRotation)
-  const cos = Math.cos(-rotationRadians)
-  const sin = Math.sin(-rotationRadians)
+  const cos = Math.cos(rotationRadians)
+  const sin = Math.sin(rotationRadians)
 
   const localDeltaX = deltaX * cos - deltaY * sin
   const localDeltaY = deltaX * sin + deltaY * cos
@@ -196,12 +200,9 @@ export function calculateRotationAngle(
   centerX: number,
   centerY: number
 ): number {
-  // 计算鼠标相对于元素中心的角度（弧度）
+  // 项目坐标已切到 Y 向上为正，但用户仍期望正角是顺时针、0° 在正上方。
   const angleRadians = Math.atan2(mouseY - centerY, mouseX - centerX)
-
-  // 调整角度基准：atan2返回的0°是正右方向，我们需要0°是正上方向
-  // 加上90度（π/2弧度）使其顺时针旋转
-  const adjustedRadians = angleRadians + Math.PI / 2
+  const adjustedRadians = Math.PI / 2 - angleRadians
 
   // 转换为角度，不进行标准化，保持连续性
   const degrees = (adjustedRadians * 180) / Math.PI
