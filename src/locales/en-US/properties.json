@@ -167,6 +167,14 @@
       "hint": "Properties for multiple selection are not supported yet",
       "unknownMedia": "Unknown Media"
     },
+    "tabs": {
+      "basic": "Basic",
+      "mask": "Mask",
+      "filter": "Filter",
+      "animation": "Animation",
+      "placeholderTitle": "{tab} is not available yet",
+      "placeholderDescription": "The {tab} panel will be added later. This is a placeholder for now."
+    },
     "mediaItem": {
       "basicInfo": "Basic Information",
       "name": "Name",

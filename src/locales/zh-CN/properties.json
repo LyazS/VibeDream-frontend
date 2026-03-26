@@ -167,6 +167,14 @@
       "hint": "多选属性暂不支持",
       "unknownMedia": "未知媒体"
     },
+    "tabs": {
+      "basic": "基础",
+      "mask": "蒙版",
+      "filter": "滤镜",
+      "animation": "动画",
+      "placeholderTitle": "{tab} 功能暂未开放",
+      "placeholderDescription": "{tab} 面板后续会接入，这里先保留占位。"
+    },
     "mediaItem": {
       "basicInfo": "基本信息",
       "name": "名称",
