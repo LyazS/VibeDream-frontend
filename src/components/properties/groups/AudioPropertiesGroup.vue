@@ -10,7 +10,8 @@
       <div class="volume-controls">
         <SliderInput
           :model-value="volume"
-          @input="updateVolume"
+          @input="updateVolumeDeferred"
+          @change="commitDeferredUpdates"
           :disabled="!canOperateTransforms"
           :min="0"
           :max="1"
@@ -28,6 +29,14 @@
           :show-controls="false"
           :placeholder="t('properties.placeholders.volume')"
         />
+        <button
+          @click="toggleMute"
+          :disabled="!canOperateTransforms"
+          class="mute-btn"
+          :title="isMuted ? t('properties.playback.unmuteTitle') : t('properties.playback.muteTitle')"
+        >
+          <component :is="getMuteIcon(isMuted)" size="14px" />
+        </button>
         <div class="keyframe-nav-group">
           <button
             class="keyframe-nav-btn"
@@ -55,14 +64,6 @@
             <component :is="IconComponents.NEXT_KEYFRAME" size="11px" />
           </button>
         </div>
-        <button
-          @click="toggleMute"
-          :disabled="!canOperateTransforms"
-          class="mute-btn"
-          :title="isMuted ? t('properties.playback.unmuteTitle') : t('properties.playback.muteTitle')"
-        >
-          <component :is="getMuteIcon(isMuted)" size="14px" />
-        </button>
       </div>
     </div>
   </div>
@@ -92,6 +93,7 @@ const unifiedStore = useUnifiedStore()
 const {
   volume,
   setVolume,
+  updateVolumeDeferred,
   canOperateTransforms,
   getChannelButtonState,
   hasPreviousChannelKeyframe,
@@ -100,6 +102,7 @@ const {
   goToNextChannelKeyframe,
   toggleChannelKeyframe,
   getChannelKeyframeTooltip,
+  commitDeferredUpdates,
 } = useUnifiedKeyframeTransformControls({
   selectedTimelineItem: computed(() => props.selectedTimelineItem),
   currentFrame: computed(() => props.currentFrame),

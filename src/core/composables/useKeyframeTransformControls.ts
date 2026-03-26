@@ -763,6 +763,44 @@ export function useUnifiedKeyframeTransformControls(
   }
 
   /**
+   * 设置音量绝对值的方法（延迟更新）
+   */
+  const updateVolumeDeferred = (value: number) => {
+    if (
+      !selectedTimelineItem.value ||
+      !TimelineItemQueries.hasAudioProperties(selectedTimelineItem.value)
+    )
+      return
+
+    const config = TimelineItemQueries.getRenderConfig(selectedTimelineItem.value)
+    const newVolume = Math.max(0, Math.min(1, value))
+
+    const isFirstInput = deferredUpdate.dragState.value.pendingUpdates.size === 0
+
+    if (isFirstInput) {
+      deferredUpdate.startDrag({ volume: config.volume ?? 1 })
+    }
+
+    const buttonState = getKeyframeButtonState(selectedTimelineItem.value, currentFrame.value, 'audio')
+
+    if (buttonState === 'none') {
+      selectedTimelineItem.value.config.volume = newVolume
+    } else if (buttonState === 'on-keyframe') {
+      const keyframe = findKeyframeAtFrame(selectedTimelineItem.value, currentFrame.value, 'audio')
+      if (keyframe && 'volume' in keyframe.properties) {
+        keyframe.properties.volume = newVolume
+      }
+    } else if (buttonState === 'between-keyframes' && deferredUpdate.dragState.value.createdKeyframe) {
+      const keyframe = deferredUpdate.dragState.value.createdKeyframe
+      if ('volume' in keyframe.properties) {
+        keyframe.properties.volume = newVolume
+      }
+    }
+
+    deferredUpdate.updateDuringDrag('volume', newVolume)
+  }
+
+  /**
    * 设置位置坐标的方法（延迟更新 - 用于拖拽操作）
    * 同时更新 x 和 y，类似等比缩放的批量更新模式
    */
@@ -1222,6 +1260,7 @@ export function useUnifiedKeyframeTransformControls(
     setScaleYDeferred,
     setRotationDeferred,
     setOpacityDeferred,
+    updateVolumeDeferred,
     setTransformPositionDeferred,
     setTransformSizeDeferred,
     setTransformRotationDeferred,
