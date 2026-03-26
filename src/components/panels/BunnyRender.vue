@@ -179,8 +179,6 @@ defineExpose({
   display: flex;
   align-items: center;
   justify-content: center;
-  background-color: var(--color-bg-primary);
-  border-radius: var(--border-radius-medium);
   overflow: hidden;
   position: relative;
   box-sizing: border-box;
