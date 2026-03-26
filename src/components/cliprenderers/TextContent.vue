@@ -17,8 +17,8 @@ import type { ContentTemplateProps } from '@/core/types/clipRenderer'
 const props = defineProps<ContentTemplateProps<'text'>>()
 
 const previewText = computed(() => {
-  const config = props.data.config as any
-  const content = config?.text || config?.content || '文本内容'
+  const config = props.data.config
+  const content = config.text || '文本内容'
 
   if (!content || content.trim() === '') {
     return '文本内容'

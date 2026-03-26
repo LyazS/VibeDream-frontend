@@ -139,15 +139,14 @@ export class AddTimelineItemCommand implements SimpleCommand {
    */
   updateMediaData(mediaData: UnifiedMediaItemData): void {
     if (this.originalTimelineItemData) {
-      const config = this.originalTimelineItemData.config as any
-
       // 从 bunny 对象中获取原始尺寸信息
       if (
+        TimelineItemQueries.hasVisualProperties(this.originalTimelineItemData) &&
         mediaData.runtime.bunny?.originalWidth !== undefined &&
         mediaData.runtime.bunny?.originalHeight !== undefined
       ) {
-        config.width = mediaData.runtime.bunny.originalWidth
-        config.height = mediaData.runtime.bunny.originalHeight
+        this.originalTimelineItemData.config.width = mediaData.runtime.bunny.originalWidth
+        this.originalTimelineItemData.config.height = mediaData.runtime.bunny.originalHeight
       }
 
       if (mediaData.duration !== undefined) {
@@ -164,8 +163,14 @@ export class AddTimelineItemCommand implements SimpleCommand {
       this.originalTimelineItemData.timelineStatus = 'ready'
 
       console.log(`🔄 [AddTimelineItemCommand] 已更新媒体数据: ${this.id}`, {
-        width: config.width,
-        height: config.height,
+        width:
+          TimelineItemQueries.hasVisualProperties(this.originalTimelineItemData)
+            ? this.originalTimelineItemData.config.width
+            : undefined,
+        height:
+          TimelineItemQueries.hasVisualProperties(this.originalTimelineItemData)
+            ? this.originalTimelineItemData.config.height
+            : undefined,
         duration: mediaData.duration,
       })
     }

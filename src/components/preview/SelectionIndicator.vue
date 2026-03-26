@@ -237,7 +237,7 @@ function handleMouseDown(event: MouseEvent) {
 function handleScaleMouseDown(
   event: MouseEvent,
   handleType: 'corner' | 'edge',
-  handlePosition: string
+  handlePosition: ScaleStartEvent['handlePosition']
 ) {
   event.preventDefault()
   event.stopPropagation()
@@ -254,7 +254,7 @@ function handleScaleMouseDown(
 
   emit('scaleStart', {
     handleType,
-    handlePosition: handlePosition as any,
+    handlePosition,
     isProportional: isProportionalScale.value,
     clientX: event.clientX,
     clientY: event.clientY,

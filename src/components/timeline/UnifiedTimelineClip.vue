@@ -60,7 +60,10 @@ import { ContentRendererFactory } from '@/components/cliprenderers/ContentRender
 import { useUnifiedStore } from '@/core/unifiedStore'
 import { useAppI18n } from '@/core/composables/useI18n'
 import { alignFramesToFrame } from '@/core/utils/timeUtils'
-import { relativeFrameToAbsoluteFrame } from '@/core/utils/unifiedKeyframeUtils'
+import {
+  getVisibleKeyframesForTimeline,
+  relativeFrameToAbsoluteFrame,
+} from '@/core/utils/unifiedKeyframeUtils'
 import { DEFAULT_TRACK_PADDING } from '@/constants/TrackConstants'
 import { getDefaultTrackHeight, mapMediaTypeToTrackType } from '@/core/track/TrackUtils'
 import { DragSourceType, type TimelineItemDragParams } from '@/core/types/drag'
@@ -180,7 +183,7 @@ const combinedStyles = computed(() => {
  * 检查是否有关键帧
  */
 const hasKeyframes = computed(() => {
-  return !!(props.data.animation && props.data.animation.keyframes.length > 0)
+  return getVisibleKeyframesForTimeline(props.data).length > 0
 })
 
 /**
@@ -189,7 +192,7 @@ const hasKeyframes = computed(() => {
 const visibleKeyframes = computed(() => {
   if (!hasKeyframes.value) return []
 
-  const keyframes = props.data.animation!.keyframes
+  const keyframes = getVisibleKeyframesForTimeline(props.data)
   const timeRange = props.data.timeRange
   const clipStartFrame = timeRange.timelineStartTime
   const clipEndFrame = timeRange.timelineEndTime

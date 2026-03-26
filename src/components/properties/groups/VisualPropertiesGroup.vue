@@ -5,7 +5,9 @@
 
       <!-- 位置控制 -->
       <div class="property-item">
-        <label>{{ t('properties.transform.position') }}</label>
+        <label :class="getAnimatedLabelClass(layoutButtonState)">
+          {{ t('properties.transform.position') }}
+        </label>
         <div class="position-controls">
           <div class="position-input-group">
             <span class="position-label">{{ t('properties.transform.positionX') }}</span>
@@ -33,12 +35,41 @@
               :placeholder="t('properties.transform.centerFor0')"
             />
           </div>
+          <div class="keyframe-nav-group">
+            <button
+              class="keyframe-nav-btn"
+              :disabled="!canOperateTransforms || !hasPreviousChannelKeyframe('layout')"
+              :title="t('properties.keyframes.previousKeyframe')"
+              @click="goToPreviousChannelKeyframe('layout')"
+            >
+              <component :is="IconComponents.PREV_KEYFRAME" size="11px" />
+            </button>
+            <button
+              class="property-keyframe-btn"
+              :class="`state-${layoutButtonState}`"
+              :title="getChannelKeyframeTooltip('layout')"
+              :disabled="!canOperateTransforms"
+              @click="toggleChannelKeyframe('layout')"
+            >
+              ◆
+            </button>
+            <button
+              class="keyframe-nav-btn"
+              :disabled="!canOperateTransforms || !hasNextChannelKeyframe('layout')"
+              :title="t('properties.keyframes.nextKeyframe')"
+              @click="goToNextChannelKeyframe('layout')"
+            >
+              <component :is="IconComponents.NEXT_KEYFRAME" size="11px" />
+            </button>
+          </div>
         </div>
       </div>
 
       <!-- 水平对齐 -->
       <div class="property-item">
-        <label>{{ t('properties.transform.alignHorizontal') }}</label>
+        <label :class="getAnimatedLabelClass(layoutButtonState)">
+          {{ t('properties.transform.alignHorizontal') }}
+        </label>
         <div class="alignment-controls">
           <button
             @click="alignHorizontal('left')"
@@ -69,7 +100,9 @@
 
       <!-- 垂直对齐 -->
       <div class="property-item">
-        <label>{{ t('properties.transform.alignVertical') }}</label>
+        <label :class="getAnimatedLabelClass(layoutButtonState)">
+          {{ t('properties.transform.alignVertical') }}
+        </label>
         <div class="alignment-controls">
           <button
             @click="alignVertical('top')"
@@ -100,7 +133,9 @@
 
       <!-- 等比缩放选项 -->
       <div class="property-item">
-        <label>{{ t('properties.transform.proportionalScale') }}</label>
+        <label :class="getAnimatedLabelClass(layoutButtonState)">
+          {{ t('properties.transform.proportionalScale') }}
+        </label>
         <input
           :checked="proportionalScale"
           @change="toggleProportionalScale"
@@ -112,7 +147,9 @@
 
       <!-- 等比缩放控制 -->
       <div v-if="proportionalScale" class="property-item">
-        <label>{{ t('properties.transform.scale') }}</label>
+        <label :class="getAnimatedLabelClass(layoutButtonState)">
+          {{ t('properties.transform.scale') }}
+        </label>
         <div class="scale-controls">
           <SliderInput
             :model-value="uniformScale"
@@ -140,7 +177,9 @@
       <!-- 非等比缩放控制 -->
       <template v-else>
         <div class="property-item">
-          <label>{{ t('properties.transform.scaleX') }}</label>
+          <label :class="getAnimatedLabelClass(layoutButtonState)">
+            {{ t('properties.transform.scaleX') }}
+          </label>
           <div class="scale-controls">
             <SliderInput
               :model-value="scaleX"
@@ -165,7 +204,9 @@
           </div>
         </div>
         <div class="property-item">
-          <label>{{ t('properties.transform.scaleY') }}</label>
+          <label :class="getAnimatedLabelClass(layoutButtonState)">
+            {{ t('properties.transform.scaleY') }}
+          </label>
           <div class="scale-controls">
             <SliderInput
               :model-value="scaleY"
@@ -193,7 +234,9 @@
 
       <!-- 缩放预设 -->
       <div class="property-item">
-        <label>{{ t('properties.transform.scalePresets') }}</label>
+        <label :class="getAnimatedLabelClass(layoutButtonState)">
+          {{ t('properties.transform.scalePresets') }}
+        </label>
         <div class="scale-preset-controls">
           <button @click="handleFitToCanvas" :disabled="!canOperateTransforms" class="preset-btn">
             {{ t('properties.transform.fitToCanvas') }}
@@ -205,7 +248,9 @@
       </div>
       <!-- 旋转 -->
       <div class="property-item">
-        <label>{{ t('properties.transform.rotation') }}</label>
+        <label :class="getAnimatedLabelClass(rotationButtonState)">
+          {{ t('properties.transform.rotation') }}
+        </label>
         <div class="rotation-controls">
           <SliderInput
             :model-value="rotation"
@@ -226,12 +271,41 @@
             :show-controls="false"
             input-class="scale-input"
           />
+          <div class="keyframe-nav-group">
+            <button
+              class="keyframe-nav-btn"
+              :disabled="!canOperateTransforms || !hasPreviousChannelKeyframe('rotation')"
+              :title="t('properties.keyframes.previousKeyframe')"
+              @click="goToPreviousChannelKeyframe('rotation')"
+            >
+              <component :is="IconComponents.PREV_KEYFRAME" size="11px" />
+            </button>
+            <button
+              class="property-keyframe-btn"
+              :class="`state-${rotationButtonState}`"
+              :title="getChannelKeyframeTooltip('rotation')"
+              :disabled="!canOperateTransforms"
+              @click="toggleChannelKeyframe('rotation')"
+            >
+              ◆
+            </button>
+            <button
+              class="keyframe-nav-btn"
+              :disabled="!canOperateTransforms || !hasNextChannelKeyframe('rotation')"
+              :title="t('properties.keyframes.nextKeyframe')"
+              @click="goToNextChannelKeyframe('rotation')"
+            >
+              <component :is="IconComponents.NEXT_KEYFRAME" size="11px" />
+            </button>
+          </div>
         </div>
       </div>
 
       <!-- 透明度 -->
       <div class="property-item">
-        <label>{{ t('properties.transform.opacity') }}</label>
+        <label :class="getAnimatedLabelClass(opacityButtonState)">
+          {{ t('properties.transform.opacity') }}
+        </label>
         <div class="opacity-controls">
           <SliderInput
             :model-value="opacity"
@@ -254,6 +328,33 @@
             :show-controls="false"
             input-class="scale-input"
           />
+          <div class="keyframe-nav-group">
+            <button
+              class="keyframe-nav-btn"
+              :disabled="!canOperateTransforms || !hasPreviousChannelKeyframe('opacity')"
+              :title="t('properties.keyframes.previousKeyframe')"
+              @click="goToPreviousChannelKeyframe('opacity')"
+            >
+              <component :is="IconComponents.PREV_KEYFRAME" size="11px" />
+            </button>
+            <button
+              class="property-keyframe-btn"
+              :class="`state-${opacityButtonState}`"
+              :title="getChannelKeyframeTooltip('opacity')"
+              :disabled="!canOperateTransforms"
+              @click="toggleChannelKeyframe('opacity')"
+            >
+              ◆
+            </button>
+            <button
+              class="keyframe-nav-btn"
+              :disabled="!canOperateTransforms || !hasNextChannelKeyframe('opacity')"
+              :title="t('properties.keyframes.nextKeyframe')"
+              @click="goToNextChannelKeyframe('opacity')"
+            >
+              <component :is="IconComponents.NEXT_KEYFRAME" size="11px" />
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -313,9 +414,26 @@ const {
 
   alignHorizontal,
   alignVertical,
+  getChannelButtonState,
+  hasPreviousChannelKeyframe,
+  hasNextChannelKeyframe,
+  goToPreviousChannelKeyframe,
+  goToNextChannelKeyframe,
+  toggleChannelKeyframe,
+  getChannelKeyframeTooltip,
 } = useUnifiedKeyframeTransformControls({
   selectedTimelineItem: computed(() => props.selectedTimelineItem),
   currentFrame: computed(() => props.currentFrame),
+})
+
+const layoutButtonState = computed(() => getChannelButtonState('layout'))
+const rotationButtonState = computed(() => getChannelButtonState('rotation'))
+const opacityButtonState = computed(() => getChannelButtonState('opacity'))
+
+const getAnimatedLabelClass = (state: string) => ({
+  'animated-property-label': state !== 'none',
+  'animated-property-label--on-keyframe': state === 'on-keyframe',
+  'animated-property-label--between-keyframes': state === 'between-keyframes',
 })
 
 // 位置限制
@@ -377,6 +495,7 @@ const handleFillCanvas = () => {
 .position-controls {
   display: flex;
   gap: var(--spacing-xs);
+  align-items: center;
   flex: 1;
 }
 
@@ -498,6 +617,84 @@ const handleFillCanvas = () => {
   align-items: center;
   gap: var(--spacing-xs);
   flex: 1;
+}
+
+.keyframe-nav-group {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  margin-left: auto;
+  flex: 0 0 auto;
+}
+
+.keyframe-nav-btn {
+  width: 12px;
+  height: 22px;
+  border-radius: 0;
+  border: none;
+  background: transparent;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  transition: all var(--transition-fast);
+  flex: 0 0 auto;
+}
+
+.keyframe-nav-group > .property-keyframe-btn {
+  border-radius: var(--border-radius-small);
+}
+
+.keyframe-nav-btn:hover:not(:disabled) {
+  background: transparent;
+  color: var(--color-text-primary);
+}
+
+.keyframe-nav-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  background: transparent;
+  color: var(--color-text-muted);
+}
+
+.property-keyframe-btn {
+  width: 22px;
+  height: 22px;
+  border-radius: var(--border-radius-small);
+  border: 1px solid var(--color-border-secondary);
+  background: var(--color-bg-active);
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  font-size: 12px;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.property-keyframe-btn.state-on-keyframe {
+  color: #5ba6ff;
+  border-color: #5ba6ff;
+}
+
+.property-keyframe-btn.state-between-keyframes {
+  color: #d9a441;
+  border-color: #d9a441;
+}
+
+.property-keyframe-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.animated-property-label--on-keyframe {
+  color: #5ba6ff;
+}
+
+.animated-property-label--between-keyframes {
+  color: #d9a441;
 }
 
 /* 区域标题头部布局 */

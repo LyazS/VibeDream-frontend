@@ -13,7 +13,7 @@ import type { MediaType } from '@/core/mediaitem'
 export function getTimelineItemDisplayName(data: UnifiedTimelineItemData<MediaType>): string {
   // 对于文本类型，优先显示文本内容
   if (data.mediaType === 'text' && 'text' in data.config) {
-    const textContent = (data.config as any).text
+    const textContent = data.config.text
     if (textContent && typeof textContent === 'string') {
       return textContent.length > 20 ? textContent.substring(0, 20) + '...' : textContent
     }

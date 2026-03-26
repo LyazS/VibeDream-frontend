@@ -17,6 +17,7 @@ import {
 } from './shared'
 import { generateCommandId } from '@/core/utils/idGenerator'
 import { toggleKeyframe } from '@/core/utils/unifiedKeyframeUtils'
+import type { AnimationChannelKey } from '@/core/timelineitem/bunnytype'
 
 export class ToggleKeyframeCommand implements SimpleCommand {
   public readonly id: string
@@ -28,6 +29,7 @@ export class ToggleKeyframeCommand implements SimpleCommand {
   constructor(
     private timelineItemId: string,
     private frame: number,
+    private channel: AnimationChannelKey,
     private timelineModule: TimelineModule,
     private playbackControls?: PlaybackControls,
   ) {
@@ -71,7 +73,7 @@ export class ToggleKeyframeCommand implements SimpleCommand {
 
     try {
       // 使用统一的关键帧切换逻辑
-      toggleKeyframe(item, this.frame)
+      toggleKeyframe(item, this.frame, this.channel)
 
       // 动画更新已迁移到 Bunny 组件，无需手动更新
 
@@ -86,6 +88,7 @@ export class ToggleKeyframeCommand implements SimpleCommand {
       console.log('✅ 切换关键帧命令执行成功:', {
         itemId: this.timelineItemId,
         frame: this.frame,
+        channel: this.channel,
       })
     } catch (error) {
       console.error('❌ 切换关键帧命令执行失败:', error)
@@ -113,6 +116,7 @@ export class ToggleKeyframeCommand implements SimpleCommand {
       console.log('↩️ 切换关键帧命令撤销成功:', {
         itemId: this.timelineItemId,
         frame: this.frame,
+        channel: this.channel,
       })
     } catch (error) {
       console.error('❌ 切换关键帧命令撤销失败:', error)

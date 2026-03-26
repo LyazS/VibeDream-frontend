@@ -75,6 +75,18 @@ export const FILE_SIZE_LIMITS = {
   image: 256 * 1024 * 1024,
 } as const
 
+type SupportedMimeType =
+  | (typeof SUPPORTED_MEDIA_TYPES.video)[number]
+  | (typeof SUPPORTED_MEDIA_TYPES.audio)[number]
+  | (typeof SUPPORTED_MEDIA_TYPES.image)[number]
+
+function isSupportedMimeInCategory<T extends readonly string[]>(
+  mimeType: string,
+  supportedTypes: T,
+): mimeType is T[number] {
+  return supportedTypes.includes(mimeType as T[number])
+}
+
 /**
  * 检测文件的媒体类型
  * @param file 文件对象
@@ -84,11 +96,11 @@ export function detectFileMediaType(file: File): DetectedMediaType {
   const mimeType = file.type.toLowerCase()
 
   // 首先根据MIME类型精确检测
-  if (SUPPORTED_MEDIA_TYPES.video.includes(mimeType as any)) {
+  if (isSupportedMimeInCategory(mimeType, SUPPORTED_MEDIA_TYPES.video)) {
     return 'video'
-  } else if (SUPPORTED_MEDIA_TYPES.audio.includes(mimeType as any)) {
+  } else if (isSupportedMimeInCategory(mimeType, SUPPORTED_MEDIA_TYPES.audio)) {
     return 'audio'
-  } else if (SUPPORTED_MEDIA_TYPES.image.includes(mimeType as any)) {
+  } else if (isSupportedMimeInCategory(mimeType, SUPPORTED_MEDIA_TYPES.image)) {
     return 'image'
   } else {
     // 如果MIME类型不在支持列表中，根据文件扩展名进行二次检测
@@ -132,9 +144,9 @@ export function isSupportedMimeType(mimeType: string): boolean {
   const normalizedMimeType = mimeType.toLowerCase()
 
   return (
-    SUPPORTED_MEDIA_TYPES.video.includes(normalizedMimeType as any) ||
-    SUPPORTED_MEDIA_TYPES.audio.includes(normalizedMimeType as any) ||
-    SUPPORTED_MEDIA_TYPES.image.includes(normalizedMimeType as any)
+    isSupportedMimeInCategory(normalizedMimeType, SUPPORTED_MEDIA_TYPES.video) ||
+    isSupportedMimeInCategory(normalizedMimeType, SUPPORTED_MEDIA_TYPES.audio) ||
+    isSupportedMimeInCategory(normalizedMimeType, SUPPORTED_MEDIA_TYPES.image)
   )
 }
 
@@ -146,11 +158,11 @@ export function isSupportedMimeType(mimeType: string): boolean {
 export function getMediaTypeFromMimeType(mimeType: string): DetectedMediaType {
   const normalizedMimeType = mimeType.toLowerCase()
 
-  if (SUPPORTED_MEDIA_TYPES.video.includes(normalizedMimeType as any)) {
+  if (isSupportedMimeInCategory(normalizedMimeType, SUPPORTED_MEDIA_TYPES.video)) {
     return 'video'
-  } else if (SUPPORTED_MEDIA_TYPES.audio.includes(normalizedMimeType as any)) {
+  } else if (isSupportedMimeInCategory(normalizedMimeType, SUPPORTED_MEDIA_TYPES.audio)) {
     return 'audio'
-  } else if (SUPPORTED_MEDIA_TYPES.image.includes(normalizedMimeType as any)) {
+  } else if (isSupportedMimeInCategory(normalizedMimeType, SUPPORTED_MEDIA_TYPES.image)) {
     return 'image'
   }
 

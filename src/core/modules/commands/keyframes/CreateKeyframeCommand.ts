@@ -15,7 +15,18 @@ import {
   showUserWarning,
 } from './shared'
 import { generateCommandId } from '@/core/utils/idGenerator'
-import { createKeyframe, enableAnimation, initializeAnimation, sortKeyframes } from '@/core/utils/unifiedKeyframeUtils'
+import {
+  createChannelKeyframe,
+  enableAnimation,
+  initializeAnimation,
+  sortKeyframes,
+} from '@/core/utils/unifiedKeyframeUtils'
+import type { AnimationChannelKey } from '@/core/timelineitem/bunnytype'
+import type { MediaType } from '@/core/mediaitem'
+import type { AnimateKeyframe } from '@/core/timelineitem/bunnytype'
+
+type ChannelEntry = { keyframes: AnimateKeyframe<MediaType, AnimationChannelKey>[] }
+type ChannelMap = Partial<Record<AnimationChannelKey, ChannelEntry>>
 
 export class CreateKeyframeCommand implements SimpleCommand {
   public readonly id: string
@@ -27,6 +38,7 @@ export class CreateKeyframeCommand implements SimpleCommand {
   constructor(
     private timelineItemId: string,
     private frame: number,
+    private channel: AnimationChannelKey,
     private timelineModule: TimelineModule,
     private playbackControls?: PlaybackControls,
   ) {
@@ -76,11 +88,19 @@ export class CreateKeyframeCommand implements SimpleCommand {
       enableAnimation(item)
 
       // 2. 创建关键帧
-      const keyframe = createKeyframe(item, this.frame)
-      ;(item.animation!.keyframes as any[]).push(keyframe)
+      const channels = item.animation!.channels as ChannelMap
+      if (!channels[this.channel]) {
+        channels[this.channel] = { keyframes: [] }
+      }
+      const keyframe = createChannelKeyframe(item, this.frame, this.channel)
+      const channelEntry = channels[this.channel]
+      if (!channelEntry) {
+        throw new Error(`无法创建关键帧通道: ${this.channel}`)
+      }
+      channelEntry.keyframes.push(keyframe)
 
       // 3. 排序关键帧
-      sortKeyframes(item)
+      sortKeyframes(item, this.channel)
 
       // 4. 动画更新已迁移到 Bunny 组件，无需手动更新
 
@@ -95,6 +115,7 @@ export class CreateKeyframeCommand implements SimpleCommand {
       console.log('✅ 创建关键帧命令执行成功:', {
         itemId: this.timelineItemId,
         frame: this.frame,
+        channel: this.channel,
         keyframe,
       })
     } catch (error) {
@@ -123,6 +144,7 @@ export class CreateKeyframeCommand implements SimpleCommand {
       console.log('↩️ 创建关键帧命令撤销成功:', {
         itemId: this.timelineItemId,
         frame: this.frame,
+        channel: this.channel,
       })
     } catch (error) {
       console.error('❌ 创建关键帧命令撤销失败:', error)

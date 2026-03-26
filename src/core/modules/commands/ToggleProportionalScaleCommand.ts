@@ -49,7 +49,7 @@ export class ToggleProportionalScaleCommand implements SimpleCommand {
     // 保存切换前的状态快照
     this.beforeSnapshot = createSnapshot(item)
 
-    const currentState = (item.config as any).proportionalScale
+    const currentState = item.config.proportionalScale
     const newState = !currentState
     this.description = `${newState ? '开启' : '关闭'}等比缩放`
 
@@ -66,7 +66,7 @@ export class ToggleProportionalScaleCommand implements SimpleCommand {
       return { width: 0, height: 0 }
     }
 
-    const config = TimelineItemQueries.getRenderConfig(item) as any
+    const config = TimelineItemQueries.getRenderConfig(item)
 
     // 文本类型：从 textBitmap 获取原始尺寸
     if (TimelineItemQueries.isTextTimelineItem(item)) {
@@ -101,7 +101,7 @@ export class ToggleProportionalScaleCommand implements SimpleCommand {
     try {
       console.log(`🔄 执行切换等比缩放操作: ${this.timelineItemId}...`)
 
-      const currentState = (item.config as any).proportionalScale
+      const currentState = item.config.proportionalScale
       const newState = !currentState
 
       // 更新 proportionalScale 属性
@@ -109,7 +109,7 @@ export class ToggleProportionalScaleCommand implements SimpleCommand {
 
       // 如果刚刚开启等比缩放，使用当前 X 缩放值作为统一缩放值，同时更新 Y 缩放
       if (newState && currentState === false) {
-        const config = item.config as any
+        const config = item.config
 
         // 使用统一的获取原始尺寸方法
         const { width: originalWidth, height: originalHeight } = this.getOriginalDimensions(item)
@@ -131,7 +131,7 @@ export class ToggleProportionalScaleCommand implements SimpleCommand {
       // 保存执行后的状态快照
       this.afterSnapshot = createSnapshot(item)
 
-      const finalState = (item.config as any).proportionalScale
+      const finalState = item.config.proportionalScale
       console.log(`✅ 已切换等比缩放: ${this.timelineItemId}, 新状态: ${finalState ? '开启' : '关闭'}`)
     } catch (error) {
       console.error(`❌ 切换等比缩放失败: ${this.timelineItemId}`, error)
@@ -152,9 +152,12 @@ export class ToggleProportionalScaleCommand implements SimpleCommand {
       console.log(`🔄 撤销切换等比缩放操作：恢复 ${this.timelineItemId} 的原始状态...`)
 
       await applyKeyframeSnapshot(item, this.beforeSnapshot)
+      const restoredState =
+        'proportionalScale' in this.beforeSnapshot.itemProperties &&
+        this.beforeSnapshot.itemProperties.proportionalScale
 
       console.log(
-        `↩️ 已撤销切换等比缩放: ${this.timelineItemId}, 恢复状态: ${(this.beforeSnapshot.itemProperties as any).proportionalScale ? '开启' : '关闭'}`,
+        `↩️ 已撤销切换等比缩放: ${this.timelineItemId}, 恢复状态: ${restoredState ? '开启' : '关闭'}`,
       )
     } catch (error) {
       console.error(`❌ 撤销切换等比缩放失败: ${this.timelineItemId}`, error)

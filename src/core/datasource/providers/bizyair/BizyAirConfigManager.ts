@@ -35,11 +35,21 @@ const builderModules = import.meta.glob('./configs/*/requestBuilder.ts', {
   eager: true
 })
 
+type SelectorModule = {
+  SELECTOR_ID?: string
+  selectConfig?: ConfigSelector
+}
+
+type BuilderModule = {
+  BUILDER_ID?: string
+  buildRequestData?: RequestBuilder
+}
+
 /**
  * 提取配置选择器 ID
  * 从 configSelector 模块的 SELECTOR_ID 常量提取配置 ID
  */
-function extractSelectorId(_path: string, module: any): string | null {
+function extractSelectorId(_path: string, module: SelectorModule): string | null {
   return module.SELECTOR_ID ?? null
 }
 
@@ -47,7 +57,7 @@ function extractSelectorId(_path: string, module: any): string | null {
  * 提取请求构建器 ID
  * 从 requestBuilder 模块的 BUILDER_ID 常量提取配置 ID
  */
-function extractBuilderId(_path: string, module: any): string | null {
+function extractBuilderId(_path: string, module: BuilderModule): string | null {
   return module.BUILDER_ID ?? null
 }
 
@@ -98,9 +108,10 @@ export class BizyAirConfigManager {
       const map = new Map<string, ConfigSelector>()
 
       for (const [path, module] of Object.entries(selectorModules)) {
-        const configId = extractSelectorId(path, module)
+        const selectorModule = module as SelectorModule
+        const configId = extractSelectorId(path, selectorModule)
         if (configId && configId !== 'default') {
-          const selector = (module as any).selectConfig
+          const selector = selectorModule.selectConfig
           if (selector) {
             map.set(configId, selector)
             console.log(`[BizyAirConfigManager] 自动注册配置选择器: ${configId}`)
@@ -126,9 +137,10 @@ export class BizyAirConfigManager {
       const map = new Map<string, RequestBuilder>()
 
       for (const [path, module] of Object.entries(builderModules)) {
-        const configId = extractBuilderId(path, module)
+        const builderModule = module as BuilderModule
+        const configId = extractBuilderId(path, builderModule)
         if (configId && configId !== 'default') {
-          const builder = (module as any).buildRequestData
+          const builder = builderModule.buildRequestData
           if (builder) {
             map.set(configId, builder)
             console.log(`[BizyAirConfigManager] 自动注册请求构建器: ${configId}`)

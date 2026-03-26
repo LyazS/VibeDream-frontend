@@ -13,6 +13,7 @@ import type {
 import { DEFAULT_SNAP_CONFIG } from '@/types/snap'
 import type { UnifiedTimelineItemData } from '@/core/timelineitem/type'
 import { relativeFrameToAbsoluteFrame } from '@/core/utils/unifiedKeyframeUtils'
+import { getVisibleKeyframesForTimeline } from '@/core/utils/unifiedKeyframeUtils'
 import type { ModuleRegistry } from './ModuleRegistry'
 import { MODULE_NAMES } from './ModuleRegistry'
 import type { UnifiedTimelineModule } from './UnifiedTimelineModule'
@@ -165,8 +166,9 @@ export function createUnifiedSnapModule(registry: ModuleRegistry) {
           }
 
           // 收集片段的关键帧
-          if (item.animation && item.animation.keyframes && item.animation.keyframes.length > 0) {
-            item.animation.keyframes.forEach((keyframe) => {
+          const keyframes = getVisibleKeyframesForTimeline(item)
+          if (keyframes.length > 0) {
+            keyframes.forEach((keyframe) => {
               // ✅ 使用缓存的帧位置计算绝对帧数
               const absoluteFrame = relativeFrameToAbsoluteFrame(
                 keyframe.cachedFrame,
@@ -267,13 +269,13 @@ export function createUnifiedSnapModule(registry: ModuleRegistry) {
     let bestSnapPoint: SnapPoint | null = null
     let bestDistance = Infinity
 
-    snapCache.value.targets.forEach((target) => {
-      const distance = Math.abs(frame - (target as any).frame)
+    for (const target of snapCache.value.targets) {
+      const distance = Math.abs(frame - target.frame)
       if (distance < bestDistance && distance <= frameThreshold) {
         bestDistance = distance
         bestSnapPoint = target
       }
-    })
+    }
 
     // 如果没有找到合适的吸附点，返回null
     if (!bestSnapPoint || bestDistance > frameThreshold) {
@@ -281,9 +283,10 @@ export function createUnifiedSnapModule(registry: ModuleRegistry) {
     }
 
     // 返回吸附结果
+    const snapPoint = bestSnapPoint
     return {
-      frame: (bestSnapPoint as any).frame,
-      snapPoint: bestSnapPoint,
+      frame: snapPoint.frame,
+      snapPoint,
       distance: bestDistance,
     }
   }

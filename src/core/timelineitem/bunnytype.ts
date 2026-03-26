@@ -39,14 +39,67 @@ export interface AudioAnimatableProps {
   volume: number
 }
 
-export type KeyframePropertiesMap = {
-  video: VisualAnimatableProps & AudioAnimatableProps
-  image: VisualAnimatableProps
-  audio: AudioAnimatableProps
-  text: VisualAnimatableProps
+export interface LayoutAnimatableProps {
+  x: number
+  /** 相对画布中心的 Y 坐标；y > 0 表示向上。 */
+  y: number
+  width: number
+  height: number
 }
 
-export interface AnimateKeyframe<T extends MediaType> {
+export interface RotationAnimatableProps {
+  /** 旋转角度（角度制，范围：-180° 到 180°） */
+  rotation: number
+}
+
+export interface OpacityAnimatableProps {
+  opacity: number
+}
+
+export type AnimationChannelKey = 'layout' | 'rotation' | 'opacity' | 'audio'
+
+export type AnimationChannelPropertiesMap = {
+  layout: LayoutAnimatableProps
+  rotation: RotationAnimatableProps
+  opacity: OpacityAnimatableProps
+  audio: AudioAnimatableProps
+}
+
+export type MediaAnimationChannelMap = {
+  video: {
+    layout: LayoutAnimatableProps
+    rotation: RotationAnimatableProps
+    opacity: OpacityAnimatableProps
+    audio: AudioAnimatableProps
+  }
+  image: {
+    layout: LayoutAnimatableProps
+    rotation: RotationAnimatableProps
+    opacity: OpacityAnimatableProps
+  }
+  audio: {
+    audio: AudioAnimatableProps
+  }
+  text: {
+    layout: LayoutAnimatableProps
+    rotation: RotationAnimatableProps
+    opacity: OpacityAnimatableProps
+  }
+}
+
+export type ChannelKeyForMedia<T extends MediaType> = Extract<
+  keyof MediaAnimationChannelMap[T],
+  AnimationChannelKey
+>
+
+export type KeyframePropertiesMap = {
+  [C in AnimationChannelKey]: AnimationChannelPropertiesMap[C]
+}
+
+export interface AnimateKeyframe<
+  T extends MediaType,
+  C extends AnimationChannelKey = AnimationChannelKey,
+> {
   /**
    * 关键帧位置（百分比，0-1 范围）
    * 这是主存储，是真实数据源
@@ -65,13 +118,19 @@ export interface AnimateKeyframe<T extends MediaType> {
    */
   cachedFrame: number
   
-  /** 包含所有可动画属性的完整状态 */
-  properties: KeyframePropertiesMap[T]
+  /** 当前通道对应的属性组 */
+  properties: KeyframePropertiesMap[C]
+}
+
+export interface AnimationChannel<T extends MediaType, C extends AnimationChannelKey> {
+  keyframes: AnimateKeyframe<T, C>[]
 }
 
 export interface AnimationProps<T extends MediaType> {
-  /** 关键帧数组 */
-  keyframes: AnimateKeyframe<T>[]
+  /** 按属性组划分的关键帧通道 */
+  channels: Partial<{
+    [C in ChannelKeyForMedia<T>]: AnimationChannel<T, C>
+  }>
 }
 
 type GetConfigMap = {
@@ -89,6 +148,27 @@ type GetAnimationMap = {
 
 export type GetConfigs<T extends MediaType> = GetConfigMap[T]
 export type GetAnimation<T extends MediaType> = GetAnimationMap[T]
+
+export const VISUAL_CHANNELS = ['layout', 'rotation', 'opacity'] as const
+export const ALL_ANIMATION_CHANNELS = ['layout', 'rotation', 'opacity', 'audio'] as const
+
+export const PROPERTY_TO_CHANNEL_MAP = {
+  x: 'layout',
+  y: 'layout',
+  width: 'layout',
+  height: 'layout',
+  rotation: 'rotation',
+  opacity: 'opacity',
+  volume: 'audio',
+} as const satisfies Record<string, AnimationChannelKey>
+
+export type AnimatablePropertyKey = keyof typeof PROPERTY_TO_CHANNEL_MAP
+
+export function getAnimationChannelForProperty(
+  property: string,
+): AnimationChannelKey | undefined {
+  return PROPERTY_TO_CHANNEL_MAP[property as AnimatablePropertyKey]
+}
 
 // 导出具体的配置类型供其他模块使用
 export type VideoMediaConfig = GetConfigs<'video'>

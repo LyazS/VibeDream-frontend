@@ -3,7 +3,11 @@
  * 提供百分比和帧位置之间的转换，以及缓存管理
  */
 
-import type { AnimateKeyframe, KeyframePropertiesMap } from '@/core/timelineitem/bunnytype'
+import type {
+  AnimateKeyframe,
+  AnimationChannelKey,
+  ChannelKeyForMedia,
+} from '@/core/timelineitem/bunnytype'
 import type { MediaType } from '@/core/mediaitem'
 import { cloneDeep } from 'lodash'
 
@@ -50,11 +54,10 @@ export function clampPercentage(percentage: number): number {
  * @param clipDurationFrames clip 时长（帧数）
  */
 export function updateKeyframeCachedFrame(
-  keyframe: AnimateKeyframe<MediaType>,
+  keyframe: AnimateKeyframe<MediaType, AnimationChannelKey>,
   clipDurationFrames: number
 ): void {
-  // 使用类型断言绕过 readonly 限制
-  ;(keyframe as any).cachedFrame = percentageToFrame(keyframe.position, clipDurationFrames)
+  keyframe.cachedFrame = percentageToFrame(keyframe.position, clipDurationFrames)
 }
 
 /**
@@ -64,7 +67,7 @@ export function updateKeyframeCachedFrame(
  * @param clipDurationFrames clip 时长（帧数）
  */
 export function updateAllKeyframesCachedFrames(
-  keyframes: AnimateKeyframe<MediaType>[],
+  keyframes: AnimateKeyframe<MediaType, AnimationChannelKey>[],
   clipDurationFrames: number
 ): void {
   for (const keyframe of keyframes) {
@@ -80,14 +83,17 @@ export function updateAllKeyframesCachedFrames(
  * @param clipDuration clip 时长（帧数）
  * @returns 插值后的关键帧，如果无法插值则返回 null
  */
-export function interpolateKeyframeAtPosition<T extends MediaType>(
-  keyframes: AnimateKeyframe<T>[],
+export function interpolateKeyframeAtPosition<
+  T extends MediaType,
+  C extends ChannelKeyForMedia<T>,
+>(
+  keyframes: AnimateKeyframe<T, C>[],
   position: number,
   clipDuration: number
-): AnimateKeyframe<T> | null {
+): AnimateKeyframe<T, C> | null {
   // 找到前后关键帧
-  let before: AnimateKeyframe<T> | null = null
-  let after: AnimateKeyframe<T> | null = null
+  let before: AnimateKeyframe<T, C> | null = null
+  let after: AnimateKeyframe<T, C> | null = null
 
   for (const kf of keyframes) {
     if (kf.position <= position) {
@@ -107,26 +113,29 @@ export function interpolateKeyframeAtPosition<T extends MediaType>(
   const t = (position - before.position) / (after.position - before.position)
 
   // 创建新关键帧
-  const newKeyframe: any = {
+  const newKeyframe: AnimateKeyframe<T, C> = {
     position,
     cachedFrame: percentageToFrame(position, clipDuration),
-    properties: {},
+    properties: {} as AnimateKeyframe<T, C>['properties'],
   }
+  const mutableProperties = newKeyframe.properties as Record<keyof typeof before.properties, number>
 
   // 对每个属性进行线性插值
-  const props = Object.keys(before.properties) as Array<keyof typeof before.properties>
+  const props = Object.keys(before.properties as unknown as Record<string, unknown>) as Array<
+    keyof typeof before.properties
+  >
   for (const prop of props) {
     const startValue = before.properties[prop] as number
     const endValue = after.properties[prop] as number
 
     if (typeof startValue === 'number' && typeof endValue === 'number') {
-      newKeyframe.properties[prop] = startValue + (endValue - startValue) * t
+      mutableProperties[prop] = startValue + (endValue - startValue) * t
     } else {
-      newKeyframe.properties[prop] = startValue
+      mutableProperties[prop] = startValue
     }
   }
 
-  return newKeyframe as AnimateKeyframe<T>
+  return newKeyframe as AnimateKeyframe<T, C>
 }
 
 /**
@@ -145,21 +154,24 @@ export function interpolateKeyframeAtPosition<T extends MediaType>(
  * @param secondDuration 第二个片段的时长（帧数）
  * @returns 切割后的两组关键帧和切割点关键帧
  */
-export function splitKeyframesAtPosition<T extends MediaType>(
-  keyframes: AnimateKeyframe<T>[],
+export function splitKeyframesAtPosition<
+  T extends MediaType,
+  C extends ChannelKeyForMedia<T>,
+>(
+  keyframes: AnimateKeyframe<T, C>[],
   splitPosition: number,
   originalDuration: number,
   firstDuration: number,
   secondDuration: number
 ): {
-  firstKeyframes: AnimateKeyframe<T>[]
-  secondKeyframes: AnimateKeyframe<T>[]
-  splitKeyframe: AnimateKeyframe<T> | null
+  firstKeyframes: AnimateKeyframe<T, C>[]
+  secondKeyframes: AnimateKeyframe<T, C>[]
+  splitKeyframe: AnimateKeyframe<T, C> | null
 } {
-  const firstKeyframes: AnimateKeyframe<T>[] = []
-  const secondKeyframes: AnimateKeyframe<T>[] = []
-  let splitKeyframe: AnimateKeyframe<T> | null = null
-  let exactSplitKeyframe: AnimateKeyframe<T> | null = null
+  const firstKeyframes: AnimateKeyframe<T, C>[] = []
+  const secondKeyframes: AnimateKeyframe<T, C>[] = []
+  let splitKeyframe: AnimateKeyframe<T, C> | null = null
+  let exactSplitKeyframe: AnimateKeyframe<T, C> | null = null
 
   // 1. 分类关键帧
   for (const kf of keyframes) {
@@ -169,8 +181,8 @@ export function splitKeyframesAtPosition<T extends MediaType>(
       if (splitPosition > 0) {
         const newPosition = kf.position / splitPosition
         const newKeyframe = cloneDeep(kf)
-        ;(newKeyframe as any).position = newPosition
-        ;(newKeyframe as any).cachedFrame = percentageToFrame(newPosition, firstDuration)
+        newKeyframe.position = newPosition
+        newKeyframe.cachedFrame = percentageToFrame(newPosition, firstDuration)
         firstKeyframes.push(newKeyframe)
       }
     } else if (kf.position > splitPosition) {
@@ -179,8 +191,8 @@ export function splitKeyframesAtPosition<T extends MediaType>(
       if (splitPosition < 1) {
         const newPosition = (kf.position - splitPosition) / (1 - splitPosition)
         const newKeyframe = cloneDeep(kf)
-        ;(newKeyframe as any).position = newPosition
-        ;(newKeyframe as any).cachedFrame = percentageToFrame(newPosition, secondDuration)
+        newKeyframe.position = newPosition
+        newKeyframe.cachedFrame = percentageToFrame(newPosition, secondDuration)
         secondKeyframes.push(newKeyframe)
       }
     } else {
@@ -193,13 +205,13 @@ export function splitKeyframesAtPosition<T extends MediaType>(
   if (exactSplitKeyframe) {
     // 切割点恰好有关键帧，复制到两个片段
     const firstSplit = cloneDeep(exactSplitKeyframe)
-    ;(firstSplit as any).position = 1.0
-    ;(firstSplit as any).cachedFrame = firstDuration
+    firstSplit.position = 1.0
+    firstSplit.cachedFrame = firstDuration
     firstKeyframes.push(firstSplit)
 
     const secondSplit = cloneDeep(exactSplitKeyframe)
-    ;(secondSplit as any).position = 0.0
-    ;(secondSplit as any).cachedFrame = 0
+    secondSplit.position = 0.0
+    secondSplit.cachedFrame = 0
     secondKeyframes.push(secondSplit)
 
     splitKeyframe = exactSplitKeyframe
@@ -214,14 +226,14 @@ export function splitKeyframesAtPosition<T extends MediaType>(
     if (splitKeyframe) {
       // 添加到第一个片段的末尾
       const firstSplit = cloneDeep(splitKeyframe)
-      ;(firstSplit as any).position = 1.0
-      ;(firstSplit as any).cachedFrame = firstDuration
+      firstSplit.position = 1.0
+      firstSplit.cachedFrame = firstDuration
       firstKeyframes.push(firstSplit)
 
       // 添加到第二个片段的开头
       const secondSplit = cloneDeep(splitKeyframe)
-      ;(secondSplit as any).position = 0.0
-      ;(secondSplit as any).cachedFrame = 0
+      secondSplit.position = 0.0
+      secondSplit.cachedFrame = 0
       secondKeyframes.push(secondSplit)
     }
   }

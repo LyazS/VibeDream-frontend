@@ -8,6 +8,7 @@ import { useUnifiedStore } from '@/core/unifiedStore'
 import { normalizeAngle } from '@/core/utils/rotationTransform'
 import type { UnifiedTimelineItemData } from '@/core/timelineitem'
 import { TimelineItemQueries } from '@/core/timelineitem/queries'
+import type { AnimationChannelKey } from '@/core/timelineitem/bunnytype'
 import type {
   KeyframeUIState,
   KeyframeButtonState,
@@ -30,6 +31,10 @@ interface UnifiedKeyframeTransformControlsOptions {
   currentFrame: Ref<number>
 }
 
+type VisualPropertyKey = 'x' | 'y' | 'width' | 'height' | 'rotation' | 'opacity'
+type VisualMutableConfig = Partial<Record<VisualPropertyKey, number>>
+type VisualMutableProperties = Partial<Record<VisualPropertyKey, number>>
+
 /**
  * 关键帧动画和变换控制器（新架构版本）
  */
@@ -45,32 +50,51 @@ export function useUnifiedKeyframeTransformControls(
     currentFrame,
   })
 
+  const setVisualConfigProperty = (
+    item: UnifiedTimelineItemData,
+    property: VisualPropertyKey,
+    value: number,
+  ) => {
+    if (!TimelineItemQueries.hasVisualProperties(item)) return
+    const config = (item.config as unknown) as VisualMutableConfig
+    if (!(property in config)) return
+    config[property] = value
+  }
+
+  const setVisualKeyframeProperty = (
+    keyframe: NonNullable<typeof deferredUpdate.dragState.value.createdKeyframe>,
+    property: VisualPropertyKey,
+    value: number,
+  ) => {
+    const properties = (keyframe.properties as unknown) as VisualMutableProperties
+    if (!(property in properties)) return
+    properties[property] = value
+  }
+
   // ==================== 关键帧UI状态 ====================
 
   const keyframeUIState = computed<KeyframeUIState>(() => {
     if (!selectedTimelineItem.value) {
       return { hasAnimation: false, isOnKeyframe: false }
     }
-    selectedTimelineItem.value.animation?.keyframes.length
-    return getKeyframeUIState(selectedTimelineItem.value, currentFrame.value)
+    return getKeyframeUIState(selectedTimelineItem.value, currentFrame.value, 'layout')
   })
 
   const buttonState = computed<KeyframeButtonState>(() => {
     if (!selectedTimelineItem.value) {
       return 'none'
     }
-    selectedTimelineItem.value.animation?.keyframes.length
-    return getKeyframeButtonState(selectedTimelineItem.value, currentFrame.value)
+    return getKeyframeButtonState(selectedTimelineItem.value, currentFrame.value, 'layout')
   })
 
   const hasPreviousKeyframe = computed(() => {
     if (!selectedTimelineItem.value) return false
-    return getPreviousKeyframeFrame(selectedTimelineItem.value, currentFrame.value) !== null
+    return getPreviousKeyframeFrame(selectedTimelineItem.value, currentFrame.value, 'layout') !== null
   })
 
   const hasNextKeyframe = computed(() => {
     if (!selectedTimelineItem.value) return false
-    return getNextKeyframeFrame(selectedTimelineItem.value, currentFrame.value) !== null
+    return getNextKeyframeFrame(selectedTimelineItem.value, currentFrame.value, 'layout') !== null
   })
 
   const isPlayheadInClip = computed(() => {
@@ -81,6 +105,74 @@ export function useUnifiedKeyframeTransformControls(
   const canOperateKeyframes = computed(() => {
     return isPlayheadInClip.value
   })
+
+  const getChannelButtonState = (channel: AnimationChannelKey): KeyframeButtonState => {
+    if (!selectedTimelineItem.value) return 'none'
+    return getKeyframeButtonState(selectedTimelineItem.value, currentFrame.value, channel)
+  }
+
+  const getChannelKeyframeUIState = (channel: AnimationChannelKey): KeyframeUIState => {
+    if (!selectedTimelineItem.value) {
+      return { hasAnimation: false, isOnKeyframe: false }
+    }
+    return getKeyframeUIState(selectedTimelineItem.value, currentFrame.value, channel)
+  }
+
+  const hasPreviousChannelKeyframe = (channel: AnimationChannelKey): boolean => {
+    if (!selectedTimelineItem.value) return false
+    return getPreviousKeyframeFrame(selectedTimelineItem.value, currentFrame.value, channel) !== null
+  }
+
+  const hasNextChannelKeyframe = (channel: AnimationChannelKey): boolean => {
+    if (!selectedTimelineItem.value) return false
+    return getNextKeyframeFrame(selectedTimelineItem.value, currentFrame.value, channel) !== null
+  }
+
+  const getPreviousChannelKeyframeFrame = (channel: AnimationChannelKey): number | null => {
+    if (!selectedTimelineItem.value) return null
+    return getPreviousKeyframeFrame(selectedTimelineItem.value, currentFrame.value, channel)
+  }
+
+  const getNextChannelKeyframeFrame = (channel: AnimationChannelKey): number | null => {
+    if (!selectedTimelineItem.value) return null
+    return getNextKeyframeFrame(selectedTimelineItem.value, currentFrame.value, channel)
+  }
+
+  const goToPreviousChannelKeyframe = (channel: AnimationChannelKey) => {
+    const frame = getPreviousChannelKeyframeFrame(channel)
+    if (frame !== null) {
+      unifiedStore.seekToFrame(frame)
+    }
+  }
+
+  const goToNextChannelKeyframe = (channel: AnimationChannelKey) => {
+    const frame = getNextChannelKeyframeFrame(channel)
+    if (frame !== null) {
+      unifiedStore.seekToFrame(frame)
+    }
+  }
+
+  const toggleChannelKeyframe = async (channel: AnimationChannelKey) => {
+    if (!selectedTimelineItem.value) return
+    await unifiedStore.toggleKeyframeWithHistory(selectedTimelineItem.value.id, currentFrame.value, channel)
+  }
+
+  const getChannelKeyframeTooltip = (channel: AnimationChannelKey) => {
+    if (!canOperateKeyframes.value) {
+      return '播放头不在当前clip时间范围内，无法操作关键帧'
+    }
+
+    switch (getChannelButtonState(channel)) {
+      case 'none':
+        return '点击创建关键帧动画'
+      case 'on-keyframe':
+        return '当前在关键帧位置，点击删除关键帧'
+      case 'between-keyframes':
+        return '点击在当前位置创建关键帧'
+      default:
+        return '关键帧控制'
+    }
+  }
 
   // ==================== 变换属性计算 ====================
 
@@ -486,21 +578,20 @@ export function useUnifiedKeyframeTransformControls(
     }
 
     // 拖动中：直接修改关键帧或 config
-    const buttonState = getKeyframeButtonState(selectedTimelineItem.value, currentFrame.value)
+    const buttonState = getKeyframeButtonState(selectedTimelineItem.value, currentFrame.value, 'layout')
 
     if (buttonState === 'none') {
-      ;(selectedTimelineItem.value.config as any).width = newWidth
-      ;(selectedTimelineItem.value.config as any).height = newHeight
+      setVisualConfigProperty(selectedTimelineItem.value, 'width', newWidth)
+      setVisualConfigProperty(selectedTimelineItem.value, 'height', newHeight)
     } else if (buttonState === 'on-keyframe') {
-      const keyframe = findKeyframeAtFrame(selectedTimelineItem.value, currentFrame.value)
+      const keyframe = findKeyframeAtFrame(selectedTimelineItem.value, currentFrame.value, 'layout')
       if (keyframe) {
-        ;(keyframe.properties as any).width = newWidth
-        ;(keyframe.properties as any).height = newHeight
+        setVisualKeyframeProperty(keyframe, 'width', newWidth)
+        setVisualKeyframeProperty(keyframe, 'height', newHeight)
       }
     } else if (buttonState === 'between-keyframes' && deferredUpdate.dragState.value.createdKeyframe) {
-      const props = deferredUpdate.dragState.value.createdKeyframe!.properties as any
-      if ('width' in props) props.width = newWidth
-      if ('height' in props) props.height = newHeight
+      setVisualKeyframeProperty(deferredUpdate.dragState.value.createdKeyframe, 'width', newWidth)
+      setVisualKeyframeProperty(deferredUpdate.dragState.value.createdKeyframe, 'height', newHeight)
     }
 
     // 记录当前值（两个属性）
@@ -533,20 +624,20 @@ export function useUnifiedKeyframeTransformControls(
     }
 
     // 拖动中：直接修改关键帧或 config
-    const buttonState = getKeyframeButtonState(selectedTimelineItem.value, currentFrame.value)
+    const buttonState = getKeyframeButtonState(selectedTimelineItem.value, currentFrame.value, 'layout')
 
     if (buttonState === 'none') {
       // 无动画：直接修改 config
-      ;(selectedTimelineItem.value.config as any).width = newWidth
+      setVisualConfigProperty(selectedTimelineItem.value, 'width', newWidth)
     } else if (buttonState === 'on-keyframe') {
       // 在关键帧上：修改关键帧的值
-      const keyframe = findKeyframeAtFrame(selectedTimelineItem.value, currentFrame.value)
+      const keyframe = findKeyframeAtFrame(selectedTimelineItem.value, currentFrame.value, 'layout')
       if (keyframe) {
-        ;(keyframe.properties as any).width = newWidth
+        setVisualKeyframeProperty(keyframe, 'width', newWidth)
       }
     } else if (buttonState === 'between-keyframes' && deferredUpdate.dragState.value.createdKeyframe) {
       // 关键帧之间：修改新创建的关键帧
-      ;(deferredUpdate.dragState.value.createdKeyframe.properties as any).width = newWidth
+      setVisualKeyframeProperty(deferredUpdate.dragState.value.createdKeyframe, 'width', newWidth)
     }
 
     // 记录当前值并更新状态
@@ -577,17 +668,17 @@ export function useUnifiedKeyframeTransformControls(
     }
 
     // 拖动中：直接修改关键帧或 config
-    const buttonState = getKeyframeButtonState(selectedTimelineItem.value, currentFrame.value)
+    const buttonState = getKeyframeButtonState(selectedTimelineItem.value, currentFrame.value, 'layout')
 
     if (buttonState === 'none') {
-      ;(selectedTimelineItem.value.config as any).height = newHeight
+      setVisualConfigProperty(selectedTimelineItem.value, 'height', newHeight)
     } else if (buttonState === 'on-keyframe') {
-      const keyframe = findKeyframeAtFrame(selectedTimelineItem.value, currentFrame.value)
+      const keyframe = findKeyframeAtFrame(selectedTimelineItem.value, currentFrame.value, 'layout')
       if (keyframe) {
-        ;(keyframe.properties as any).height = newHeight
+        setVisualKeyframeProperty(keyframe, 'height', newHeight)
       }
     } else if (buttonState === 'between-keyframes' && deferredUpdate.dragState.value.createdKeyframe) {
-      ;(deferredUpdate.dragState.value.createdKeyframe.properties as any).height = newHeight
+      setVisualKeyframeProperty(deferredUpdate.dragState.value.createdKeyframe, 'height', newHeight)
     }
 
     deferredUpdate.updateDuringDrag('height', newHeight)
@@ -614,18 +705,18 @@ export function useUnifiedKeyframeTransformControls(
     }
 
     // 拖动中：直接修改关键帧或 config
-    const buttonState = getKeyframeButtonState(selectedTimelineItem.value, currentFrame.value)
+    const buttonState = getKeyframeButtonState(selectedTimelineItem.value, currentFrame.value, 'rotation')
 
     if (buttonState === 'none') {
-      ;(selectedTimelineItem.value.config as any).rotation = newRotation
+      setVisualConfigProperty(selectedTimelineItem.value, 'rotation', newRotation)
     } else if (buttonState === 'on-keyframe') {
-      const keyframe = findKeyframeAtFrame(selectedTimelineItem.value, currentFrame.value)
+      const keyframe = findKeyframeAtFrame(selectedTimelineItem.value, currentFrame.value, 'rotation')
       if (keyframe && 'rotation' in keyframe.properties) {
-        ;(keyframe.properties as any).rotation = newRotation
+        setVisualKeyframeProperty(keyframe, 'rotation', newRotation)
       }
     } else if (buttonState === 'between-keyframes' && deferredUpdate.dragState.value.createdKeyframe) {
       if ('rotation' in deferredUpdate.dragState.value.createdKeyframe!.properties) {
-        ;(deferredUpdate.dragState.value.createdKeyframe.properties as any).rotation = newRotation
+        setVisualKeyframeProperty(deferredUpdate.dragState.value.createdKeyframe, 'rotation', newRotation)
       }
     }
 
@@ -653,18 +744,18 @@ export function useUnifiedKeyframeTransformControls(
     }
 
     // 拖动中：直接修改关键帧或 config
-    const buttonState = getKeyframeButtonState(selectedTimelineItem.value, currentFrame.value)
+    const buttonState = getKeyframeButtonState(selectedTimelineItem.value, currentFrame.value, 'opacity')
 
     if (buttonState === 'none') {
-      ;(selectedTimelineItem.value.config as any).opacity = newOpacity
+      setVisualConfigProperty(selectedTimelineItem.value, 'opacity', newOpacity)
     } else if (buttonState === 'on-keyframe') {
-      const keyframe = findKeyframeAtFrame(selectedTimelineItem.value, currentFrame.value)
+      const keyframe = findKeyframeAtFrame(selectedTimelineItem.value, currentFrame.value, 'opacity')
       if (keyframe && 'opacity' in keyframe.properties) {
-        ;(keyframe.properties as any).opacity = newOpacity
+        setVisualKeyframeProperty(keyframe, 'opacity', newOpacity)
       }
     } else if (buttonState === 'between-keyframes' && deferredUpdate.dragState.value.createdKeyframe) {
       if ('opacity' in deferredUpdate.dragState.value.createdKeyframe!.properties) {
-        ;(deferredUpdate.dragState.value.createdKeyframe.properties as any).opacity = newOpacity
+        setVisualKeyframeProperty(deferredUpdate.dragState.value.createdKeyframe, 'opacity', newOpacity)
       }
     }
 
@@ -698,28 +789,28 @@ export function useUnifiedKeyframeTransformControls(
     }
 
     // 拖动中：直接修改关键帧或 config
-    const buttonState = getKeyframeButtonState(selectedTimelineItem.value, currentFrame.value)
+    const buttonState = getKeyframeButtonState(selectedTimelineItem.value, currentFrame.value, 'layout')
 
     if (buttonState === 'none') {
-      ;(selectedTimelineItem.value.config as any).x = newX
-      ;(selectedTimelineItem.value.config as any).y = newY
+      setVisualConfigProperty(selectedTimelineItem.value, 'x', newX)
+      setVisualConfigProperty(selectedTimelineItem.value, 'y', newY)
     } else if (buttonState === 'on-keyframe') {
-      const keyframe = findKeyframeAtFrame(selectedTimelineItem.value, currentFrame.value)
+      const keyframe = findKeyframeAtFrame(selectedTimelineItem.value, currentFrame.value, 'layout')
       if (keyframe) {
         if ('x' in keyframe.properties) {
-          ;(keyframe.properties as any).x = newX
+          setVisualKeyframeProperty(keyframe, 'x', newX)
         }
         if ('y' in keyframe.properties) {
-          ;(keyframe.properties as any).y = newY
+          setVisualKeyframeProperty(keyframe, 'y', newY)
         }
       }
     } else if (buttonState === 'between-keyframes' && deferredUpdate.dragState.value.createdKeyframe) {
-      const keyframe = deferredUpdate.dragState.value.createdKeyframe!
+      const keyframe = deferredUpdate.dragState.value.createdKeyframe
       if ('x' in keyframe.properties) {
-        ;(keyframe.properties as any).x = newX
+        setVisualKeyframeProperty(keyframe, 'x', newX)
       }
       if ('y' in keyframe.properties) {
-        ;(keyframe.properties as any).y = newY
+        setVisualKeyframeProperty(keyframe, 'y', newY)
       }
     }
 
@@ -751,7 +842,7 @@ export function useUnifiedKeyframeTransformControls(
 
     if (isFirstInput) {
       // 记录初始值
-      const initialValues: Record<string, any> = {
+      const initialValues: Record<string, unknown> = {
         width: config.width,
         height: config.height,
       }
@@ -761,31 +852,31 @@ export function useUnifiedKeyframeTransformControls(
     }
 
     // 拖动中：直接修改关键帧或 config
-    const buttonState = getKeyframeButtonState(selectedTimelineItem.value, currentFrame.value)
+    const buttonState = getKeyframeButtonState(selectedTimelineItem.value, currentFrame.value, 'layout')
 
     if (buttonState === 'none') {
-      ;(selectedTimelineItem.value.config as any).width = newWidth
-      ;(selectedTimelineItem.value.config as any).height = newHeight
-      if (x !== undefined) (selectedTimelineItem.value.config as any).x = x
-      if (y !== undefined) (selectedTimelineItem.value.config as any).y = y
+      setVisualConfigProperty(selectedTimelineItem.value, 'width', newWidth)
+      setVisualConfigProperty(selectedTimelineItem.value, 'height', newHeight)
+      if (x !== undefined) setVisualConfigProperty(selectedTimelineItem.value, 'x', x)
+      if (y !== undefined) setVisualConfigProperty(selectedTimelineItem.value, 'y', y)
     } else if (buttonState === 'on-keyframe') {
-      const keyframe = findKeyframeAtFrame(selectedTimelineItem.value, currentFrame.value)
+      const keyframe = findKeyframeAtFrame(selectedTimelineItem.value, currentFrame.value, 'layout')
       if (keyframe) {
-        ;(keyframe.properties as any).width = newWidth
-        ;(keyframe.properties as any).height = newHeight
+        setVisualKeyframeProperty(keyframe, 'width', newWidth)
+        setVisualKeyframeProperty(keyframe, 'height', newHeight)
         if (x !== undefined && 'x' in keyframe.properties) {
-          ;(keyframe.properties as any).x = x
+          setVisualKeyframeProperty(keyframe, 'x', x)
         }
         if (y !== undefined && 'y' in keyframe.properties) {
-          ;(keyframe.properties as any).y = y
+          setVisualKeyframeProperty(keyframe, 'y', y)
         }
       }
     } else if (buttonState === 'between-keyframes' && deferredUpdate.dragState.value.createdKeyframe) {
-      const props = deferredUpdate.dragState.value.createdKeyframe!.properties as any
-      if ('width' in props) props.width = newWidth
-      if ('height' in props) props.height = newHeight
-      if (x !== undefined && 'x' in props) props.x = x
-      if (y !== undefined && 'y' in props) props.y = y
+      const keyframe = deferredUpdate.dragState.value.createdKeyframe
+      setVisualKeyframeProperty(keyframe, 'width', newWidth)
+      setVisualKeyframeProperty(keyframe, 'height', newHeight)
+      if (x !== undefined && 'x' in keyframe.properties) setVisualKeyframeProperty(keyframe, 'x', x)
+      if (y !== undefined && 'y' in keyframe.properties) setVisualKeyframeProperty(keyframe, 'y', y)
     }
 
     // 记录当前值并更新状态
@@ -819,19 +910,19 @@ export function useUnifiedKeyframeTransformControls(
     }
 
     // 拖动中：直接修改关键帧或 config
-    const buttonState = getKeyframeButtonState(selectedTimelineItem.value, currentFrame.value)
+    const buttonState = getKeyframeButtonState(selectedTimelineItem.value, currentFrame.value, 'rotation')
 
     if (buttonState === 'none') {
-      ;(selectedTimelineItem.value.config as any).rotation = normalizedRotation
+      setVisualConfigProperty(selectedTimelineItem.value, 'rotation', normalizedRotation)
     } else if (buttonState === 'on-keyframe') {
-      const keyframe = findKeyframeAtFrame(selectedTimelineItem.value, currentFrame.value)
+      const keyframe = findKeyframeAtFrame(selectedTimelineItem.value, currentFrame.value, 'rotation')
       if (keyframe && 'rotation' in keyframe.properties) {
-        ;(keyframe.properties as any).rotation = normalizedRotation
+        setVisualKeyframeProperty(keyframe, 'rotation', normalizedRotation)
       }
     } else if (buttonState === 'between-keyframes' && deferredUpdate.dragState.value.createdKeyframe) {
-      const props = deferredUpdate.dragState.value.createdKeyframe!.properties as any
-      if ('rotation' in props) {
-        props.rotation = normalizedRotation
+      const keyframe = deferredUpdate.dragState.value.createdKeyframe
+      if ('rotation' in keyframe.properties) {
+        setVisualKeyframeProperty(keyframe, 'rotation', normalizedRotation)
       }
     }
 
@@ -1150,6 +1241,16 @@ export function useUnifiedKeyframeTransformControls(
     alignVertical,
 
     // ✅ 保留：辅助方法
+    getChannelButtonState,
+    getChannelKeyframeUIState,
+    hasPreviousChannelKeyframe,
+    hasNextChannelKeyframe,
+    getPreviousChannelKeyframeFrame,
+    getNextChannelKeyframeFrame,
+    goToPreviousChannelKeyframe,
+    goToNextChannelKeyframe,
+    toggleChannelKeyframe,
+    getChannelKeyframeTooltip,
     getUnifiedKeyframeTooltip,
     debugUnifiedKeyframes,
   }

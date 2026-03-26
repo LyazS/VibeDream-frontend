@@ -17,6 +17,7 @@ import type { GetConfigs, GetAnimation } from './bunnytype'
 
 // 重新导出 bunnytype 中的类型供其他模块使用
 export type {
+  AnimationChannelKey,
   GetConfigs,
   GetAnimation,
   VisualProps,
@@ -28,6 +29,7 @@ export type {
   TextMediaConfig,
 } from './bunnytype'
 import type {
+  AnimationChannelKey,
   VisualProps,
   AudioProps,
   TextProps,

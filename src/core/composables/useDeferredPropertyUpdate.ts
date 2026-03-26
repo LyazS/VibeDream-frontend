@@ -7,21 +7,30 @@ import { ref, type Ref } from 'vue'
 import type { UnifiedTimelineItemData } from '@/core/timelineitem'
 import { TimelineItemQueries } from '@/core/timelineitem/queries'
 import {
-  createKeyframe,
+  createChannelKeyframe,
   findKeyframeAtFrame,
   sortKeyframes,
   getKeyframeButtonState,
 } from '@/core/utils/unifiedKeyframeUtils'
-import type { AnimateKeyframe } from '@/core/timelineitem/bunnytype'
+import type { AnimateKeyframe, AnimationChannelKey } from '@/core/timelineitem/bunnytype'
 import type { MediaType } from '@/core/mediaitem'
 import type { KeyframeButtonState } from '@/core/timelineitem/animationtypes'
+import { getAnimationChannelForProperty } from '@/core/timelineitem/bunnytype'
+
+type DeferredChannelEntry = {
+  keyframes: AnimateKeyframe<MediaType, AnimationChannelKey>[]
+}
+type DeferredChannelMap = Partial<Record<AnimationChannelKey, DeferredChannelEntry>>
+type DeferredMutableConfig = Record<string, unknown>
+type DeferredMutableProperties = Record<string, unknown>
 
 interface DragState {
   isDragging: boolean
-  initialValues: Map<string, any> // property -> initial value
-  pendingUpdates: Map<string, any> // property -> current value
-  createdKeyframe: AnimateKeyframe<MediaType> | null // 关键帧之间拖动时创建的关键帧
+  initialValues: Map<string, unknown> // property -> initial value
+  pendingUpdates: Map<string, unknown> // property -> current value
+  createdKeyframe: AnimateKeyframe<MediaType, AnimationChannelKey> | null // 关键帧之间拖动时创建的关键帧
   initialButtonState: KeyframeButtonState | null // 拖动开始时的动画状态（用于判断是否需要删除临时关键帧）
+  channel: AnimationChannelKey | null
 }
 
 interface DeferredUpdateOptions {
@@ -46,7 +55,28 @@ export function useDeferredPropertyUpdate(options: DeferredUpdateOptions) {
     pendingUpdates: new Map(),
     createdKeyframe: null,
     initialButtonState: null,
+    channel: null,
   })
+
+  const setConfigProperty = (
+    item: UnifiedTimelineItemData,
+    property: string,
+    value: unknown,
+  ) => {
+    const config = (item.config as unknown) as DeferredMutableConfig
+    if (!(property in config)) return
+    config[property] = value
+  }
+
+  const setKeyframeProperty = (
+    keyframe: AnimateKeyframe<MediaType, AnimationChannelKey>,
+    property: string,
+    value: unknown,
+  ) => {
+    const properties = (keyframe.properties as unknown) as DeferredMutableProperties
+    if (!(property in properties)) return
+    properties[property] = value
+  }
 
   /**
    * 开始拖拽 - 由第一次 @input 触发
@@ -56,13 +86,18 @@ export function useDeferredPropertyUpdate(options: DeferredUpdateOptions) {
    * - 单个属性：startDrag({ rotation: config.rotation })
    * - 多个属性：startDrag({ width: config.width, height: config.height })
    */
-  const startDrag = (properties: Record<string, any>) => {
+  const startDrag = (properties: Record<string, unknown>) => {
     const item = selectedTimelineItem.value
     if (!item) return
 
-    const buttonState = getKeyframeButtonState(item, currentFrame.value)
+    const propertyNames = Object.keys(properties)
+    const channel = getAnimationChannelForProperty(propertyNames[0] || '')
+    if (!channel) return
+
+    const buttonState = getKeyframeButtonState(item, currentFrame.value, channel)
     dragState.value.isDragging = true
     dragState.value.initialButtonState = buttonState
+    dragState.value.channel = channel
 
     // 记录所有属性的初始值
     for (const [prop, value] of Object.entries(properties)) {
@@ -76,9 +111,14 @@ export function useDeferredPropertyUpdate(options: DeferredUpdateOptions) {
 
     // 如果在关键帧之间，立即创建新关键帧（使用传入的初始值）
     if (buttonState === 'between-keyframes') {
-      const keyframe = createKeyframe(item, currentFrame.value)
-      ;(item.animation as any)!.keyframes.push(keyframe)
-      sortKeyframes(item)
+      item.animation ??= { channels: {} } as UnifiedTimelineItemData['animation']
+      const channels = item.animation!.channels as DeferredChannelMap
+      if (!channels[channel]) {
+        channels[channel] = { keyframes: [] }
+      }
+      const keyframe = createChannelKeyframe(item, currentFrame.value, channel)
+      channels[channel].keyframes.push(keyframe)
+      sortKeyframes(item, channel)
       dragState.value.createdKeyframe = keyframe
 
       console.log('🎯 [Deferred Update] 创建临时关键帧:', {
@@ -94,25 +134,28 @@ export function useDeferredPropertyUpdate(options: DeferredUpdateOptions) {
    * @param property 属性名
    * @param value 新值
    */
-  const updateDuringDrag = (property: string, value: any) => {
+  const updateDuringDrag = (property: string, value: unknown) => {
     const item = selectedTimelineItem.value
     if (!item || !dragState.value.isDragging) return
 
-    const buttonState = getKeyframeButtonState(item, currentFrame.value)
+    const channel = dragState.value.channel
+    if (!channel) return
+
+    const buttonState = getKeyframeButtonState(item, currentFrame.value, channel)
 
     if (buttonState === 'none') {
       // 无动画：直接修改 config
-      ;(item.config as any)[property] = value
+      setConfigProperty(item, property, value)
     } else if (buttonState === 'on-keyframe') {
       // 在关键帧上：修改关键帧的值
-      const keyframe = findKeyframeAtFrame(item, currentFrame.value)
+      const keyframe = findKeyframeAtFrame(item, currentFrame.value, channel)
       if (keyframe && property in keyframe.properties) {
-        ;(keyframe.properties as any)[property] = value
+        setKeyframeProperty(keyframe, property, value)
       }
     } else if (buttonState === 'between-keyframes' && dragState.value.createdKeyframe) {
       // 关键帧之间：修改新创建的关键帧
       if (property in dragState.value.createdKeyframe.properties) {
-        ;(dragState.value.createdKeyframe.properties as any)[property] = value
+        setKeyframeProperty(dragState.value.createdKeyframe, property, value)
       }
     }
 
@@ -131,7 +174,7 @@ export function useDeferredPropertyUpdate(options: DeferredUpdateOptions) {
    * 提交历史记录并清理状态
    * @param onCommit 提交回调，接收所有属性的更新对象
    */
-  const commitDrag = async (onCommit: (updates: Record<string, any>) => Promise<void>) => {
+  const commitDrag = async (onCommit: (updates: Record<string, unknown>) => Promise<void>) => {
     console.log('🔍 [Deferred Update] commitDrag 被调用')
     console.log('  - isDragging:', dragState.value.isDragging)
     console.log('  - createdKeyframe:', dragState.value.createdKeyframe)
@@ -148,7 +191,7 @@ export function useDeferredPropertyUpdate(options: DeferredUpdateOptions) {
     console.log('📊 [Deferred Update] 使用初始动画状态:', buttonState)
 
     // 保存最终值
-    const updates: Record<string, any> = {}
+    const updates: Record<string, unknown> = {}
     for (const [property, value] of dragState.value.pendingUpdates) {
       updates[property] = value
     }
@@ -158,22 +201,26 @@ export function useDeferredPropertyUpdate(options: DeferredUpdateOptions) {
     if (buttonState === 'none') {
       // 无动画：恢复 config 到初始值
       for (const [property, initialValue] of dragState.value.initialValues) {
-        ;(item.config as any)[property] = initialValue
+        setConfigProperty(item, property, initialValue)
       }
     } else if (buttonState === 'on-keyframe') {
       // 在关键帧上：恢复关键帧属性到初始值
-      const keyframe = findKeyframeAtFrame(item, currentFrame.value)
+      const channel = dragState.value.channel
+      if (!channel) return
+      const keyframe = findKeyframeAtFrame(item, currentFrame.value, channel)
       if (keyframe) {
         for (const [property, initialValue] of dragState.value.initialValues) {
           if (property in keyframe.properties) {
-            ;(keyframe.properties as any)[property] = initialValue
+            setKeyframeProperty(keyframe, property, initialValue)
           }
         }
       }
     } else if (buttonState === 'between-keyframes' && dragState.value.createdKeyframe) {
       console.log('🎯 [Deferred Update] 准备删除临时关键帧...')
       // 🔧 关键帧之间：删除临时创建的关键帧，恢复到拖动前的状态
-      const keyframes = (item.animation as any).keyframes
+      const channel = dragState.value.channel
+      if (!channel) return
+      const keyframes = (item.animation?.channels as DeferredChannelMap)?.[channel]?.keyframes ?? []
       const index = keyframes.indexOf(dragState.value.createdKeyframe)
       console.log('  - 关键帧索引:', index)
       console.log('  - 删除前关键帧数:', keyframes.length)
@@ -185,7 +232,7 @@ export function useDeferredPropertyUpdate(options: DeferredUpdateOptions) {
       }
 
       // 验证删除后的状态
-      const stateAfterDelete = getKeyframeButtonState(item, currentFrame.value)
+      const stateAfterDelete = getKeyframeButtonState(item, currentFrame.value, channel)
       console.log('📊 [Deferred Update] 删除后状态:', stateAfterDelete)
     } else {
       console.log('⚠️ [Deferred Update] 未知状态，createdKeyframe:', dragState.value.createdKeyframe)
@@ -195,6 +242,7 @@ export function useDeferredPropertyUpdate(options: DeferredUpdateOptions) {
     dragState.value.isDragging = false
     dragState.value.createdKeyframe = null
     dragState.value.initialButtonState = null
+    dragState.value.channel = null
     dragState.value.initialValues.clear()
     dragState.value.pendingUpdates.clear()
 

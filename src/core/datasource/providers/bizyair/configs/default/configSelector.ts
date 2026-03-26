@@ -10,12 +10,15 @@ import type { BizyAirAppConfig } from '../../types'
  * Vite 的 import.meta.glob 会自动匹配当前目录下的所有 .json 文件
  */
 const configModules = import.meta.glob('./*.json', { eager: true })
+type ConfigJsonModule = { default: BizyAirAppConfig }
 
 // 使用对象缓存配置
 const configCache: Record<string, Record<string, BizyAirAppConfig>> = {}
 
 // 加载配置到缓存
-const configs: BizyAirAppConfig[] = Object.values(configModules).map((module) => (module as any).default as BizyAirAppConfig)
+const configs: BizyAirAppConfig[] = Object.values(configModules).map(
+  (module) => (module as ConfigJsonModule).default,
+)
 
 for (const loadedConfig of configs) {
   if (!configCache[loadedConfig.id]) {

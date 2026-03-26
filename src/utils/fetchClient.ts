@@ -15,6 +15,14 @@ const debugPrefix = '[TOKEN]'
 // 临时跳过认证开关（测试时设为 true）
 const SKIP_AUTH = false
 
+interface HTTPError extends Error {
+  status: number
+}
+
+function isHTTPError(error: unknown): error is HTTPError {
+  return error instanceof Error && 'status' in error
+}
+
 // 统一的fetch客户端
 export class FetchClient {
   private baseURL: string
@@ -31,7 +39,7 @@ export class FetchClient {
   /**
    * 发送GET请求
    */
-  async get<T = any>(url: string, config: RequestConfig = {}): Promise<ApiResponse<T>> {
+  async get<T = unknown>(url: string, config: RequestConfig = {}): Promise<ApiResponse<T>> {
     // 如果是API请求且不是认证相关的请求，使用带认证的方法（除非跳过认证）
     if (!SKIP_AUTH && this.isApiRequest(url) && !this.isAuthRequest(url)) {
       return this.requestWithAuth<T>(url, { ...config, method: 'GET' })
@@ -42,9 +50,9 @@ export class FetchClient {
   /**
    * 发送POST请求
    */
-  async post<T = any>(
+  async post<T = unknown>(
     url: string,
-    data?: any,
+    data?: unknown,
     config: RequestConfig = {},
   ): Promise<ApiResponse<T>> {
     // 如果是API请求且不是认证相关的请求，使用带认证的方法（除非跳过认证）
@@ -65,7 +73,7 @@ export class FetchClient {
   /**
    * 发送DELETE请求
    */
-  async delete<T = any>(url: string, config: RequestConfig = {}): Promise<ApiResponse<T>> {
+  async delete<T = unknown>(url: string, config: RequestConfig = {}): Promise<ApiResponse<T>> {
     // 如果是API请求且不是认证相关的请求，使用带认证的方法（除非跳过认证）
     if (!SKIP_AUTH && this.isApiRequest(url) && !this.isAuthRequest(url)) {
       return this.requestWithAuth<T>(url, { ...config, method: 'DELETE' })
@@ -115,7 +123,7 @@ export class FetchClient {
     method: 'GET' | 'POST',
     url: string,
     onMessage: (message: T) => Promise<boolean | void> | boolean | void,
-    data?: any,
+    data?: unknown,
     config: RequestConfig = {},
   ): Promise<void> {
     // 如果是API请求且不是认证相关的请求，使用带认证的方法（除非跳过认证）
@@ -132,7 +140,7 @@ export class FetchClient {
     method: 'GET' | 'POST',
     url: string,
     onMessage: (message: T) => Promise<boolean | void> | boolean | void,
-    data?: any,
+    data?: unknown,
     config: RequestConfig = {},
   ): Promise<void> {
     if (DEBUG_FETCH) {
@@ -177,9 +185,9 @@ export class FetchClient {
           method,
         })
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       // 4. 处理401错误
-      if (error.status === 401 && !config.isRetry) {
+      if (isHTTPError(error) && error.status === 401 && !config.isRetry) {
         console.warn(`${debugPrefix} 流式请求收到401响应，尝试刷新令牌`)
         const refreshed = await tokenManager.refreshToken()
         if (refreshed) {
@@ -206,8 +214,8 @@ export class FetchClient {
       if (DEBUG_FETCH) {
         console.error(`${debugPrefix} 流式请求失败:`, {
           url,
-          status: error.status,
-          message: error.message,
+          status: isHTTPError(error) ? error.status : undefined,
+          message: error instanceof Error ? error.message : String(error),
         })
       }
 
@@ -222,7 +230,7 @@ export class FetchClient {
     method: 'GET' | 'POST',
     url: string,
     onMessage: (message: T) => Promise<boolean | void> | boolean | void,
-    data?: any,
+    data?: unknown,
     config: RequestConfig = {},
   ): Promise<void> {
     const fullUrl = this.buildURL(url)
@@ -239,7 +247,7 @@ export class FetchClient {
     })
 
     if (!response.ok) {
-      const error = new Error(`HTTP错误: ${response.status} ${response.statusText}`) as any
+      const error = new Error(`HTTP错误: ${response.status} ${response.statusText}`) as HTTPError
       error.status = response.status
       throw error
     }
@@ -283,7 +291,7 @@ export class FetchClient {
   /**
    * 带认证的请求方法
    */
-  private async requestWithAuth<T = any>(
+  private async requestWithAuth<T = unknown>(
     url: string,
     config: RequestConfig,
   ): Promise<ApiResponse<T>> {
@@ -331,9 +339,9 @@ export class FetchClient {
         })
       }
       return response
-    } catch (error: any) {
+    } catch (error: unknown) {
       // 4. 处理401错误
-      if (error.status === 401 && !config.isRetry) {
+      if (isHTTPError(error) && error.status === 401 && !config.isRetry) {
         console.warn(`${debugPrefix} 收到401响应，尝试刷新令牌`)
         const refreshed = await tokenManager.refreshToken()
         if (refreshed) {
@@ -351,8 +359,8 @@ export class FetchClient {
       if (DEBUG_FETCH) {
         console.error(`${debugPrefix} 请求失败:`, {
           url,
-          status: error.status,
-          message: error.message,
+          status: isHTTPError(error) ? error.status : undefined,
+          message: error instanceof Error ? error.message : String(error),
         })
       }
 
@@ -363,7 +371,7 @@ export class FetchClient {
   /**
    * 通用的请求方法
    */
-  private async request<T = any>(url: string, config: RequestConfig): Promise<ApiResponse<T>> {
+  private async request<T = unknown>(url: string, config: RequestConfig): Promise<ApiResponse<T>> {
     const fullUrl = this.buildURL(url)
     const headers = { ...this.defaultHeaders, ...config.headers }
 
@@ -421,14 +429,14 @@ export class FetchClient {
         statusText: response.statusText,
         headers: response.headers,
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       // 清除超时
       if (timeoutId) {
         clearTimeout(timeoutId)
       }
 
       // 处理错误响应
-      if (error.status) {
+      if (isHTTPError(error)) {
         throw error
       }
 

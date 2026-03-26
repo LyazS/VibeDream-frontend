@@ -397,7 +397,7 @@ export class BizyAirAPIClient {
         switch (status) {
           case 'Queuing':
             progress = Math.min(50 + Math.floor((elapsedTime / timeout) * 10), 60)
-            const queueCount = (statusData as any).queueInfo?.queue_count ?? -1
+            const queueCount = statusData.queueInfo?.queue_count ?? -1
             message =
               queueCount >= 0
                 ? `任务排队中... (前面还有 ${queueCount} 个任务) bizyair任务ID: ${requestId}`

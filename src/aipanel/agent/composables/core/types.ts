@@ -9,7 +9,7 @@ import type { BaseBatchCommand } from '@/core/modules/UnifiedHistoryModule'
  */
 export interface BaseOperationConfig {
   type: string
-  params: any
+  params: unknown
 }
 
 /**

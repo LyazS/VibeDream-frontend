@@ -776,7 +776,7 @@ export function useHistoryOperations(
       console.log('🎬 [useHistoryOperations] 创建关键帧:', { timelineItemId, frame })
 
       // 创建关键帧命令
-      const command = new CreateKeyframeCommand(timelineItemId, frame, unifiedTimelineModule, {
+      const command = new CreateKeyframeCommand(timelineItemId, frame, 'layout', unifiedTimelineModule, {
         seekTo: (frame: number) => {
           // 播放头控制应该由调用方提供，这里简化为不控制播放头
           console.log('🔍 关键帧操作播放头控制:', frame)
@@ -803,7 +803,7 @@ export function useHistoryOperations(
       console.log('🎬 [useHistoryOperations] 删除关键帧:', { timelineItemId, frame })
 
       // 创建删除关键帧命令
-      const command = new DeleteKeyframeCommand(timelineItemId, frame, unifiedTimelineModule, {
+      const command = new DeleteKeyframeCommand(timelineItemId, frame, 'layout', unifiedTimelineModule, {
         seekTo: (frame: number) => {
           console.log('🔍 关键帧操作播放头控制:', frame)
         },
@@ -868,12 +868,12 @@ export function useHistoryOperations(
    * 带历史记录的清除所有关键帧方法
    * @param timelineItemId 时间轴项目ID
    */
-  async function clearAllKeyframesWithHistory(timelineItemId: string) {
+  async function clearAllKeyframesWithHistory(timelineItemId: string, channel?: any) {
     try {
       console.log('🎬 [useHistoryOperations] 清除所有关键帧:', { timelineItemId })
 
       // 创建清除所有关键帧命令
-      const command = new ClearAllKeyframesCommand(timelineItemId, unifiedTimelineModule, {
+      const command = new ClearAllKeyframesCommand(timelineItemId, channel, unifiedTimelineModule, {
         seekTo: (frame: number) => {
           console.log('🔍 关键帧操作播放头控制:', frame)
         },
@@ -894,12 +894,12 @@ export function useHistoryOperations(
    * @param timelineItemId 时间轴项目ID
    * @param frame 帧数
    */
-  async function toggleKeyframeWithHistory(timelineItemId: string, frame: number) {
+  async function toggleKeyframeWithHistory(timelineItemId: string, frame: number, channel: any = 'layout') {
     try {
       console.log('🎬 [useHistoryOperations] 切换关键帧:', { timelineItemId, frame })
 
       // 创建切换关键帧命令
-      const command = new ToggleKeyframeCommand(timelineItemId, frame, unifiedTimelineModule, {
+      const command = new ToggleKeyframeCommand(timelineItemId, frame, channel, unifiedTimelineModule, {
         seekTo: (frame: number) => {
           console.log('🔍 关键帧操作播放头控制:', frame)
         },

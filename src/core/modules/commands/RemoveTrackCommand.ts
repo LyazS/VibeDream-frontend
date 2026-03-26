@@ -226,15 +226,14 @@ export class RemoveTrackCommand implements SimpleCommand {
       if (timelineItem.runtime.isInitialized) continue
 
       // 如果没有指定timelineItemId或者项目ID匹配，则更新该项目
-      const config = timelineItem.config as any
-
       // 从 bunny 对象中获取原始尺寸信息
       if (
+        TimelineItemQueries.hasVisualProperties(timelineItem) &&
         mediaData.runtime.bunny?.originalWidth !== undefined &&
         mediaData.runtime.bunny?.originalHeight !== undefined
       ) {
-        config.width = mediaData.runtime.bunny.originalWidth
-        config.height = mediaData.runtime.bunny.originalHeight
+        timelineItem.config.width = mediaData.runtime.bunny.originalWidth
+        timelineItem.config.height = mediaData.runtime.bunny.originalHeight
       }
 
       if (mediaData.duration !== undefined) {
@@ -251,8 +250,8 @@ export class RemoveTrackCommand implements SimpleCommand {
       timelineItem.timelineStatus = 'ready'
 
       console.log(`🔄 [RemoveTrackCommand] 已更新媒体数据: ${timelineItem.id}`, {
-        width: config.width,
-        height: config.height,
+        width: TimelineItemQueries.hasVisualProperties(timelineItem) ? timelineItem.config.width : undefined,
+        height: TimelineItemQueries.hasVisualProperties(timelineItem) ? timelineItem.config.height : undefined,
         duration: mediaData.duration,
       })
 

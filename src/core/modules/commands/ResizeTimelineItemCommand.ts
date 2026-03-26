@@ -2,6 +2,7 @@ import { generateCommandId } from '@/core/utils/idGenerator'
 import { framesToTimecode } from '@/core/utils/timeUtils'
 import type { SimpleCommand } from '@/core/modules/commands/types'
 import { adjustKeyframesForDurationChange } from '@/core/utils/unifiedKeyframeUtils'
+import { hasAnimation } from '@/core/utils/unifiedKeyframeUtils'
 
 // 类型导入
 import type { UnifiedTimelineItemData } from '@/core/timelineitem/type'
@@ -60,7 +61,7 @@ export class ResizeTimelineItemCommand implements SimpleCommand {
       itemName = mediaItem?.name || '未知素材'
 
       // 检查是否有动画
-      this.hasAnimation = !!(timelineItem.animation && timelineItem.animation.keyframes.length > 0)
+      this.hasAnimation = hasAnimation(timelineItem)
     }
 
     const originalStartFrames = this.originalTimeRange.timelineStartTime

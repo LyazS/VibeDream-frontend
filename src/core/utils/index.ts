@@ -108,7 +108,7 @@ export {
 
   // 关键帧基础操作
   initializeAnimation,
-  createKeyframe,
+  createChannelKeyframe,
   hasAnimation,
   isCurrentFrameOnKeyframe,
   getKeyframeButtonState,

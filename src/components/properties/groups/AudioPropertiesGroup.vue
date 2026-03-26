@@ -4,7 +4,9 @@
 
     <!-- 音量控制 -->
     <div class="property-item">
-      <label>{{ t('properties.playback.volume') }}</label>
+      <label :class="getAnimatedLabelClass(audioButtonState)">
+        {{ t('properties.playback.volume') }}
+      </label>
       <div class="volume-controls">
         <SliderInput
           :model-value="volume"
@@ -26,6 +28,33 @@
           :show-controls="false"
           :placeholder="t('properties.placeholders.volume')"
         />
+        <div class="keyframe-nav-group">
+          <button
+            class="keyframe-nav-btn"
+            :disabled="!canOperateTransforms || !hasPreviousChannelKeyframe('audio')"
+            :title="t('properties.keyframes.previousKeyframe')"
+            @click="goToPreviousChannelKeyframe('audio')"
+          >
+            <component :is="IconComponents.PREV_KEYFRAME" size="11px" />
+          </button>
+          <button
+            class="property-keyframe-btn"
+            :class="`state-${audioButtonState}`"
+            :title="getChannelKeyframeTooltip('audio')"
+            :disabled="!canOperateTransforms"
+            @click="toggleChannelKeyframe('audio')"
+          >
+            ◆
+          </button>
+          <button
+            class="keyframe-nav-btn"
+            :disabled="!canOperateTransforms || !hasNextChannelKeyframe('audio')"
+            :title="t('properties.keyframes.nextKeyframe')"
+            @click="goToNextChannelKeyframe('audio')"
+          >
+            <component :is="IconComponents.NEXT_KEYFRAME" size="11px" />
+          </button>
+        </div>
         <button
           @click="toggleMute"
           :disabled="!canOperateTransforms"
@@ -45,7 +74,7 @@ import { useAppI18n } from '@/core/composables/useI18n'
 import { useUnifiedStore } from '@/core/unifiedStore'
 import { hasAudioProperties } from '@/core/timelineitem/queries'
 import { useUnifiedKeyframeTransformControls } from '@/core/composables'
-import { getMuteIcon } from '@/constants/iconComponents'
+import { IconComponents, getMuteIcon } from '@/constants/iconComponents'
 import type { UnifiedTimelineItemData } from '@/core/timelineitem/type'
 import NumberInput from '@/components/base/NumberInput.vue'
 import SliderInput from '@/components/base/SliderInput.vue'
@@ -60,9 +89,28 @@ const { t } = useAppI18n()
 const unifiedStore = useUnifiedStore()
 
 // 使用关键帧控制器获取音量（支持关键帧动画）和禁用状态
-const { volume, setVolume, canOperateTransforms } = useUnifiedKeyframeTransformControls({
+const {
+  volume,
+  setVolume,
+  canOperateTransforms,
+  getChannelButtonState,
+  hasPreviousChannelKeyframe,
+  hasNextChannelKeyframe,
+  goToPreviousChannelKeyframe,
+  goToNextChannelKeyframe,
+  toggleChannelKeyframe,
+  getChannelKeyframeTooltip,
+} = useUnifiedKeyframeTransformControls({
   selectedTimelineItem: computed(() => props.selectedTimelineItem),
   currentFrame: computed(() => props.currentFrame),
+})
+
+const audioButtonState = computed(() => getChannelButtonState('audio'))
+
+const getAnimatedLabelClass = (state: string) => ({
+  'animated-property-label': state !== 'none',
+  'animated-property-label--on-keyframe': state === 'on-keyframe',
+  'animated-property-label--between-keyframes': state === 'between-keyframes',
 })
 
 // isMuted 不使用关键帧系统，直接从 config 读取
@@ -110,6 +158,13 @@ const toggleMute = async () => {
   flex: 1;
 }
 
+.keyframe-nav-group {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  flex: 0 0 auto;
+}
+
 .mute-btn {
   background: var(--color-bg-quaternary);
   border: 1px solid var(--color-border-secondary);
@@ -141,5 +196,72 @@ const toggleMute = async () => {
 .mute-btn:disabled:hover {
   background: var(--color-bg-tertiary);
   border-color: var(--color-border-secondary);
+}
+
+.property-keyframe-btn {
+  width: 22px;
+  height: 22px;
+  border-radius: var(--border-radius-small);
+  border: 1px solid var(--color-border-secondary);
+  background: var(--color-bg-active);
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  font-size: 12px;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.keyframe-nav-btn {
+  width: 12px;
+  height: 22px;
+  border-radius: 0;
+  border: none;
+  background: transparent;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  font-size: 12px;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  transition: all 0.2s ease;
+  flex: 0 0 auto;
+}
+
+.keyframe-nav-group > .property-keyframe-btn {
+  border-radius: var(--border-radius-small);
+}
+
+.keyframe-nav-btn:hover:not(:disabled) {
+  background: transparent;
+  color: var(--color-text-primary);
+}
+
+.keyframe-nav-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  background: transparent;
+  color: var(--color-text-muted);
+}
+
+.property-keyframe-btn.state-on-keyframe {
+  color: #5ba6ff;
+  border-color: #5ba6ff;
+}
+
+.property-keyframe-btn.state-between-keyframes {
+  color: #d9a441;
+  border-color: #d9a441;
+}
+
+.animated-property-label--on-keyframe {
+  color: #5ba6ff;
+}
+
+.animated-property-label--between-keyframes {
+  color: #d9a441;
 }
 </style>

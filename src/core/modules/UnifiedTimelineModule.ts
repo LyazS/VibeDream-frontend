@@ -8,6 +8,7 @@ import type { UnifiedSelectionModule } from './UnifiedSelectionModule'
 
 import { isReady, isVideoTimelineItem, isAudioTimelineItem } from '@/core/timelineitem/queries'
 import { adjustKeyframesForDurationChange } from '@/core/utils/unifiedKeyframeUtils'
+import { hasAnimation } from '@/core/utils/unifiedKeyframeUtils'
 import { TimelineItemFactory } from '../timelineitem'
 
 /**
@@ -183,7 +184,7 @@ export function createUnifiedTimelineModule(registry: ModuleRegistry) {
         newDurationFrames = Math.round(clipDurationFrames / clampedRate)
 
         // 如果有关键帧，先调整位置
-        if (item.animation && item.animation.keyframes.length > 0) {
+        if (hasAnimation(item)) {
           adjustKeyframesForDurationChange(item, oldDurationFrames, newDurationFrames)
           console.log('🎬 [Playback Rate] Keyframes adjusted for speed change:', {
             oldRate: clampedRate,

@@ -16,6 +16,7 @@ import {
 } from './shared'
 import { generateCommandId } from '@/core/utils/idGenerator'
 import { removeKeyframeAtFrame, disableAnimation } from '@/core/utils/unifiedKeyframeUtils'
+import type { AnimationChannelKey } from '@/core/timelineitem/bunnytype'
 
 export class DeleteKeyframeCommand implements SimpleCommand {
   public readonly id: string
@@ -27,6 +28,7 @@ export class DeleteKeyframeCommand implements SimpleCommand {
   constructor(
     private timelineItemId: string,
     private frame: number,
+    private channel: AnimationChannelKey,
     private timelineModule: TimelineModule,
     private playbackControls?: PlaybackControls,
   ) {
@@ -70,10 +72,10 @@ export class DeleteKeyframeCommand implements SimpleCommand {
 
     try {
       // 1. 删除指定帧的关键帧
-      removeKeyframeAtFrame(item, this.frame)
+      removeKeyframeAtFrame(item, this.frame, this.channel)
 
       // 2. 如果没有其他关键帧，禁用动画
-      if (!item.animation || item.animation.keyframes.length === 0) {
+      if (!item.animation || !item.animation.channels || Object.keys(item.animation.channels).length === 0) {
         disableAnimation(item)
       }
 
@@ -90,6 +92,7 @@ export class DeleteKeyframeCommand implements SimpleCommand {
       console.log('✅ 删除关键帧命令执行成功:', {
         itemId: this.timelineItemId,
         frame: this.frame,
+        channel: this.channel,
       })
     } catch (error) {
       console.error('❌ 删除关键帧命令执行失败:', error)
@@ -117,6 +120,7 @@ export class DeleteKeyframeCommand implements SimpleCommand {
       console.log('↩️ 删除关键帧命令撤销成功:', {
         itemId: this.timelineItemId,
         frame: this.frame,
+        channel: this.channel,
       })
     } catch (error) {
       console.error('❌ 删除关键帧命令撤销失败:', error)

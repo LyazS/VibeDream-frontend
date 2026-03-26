@@ -196,6 +196,10 @@ export interface BizyAirTaskDetail {
   request_id: string
   /** 任务状态 */
   status: BizyAirTaskStatus
+  /** 排队信息（可选） */
+  queueInfo?: {
+    queue_count?: number
+  }
   /** 进度信息（可选） */
   progress?: {
     /** 当前进度百分比 */

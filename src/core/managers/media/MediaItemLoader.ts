@@ -81,8 +81,11 @@ export class MediaItemLoader {
     // 1. 根据数据源类型创建相应的数据源（运行时状态）
     let source
 
-    // 🌟 使用类型断言确保 metaData.source 有 type 属性
-    const sourceType = (metaData.source as any).type
+    if (!metaData.source || typeof metaData.source !== 'object' || !('type' in metaData.source)) {
+      throw new Error(`无效的数据源配置: ${metaData.id}`)
+    }
+
+    const sourceType = metaData.source.type
 
     if (sourceType === 'user-selected') {
       // 用户选择文件数据源

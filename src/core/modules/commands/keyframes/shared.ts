@@ -4,7 +4,7 @@
  */
 
 import type { UnifiedTimelineItemData } from '@/core/timelineitem/type'
-import type { GetAnimation } from '@/core/timelineitem/bunnytype'
+import type { AnimateKeyframe, GetAnimation } from '@/core/timelineitem/bunnytype'
 import type { GetConfigs } from '@/core/timelineitem/bunnytype'
 import type { MediaType } from '@/core/mediaitem'
 import { isPlayheadInTimelineItem as checkPlayheadInTimelineItem } from '@/core/utils/timelineSearchUtils'
@@ -64,15 +64,22 @@ export async function applyKeyframeSnapshot(
   // 1. 恢复动画配置（关键帧数据）
   if (snapshot.animationConfig) {
     // 类型安全的动画配置恢复
-    ;(item as any).animation = {
-      keyframes: snapshot.animationConfig.keyframes.map((kf) => ({
-        position: kf.position,
-        cachedFrame: kf.cachedFrame,
-        properties: { ...kf.properties },
-      })),
-    }
+    item.animation = {
+      channels: Object.fromEntries(
+        Object.entries(snapshot.animationConfig.channels || {}).map(([channel, channelConfig]) => [
+          channel,
+          {
+            keyframes: channelConfig.keyframes.map((kf: AnimateKeyframe<MediaType>) => ({
+              position: kf.position,
+              cachedFrame: kf.cachedFrame,
+              properties: { ...kf.properties },
+            })),
+          },
+        ]),
+      ),
+    } as GetAnimation<MediaType>
   } else {
-    ;(item as any).animation = undefined
+    item.animation = undefined
   }
 
   // 2. 直接恢复属性值到 item.config
