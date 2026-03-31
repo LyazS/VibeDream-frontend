@@ -47,9 +47,12 @@ export interface TextProps {
   style: TextStyleConfig
 }
 
-export interface LayoutAnimatableProps {
+export interface PositionAnimatableProps {
   x: number
   y: number
+}
+
+export interface SizeAnimatableProps {
   width: number
   height: number
 }
@@ -67,7 +70,8 @@ export interface AudioAnimatableProps {
 }
 
 export type AnimationGroupValueMap = {
-  'transform.layout': LayoutAnimatableProps
+  'transform.position': PositionAnimatableProps
+  'transform.size': SizeAnimatableProps
   'transform.rotation': RotationAnimatableProps
   'transform.opacity': OpacityAnimatableProps
   'audio.volume': AudioAnimatableProps
@@ -118,7 +122,8 @@ export interface AnimationGroupTrack<
 
 export type MediaAnimationGroupMap = {
   video: {
-    'transform.layout': LayoutAnimatableProps
+    'transform.position': PositionAnimatableProps
+    'transform.size': SizeAnimatableProps
     'transform.rotation': RotationAnimatableProps
     'transform.opacity': OpacityAnimatableProps
     'audio.volume': AudioAnimatableProps
@@ -133,7 +138,8 @@ export type MediaAnimationGroupMap = {
     'mask.mirror.length': MaskMirrorValue
   }
   image: {
-    'transform.layout': LayoutAnimatableProps
+    'transform.position': PositionAnimatableProps
+    'transform.size': SizeAnimatableProps
     'transform.rotation': RotationAnimatableProps
     'transform.opacity': OpacityAnimatableProps
     'mask.center': MaskCenterValue
@@ -150,7 +156,8 @@ export type MediaAnimationGroupMap = {
     'audio.volume': AudioAnimatableProps
   }
   text: {
-    'transform.layout': LayoutAnimatableProps
+    'transform.position': PositionAnimatableProps
+    'transform.size': SizeAnimatableProps
     'transform.rotation': RotationAnimatableProps
     'transform.opacity': OpacityAnimatableProps
     'mask.center': MaskCenterValue
@@ -198,13 +205,15 @@ export type GetConfigs<T extends MediaType> = GetConfigMap[T]
 export type GetAnimation<T extends MediaType> = GetAnimationMap[T]
 
 export const VISUAL_CHANNELS = [
-  'transform.layout',
+  'transform.position',
+  'transform.size',
   'transform.rotation',
   'transform.opacity',
 ] as const satisfies readonly AnimationGroupId[]
 
 export const ALL_ANIMATION_GROUPS = [
-  'transform.layout',
+  'transform.position',
+  'transform.size',
   'transform.rotation',
   'transform.opacity',
   'audio.volume',
@@ -220,10 +229,10 @@ export const ALL_ANIMATION_GROUPS = [
 ] as const satisfies readonly AnimationGroupId[]
 
 export const PROPERTY_TO_GROUP_MAP = {
-  x: 'transform.layout',
-  y: 'transform.layout',
-  width: 'transform.layout',
-  height: 'transform.layout',
+  x: 'transform.position',
+  y: 'transform.position',
+  width: 'transform.size',
+  height: 'transform.size',
   rotation: 'transform.rotation',
   opacity: 'transform.opacity',
   volume: 'audio.volume',

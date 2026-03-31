@@ -782,7 +782,7 @@ export function useHistoryOperations(
   async function createKeyframeWithHistory(
     timelineItemId: string,
     frame: number,
-    groupId: AnimationChannelKey = 'transform.layout',
+    groupId: AnimationChannelKey = 'transform.position',
   ) {
     try {
       console.log('🎬 [useHistoryOperations] 创建关键帧:', { timelineItemId, frame })
@@ -824,7 +824,7 @@ export function useHistoryOperations(
       const command = new DeleteKeyframeCommand(
         timelineItemId,
         frame,
-        'transform.layout',
+        'transform.position',
         unifiedTimelineModule,
         {
           seekTo: (frame: number) => {
@@ -1019,7 +1019,7 @@ export function useHistoryOperations(
   async function toggleKeyframeWithHistory(
     timelineItemId: string,
     frame: number,
-    channel: AnimationChannelKey = 'transform.layout',
+    channel: AnimationChannelKey = 'transform.position',
   ) {
     try {
       const command = new ToggleAnimationGroupKeyframeCommand(

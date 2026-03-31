@@ -87,8 +87,8 @@ function getMaskTextureSizeFromConfig(config: Record<string, unknown>) {
 const animationGroupDefinitions: {
   [G in AnimationGroupId]: AnimationGroupDefinition<G>
 } = {
-  'transform.layout': {
-    id: 'transform.layout',
+  'transform.position': {
+    id: 'transform.position',
     scope: 'transform',
     supports: (item) => TimelineItemQueries.hasVisualProperties(item),
     isEnabled: (item) => TimelineItemQueries.hasVisualProperties(item),
@@ -97,6 +97,27 @@ const animationGroupDefinitions: {
       return {
         x: config.x,
         y: config.y,
+      }
+    },
+    applyValue: (item, value) => {
+      if (!TimelineItemQueries.hasVisualProperties(item)) return
+      Object.assign(item.config, value)
+    },
+    applyValueToConfig: (config, value) => {
+      Object.assign(config, value)
+    },
+    interpolate: interpolateNumericRecord,
+    uiMeta: { order: 10, allowDeferred: true, allowNavigation: true },
+    historyMeta: { description: '修改位置关键帧' },
+  },
+  'transform.size': {
+    id: 'transform.size',
+    scope: 'transform',
+    supports: (item) => TimelineItemQueries.hasVisualProperties(item),
+    isEnabled: (item) => TimelineItemQueries.hasVisualProperties(item),
+    getBaseValue: (item) => {
+      const config = getVisualConfigRecord(item)
+      return {
         width: config.width,
         height: config.height,
       }
@@ -109,8 +130,8 @@ const animationGroupDefinitions: {
       Object.assign(config, value)
     },
     interpolate: interpolateNumericRecord,
-    uiMeta: { order: 10, allowDeferred: true, allowNavigation: true },
-    historyMeta: { description: '修改布局关键帧' },
+    uiMeta: { order: 20, allowDeferred: true, allowNavigation: true },
+    historyMeta: { description: '修改尺寸关键帧' },
   },
   'transform.rotation': {
     id: 'transform.rotation',
@@ -126,7 +147,7 @@ const animationGroupDefinitions: {
       Object.assign(config, value)
     },
     interpolate: interpolateNumericRecord,
-    uiMeta: { order: 20, allowDeferred: true, allowNavigation: true },
+    uiMeta: { order: 30, allowDeferred: true, allowNavigation: true },
     historyMeta: { description: '修改旋转关键帧' },
   },
   'transform.opacity': {
@@ -143,7 +164,7 @@ const animationGroupDefinitions: {
       Object.assign(config, value)
     },
     interpolate: interpolateNumericRecord,
-    uiMeta: { order: 30, allowDeferred: true, allowNavigation: true },
+    uiMeta: { order: 40, allowDeferred: true, allowNavigation: true },
     historyMeta: { description: '修改透明度关键帧' },
   },
   'audio.volume': {
@@ -160,7 +181,7 @@ const animationGroupDefinitions: {
       Object.assign(config, value)
     },
     interpolate: interpolateNumericRecord,
-    uiMeta: { order: 40, allowDeferred: true, allowNavigation: true },
+    uiMeta: { order: 50, allowDeferred: true, allowNavigation: true },
     historyMeta: { description: '修改音量关键帧' },
   },
   'mask.center': {
@@ -186,7 +207,7 @@ const animationGroupDefinitions: {
       config.mask = applyMaskCenterValue(config.mask as never, value, getMaskTextureSizeFromConfig(config))
     },
     interpolate: interpolateNumericRecord,
-    uiMeta: { order: 50, allowDeferred: true, allowNavigation: true },
+    uiMeta: { order: 60, allowDeferred: true, allowNavigation: true },
     historyMeta: { description: '修改蒙版中心关键帧' },
   },
   'mask.rotation': {
@@ -212,7 +233,7 @@ const animationGroupDefinitions: {
       config.mask = applyMaskRotationValue(config.mask as never, value, getMaskTextureSizeFromConfig(config))
     },
     interpolate: interpolateNumericRecord,
-    uiMeta: { order: 60, allowDeferred: true, allowNavigation: true },
+    uiMeta: { order: 70, allowDeferred: true, allowNavigation: true },
     historyMeta: { description: '修改蒙版旋转关键帧' },
   },
   'mask.feather': {

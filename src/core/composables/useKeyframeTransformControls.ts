@@ -59,19 +59,13 @@ export function useUnifiedKeyframeTransformControls(
 
   const transformX = computed(() => (renderConfig.value as any)?.x ?? 0)
   const transformY = computed(() => (renderConfig.value as any)?.y ?? 0)
+  const displayWidth = computed(() => (renderConfig.value as any)?.width ?? 0)
+  const displayHeight = computed(() => (renderConfig.value as any)?.height ?? 0)
   const rotation = computed(() => (renderConfig.value as any)?.rotation ?? 0)
   const opacity = computed(() => (renderConfig.value as any)?.opacity ?? 1)
   const volume = computed(() => (renderConfig.value as any)?.volume ?? 1)
   const elementWidth = computed(() => getOriginalDimensions().width)
   const elementHeight = computed(() => getOriginalDimensions().height)
-  const scaleX = computed(() => {
-    const originalWidth = elementWidth.value
-    return originalWidth > 0 ? ((renderConfig.value as any)?.width ?? 0) / originalWidth : 1
-  })
-  const scaleY = computed(() => {
-    const originalHeight = elementHeight.value
-    return originalHeight > 0 ? ((renderConfig.value as any)?.height ?? 0) / originalHeight : 1
-  })
   const proportionalScale = computed({
     get: () =>
       Boolean(
@@ -85,7 +79,29 @@ export function useUnifiedKeyframeTransformControls(
       }
     },
   })
-  const uniformScale = computed(() => scaleX.value)
+  function getScaledSizeFromWidth(nextWidth: number): Record<string, number> {
+    const { width: originalWidth, height: originalHeight } = getOriginalDimensions()
+    if (originalWidth <= 0 || originalHeight <= 0) {
+      return { width: nextWidth }
+    }
+
+    return {
+      width: nextWidth,
+      height: Math.round((nextWidth * originalHeight) / originalWidth),
+    }
+  }
+
+  function getScaledSizeFromHeight(nextHeight: number): Record<string, number> {
+    const { width: originalWidth, height: originalHeight } = getOriginalDimensions()
+    if (originalWidth <= 0 || originalHeight <= 0) {
+      return { height: nextHeight }
+    }
+
+    return {
+      width: Math.round((nextHeight * originalWidth) / originalHeight),
+      height: nextHeight,
+    }
+  }
 
   const getChannelButtonState = (groupId: AnimationChannelKey) => {
     const item = selectedTimelineItem.value
@@ -184,47 +200,41 @@ export function useUnifiedKeyframeTransformControls(
   }
 
   const setTransformPositionDeferred = (x: number, y: number) => {
-    applyDeferredPatch('transform.layout', { x, y })
+    applyDeferredPatch('transform.position', { x, y })
   }
 
   const setTransformSizeDeferred = (width: number, height: number, x?: number, y?: number) => {
-    const patch: Record<string, number> = { width, height }
-    if (typeof x === 'number') patch.x = x
-    if (typeof y === 'number') patch.y = y
-    applyDeferredPatch('transform.layout', patch)
+    applyDeferredPatch('transform.size', { width, height })
+    if (typeof x === 'number' || typeof y === 'number') {
+      const positionPatch: Record<string, number> = {}
+      if (typeof x === 'number') positionPatch.x = x
+      if (typeof y === 'number') positionPatch.y = y
+      applyDeferredPatch('transform.position', positionPatch)
+    }
   }
 
   const setTransformRotationDeferred = (nextRotation: number) => {
     applyDeferredPatch('transform.rotation', { rotation: normalizeAngle(nextRotation) })
   }
 
-  const updateUniformScaleDeferred = (scale: number) => {
-    const { width, height } = getOriginalDimensions()
-    setTransformSizeDeferred(width * scale, height * scale)
-  }
-
-  const setScaleXDeferred = (scale: number) => {
-    const { width, height } = getOriginalDimensions()
-    const nextWidth = width * scale
-    if (proportionalScale.value) {
-      setTransformSizeDeferred(nextWidth, height * scale)
-      return
-    }
-    applyDeferredPatch('transform.layout', { width: nextWidth })
-  }
-
-  const setScaleYDeferred = (scale: number) => {
-    const { width, height } = getOriginalDimensions()
-    const nextHeight = height * scale
-    if (proportionalScale.value) {
-      setTransformSizeDeferred(width * scale, nextHeight)
-      return
-    }
-    applyDeferredPatch('transform.layout', { height: nextHeight })
-  }
-
   const setRotationDeferred = (nextRotation: number) => {
     setTransformRotationDeferred(nextRotation)
+  }
+
+  const setWidthDeferred = (width: number) => {
+    if (proportionalScale.value) {
+      applyDeferredPatch('transform.size', getScaledSizeFromWidth(width))
+      return
+    }
+    applyDeferredPatch('transform.size', { width })
+  }
+
+  const setHeightDeferred = (height: number) => {
+    if (proportionalScale.value) {
+      applyDeferredPatch('transform.size', getScaledSizeFromHeight(height))
+      return
+    }
+    applyDeferredPatch('transform.size', { height })
   }
 
   const setOpacityDeferred = (nextOpacity: number) => {
@@ -236,34 +246,31 @@ export function useUnifiedKeyframeTransformControls(
   }
 
   const setTransformXDirectly = async (x: number) => {
-    await updateGroupDirect('transform.layout', { x })
+    await updateGroupDirect('transform.position', { x })
   }
 
   const setTransformYDirectly = async (y: number) => {
-    await updateGroupDirect('transform.layout', { y })
+    await updateGroupDirect('transform.position', { y })
   }
 
-  const setScaleXDirectly = async (scale: number) => {
-    const { width, height } = getOriginalDimensions()
+  const setSizeDirectly = async (width: number, height: number) => {
+    await updateGroupDirect('transform.size', { width, height })
+  }
+
+  const setWidthDirectly = async (width: number) => {
     if (proportionalScale.value) {
-      await updateGroupDirect('transform.layout', { width: width * scale, height: height * scale })
+      await updateGroupDirect('transform.size', getScaledSizeFromWidth(width))
       return
     }
-    await updateGroupDirect('transform.layout', { width: width * scale })
+    await updateGroupDirect('transform.size', { width })
   }
 
-  const setScaleYDirectly = async (scale: number) => {
-    const { width, height } = getOriginalDimensions()
+  const setHeightDirectly = async (height: number) => {
     if (proportionalScale.value) {
-      await updateGroupDirect('transform.layout', { width: width * scale, height: height * scale })
+      await updateGroupDirect('transform.size', getScaledSizeFromHeight(height))
       return
     }
-    await updateGroupDirect('transform.layout', { height: height * scale })
-  }
-
-  const updateUniformScaleDirectly = async (scale: number) => {
-    const { width, height } = getOriginalDimensions()
-    await updateGroupDirect('transform.layout', { width: width * scale, height: height * scale })
+    await updateGroupDirect('transform.size', { height })
   }
 
   const setRotationDirectly = async (nextRotation: number) => {
@@ -292,7 +299,7 @@ export function useUnifiedKeyframeTransformControls(
       : mode === 'right'
         ? (canvasWidth - width) / 2
         : 0
-    await updateGroupDirect('transform.layout', { x })
+    await updateGroupDirect('transform.position', { x })
   }
 
   const alignVertical = async (mode: 'top' | 'middle' | 'bottom') => {
@@ -303,39 +310,37 @@ export function useUnifiedKeyframeTransformControls(
       : mode === 'bottom'
         ? -(canvasHeight - height) / 2
         : 0
-    await updateGroupDirect('transform.layout', { y })
+    await updateGroupDirect('transform.position', { y })
   }
 
   return {
     canOperateTransforms,
     transformX,
     transformY,
-    scaleX,
-    scaleY,
+    displayWidth,
+    displayHeight,
     rotation,
     opacity,
     volume,
     proportionalScale,
-    uniformScale,
     elementWidth,
     elementHeight,
     setTransformPositionDeferred,
     setTransformSizeDeferred,
     setTransformRotationDeferred,
-    updateUniformScaleDeferred,
-    setScaleXDeferred,
-    setScaleYDeferred,
+    setWidthDeferred,
+    setHeightDeferred,
     setRotationDeferred,
     setOpacityDeferred,
     updateVolumeDeferred,
     commitDeferredUpdates,
     setTransformXDirectly,
     setTransformYDirectly,
-    setScaleXDirectly,
-    setScaleYDirectly,
+    setWidthDirectly,
+    setHeightDirectly,
+    setSizeDirectly,
     setRotationDirectly,
     setOpacityDirectly,
-    updateUniformScaleDirectly,
     setVolume,
     toggleProportionalScale,
     alignHorizontal,

@@ -6,11 +6,11 @@
       <!-- 位置控制 -->
       <KeyframedDualNumberField
         :label="t('properties.transform.position')"
-        :state="layoutButtonState"
-        :tooltip="getChannelKeyframeTooltip('transform.layout')"
+        :state="positionButtonState"
+        :tooltip="getChannelKeyframeTooltip('transform.position')"
         :disabled="!canOperateTransforms"
-        :has-previous="hasPreviousChannelKeyframe('transform.layout')"
-        :has-next="hasNextChannelKeyframe('transform.layout')"
+        :has-previous="hasPreviousChannelKeyframe('transform.position')"
+        :has-next="hasNextChannelKeyframe('transform.position')"
         :first-label="t('properties.transform.positionX')"
         :second-label="t('properties.transform.positionY')"
         :first-value="transformX"
@@ -25,14 +25,14 @@
         :second-placeholder="t('properties.transform.centerFor0')"
         @first-change="setTransformXDirectly"
         @second-change="setTransformYDirectly"
-        @previous="goToPreviousChannelKeyframe('transform.layout')"
-        @toggle="toggleChannelKeyframe('transform.layout')"
-        @next="goToNextChannelKeyframe('transform.layout')"
+        @previous="goToPreviousChannelKeyframe('transform.position')"
+        @toggle="toggleChannelKeyframe('transform.position')"
+        @next="goToNextChannelKeyframe('transform.position')"
       />
 
       <!-- 水平对齐 -->
       <div class="property-item">
-        <label :class="getAnimatedLabelClass(layoutButtonState)">
+          <label :class="getAnimatedLabelClass(positionButtonState)">
           {{ t('properties.transform.alignHorizontal') }}
         </label>
         <div class="alignment-controls">
@@ -65,7 +65,7 @@
 
       <!-- 垂直对齐 -->
       <div class="property-item">
-        <label :class="getAnimatedLabelClass(layoutButtonState)">
+          <label :class="getAnimatedLabelClass(positionButtonState)">
           {{ t('properties.transform.alignVertical') }}
         </label>
         <div class="alignment-controls">
@@ -98,7 +98,7 @@
 
       <!-- 等比缩放选项 -->
       <div class="property-item">
-        <label :class="getAnimatedLabelClass(layoutButtonState)">
+          <label :class="getAnimatedLabelClass(sizeButtonState)">
           {{ t('properties.transform.proportionalScale') }}
         </label>
         <input
@@ -110,96 +110,33 @@
         />
       </div>
 
-      <!-- 等比缩放控制 -->
-      <div v-if="proportionalScale" class="property-item">
-        <label :class="getAnimatedLabelClass(layoutButtonState)">
-          {{ t('properties.transform.scale') }}
-        </label>
-        <div class="scale-controls">
-          <SliderInput
-            :model-value="uniformScale"
-            @input="updateUniformScaleDeferred"
-            @change="commitDeferredUpdates"
-            :disabled="!canOperateTransforms"
-            :min="0.01"
-            :max="5"
-            :step="0.01"
-          />
-          <NumberInput
-            :model-value="uniformScale"
-            @change="updateUniformScaleDirectly"
-            :disabled="!canOperateTransforms"
-            :min="0.01"
-            :max="5"
-            :step="0.01"
-            :precision="2"
-            :show-controls="false"
-            input-class="scale-input"
-          />
-        </div>
-      </div>
-
-      <!-- 非等比缩放控制 -->
-      <template v-else>
-        <div class="property-item">
-          <label :class="getAnimatedLabelClass(layoutButtonState)">
-            {{ t('properties.transform.scaleX') }}
-          </label>
-          <div class="scale-controls">
-            <SliderInput
-              :model-value="scaleX"
-              @input="setScaleXDeferred"
-              @change="commitDeferredUpdates"
-              :disabled="!canOperateTransforms"
-              :min="0.01"
-              :max="5"
-              :step="0.01"
-            />
-            <NumberInput
-              :model-value="scaleX"
-              @change="setScaleXDirectly"
-              :disabled="!canOperateTransforms"
-              :min="0.01"
-              :max="5"
-              :step="0.01"
-              :precision="2"
-              :show-controls="false"
-              input-class="scale-input"
-            />
-          </div>
-        </div>
-        <div class="property-item">
-          <label :class="getAnimatedLabelClass(layoutButtonState)">
-            {{ t('properties.transform.scaleY') }}
-          </label>
-          <div class="scale-controls">
-            <SliderInput
-              :model-value="scaleY"
-              @input="setScaleYDeferred"
-              @change="commitDeferredUpdates"
-              :disabled="!canOperateTransforms"
-              :min="0.01"
-              :max="5"
-              :step="0.01"
-            />
-            <NumberInput
-              :model-value="scaleY"
-              @change="setScaleYDirectly"
-              :disabled="!canOperateTransforms"
-              :min="0.01"
-              :max="5"
-              :step="0.01"
-              :precision="2"
-              :show-controls="false"
-              input-class="scale-input"
-            />
-          </div>
-        </div>
-      </template>
+      <KeyframedDualNumberField
+        :label="t('properties.transform.size')"
+        :state="sizeButtonState"
+        :tooltip="getChannelKeyframeTooltip('transform.size')"
+        :disabled="!canOperateTransforms"
+        :has-previous="hasPreviousChannelKeyframe('transform.size')"
+        :has-next="hasNextChannelKeyframe('transform.size')"
+        :first-label="t('properties.transform.width')"
+        :second-label="t('properties.transform.height')"
+        :first-value="displayWidth"
+        :second-value="displayHeight"
+        :first-min="sizeLimits.min"
+        :first-max="sizeLimits.max"
+        :second-min="sizeLimits.min"
+        :second-max="sizeLimits.max"
+        :step="1"
+        :precision="0"
+        @first-change="setWidthDirectly"
+        @second-change="setHeightDirectly"
+        @previous="goToPreviousChannelKeyframe('transform.size')"
+        @toggle="toggleChannelKeyframe('transform.size')"
+        @next="goToNextChannelKeyframe('transform.size')"
+      />
 
       <!-- 缩放预设 -->
       <div class="property-item">
-        <label :class="getAnimatedLabelClass(layoutButtonState)">
+        <label :class="getAnimatedLabelClass(sizeButtonState)">
           {{ t('properties.transform.scalePresets') }}
         </label>
         <div class="scale-preset-controls">
@@ -265,8 +202,6 @@ import { useUnifiedStore } from '@/core/unifiedStore'
 import { useUnifiedKeyframeTransformControls } from '@/core/composables'
 import { IconComponents } from '@/constants/iconComponents'
 import type { UnifiedTimelineItemData } from '@/core/timelineitem/type'
-import NumberInput from '@/components/base/NumberInput.vue'
-import SliderInput from '@/components/base/SliderInput.vue'
 import KeyframedDualNumberField from '@/components/properties/common/KeyframedDualNumberField.vue'
 import KeyframedSliderField from '@/components/properties/common/KeyframedSliderField.vue'
 
@@ -284,20 +219,14 @@ const {
   canOperateTransforms,
   transformX,
   transformY,
-  scaleX,
-  scaleY,
+  displayWidth,
+  displayHeight,
   rotation,
   opacity,
   proportionalScale,
-  uniformScale,
   elementWidth,
   elementHeight,
   toggleProportionalScale,
-
-  // 延迟更新方法（用于 SliderInput）
-  updateUniformScaleDeferred,
-  setScaleXDeferred,
-  setScaleYDeferred,
   setRotationDeferred,
   setOpacityDeferred,
   commitDeferredUpdates,
@@ -305,11 +234,11 @@ const {
   // 直接更新方法（用于 NumberInput）
   setTransformXDirectly,
   setTransformYDirectly,
-  setScaleXDirectly,
-  setScaleYDirectly,
+  setWidthDirectly,
+  setHeightDirectly,
+  setSizeDirectly,
   setRotationDirectly,
   setOpacityDirectly,
-  updateUniformScaleDirectly,
 
   alignHorizontal,
   alignVertical,
@@ -325,7 +254,8 @@ const {
   currentFrame: computed(() => props.currentFrame),
 })
 
-const layoutButtonState = computed(() => getChannelButtonState('transform.layout'))
+const positionButtonState = computed(() => getChannelButtonState('transform.position'))
+const sizeButtonState = computed(() => getChannelButtonState('transform.size'))
 const rotationButtonState = computed(() => getChannelButtonState('transform.rotation'))
 const opacityButtonState = computed(() => getChannelButtonState('transform.opacity'))
 
@@ -343,8 +273,13 @@ const positionLimits = computed(() => ({
   maxY: unifiedStore.videoResolution.height,
 }))
 
+const sizeLimits = computed(() => ({
+  min: 1,
+  max: Math.max(unifiedStore.videoResolution.width, unifiedStore.videoResolution.height) * 4,
+}))
+
 // 适应画布
-const handleFitToCanvas = () => {
+const handleFitToCanvas = async () => {
   if (elementWidth.value <= 0 || elementHeight.value <= 0) {
     console.warn('无法计算缩放：元素尺寸无效', { 
       elementWidth: elementWidth.value, 
@@ -356,16 +291,18 @@ const handleFitToCanvas = () => {
   const canvasWidth = unifiedStore.videoResolution.width
   const canvasHeight = unifiedStore.videoResolution.height
   const scale = Math.min(canvasWidth / elementWidth.value, canvasHeight / elementHeight.value)
+  const targetWidth = Math.round(elementWidth.value * scale)
+  const targetHeight = Math.round(elementHeight.value * scale)
   
   console.log(
-    `适应画布：元素尺寸 ${elementWidth.value}x${elementHeight.value}, 画布尺寸 ${canvasWidth}x${canvasHeight}, 缩放比例 ${scale}`,
+    `适应画布：元素尺寸 ${elementWidth.value}x${elementHeight.value}, 画布尺寸 ${canvasWidth}x${canvasHeight}, 目标尺寸 ${targetWidth}x${targetHeight}`,
   )
 
-  updateUniformScaleDirectly(scale)
+  await setSizeDirectly(targetWidth, targetHeight)
 }
 
 // 填满画布
-const handleFillCanvas = () => {
+const handleFillCanvas = async () => {
   if (elementWidth.value <= 0 || elementHeight.value <= 0) {
     console.warn('无法计算缩放：元素尺寸无效', { 
       elementWidth: elementWidth.value, 
@@ -377,12 +314,14 @@ const handleFillCanvas = () => {
   const canvasWidth = unifiedStore.videoResolution.width
   const canvasHeight = unifiedStore.videoResolution.height
   const scale = Math.max(canvasWidth / elementWidth.value, canvasHeight / elementHeight.value)
+  const targetWidth = Math.round(elementWidth.value * scale)
+  const targetHeight = Math.round(elementHeight.value * scale)
   
   console.log(
-    `填满画布：元素尺寸 ${elementWidth.value}x${elementHeight.value}, 画布尺寸 ${canvasWidth}x${canvasHeight}, 缩放比例 ${scale}`,
+    `填满画布：元素尺寸 ${elementWidth.value}x${elementHeight.value}, 画布尺寸 ${canvasWidth}x${canvasHeight}, 目标尺寸 ${targetWidth}x${targetHeight}`,
   )
 
-  updateUniformScaleDirectly(scale)
+  await setSizeDirectly(targetWidth, targetHeight)
 }
 </script>
 
@@ -416,13 +355,6 @@ const handleFillCanvas = () => {
   height: 16px;
   accent-color: var(--color-text-primary);
   cursor: pointer;
-}
-
-.scale-controls {
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-xs);
-  flex: 1;
 }
 
 .scale-preset-controls {
