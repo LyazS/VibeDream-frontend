@@ -74,8 +74,7 @@ export class DeleteKeyframeCommand implements SimpleCommand {
       // 1. 删除指定帧的关键帧
       removeKeyframeAtFrame(item, this.frame, this.channel)
 
-      // 2. 如果没有其他关键帧，禁用动画
-      if (!item.animation || !item.animation.channels || Object.keys(item.animation.channels).length === 0) {
+      if (!item.animation?.groups || Object.keys(item.animation.groups).length === 0) {
         disableAnimation(item)
       }
 

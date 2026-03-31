@@ -39,13 +39,13 @@
         </button>
         <KeyframeNavButtons
           :state="audioButtonState"
-          :tooltip="getChannelKeyframeTooltip('audio')"
+          :tooltip="getChannelKeyframeTooltip('audio.volume')"
           :disabled="!canOperateTransforms"
-          :has-previous="hasPreviousChannelKeyframe('audio')"
-          :has-next="hasNextChannelKeyframe('audio')"
-          @previous="goToPreviousChannelKeyframe('audio')"
-          @toggle="toggleChannelKeyframe('audio')"
-          @next="goToNextChannelKeyframe('audio')"
+          :has-previous="hasPreviousChannelKeyframe('audio.volume')"
+          :has-next="hasNextChannelKeyframe('audio.volume')"
+          @previous="goToPreviousChannelKeyframe('audio.volume')"
+          @toggle="toggleChannelKeyframe('audio.volume')"
+          @next="goToNextChannelKeyframe('audio.volume')"
         />
       </div>
     </div>
@@ -92,7 +92,7 @@ const {
   currentFrame: computed(() => props.currentFrame),
 })
 
-const audioButtonState = computed(() => getChannelButtonState('audio'))
+const audioButtonState = computed(() => getChannelButtonState('audio.volume'))
 
 const getAnimatedLabelClass = (state: string) => ({
   'animated-property-label': state !== 'none',

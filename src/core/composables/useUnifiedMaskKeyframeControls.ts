@@ -25,11 +25,6 @@ export function useUnifiedMaskKeyframeControls(
     ...options,
     unifiedStore,
     canOperateMaskNumbers: maskState.canOperateMaskNumbers,
-    itemLocalSize: maskState.itemLocalSize,
-    maskConfig: maskState.maskConfig,
-    rectangleMaskConfig: maskState.rectangleMaskConfig,
-    ellipseMaskConfig: maskState.ellipseMaskConfig,
-    mirrorMaskConfig: maskState.mirrorMaskConfig,
   })
 
   return {

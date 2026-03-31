@@ -42,11 +42,11 @@
 
       <KeyframedDualNumberField
         :label="t('properties.mask.center')"
-        :state="getMaskChannelButtonState('maskCenter')"
-        :tooltip="getMaskKeyframeTooltip('maskCenter')"
+        :state="getMaskChannelButtonState('mask.center')"
+        :tooltip="getMaskKeyframeTooltip('mask.center')"
         :disabled="!canOperateMaskNumbers"
-        :has-previous="hasPreviousMaskKeyframe('maskCenter')"
-        :has-next="hasNextMaskKeyframe('maskCenter')"
+        :has-previous="hasPreviousMaskKeyframe('mask.center')"
+        :has-next="hasNextMaskKeyframe('mask.center')"
         :first-label="t('properties.transform.positionX')"
         :second-label="t('properties.transform.positionY')"
         :first-value="maskConfig.centerX"
@@ -59,18 +59,18 @@
         :precision="0"
         @first-change="(value) => setMaskProperty('mask.centerX', value)"
         @second-change="(value) => setMaskProperty('mask.centerY', value)"
-        @previous="goToPreviousMaskKeyframe('maskCenter')"
-        @toggle="toggleMaskKeyframe('maskCenter')"
-        @next="goToNextMaskKeyframe('maskCenter')"
+        @previous="goToPreviousMaskKeyframe('mask.center')"
+        @toggle="toggleMaskKeyframe('mask.center')"
+        @next="goToNextMaskKeyframe('mask.center')"
       />
 
       <KeyframedSliderField
         :label="t('properties.transform.rotation')"
-        :state="getMaskChannelButtonState('maskRotation')"
-        :tooltip="getMaskKeyframeTooltip('maskRotation')"
+        :state="getMaskChannelButtonState('mask.rotation')"
+        :tooltip="getMaskKeyframeTooltip('mask.rotation')"
         :disabled="!canOperateMaskNumbers"
-        :has-previous="hasPreviousMaskKeyframe('maskRotation')"
-        :has-next="hasNextMaskKeyframe('maskRotation')"
+        :has-previous="hasPreviousMaskKeyframe('mask.rotation')"
+        :has-next="hasNextMaskKeyframe('mask.rotation')"
         :value="maskConfig.rotation"
         :min="-180"
         :max="180"
@@ -79,18 +79,18 @@
         @slider-input="setMaskRotationDeferred"
         @slider-change="commitDeferredUpdates"
         @number-change="(value) => setMaskProperty('mask.rotation', value)"
-        @previous="goToPreviousMaskKeyframe('maskRotation')"
-        @toggle="toggleMaskKeyframe('maskRotation')"
-        @next="goToNextMaskKeyframe('maskRotation')"
+        @previous="goToPreviousMaskKeyframe('mask.rotation')"
+        @toggle="toggleMaskKeyframe('mask.rotation')"
+        @next="goToNextMaskKeyframe('mask.rotation')"
       />
 
       <KeyframedSliderField
         :label="t('properties.mask.outerRange')"
-        :state="getMaskChannelButtonState('maskOuterRange')"
-        :tooltip="getMaskKeyframeTooltip('maskOuterRange')"
+        :state="getMaskChannelButtonState('mask.feather')"
+        :tooltip="getMaskKeyframeTooltip('mask.feather')"
         :disabled="!canOperateMaskNumbers"
-        :has-previous="hasPreviousMaskKeyframe('maskOuterRange')"
-        :has-next="hasNextMaskKeyframe('maskOuterRange')"
+        :has-previous="hasPreviousMaskKeyframe('mask.feather')"
+        :has-next="hasNextMaskKeyframe('mask.feather')"
         :value="maskConfig.falloff.outerRange"
         :min="0"
         :max="Math.max(itemLocalSize.width, itemLocalSize.height)"
@@ -99,18 +99,18 @@
         @slider-input="setMaskOuterRangeDeferred"
         @slider-change="commitDeferredUpdates"
         @number-change="(value) => setMaskProperty('mask.outerRange', value)"
-        @previous="goToPreviousMaskKeyframe('maskOuterRange')"
-        @toggle="toggleMaskKeyframe('maskOuterRange')"
-        @next="goToNextMaskKeyframe('maskOuterRange')"
+        @previous="goToPreviousMaskKeyframe('mask.feather')"
+        @toggle="toggleMaskKeyframe('mask.feather')"
+        @next="goToNextMaskKeyframe('mask.feather')"
       />
 
       <KeyframedSliderField
         :label="t('properties.mask.decayRate')"
-        :state="getMaskChannelButtonState('maskDecayRate')"
-        :tooltip="getMaskKeyframeTooltip('maskDecayRate')"
+        :state="getMaskChannelButtonState('mask.intensity')"
+        :tooltip="getMaskKeyframeTooltip('mask.intensity')"
         :disabled="!canOperateMaskNumbers"
-        :has-previous="hasPreviousMaskKeyframe('maskDecayRate')"
-        :has-next="hasNextMaskKeyframe('maskDecayRate')"
+        :has-previous="hasPreviousMaskKeyframe('mask.intensity')"
+        :has-next="hasNextMaskKeyframe('mask.intensity')"
         :value="maskConfig.falloff.decayRate"
         :min="0"
         :max="1"
@@ -119,9 +119,9 @@
         @slider-input="setMaskDecayRateDeferred"
         @slider-change="commitDeferredUpdates"
         @number-change="(value) => setMaskProperty('mask.decayRate', value)"
-        @previous="goToPreviousMaskKeyframe('maskDecayRate')"
-        @toggle="toggleMaskKeyframe('maskDecayRate')"
-        @next="goToNextMaskKeyframe('maskDecayRate')"
+        @previous="goToPreviousMaskKeyframe('mask.intensity')"
+        @toggle="toggleMaskKeyframe('mask.intensity')"
+        @next="goToNextMaskKeyframe('mask.intensity')"
       />
     </div>
 
@@ -130,11 +130,11 @@
 
       <KeyframedDualNumberField
         :label="t('properties.mask.size')"
-        :state="getMaskChannelButtonState('maskRectangleSize')"
-        :tooltip="getMaskKeyframeTooltip('maskRectangleSize')"
+        :state="getMaskChannelButtonState('mask.rectangle.size')"
+        :tooltip="getMaskKeyframeTooltip('mask.rectangle.size')"
         :disabled="!canOperateMaskNumbers"
-        :has-previous="hasPreviousMaskKeyframe('maskRectangleSize')"
-        :has-next="hasNextMaskKeyframe('maskRectangleSize')"
+        :has-previous="hasPreviousMaskKeyframe('mask.rectangle.size')"
+        :has-next="hasNextMaskKeyframe('mask.rectangle.size')"
         :first-label="t('properties.mask.widthShort')"
         :second-label="t('properties.mask.heightShort')"
         :first-value="rectangleMaskConfig?.width ?? 0"
@@ -147,29 +147,29 @@
         :precision="0"
         @first-change="(value) => setMaskProperty('mask.width', value)"
         @second-change="(value) => setMaskProperty('mask.height', value)"
-        @previous="goToPreviousMaskKeyframe('maskRectangleSize')"
-        @toggle="toggleMaskKeyframe('maskRectangleSize')"
-        @next="goToNextMaskKeyframe('maskRectangleSize')"
+        @previous="goToPreviousMaskKeyframe('mask.rectangle.size')"
+        @toggle="toggleMaskKeyframe('mask.rectangle.size')"
+        @next="goToNextMaskKeyframe('mask.rectangle.size')"
       />
 
       <KeyframedSliderField
         :label="t('properties.mask.cornerRadius')"
-        :state="getMaskChannelButtonState('maskRectangleCorner')"
-        :tooltip="getMaskKeyframeTooltip('maskRectangleCorner')"
+        :state="getMaskChannelButtonState('mask.rectangle.cornerRadius')"
+        :tooltip="getMaskKeyframeTooltip('mask.rectangle.cornerRadius')"
         :disabled="!canOperateMaskNumbers"
-        :has-previous="hasPreviousMaskKeyframe('maskRectangleCorner')"
-        :has-next="hasNextMaskKeyframe('maskRectangleCorner')"
+        :has-previous="hasPreviousMaskKeyframe('mask.rectangle.cornerRadius')"
+        :has-next="hasNextMaskKeyframe('mask.rectangle.cornerRadius')"
         :value="rectangleMaskConfig?.cornerRadius ?? 0"
         :min="0"
-        :max="rectangleCornerRadiusMax"
-        :step="1"
-        :precision="0"
+        :max="1"
+        :step="0.01"
+        :precision="2"
         @slider-input="setMaskCornerRadiusDeferred"
         @slider-change="commitDeferredUpdates"
         @number-change="(value) => setMaskProperty('mask.cornerRadius', value)"
-        @previous="goToPreviousMaskKeyframe('maskRectangleCorner')"
-        @toggle="toggleMaskKeyframe('maskRectangleCorner')"
-        @next="goToNextMaskKeyframe('maskRectangleCorner')"
+        @previous="goToPreviousMaskKeyframe('mask.rectangle.cornerRadius')"
+        @toggle="toggleMaskKeyframe('mask.rectangle.cornerRadius')"
+        @next="goToNextMaskKeyframe('mask.rectangle.cornerRadius')"
       />
     </div>
 
@@ -178,11 +178,11 @@
 
       <KeyframedDualNumberField
         :label="t('properties.mask.size')"
-        :state="getMaskChannelButtonState('maskEllipseSize')"
-        :tooltip="getMaskKeyframeTooltip('maskEllipseSize')"
+        :state="getMaskChannelButtonState('mask.ellipse.size')"
+        :tooltip="getMaskKeyframeTooltip('mask.ellipse.size')"
         :disabled="!canOperateMaskNumbers"
-        :has-previous="hasPreviousMaskKeyframe('maskEllipseSize')"
-        :has-next="hasNextMaskKeyframe('maskEllipseSize')"
+        :has-previous="hasPreviousMaskKeyframe('mask.ellipse.size')"
+        :has-next="hasNextMaskKeyframe('mask.ellipse.size')"
         :first-label="t('properties.mask.widthShort')"
         :second-label="t('properties.mask.heightShort')"
         :first-value="ellipseMaskConfig?.ellipseWidth ?? 0"
@@ -195,9 +195,9 @@
         :precision="0"
         @first-change="(value) => setMaskProperty('mask.ellipseWidth', value)"
         @second-change="(value) => setMaskProperty('mask.ellipseHeight', value)"
-        @previous="goToPreviousMaskKeyframe('maskEllipseSize')"
-        @toggle="toggleMaskKeyframe('maskEllipseSize')"
-        @next="goToNextMaskKeyframe('maskEllipseSize')"
+        @previous="goToPreviousMaskKeyframe('mask.ellipse.size')"
+        @toggle="toggleMaskKeyframe('mask.ellipse.size')"
+        @next="goToNextMaskKeyframe('mask.ellipse.size')"
       />
     </div>
 
@@ -206,11 +206,11 @@
 
       <KeyframedSliderField
         :label="t('properties.mask.length')"
-        :state="getMaskChannelButtonState('maskMirrorLength')"
-        :tooltip="getMaskKeyframeTooltip('maskMirrorLength')"
+        :state="getMaskChannelButtonState('mask.mirror.length')"
+        :tooltip="getMaskKeyframeTooltip('mask.mirror.length')"
         :disabled="!canOperateMaskNumbers"
-        :has-previous="hasPreviousMaskKeyframe('maskMirrorLength')"
-        :has-next="hasNextMaskKeyframe('maskMirrorLength')"
+        :has-previous="hasPreviousMaskKeyframe('mask.mirror.length')"
+        :has-next="hasNextMaskKeyframe('mask.mirror.length')"
         :value="mirrorMaskConfig?.length ?? 0"
         :min="0"
         :max="itemLocalSize.width"
@@ -219,9 +219,9 @@
         @slider-input="setMaskLengthDeferred"
         @slider-change="commitDeferredUpdates"
         @number-change="(value) => setMaskProperty('mask.length', value)"
-        @previous="goToPreviousMaskKeyframe('maskMirrorLength')"
-        @toggle="toggleMaskKeyframe('maskMirrorLength')"
-        @next="goToNextMaskKeyframe('maskMirrorLength')"
+        @previous="goToPreviousMaskKeyframe('mask.mirror.length')"
+        @toggle="toggleMaskKeyframe('mask.mirror.length')"
+        @next="goToNextMaskKeyframe('mask.mirror.length')"
       />
     </div>
   </div>
@@ -256,7 +256,6 @@ const {
   rectangleMaskConfig,
   ellipseMaskConfig,
   mirrorMaskConfig,
-  rectangleCornerRadiusMax,
   canOperateMaskNumbers,
   getMaskChannelButtonState,
   hasPreviousMaskKeyframe,

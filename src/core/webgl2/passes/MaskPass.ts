@@ -38,6 +38,8 @@ export class MaskPass implements RenderPass {
         program: programs.createProgram(MASK_VERTEX_SHADER, MASK_RECTANGLE_FRAGMENT_SHADER),
         bindShapeUniforms: (gl, program, mask) => {
           const rectangleMask = mask as RectangleMaskConfig
+          const cornerRadiusPixels =
+            Math.min(rectangleMask.width, rectangleMask.height) * 0.5 * rectangleMask.cornerRadius
           gl.uniform2f(
             gl.getUniformLocation(program, 'u_rectSize'),
             rectangleMask.width,
@@ -45,7 +47,7 @@ export class MaskPass implements RenderPass {
           )
           gl.uniform1f(
             gl.getUniformLocation(program, 'u_cornerRadius'),
-            rectangleMask.cornerRadius,
+            cornerRadiusPixels,
           )
         },
       },

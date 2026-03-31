@@ -10,14 +10,14 @@ export interface UnifiedMaskKeyframeControlsOptions {
 }
 
 export type MaskChannelKey =
-  | 'maskCenter'
-  | 'maskRotation'
-  | 'maskOuterRange'
-  | 'maskDecayRate'
-  | 'maskRectangleSize'
-  | 'maskRectangleCorner'
-  | 'maskEllipseSize'
-  | 'maskMirrorLength'
+  | 'mask.center'
+  | 'mask.rotation'
+  | 'mask.feather'
+  | 'mask.intensity'
+  | 'mask.rectangle.size'
+  | 'mask.rectangle.cornerRadius'
+  | 'mask.ellipse.size'
+  | 'mask.mirror.length'
 
 export type MaskDeferredPatch = Partial<Record<MaskPropertyPath, number>>
 

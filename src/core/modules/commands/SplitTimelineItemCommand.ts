@@ -16,28 +16,28 @@ import type { UnifiedMediaItemData, MediaType } from '@/core/mediaitem/types'
 
 import type { UnifiedTimeRange } from '@/core/types/timeRange'
 
-import type { AnimateKeyframe, AnimationChannelKey, GetAnimation } from '@/core/timelineitem/bunnytype'
-import { splitKeyframesAtPosition } from '@/core/utils/keyframePositionUtils'
+import type {
+  AnimateKeyframe,
+  AnimationGroupId,
+  AnimationGroupTrack,
+  GetAnimation,
+} from '@/core/timelineitem/bunnytype'
+import { sliceKeyframesToSegment } from '@/core/utils/keyframePositionUtils'
 
 // ==================== 新架构工具导入 ====================
 
 import { TimelineItemFactory } from '@/core/timelineitem'
 
-type SplitKeyframe = AnimateKeyframe<any, AnimationChannelKey>
-type SplitChannelEntry = { keyframes: SplitKeyframe[] }
-type SplitChannelMap = Partial<Record<AnimationChannelKey, SplitChannelEntry>>
-
-const splitChannelKeyframes = splitKeyframesAtPosition as <T extends SplitKeyframe>(
+type SplitKeyframe = AnimateKeyframe<any, AnimationGroupId>
+type SplitChannelEntry = AnimationGroupTrack<any, AnimationGroupId>
+type SplitChannelMap = Partial<Record<AnimationGroupId, SplitChannelEntry>>
+const sliceChannelKeyframes = sliceKeyframesToSegment as <T extends SplitKeyframe>(
   keyframes: T[],
-  splitPosition: number,
+  startRatio: number,
+  endRatio: number,
   originalDuration: number,
-  firstDuration: number,
-  secondDuration: number,
-) => {
-  firstKeyframes: T[]
-  secondKeyframes: T[]
-  splitKeyframe: T | null
-}
+  segmentDuration: number,
+) => T[]
 
 /**
  * 分割时间轴项目命令
@@ -124,8 +124,8 @@ export class SplitTimelineItemCommand implements SimpleCommand {
     // 处理关键帧动画
     let animations: Array<GetAnimation<MediaType> | undefined> = []
     if (
-      this.originalTimelineItemData.animation?.channels &&
-      Object.keys(this.originalTimelineItemData.animation.channels).length > 0
+      this.originalTimelineItemData.animation?.groups &&
+      Object.keys(this.originalTimelineItemData.animation.groups).length > 0
     ) {
       console.log('🎬 [Split] 检测到关键帧动画，开始处理...')
 
@@ -134,18 +134,19 @@ export class SplitTimelineItemCommand implements SimpleCommand {
         const fragmentStartTime = allSplitPoints[i]
         const fragmentEndTime = allSplitPoints[i + 1]
 
-        // 计算片段在原始时间轴中的相对位置
-        const relativeTimelineFrames = fragmentStartTime - timelineStartTimeFrames
-        const relativeRatio = relativeTimelineFrames / timelineDurationFrames
+        const fragmentStartRatio = timelineDurationFrames === 0
+          ? 0
+          : (fragmentStartTime - timelineStartTimeFrames) / timelineDurationFrames
+        const fragmentEndRatio = timelineDurationFrames === 0
+          ? 1
+          : (fragmentEndTime - timelineStartTimeFrames) / timelineDurationFrames
 
         // 计算片段时长
         const fragmentDurationFrames = fragmentEndTime - fragmentStartTime
 
         // 计算片段在素材中的起始和结束时间
-        const fragmentClipStartTime = clipStartTimeFrames + Math.round(clipDurationFrames * relativeRatio)
-        const fragmentClipEndTime = clipStartTimeFrames + Math.round(
-          clipDurationFrames * ((fragmentEndTime - timelineStartTimeFrames) / timelineDurationFrames)
-        )
+        const fragmentClipStartTime = clipStartTimeFrames + Math.round(clipDurationFrames * fragmentStartRatio)
+        const fragmentClipEndTime = clipStartTimeFrames + Math.round(clipDurationFrames * fragmentEndRatio)
 
         console.log(`🎬 [Split] 片段 ${i + 1} 关键帧切割参数:`, {
           fragmentStartTime,
@@ -153,27 +154,32 @@ export class SplitTimelineItemCommand implements SimpleCommand {
           fragmentDurationFrames,
           fragmentClipStartTime,
           fragmentClipEndTime,
-          relativeRatio,
+          fragmentStartRatio,
+          fragmentEndRatio,
         })
 
         const nextChannels: SplitChannelMap = {}
-        const originalChannels = this.originalTimelineItemData.animation.channels as Partial<
-          Record<AnimationChannelKey, SplitChannelEntry>
+        const originalChannels = this.originalTimelineItemData.animation.groups as Partial<
+          Record<AnimationGroupId, SplitChannelEntry>
         >
 
         for (const [channel, channelConfig] of Object.entries(originalChannels) as Array<
-          [AnimationChannelKey, SplitChannelEntry]
+          [AnimationGroupId, SplitChannelEntry]
         >) {
-          const { firstKeyframes } = splitChannelKeyframes(
+          const segmentKeyframes = sliceChannelKeyframes(
             channelConfig.keyframes,
-            relativeRatio,
+            fragmentStartRatio,
+            fragmentEndRatio,
             clipDurationFrames,
             fragmentDurationFrames,
-            fragmentClipEndTime - fragmentClipStartTime,
           )
 
-          if (firstKeyframes.length > 0) {
-            nextChannels[channel] = { keyframes: firstKeyframes }
+          if (segmentKeyframes.length > 0) {
+            nextChannels[channel] = {
+              groupId: channel,
+              strategyKey: channel,
+              keyframes: segmentKeyframes,
+            }
           }
         }
 
@@ -183,7 +189,7 @@ export class SplitTimelineItemCommand implements SimpleCommand {
 
         animations.push(
           Object.keys(nextChannels).length > 0
-            ? ({ channels: nextChannels } as GetAnimation<MediaType>)
+            ? ({ groups: nextChannels } as GetAnimation<MediaType>)
             : undefined,
         )
       }
@@ -284,15 +290,15 @@ export class SplitTimelineItemCommand implements SimpleCommand {
       throw new Error(`重建原始项目失败: ${rebuildResult.error}`)
     }
 
-    const newTimelineItem = rebuildResult.timelineItem
+    const originalItem = rebuildResult.timelineItem
 
     console.log('🔄 重建原始项目完成:', {
-      id: newTimelineItem.id,
+      id: originalItem.id,
       mediaType: this.originalTimelineItemData.mediaType,
       timeRange: this.originalTimelineItemData.timeRange,
     })
 
-    return newTimelineItem
+    return originalItem
   }
 
   /**

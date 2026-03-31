@@ -61,19 +61,25 @@ export async function applyKeyframeSnapshot(
   item: UnifiedTimelineItemData,
   snapshot: KeyframeSnapshot,
 ): Promise<void> {
-  // 1. 恢复动画配置（关键帧数据）
   if (snapshot.animationConfig) {
-    // 类型安全的动画配置恢复
     item.animation = {
-      channels: Object.fromEntries(
-        Object.entries(snapshot.animationConfig.channels || {}).map(([channel, channelConfig]) => [
-          channel,
+      groups: Object.fromEntries(
+        Object.entries(snapshot.animationConfig.groups || {}).map(([groupId, track]) => [
+          groupId,
           {
-            keyframes: channelConfig.keyframes.map((kf: AnimateKeyframe<MediaType>) => ({
-              position: kf.position,
-              cachedFrame: kf.cachedFrame,
-              properties: { ...kf.properties },
-            })),
+            groupId,
+            strategyKey: track.groupId,
+            keyframes: track.keyframes.map((kf: AnimateKeyframe<MediaType>) => {
+              const value = { ...kf.value }
+              return {
+                position: kf.position,
+                frame: kf.frame,
+                cachedFrame: kf.cachedFrame,
+                value,
+                properties: value,
+                easing: kf.easing,
+              }
+            }),
           },
         ]),
       ),
@@ -82,7 +88,6 @@ export async function applyKeyframeSnapshot(
     item.animation = undefined
   }
 
-  // 2. 直接恢复属性值到 item.config
   if (snapshot.itemProperties) {
     Object.assign(item.config, snapshot.itemProperties)
   }

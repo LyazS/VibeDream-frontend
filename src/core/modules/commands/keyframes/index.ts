@@ -10,7 +10,9 @@ export { DeleteKeyframeCommand } from './DeleteKeyframeCommand'
 export { UpdatePropertyCommand } from './UpdatePropertyCommand'
 export { UpdateMaskCommand } from './UpdateMaskCommand'
 export { ClearAllKeyframesCommand } from './ClearAllKeyframesCommand'
-export { ToggleKeyframeCommand } from './ToggleKeyframeCommand'
+export { SetAnimationGroupValueCommand } from './SetAnimationGroupValueCommand'
+export { ToggleAnimationGroupKeyframeCommand } from './ToggleAnimationGroupKeyframeCommand'
+export { BatchSetAnimationGroupValuesCommand } from './BatchSetAnimationGroupValuesCommand'
 
 // 导出共享的类型和工具函数
 export type {

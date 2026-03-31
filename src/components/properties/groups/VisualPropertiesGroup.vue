@@ -7,10 +7,10 @@
       <KeyframedDualNumberField
         :label="t('properties.transform.position')"
         :state="layoutButtonState"
-        :tooltip="getChannelKeyframeTooltip('layout')"
+        :tooltip="getChannelKeyframeTooltip('transform.layout')"
         :disabled="!canOperateTransforms"
-        :has-previous="hasPreviousChannelKeyframe('layout')"
-        :has-next="hasNextChannelKeyframe('layout')"
+        :has-previous="hasPreviousChannelKeyframe('transform.layout')"
+        :has-next="hasNextChannelKeyframe('transform.layout')"
         :first-label="t('properties.transform.positionX')"
         :second-label="t('properties.transform.positionY')"
         :first-value="transformX"
@@ -25,9 +25,9 @@
         :second-placeholder="t('properties.transform.centerFor0')"
         @first-change="setTransformXDirectly"
         @second-change="setTransformYDirectly"
-        @previous="goToPreviousChannelKeyframe('layout')"
-        @toggle="toggleChannelKeyframe('layout')"
-        @next="goToNextChannelKeyframe('layout')"
+        @previous="goToPreviousChannelKeyframe('transform.layout')"
+        @toggle="toggleChannelKeyframe('transform.layout')"
+        @next="goToNextChannelKeyframe('transform.layout')"
       />
 
       <!-- 水平对齐 -->
@@ -215,10 +215,10 @@
       <KeyframedSliderField
         :label="t('properties.transform.rotation')"
         :state="rotationButtonState"
-        :tooltip="getChannelKeyframeTooltip('rotation')"
+        :tooltip="getChannelKeyframeTooltip('transform.rotation')"
         :disabled="!canOperateTransforms"
-        :has-previous="hasPreviousChannelKeyframe('rotation')"
-        :has-next="hasNextChannelKeyframe('rotation')"
+        :has-previous="hasPreviousChannelKeyframe('transform.rotation')"
+        :has-next="hasNextChannelKeyframe('transform.rotation')"
         :value="rotation"
         :min="-180"
         :max="180"
@@ -228,19 +228,19 @@
         @slider-input="setRotationDeferred"
         @slider-change="commitDeferredUpdates"
         @number-change="setRotationDirectly"
-        @previous="goToPreviousChannelKeyframe('rotation')"
-        @toggle="toggleChannelKeyframe('rotation')"
-        @next="goToNextChannelKeyframe('rotation')"
+        @previous="goToPreviousChannelKeyframe('transform.rotation')"
+        @toggle="toggleChannelKeyframe('transform.rotation')"
+        @next="goToNextChannelKeyframe('transform.rotation')"
       />
 
       <!-- 透明度 -->
       <KeyframedSliderField
         :label="t('properties.transform.opacity')"
         :state="opacityButtonState"
-        :tooltip="getChannelKeyframeTooltip('opacity')"
+        :tooltip="getChannelKeyframeTooltip('transform.opacity')"
         :disabled="!canOperateTransforms"
-        :has-previous="hasPreviousChannelKeyframe('opacity')"
-        :has-next="hasNextChannelKeyframe('opacity')"
+        :has-previous="hasPreviousChannelKeyframe('transform.opacity')"
+        :has-next="hasNextChannelKeyframe('transform.opacity')"
         :value="opacity"
         :min="0"
         :max="1"
@@ -250,9 +250,9 @@
         @slider-input="setOpacityDeferred"
         @slider-change="commitDeferredUpdates"
         @number-change="setOpacityDirectly"
-        @previous="goToPreviousChannelKeyframe('opacity')"
-        @toggle="toggleChannelKeyframe('opacity')"
-        @next="goToNextChannelKeyframe('opacity')"
+        @previous="goToPreviousChannelKeyframe('transform.opacity')"
+        @toggle="toggleChannelKeyframe('transform.opacity')"
+        @next="goToNextChannelKeyframe('transform.opacity')"
       />
     </div>
   </div>
@@ -325,9 +325,9 @@ const {
   currentFrame: computed(() => props.currentFrame),
 })
 
-const layoutButtonState = computed(() => getChannelButtonState('layout'))
-const rotationButtonState = computed(() => getChannelButtonState('rotation'))
-const opacityButtonState = computed(() => getChannelButtonState('opacity'))
+const layoutButtonState = computed(() => getChannelButtonState('transform.layout'))
+const rotationButtonState = computed(() => getChannelButtonState('transform.rotation'))
+const opacityButtonState = computed(() => getChannelButtonState('transform.opacity'))
 
 const getAnimatedLabelClass = (state: string) => ({
   'animated-property-label': state !== 'none',

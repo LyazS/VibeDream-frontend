@@ -5,7 +5,7 @@
 
 import type {
   AnimateKeyframe,
-  AnimationChannelKey,
+  AnimationGroupId,
   ChannelKeyForMedia,
 } from '@/core/timelineitem/bunnytype'
 import type { MediaType } from '@/core/mediaitem'
@@ -54,10 +54,11 @@ export function clampPercentage(percentage: number): number {
  * @param clipDurationFrames clip 时长（帧数）
  */
 export function updateKeyframeCachedFrame(
-  keyframe: AnimateKeyframe<MediaType, AnimationChannelKey>,
+  keyframe: AnimateKeyframe<MediaType, AnimationGroupId>,
   clipDurationFrames: number
 ): void {
-  keyframe.cachedFrame = percentageToFrame(keyframe.position, clipDurationFrames)
+  keyframe.frame = percentageToFrame(keyframe.position, clipDurationFrames)
+  keyframe.cachedFrame = keyframe.frame
 }
 
 /**
@@ -67,7 +68,7 @@ export function updateKeyframeCachedFrame(
  * @param clipDurationFrames clip 时长（帧数）
  */
 export function updateAllKeyframesCachedFrames(
-  keyframes: AnimateKeyframe<MediaType, AnimationChannelKey>[],
+  keyframes: AnimateKeyframe<MediaType, AnimationGroupId>[],
   clipDurationFrames: number
 ): void {
   for (const keyframe of keyframes) {
@@ -115,18 +116,20 @@ export function interpolateKeyframeAtPosition<
   // 创建新关键帧
   const newKeyframe: AnimateKeyframe<T, C> = {
     position,
+    frame: percentageToFrame(position, clipDuration),
     cachedFrame: percentageToFrame(position, clipDuration),
+    value: {} as AnimateKeyframe<T, C>['value'],
     properties: {} as AnimateKeyframe<T, C>['properties'],
   }
-  const mutableProperties = newKeyframe.properties as Record<keyof typeof before.properties, number>
+  const mutableProperties = newKeyframe.value as Record<keyof typeof before.value, number>
 
   // 对每个属性进行线性插值
-  const props = Object.keys(before.properties as unknown as Record<string, unknown>) as Array<
-    keyof typeof before.properties
+  const props = Object.keys(before.value as unknown as Record<string, unknown>) as Array<
+    keyof typeof before.value
   >
   for (const prop of props) {
-    const startValue = before.properties[prop] as number
-    const endValue = after.properties[prop] as number
+    const startValue = before.value[prop] as number
+    const endValue = after.value[prop] as number
 
     if (typeof startValue === 'number' && typeof endValue === 'number') {
       mutableProperties[prop] = startValue + (endValue - startValue) * t
@@ -134,6 +137,8 @@ export function interpolateKeyframeAtPosition<
       mutableProperties[prop] = startValue
     }
   }
+
+  newKeyframe.properties = newKeyframe.value
 
   return newKeyframe as AnimateKeyframe<T, C>
 }
@@ -182,7 +187,8 @@ export function splitKeyframesAtPosition<
         const newPosition = kf.position / splitPosition
         const newKeyframe = cloneDeep(kf)
         newKeyframe.position = newPosition
-        newKeyframe.cachedFrame = percentageToFrame(newPosition, firstDuration)
+        newKeyframe.frame = percentageToFrame(newPosition, firstDuration)
+        newKeyframe.cachedFrame = newKeyframe.frame
         firstKeyframes.push(newKeyframe)
       }
     } else if (kf.position > splitPosition) {
@@ -192,7 +198,8 @@ export function splitKeyframesAtPosition<
         const newPosition = (kf.position - splitPosition) / (1 - splitPosition)
         const newKeyframe = cloneDeep(kf)
         newKeyframe.position = newPosition
-        newKeyframe.cachedFrame = percentageToFrame(newPosition, secondDuration)
+        newKeyframe.frame = percentageToFrame(newPosition, secondDuration)
+        newKeyframe.cachedFrame = newKeyframe.frame
         secondKeyframes.push(newKeyframe)
       }
     } else {
@@ -206,12 +213,14 @@ export function splitKeyframesAtPosition<
     // 切割点恰好有关键帧，复制到两个片段
     const firstSplit = cloneDeep(exactSplitKeyframe)
     firstSplit.position = 1.0
-    firstSplit.cachedFrame = firstDuration
+    firstSplit.frame = firstDuration
+    firstSplit.cachedFrame = firstSplit.frame
     firstKeyframes.push(firstSplit)
 
     const secondSplit = cloneDeep(exactSplitKeyframe)
     secondSplit.position = 0.0
-    secondSplit.cachedFrame = 0
+    secondSplit.frame = 0
+    secondSplit.cachedFrame = secondSplit.frame
     secondKeyframes.push(secondSplit)
 
     splitKeyframe = exactSplitKeyframe
@@ -227,13 +236,15 @@ export function splitKeyframesAtPosition<
       // 添加到第一个片段的末尾
       const firstSplit = cloneDeep(splitKeyframe)
       firstSplit.position = 1.0
-      firstSplit.cachedFrame = firstDuration
+      firstSplit.frame = firstDuration
+      firstSplit.cachedFrame = firstSplit.frame
       firstKeyframes.push(firstSplit)
 
       // 添加到第二个片段的开头
       const secondSplit = cloneDeep(splitKeyframe)
       secondSplit.position = 0.0
-      secondSplit.cachedFrame = 0
+      secondSplit.frame = 0
+      secondSplit.cachedFrame = secondSplit.frame
       secondKeyframes.push(secondSplit)
     }
   }
@@ -247,4 +258,85 @@ export function splitKeyframesAtPosition<
     secondKeyframes,
     splitKeyframe,
   }
+}
+
+export function sliceKeyframesToSegment<
+  T extends MediaType,
+  C extends ChannelKeyForMedia<T>,
+>(
+  keyframes: AnimateKeyframe<T, C>[],
+  startRatio: number,
+  endRatio: number,
+  originalDuration: number,
+  segmentDuration: number,
+): AnimateKeyframe<T, C>[] {
+  const safeStartRatio = clampPercentage(startRatio)
+  const safeEndRatio = clampPercentage(endRatio)
+
+  if (safeEndRatio < safeStartRatio) {
+    return []
+  }
+
+  const segmentSpan = safeEndRatio - safeStartRatio
+  const result: AnimateKeyframe<T, C>[] = []
+  const hasExactKeyframeAt = (position: number) =>
+    keyframes.some((keyframe) => keyframe.position === position)
+
+  if (segmentSpan === 0) {
+    const boundaryKeyframe = hasExactKeyframeAt(safeStartRatio)
+      ? cloneDeep(keyframes.find((keyframe) => keyframe.position === safeStartRatio)!)
+      : interpolateKeyframeAtPosition(keyframes, safeStartRatio, originalDuration)
+
+    if (!boundaryKeyframe) {
+      return []
+    }
+
+    boundaryKeyframe.position = 0
+    boundaryKeyframe.frame = 0
+    boundaryKeyframe.cachedFrame = 0
+    boundaryKeyframe.properties = boundaryKeyframe.value
+    return [boundaryKeyframe]
+  }
+
+  for (const keyframe of keyframes) {
+    if (keyframe.position < safeStartRatio || keyframe.position > safeEndRatio) {
+      continue
+    }
+
+    const nextKeyframe = cloneDeep(keyframe)
+    nextKeyframe.position = clampPercentage((keyframe.position - safeStartRatio) / segmentSpan)
+    nextKeyframe.frame = percentageToFrame(nextKeyframe.position, segmentDuration)
+    nextKeyframe.cachedFrame = nextKeyframe.frame
+    nextKeyframe.properties = nextKeyframe.value
+    result.push(nextKeyframe)
+  }
+
+  if (!hasExactKeyframeAt(safeStartRatio)) {
+    const startKeyframe = interpolateKeyframeAtPosition(keyframes, safeStartRatio, originalDuration)
+    if (startKeyframe) {
+      startKeyframe.position = 0
+      startKeyframe.frame = 0
+      startKeyframe.cachedFrame = 0
+      startKeyframe.properties = startKeyframe.value
+      result.push(startKeyframe)
+    }
+  }
+
+  if (!hasExactKeyframeAt(safeEndRatio)) {
+    const endKeyframe = interpolateKeyframeAtPosition(keyframes, safeEndRatio, originalDuration)
+    if (endKeyframe) {
+      endKeyframe.position = 1
+      endKeyframe.frame = percentageToFrame(1, segmentDuration)
+      endKeyframe.cachedFrame = endKeyframe.frame
+      endKeyframe.properties = endKeyframe.value
+      result.push(endKeyframe)
+    }
+  }
+
+  const deduped = new Map<number, AnimateKeyframe<T, C>>()
+  for (const keyframe of result) {
+    deduped.set(keyframe.frame, keyframe)
+  }
+
+  return Array.from(deduped.values()).sort((a, b) => a.position - b.position)
 }

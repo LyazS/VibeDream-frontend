@@ -66,14 +66,6 @@ export function useMaskPropertiesState(options: UnifiedMaskKeyframeControlsOptio
     isMirrorMaskConfig(maskConfig.value) ? maskConfig.value : null,
   )
 
-  const rectangleCornerRadiusMax = computed(
-    () =>
-      Math.min(
-        rectangleMaskConfig.value?.width ?? 0,
-        rectangleMaskConfig.value?.height ?? 0,
-      ) * 0.5,
-  )
-
   const canOperateMaskNumbers = computed(() => {
     const item = selectedTimelineItem.value
     if (!item) return false
@@ -86,7 +78,6 @@ export function useMaskPropertiesState(options: UnifiedMaskKeyframeControlsOptio
     rectangleMaskConfig,
     ellipseMaskConfig,
     mirrorMaskConfig,
-    rectangleCornerRadiusMax,
     canOperateMaskNumbers,
   }
 }

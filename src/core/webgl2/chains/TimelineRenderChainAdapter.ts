@@ -1,6 +1,12 @@
 import { RenderChain } from '@/core/webgl2/renderchain/RenderChain'
 import { ChainBuilder, type VisualTimelineItem } from '@/core/webgl2/chains/ChainBuilder'
 
+interface CachedChainEntry {
+  chain: RenderChain
+  signature: string
+  itemRef: VisualTimelineItem
+}
+
 /**
  * 把 timeline item 适配成 RenderChain。
  *
@@ -12,8 +18,7 @@ import { ChainBuilder, type VisualTimelineItem } from '@/core/webgl2/chains/Chai
  * 适配器缓存链对象，避免每帧重新 new pass / chain。
  */
 export class TimelineRenderChainAdapter {
-  private readonly chains = new Map<string, RenderChain>()
-  private readonly signatures = new Map<string, string>()
+  private readonly cache = new Map<string, CachedChainEntry>()
 
   constructor(
     private readonly chainBuilder: ChainBuilder,
@@ -24,21 +29,23 @@ export class TimelineRenderChainAdapter {
    */
   getChain(item: VisualTimelineItem): RenderChain {
     const signature = this.chainBuilder.getSignature(item)
-    const existing = this.chains.get(item.id)
-    const existingSignature = this.signatures.get(item.id)
+    const existing = this.cache.get(item.id)
 
-    if (existing && existingSignature === signature) {
-      return existing
+    if (existing && existing.signature === signature && existing.itemRef === item) {
+      return existing.chain
     }
 
     if (existing) {
-      existing.dispose()
+      existing.chain.dispose()
     }
 
     const chain = this.chainBuilder.build(item)
 
-    this.chains.set(item.id, chain)
-    this.signatures.set(item.id, signature)
+    this.cache.set(item.id, {
+      chain,
+      signature,
+      itemRef: item,
+    })
     return chain
   }
 
@@ -46,10 +53,9 @@ export class TimelineRenderChainAdapter {
    * 销毁所有缓存的 chain。
    */
   dispose(): void {
-    for (const chain of this.chains.values()) {
-      chain.dispose()
+    for (const cached of this.cache.values()) {
+      cached.chain.dispose()
     }
-    this.chains.clear()
-    this.signatures.clear()
+    this.cache.clear()
   }
 }

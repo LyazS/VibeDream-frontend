@@ -77,66 +77,55 @@ export interface MaskConfigPatch {
   shape?: LegacyMaskShape | null
 }
 
-export interface MaskAnimatableProps {
-  'mask.centerX': number
-  'mask.centerY': number
-  'mask.rotation': number
-  'mask.width': number
-  'mask.height': number
-  'mask.ellipseWidth': number
-  'mask.ellipseHeight': number
-  'mask.cornerRadius': number
-  'mask.length': number
-  'mask.outerRange': number
-  'mask.decayRate': number
+export interface MaskCenterValue {
+  centerX: number
+  centerY: number
 }
 
-export interface MaskCenterAnimatableProps {
-  'mask.centerX': number
-  'mask.centerY': number
+export interface MaskRotationValue {
+  rotation: number
 }
 
-export interface MaskRotationAnimatableProps {
-  'mask.rotation': number
+export interface MaskFeatherValue {
+  outerRange: number
 }
 
-export interface MaskOuterRangeAnimatableProps {
-  'mask.outerRange': number
+export interface MaskIntensityValue {
+  decayRate: number
 }
 
-export interface MaskDecayRateAnimatableProps {
-  'mask.decayRate': number
+export interface MaskRectangleSizeValue {
+  width: number
+  height: number
 }
 
-export interface MaskShapeAnimatableProps {
-  'mask.width': number
-  'mask.height': number
-  'mask.ellipseWidth': number
-  'mask.ellipseHeight': number
-  'mask.cornerRadius': number
-  'mask.length': number
+export interface MaskRectangleCornerRadiusValue {
+  cornerRadius: number
 }
 
-export interface MaskRectangleSizeAnimatableProps {
-  'mask.width': number
-  'mask.height': number
+export interface MaskEllipseSizeValue {
+  ellipseWidth: number
+  ellipseHeight: number
 }
 
-export interface MaskRectangleCornerAnimatableProps {
-  'mask.cornerRadius': number
+export interface MaskMirrorValue {
+  length: number
 }
 
-export interface MaskEllipseSizeAnimatableProps {
-  'mask.ellipseWidth': number
-  'mask.ellipseHeight': number
-}
+export type MaskPropertyPath =
+  | 'mask.centerX'
+  | 'mask.centerY'
+  | 'mask.rotation'
+  | 'mask.width'
+  | 'mask.height'
+  | 'mask.ellipseWidth'
+  | 'mask.ellipseHeight'
+  | 'mask.cornerRadius'
+  | 'mask.length'
+  | 'mask.outerRange'
+  | 'mask.decayRate'
 
-export interface MaskMirrorLengthAnimatableProps {
-  'mask.length': number
-}
-
-export type MaskPropertyPath = keyof MaskAnimatableProps
-
+// Deprecated compatibility constants kept while legacy callers are migrated.
 export const MASK_ANIMATABLE_PATHS = [
   'mask.centerX',
   'mask.centerY',
@@ -150,46 +139,6 @@ export const MASK_ANIMATABLE_PATHS = [
   'mask.outerRange',
   'mask.decayRate',
 ] as const satisfies readonly MaskPropertyPath[]
-
-export const MASK_CENTER_PATHS = [
-  'mask.centerX',
-  'mask.centerY',
-] as const satisfies readonly (keyof MaskCenterAnimatableProps)[]
-export const MASK_ROTATION_PATHS = [
-  'mask.rotation',
-] as const satisfies readonly (keyof MaskRotationAnimatableProps)[]
-export const MASK_OUTER_RANGE_PATHS = [
-  'mask.outerRange',
-] as const satisfies readonly (keyof MaskOuterRangeAnimatableProps)[]
-export const MASK_DECAY_RATE_PATHS = [
-  'mask.decayRate',
-] as const satisfies readonly (keyof MaskDecayRateAnimatableProps)[]
-export const MASK_SHAPE_PATHS = [
-  'mask.width',
-  'mask.height',
-  'mask.ellipseWidth',
-  'mask.ellipseHeight',
-  'mask.cornerRadius',
-  'mask.length',
-] as const satisfies readonly (keyof MaskShapeAnimatableProps)[]
-
-export const MASK_RECTANGLE_SIZE_PATHS = [
-  'mask.width',
-  'mask.height',
-] as const satisfies readonly (keyof MaskRectangleSizeAnimatableProps)[]
-
-export const MASK_RECTANGLE_CORNER_PATHS = [
-  'mask.cornerRadius',
-] as const satisfies readonly (keyof MaskRectangleCornerAnimatableProps)[]
-
-export const MASK_ELLIPSE_SIZE_PATHS = [
-  'mask.ellipseWidth',
-  'mask.ellipseHeight',
-] as const satisfies readonly (keyof MaskEllipseSizeAnimatableProps)[]
-
-export const MASK_MIRROR_LENGTH_PATHS = [
-  'mask.length',
-] as const satisfies readonly (keyof MaskMirrorLengthAnimatableProps)[]
 
 const DEFAULT_MASK_TEXTURE_SIZE: MaskTextureSize = {
   width: 1920,
@@ -222,6 +171,31 @@ function pickNumericValue(...values: unknown[]): number | undefined {
   }
 
   return undefined
+}
+
+function clampUnitValue(value: number): number {
+  return Math.min(Math.max(value, 0), 1)
+}
+
+function normalizeRectangleCornerRadius(
+  cornerRadius: number | undefined,
+  width: number,
+  height: number,
+): number {
+  if (cornerRadius === undefined || !Number.isFinite(cornerRadius)) {
+    return 0
+  }
+
+  if (cornerRadius <= 1) {
+    return clampUnitValue(cornerRadius)
+  }
+
+  const maxPixelRadius = Math.min(width, height) * 0.5
+  if (maxPixelRadius <= 0) {
+    return 0
+  }
+
+  return clampUnitValue(cornerRadius / maxPixelRadius)
 }
 
 function createDefaultFalloff(textureSize?: Partial<MaskTextureSize> | null): MaskFalloff {
@@ -342,21 +316,27 @@ export function normalizeMaskConfig(
   switch (type) {
     case 'rectangle': {
       const rectangleDefaults = defaults as RectangleMaskConfig
+      const width =
+        pickNumericValue(patch.width, legacyShape?.width, rectangleDefaults.width) ??
+        rectangleDefaults.width
+      const height =
+        pickNumericValue(patch.height, legacyShape?.height, rectangleDefaults.height) ??
+        rectangleDefaults.height
+
       return {
         ...base,
         type,
-        width:
-          pickNumericValue(patch.width, legacyShape?.width, rectangleDefaults.width) ??
-          rectangleDefaults.width,
-        height:
-          pickNumericValue(patch.height, legacyShape?.height, rectangleDefaults.height) ??
-          rectangleDefaults.height,
-        cornerRadius:
+        width,
+        height,
+        cornerRadius: normalizeRectangleCornerRadius(
           pickNumericValue(
             patch.cornerRadius,
             legacyShape?.cornerRadius,
             rectangleDefaults.cornerRadius,
           ) ?? rectangleDefaults.cornerRadius,
+          width,
+          height,
+        ),
       }
     }
     case 'ellipse': {
@@ -421,7 +401,7 @@ export function replaceMaskType(
 export function getMaskAnimatableProps(
   mask?: MaskConfigPatch | Partial<MaskConfig> | null,
   textureSize?: Partial<MaskTextureSize> | null,
-): MaskAnimatableProps {
+): Record<MaskPropertyPath, number> {
   const normalized = normalizeMaskConfig(mask, textureSize)
 
   return {
@@ -439,48 +419,342 @@ export function getMaskAnimatableProps(
   }
 }
 
+export function getMaskCenterValue(
+  mask?: MaskConfigPatch | Partial<MaskConfig> | null,
+  textureSize?: Partial<MaskTextureSize> | null,
+): MaskCenterValue {
+  const normalized = normalizeMaskConfig(mask, textureSize)
+  return {
+    centerX: normalized.centerX,
+    centerY: normalized.centerY,
+  }
+}
+
+export function getMaskRotationValue(
+  mask?: MaskConfigPatch | Partial<MaskConfig> | null,
+  textureSize?: Partial<MaskTextureSize> | null,
+): MaskRotationValue {
+  const normalized = normalizeMaskConfig(mask, textureSize)
+  return {
+    rotation: normalized.rotation,
+  }
+}
+
+export function getMaskFeatherValue(
+  mask?: MaskConfigPatch | Partial<MaskConfig> | null,
+  textureSize?: Partial<MaskTextureSize> | null,
+): MaskFeatherValue {
+  const normalized = normalizeMaskConfig(mask, textureSize)
+  return {
+    outerRange: normalized.falloff.outerRange,
+  }
+}
+
+export function getMaskIntensityValue(
+  mask?: MaskConfigPatch | Partial<MaskConfig> | null,
+  textureSize?: Partial<MaskTextureSize> | null,
+): MaskIntensityValue {
+  const normalized = normalizeMaskConfig(mask, textureSize)
+  return {
+    decayRate: normalized.falloff.decayRate,
+  }
+}
+
+export function getMaskRectangleSizeValue(
+  mask?: MaskConfigPatch | Partial<MaskConfig> | null,
+  textureSize?: Partial<MaskTextureSize> | null,
+): MaskRectangleSizeValue {
+  const normalized = normalizeMaskConfig(mask, textureSize)
+  if (normalized.type === 'rectangle') {
+    return {
+      width: normalized.width,
+      height: normalized.height,
+    }
+  }
+
+  const defaults = createDefaultMaskConfig('rectangle', textureSize) as RectangleMaskConfig
+  return {
+    width: defaults.width,
+    height: defaults.height,
+  }
+}
+
+export function getMaskRectangleCornerRadiusValue(
+  mask?: MaskConfigPatch | Partial<MaskConfig> | null,
+  textureSize?: Partial<MaskTextureSize> | null,
+): MaskRectangleCornerRadiusValue {
+  const normalized = normalizeMaskConfig(mask, textureSize)
+  if (normalized.type === 'rectangle') {
+    return {
+      cornerRadius: normalized.cornerRadius,
+    }
+  }
+
+  const defaults = createDefaultMaskConfig('rectangle', textureSize) as RectangleMaskConfig
+  return {
+    cornerRadius: defaults.cornerRadius,
+  }
+}
+
+export function getMaskEllipseSizeValue(
+  mask?: MaskConfigPatch | Partial<MaskConfig> | null,
+  textureSize?: Partial<MaskTextureSize> | null,
+): MaskEllipseSizeValue {
+  const normalized = normalizeMaskConfig(mask, textureSize)
+  if (normalized.type === 'ellipse') {
+    return {
+      ellipseWidth: normalized.ellipseWidth,
+      ellipseHeight: normalized.ellipseHeight,
+    }
+  }
+
+  const defaults = createDefaultMaskConfig('ellipse', textureSize) as EllipseMaskConfig
+  return {
+    ellipseWidth: defaults.ellipseWidth,
+    ellipseHeight: defaults.ellipseHeight,
+  }
+}
+
+export function getMaskMirrorValue(
+  mask?: MaskConfigPatch | Partial<MaskConfig> | null,
+  textureSize?: Partial<MaskTextureSize> | null,
+): MaskMirrorValue {
+  const normalized = normalizeMaskConfig(mask, textureSize)
+  if (normalized.type === 'mirror') {
+    return { length: normalized.length }
+  }
+
+  const defaults = createDefaultMaskConfig('mirror', textureSize) as MirrorMaskConfig
+  return { length: defaults.length }
+}
+
+export function applyMaskCenterValue(
+  mask: MaskConfigPatch | Partial<MaskConfig> | null | undefined,
+  patch: Partial<MaskCenterValue>,
+  textureSize?: Partial<MaskTextureSize> | null,
+): MaskConfig {
+  const normalized = normalizeMaskConfig(mask, textureSize)
+  return {
+    ...normalized,
+    centerX: patch.centerX ?? normalized.centerX,
+    centerY: patch.centerY ?? normalized.centerY,
+  }
+}
+
+export function applyMaskRotationValue(
+  mask: MaskConfigPatch | Partial<MaskConfig> | null | undefined,
+  patch: Partial<MaskRotationValue>,
+  textureSize?: Partial<MaskTextureSize> | null,
+): MaskConfig {
+  const normalized = normalizeMaskConfig(mask, textureSize)
+  return {
+    ...normalized,
+    rotation: patch.rotation ?? normalized.rotation,
+  }
+}
+
+export function applyMaskFeatherValue(
+  mask: MaskConfigPatch | Partial<MaskConfig> | null | undefined,
+  patch: Partial<MaskFeatherValue>,
+  textureSize?: Partial<MaskTextureSize> | null,
+): MaskConfig {
+  const normalized = normalizeMaskConfig(mask, textureSize)
+  return {
+    ...normalized,
+    falloff: {
+      outerRange: patch.outerRange ?? normalized.falloff.outerRange,
+      decayRate: normalized.falloff.decayRate,
+    },
+  }
+}
+
+export function applyMaskIntensityValue(
+  mask: MaskConfigPatch | Partial<MaskConfig> | null | undefined,
+  patch: Partial<MaskIntensityValue>,
+  textureSize?: Partial<MaskTextureSize> | null,
+): MaskConfig {
+  const normalized = normalizeMaskConfig(mask, textureSize)
+  return {
+    ...normalized,
+    falloff: {
+      outerRange: normalized.falloff.outerRange,
+      decayRate: patch.decayRate ?? normalized.falloff.decayRate,
+    },
+  }
+}
+
+export function applyMaskRectangleSizeValue(
+  mask: MaskConfigPatch | Partial<MaskConfig> | null | undefined,
+  patch: Partial<MaskRectangleSizeValue>,
+  textureSize?: Partial<MaskTextureSize> | null,
+): MaskConfig {
+  const normalized = normalizeMaskConfig(mask, textureSize)
+  if (normalized.type !== 'rectangle') {
+    return normalized
+  }
+
+  return {
+    ...normalized,
+    width: patch.width ?? normalized.width,
+    height: patch.height ?? normalized.height,
+  }
+}
+
+export function applyMaskRectangleCornerRadiusValue(
+  mask: MaskConfigPatch | Partial<MaskConfig> | null | undefined,
+  patch: Partial<MaskRectangleCornerRadiusValue>,
+  textureSize?: Partial<MaskTextureSize> | null,
+): MaskConfig {
+  const normalized = normalizeMaskConfig(mask, textureSize)
+  if (normalized.type !== 'rectangle') {
+    return normalized
+  }
+
+  return {
+    ...normalized,
+    cornerRadius: normalizeRectangleCornerRadius(
+      patch.cornerRadius ?? normalized.cornerRadius,
+      normalized.width,
+      normalized.height,
+    ),
+  }
+}
+
+export function applyMaskEllipseSizeValue(
+  mask: MaskConfigPatch | Partial<MaskConfig> | null | undefined,
+  patch: Partial<MaskEllipseSizeValue>,
+  textureSize?: Partial<MaskTextureSize> | null,
+): MaskConfig {
+  const normalized = normalizeMaskConfig(mask, textureSize)
+  if (normalized.type !== 'ellipse') {
+    return normalized
+  }
+
+  return {
+    ...normalized,
+    ellipseWidth: patch.ellipseWidth ?? normalized.ellipseWidth,
+    ellipseHeight: patch.ellipseHeight ?? normalized.ellipseHeight,
+  }
+}
+
+export function applyMaskMirrorValue(
+  mask: MaskConfigPatch | Partial<MaskConfig> | null | undefined,
+  patch: Partial<MaskMirrorValue>,
+  textureSize?: Partial<MaskTextureSize> | null,
+): MaskConfig {
+  const normalized = normalizeMaskConfig(mask, textureSize)
+  if (normalized.type !== 'mirror') {
+    return normalized
+  }
+
+  return {
+    ...normalized,
+    length: patch.length ?? normalized.length,
+  }
+}
+
 export function setMaskPropertyValue(
   mask: MaskConfigPatch | Partial<MaskConfig> | null | undefined,
   path: MaskPropertyPath,
   value: number,
   textureSize?: Partial<MaskTextureSize> | null,
 ): MaskConfig {
-  const normalized = normalizeMaskConfig(mask, textureSize)
-
   switch (path) {
     case 'mask.centerX':
-      return { ...normalized, centerX: value }
+      return applyMaskCenterValue(mask, { centerX: value }, textureSize)
     case 'mask.centerY':
-      return { ...normalized, centerY: value }
+      return applyMaskCenterValue(mask, { centerY: value }, textureSize)
     case 'mask.rotation':
-      return { ...normalized, rotation: value }
+      return applyMaskRotationValue(mask, { rotation: value }, textureSize)
     case 'mask.width':
-      return normalized.type === 'rectangle' ? { ...normalized, width: value } : normalized
+      return applyMaskRectangleSizeValue(mask, { width: value }, textureSize)
     case 'mask.height':
-      return normalized.type === 'rectangle' ? { ...normalized, height: value } : normalized
+      return applyMaskRectangleSizeValue(mask, { height: value }, textureSize)
     case 'mask.cornerRadius':
-      return normalized.type === 'rectangle' ? { ...normalized, cornerRadius: value } : normalized
+      return applyMaskRectangleCornerRadiusValue(mask, { cornerRadius: value }, textureSize)
     case 'mask.ellipseWidth':
-      return normalized.type === 'ellipse' ? { ...normalized, ellipseWidth: value } : normalized
+      return applyMaskEllipseSizeValue(mask, { ellipseWidth: value }, textureSize)
     case 'mask.ellipseHeight':
-      return normalized.type === 'ellipse' ? { ...normalized, ellipseHeight: value } : normalized
+      return applyMaskEllipseSizeValue(mask, { ellipseHeight: value }, textureSize)
     case 'mask.length':
-      return normalized.type === 'mirror' ? { ...normalized, length: value } : normalized
+      return applyMaskMirrorValue(mask, { length: value }, textureSize)
     case 'mask.outerRange':
-      return {
-        ...normalized,
-        falloff: {
-          ...normalized.falloff,
-          outerRange: value,
-        },
-      }
+      return applyMaskFeatherValue(mask, { outerRange: value }, textureSize)
     case 'mask.decayRate':
-      return {
-        ...normalized,
-        falloff: {
-          ...normalized.falloff,
-          decayRate: value,
-        },
-      }
+      return applyMaskIntensityValue(mask, { decayRate: value }, textureSize)
   }
+}
+
+// Deprecated compatibility aliases.
+export type MaskCommonValue = MaskCenterValue & MaskRotationValue & MaskFeatherValue & MaskIntensityValue
+export type MaskRectangleValue = MaskRectangleSizeValue & MaskRectangleCornerRadiusValue
+export type MaskEllipseValue = MaskEllipseSizeValue
+
+export function getMaskCommonValue(
+  mask?: MaskConfigPatch | Partial<MaskConfig> | null,
+  textureSize?: Partial<MaskTextureSize> | null,
+): MaskCommonValue {
+  return {
+    ...getMaskCenterValue(mask, textureSize),
+    ...getMaskRotationValue(mask, textureSize),
+    ...getMaskFeatherValue(mask, textureSize),
+    ...getMaskIntensityValue(mask, textureSize),
+  }
+}
+
+export function getMaskRectangleValue(
+  mask?: MaskConfigPatch | Partial<MaskConfig> | null,
+  textureSize?: Partial<MaskTextureSize> | null,
+): MaskRectangleValue {
+  return {
+    ...getMaskRectangleSizeValue(mask, textureSize),
+    ...getMaskRectangleCornerRadiusValue(mask, textureSize),
+  }
+}
+
+export function getMaskEllipseValue(
+  mask?: MaskConfigPatch | Partial<MaskConfig> | null,
+  textureSize?: Partial<MaskTextureSize> | null,
+): MaskEllipseValue {
+  return getMaskEllipseSizeValue(mask, textureSize)
+}
+
+export function applyMaskCommonValue(
+  mask: MaskConfigPatch | Partial<MaskConfig> | null | undefined,
+  patch: Partial<MaskCommonValue>,
+  textureSize?: Partial<MaskTextureSize> | null,
+): MaskConfig {
+  return applyMaskIntensityValue(
+    applyMaskFeatherValue(
+      applyMaskRotationValue(
+        applyMaskCenterValue(mask, patch, textureSize),
+        patch,
+        textureSize,
+      ),
+      patch,
+      textureSize,
+    ),
+    patch,
+    textureSize,
+  )
+}
+
+export function applyMaskRectangleValue(
+  mask: MaskConfigPatch | Partial<MaskConfig> | null | undefined,
+  patch: Partial<MaskRectangleValue>,
+  textureSize?: Partial<MaskTextureSize> | null,
+): MaskConfig {
+  return applyMaskRectangleCornerRadiusValue(
+    applyMaskRectangleSizeValue(mask, patch, textureSize),
+    patch,
+    textureSize,
+  )
+}
+
+export function applyMaskEllipseValue(
+  mask: MaskConfigPatch | Partial<MaskConfig> | null | undefined,
+  patch: Partial<MaskEllipseValue>,
+  textureSize?: Partial<MaskTextureSize> | null,
+): MaskConfig {
+  return applyMaskEllipseSizeValue(mask, patch, textureSize)
 }

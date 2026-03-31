@@ -153,6 +153,8 @@ export const useUnifiedStore = defineStore('unified', () => {
     deleteKeyframeWithHistory: historyOperations.deleteKeyframeWithHistory,
     updatePropertyWithHistory: historyOperations.updatePropertyWithHistory,
     updateMaskWithHistory: historyOperations.updateMaskWithHistory,
+    updateAnimationGroupValueWithHistory: historyOperations.updateAnimationGroupValueWithHistory,
+    updateAnimationGroupsBatchWithHistory: historyOperations.updateAnimationGroupsBatchWithHistory,
     clearAllKeyframesWithHistory: historyOperations.clearAllKeyframesWithHistory,
     toggleKeyframeWithHistory: historyOperations.toggleKeyframeWithHistory,
     toggleProportionalScaleWithHistory: historyOperations.toggleProportionalScaleWithHistory,

@@ -18,15 +18,11 @@ import { generateCommandId } from '@/core/utils/idGenerator'
 import {
   createChannelKeyframe,
   enableAnimation,
-  initializeAnimation,
   sortKeyframes,
 } from '@/core/utils/unifiedKeyframeUtils'
 import type { AnimationChannelKey } from '@/core/timelineitem/bunnytype'
-import type { MediaType } from '@/core/mediaitem'
-import type { AnimateKeyframe } from '@/core/timelineitem/bunnytype'
-
-type ChannelEntry = { keyframes: AnimateKeyframe<MediaType, AnimationChannelKey>[] }
-type ChannelMap = Partial<Record<AnimationChannelKey, ChannelEntry>>
+import { normalizeAnimationGroupId } from '@/core/timelineitem/bunnytype'
+import { ensureTrack } from '@/core/animation/engine'
 
 export class CreateKeyframeCommand implements SimpleCommand {
   public readonly id: string
@@ -83,27 +79,15 @@ export class CreateKeyframeCommand implements SimpleCommand {
     try {
       enableAnimation(item)
 
-      // 2. 创建关键帧
-      const channels = item.animation!.channels as ChannelMap
-      if (!channels[this.channel]) {
-        channels[this.channel] = { keyframes: [] }
+      const groupId = normalizeAnimationGroupId(this.channel)
+      if (!groupId) {
+        throw new Error(`无法识别动画组: ${this.channel}`)
       }
       const keyframe = createChannelKeyframe(item, this.frame, this.channel)
-      const channelEntry = channels[this.channel]
-      if (!channelEntry) {
-        throw new Error(`无法创建关键帧通道: ${this.channel}`)
-      }
-      channelEntry.keyframes.push(keyframe)
+      ensureTrack(item, groupId).keyframes.push(keyframe as never)
 
-      // 3. 排序关键帧
       sortKeyframes(item, this.channel)
-
-      // 4. 动画更新已迁移到 Bunny 组件，无需手动更新
-
-      // 5. 保存执行后的状态快照
       this.afterSnapshot = createSnapshot(item)
-
-      // 6. 重做关键帧操作时，跳转到相关帧位置
       if (this.playbackControls) {
         this.playbackControls.seekTo(this.frame)
       }

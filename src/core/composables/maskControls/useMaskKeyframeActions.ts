@@ -7,7 +7,7 @@ import {
   getNextKeyframeFrame,
   getPreviousKeyframeFrame,
 } from '@/core/utils/unifiedKeyframeUtils'
-import type { MaskChannelKey, UnifiedMaskKeyframeControlsOptions } from './types'
+import type { UnifiedMaskKeyframeControlsOptions, MaskChannelKey } from './types'
 
 type UnifiedStoreInstance = ReturnType<typeof useUnifiedStore>
 
@@ -58,55 +58,36 @@ export function useMaskKeyframeActions(options: MaskKeyframeActionsOptions) {
   async function setMaskProperty(path: MaskPropertyPath, value: number) {
     const item = selectedTimelineItem.value
     if (!item) return
-
-    await unifiedStore.updateMaskWithHistory(item.id, currentFrame.value, {
-      type: 'set-property',
-      path,
-      value,
-    })
+    await unifiedStore.updatePropertyWithHistory(item.id, currentFrame.value, path, value)
   }
 
   async function setEnabled(value: boolean) {
     const item = selectedTimelineItem.value
     if (!item) return
-
-    await unifiedStore.updateMaskWithHistory(item.id, currentFrame.value, {
-      type: 'set-enabled',
-      value,
-    })
+    await unifiedStore.updateMaskWithHistory(item.id, currentFrame.value, { type: 'set-enabled', value })
   }
 
   async function setType(value: MaskType) {
     const item = selectedTimelineItem.value
     if (!item) return
-
-    await unifiedStore.updateMaskWithHistory(item.id, currentFrame.value, {
-      type: 'set-type',
-      value,
-    })
+    await unifiedStore.updateMaskWithHistory(item.id, currentFrame.value, { type: 'set-type', value })
   }
 
   async function setInverted(value: boolean) {
     const item = selectedTimelineItem.value
     if (!item) return
-
-    await unifiedStore.updateMaskWithHistory(item.id, currentFrame.value, {
-      type: 'set-inverted',
-      value,
-    })
+    await unifiedStore.updateMaskWithHistory(item.id, currentFrame.value, { type: 'set-inverted', value })
   }
 
   async function toggleMaskKeyframe(channel: MaskChannelKey) {
     const item = selectedTimelineItem.value
     if (!item) return
-
     await unifiedStore.toggleKeyframeWithHistory(item.id, currentFrame.value, channel)
   }
 
   function goToPreviousMaskKeyframe(channel: MaskChannelKey) {
     const item = selectedTimelineItem.value
     if (!item) return
-
     const frame = getPreviousKeyframeFrame(item, currentFrame.value, channel)
     if (frame !== null) {
       unifiedStore.seekToFrame(frame)
@@ -116,7 +97,6 @@ export function useMaskKeyframeActions(options: MaskKeyframeActionsOptions) {
   function goToNextMaskKeyframe(channel: MaskChannelKey) {
     const item = selectedTimelineItem.value
     if (!item) return
-
     const frame = getNextKeyframeFrame(item, currentFrame.value, channel)
     if (frame !== null) {
       unifiedStore.seekToFrame(frame)

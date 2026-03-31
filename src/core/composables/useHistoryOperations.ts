@@ -40,12 +40,20 @@ import {
   UpdatePropertyCommand,
   UpdateMaskCommand,
   ClearAllKeyframesCommand,
-  ToggleKeyframeCommand,
+  SetAnimationGroupValueCommand,
+  ToggleAnimationGroupKeyframeCommand,
+  BatchSetAnimationGroupValuesCommand,
   type TimelineModule as KeyframeTimelineModule,
   type PlaybackControls,
 } from '@/core/modules/commands/keyframeCommands'
 import type { MaskUpdateAction } from '@/core/modules/commands/keyframes/UpdateMaskCommand'
 import { ToggleProportionalScaleCommand } from '@/core/modules/commands/ToggleProportionalScaleCommand'
+import type {
+  AnimationChannelKey,
+  AnimationGroupId,
+  AnimationGroupValueMap,
+} from '@/core/timelineitem/bunnytype'
+import { getAnimationGroupForProperty } from '@/core/timelineitem/bunnytype'
 
 // 变换属性类型定义
 interface TransformProperties {
@@ -771,7 +779,11 @@ export function useHistoryOperations(
    * @param timelineItemId 时间轴项目ID
    * @param frame 帧数
    */
-  async function createKeyframeWithHistory(timelineItemId: string, frame: number) {
+  async function createKeyframeWithHistory(
+    timelineItemId: string,
+    frame: number,
+    groupId: AnimationChannelKey = 'transform.layout',
+  ) {
     try {
       console.log('🎬 [useHistoryOperations] 创建关键帧:', { timelineItemId, frame })
 
@@ -779,7 +791,7 @@ export function useHistoryOperations(
       const command = new CreateKeyframeCommand(
         timelineItemId,
         frame,
-        'layout',
+        groupId,
         unifiedTimelineModule,
         {
           seekTo: (frame: number) => {
@@ -812,7 +824,7 @@ export function useHistoryOperations(
       const command = new DeleteKeyframeCommand(
         timelineItemId,
         frame,
-        'layout',
+        'transform.layout',
         unifiedTimelineModule,
         {
           seekTo: (frame: number) => {
@@ -838,12 +850,84 @@ export function useHistoryOperations(
    * @param property 属性名
    * @param value 新值
    */
+  async function updateAnimationGroupValueWithHistory<G extends AnimationGroupId>(
+    timelineItemId: string,
+    frame: number,
+    groupId: G,
+    patch: Partial<AnimationGroupValueMap[G]>,
+  ) {
+    try {
+      const command = new SetAnimationGroupValueCommand(
+        timelineItemId,
+        frame,
+        groupId,
+        patch,
+        unifiedTimelineModule,
+        {
+          seekTo: (nextFrame: number) => {
+            console.log('🔍 动画组操作播放头控制:', nextFrame)
+          },
+        },
+      )
+
+      await unifiedHistoryModule.executeCommand(command)
+    } catch (error) {
+      console.error('❌ [useHistoryOperations] 动画组更新失败:', error)
+      throw error
+    }
+  }
+
+  async function updateAnimationGroupsBatchWithHistory(
+    timelineItemId: string,
+    frame: number,
+    updates: Array<{
+      groupId: AnimationGroupId
+      patch: Partial<AnimationGroupValueMap[AnimationGroupId]>
+    }>,
+  ) {
+    try {
+      const commands = updates.map((update) => new SetAnimationGroupValueCommand(
+        timelineItemId,
+        frame,
+        update.groupId,
+        update.patch,
+        unifiedTimelineModule,
+        {
+          seekTo: (nextFrame: number) => {
+            console.log('🔍 动画组批量操作播放头控制:', nextFrame)
+          },
+        },
+      ))
+
+      await unifiedHistoryModule.executeBatchCommand(
+        new BatchSetAnimationGroupValuesCommand([timelineItemId], commands),
+      )
+    } catch (error) {
+      console.error('❌ [useHistoryOperations] 动画组批量更新失败:', error)
+      throw error
+    }
+  }
+
   async function updatePropertyWithHistory(
     timelineItemId: string,
     frame: number,
     property: string,
     value: any,
   ) {
+    const groupId = getAnimationGroupForProperty(property)
+    if (groupId && typeof value === 'number') {
+      const patchKey = property.startsWith('mask.')
+        ? property.replace('mask.', '')
+        : property
+      await updateAnimationGroupValueWithHistory(
+        timelineItemId,
+        frame,
+        groupId,
+        { [patchKey]: value } as never,
+      )
+      return
+    }
+
     try {
       console.log('🎬 [useHistoryOperations] 更新关键帧属性:', {
         timelineItemId,
@@ -935,13 +1019,10 @@ export function useHistoryOperations(
   async function toggleKeyframeWithHistory(
     timelineItemId: string,
     frame: number,
-    channel: any = 'layout',
+    channel: AnimationChannelKey = 'transform.layout',
   ) {
     try {
-      console.log('🎬 [useHistoryOperations] 切换关键帧:', { timelineItemId, frame })
-
-      // 创建切换关键帧命令
-      const command = new ToggleKeyframeCommand(
+      const command = new ToggleAnimationGroupKeyframeCommand(
         timelineItemId,
         frame,
         channel,
@@ -955,8 +1036,6 @@ export function useHistoryOperations(
 
       // 执行命令（带历史记录）
       await unifiedHistoryModule.executeCommand(command)
-
-      console.log('✅ [useHistoryOperations] 关键帧切换成功')
     } catch (error) {
       console.error('❌ [useHistoryOperations] 关键帧切换失败:', error)
       throw error
@@ -1010,6 +1089,8 @@ export function useHistoryOperations(
     updateMaskWithHistory,
     clearAllKeyframesWithHistory,
     toggleKeyframeWithHistory,
+    updateAnimationGroupValueWithHistory,
+    updateAnimationGroupsBatchWithHistory,
     toggleProportionalScaleWithHistory,
   }
 }
