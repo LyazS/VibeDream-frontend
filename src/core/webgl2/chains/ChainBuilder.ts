@@ -3,7 +3,8 @@ import type { UnifiedMediaItemData } from '@/core/mediaitem/types'
 import { TimelineItemQueries } from '@/core/timelineitem/queries'
 import type { UnifiedTimelineItemData } from '@/core/timelineitem/type'
 import { CompositeToMainPass } from '@/core/webgl2/passes/CompositeToMainPass'
-import { DrawSourcePass } from '@/core/webgl2/passes/DrawSourcePass'
+import { ItemLocalRasterPass } from '@/core/webgl2/passes/ItemLocalRasterPass'
+import { MaskPass } from '@/core/webgl2/passes/MaskPass'
 import { RotateSourcePass } from '@/core/webgl2/passes/RotateSourcePass'
 import { RenderChain } from '@/core/webgl2/renderchain/RenderChain'
 import type { ProgramManager } from '@/core/webgl2/runtime/ProgramManager'
@@ -19,7 +20,7 @@ export type VisualTimelineItem =
 
 interface ChainBuilderParams {
   programs: Pick<ProgramManager, 'createProgram'>
-  targets: Pick<RenderTargetPool, 'releaseRenderTarget'>
+  targets: Pick<RenderTargetPool, 'releaseRenderTarget' | 'ensureRenderTarget'>
   getSourceTextureId: (itemId: string) => string | null
   getMediaItem: (mediaItemId: string) => UnifiedMediaItemData | undefined
 }
@@ -35,6 +36,7 @@ export class ChainBuilder {
 
   build(item: VisualTimelineItem): RenderChain {
     const itemTargetTextureId = `item:${item.id}`
+    const maskedItemTextureId = `mask:${item.id}`
     const clockwiseRotationSourceTextureId = `clockwiseRotation-source:${item.id}`
     const clockwiseRotation = TimelineItemQueries.isVideoTimelineItem(item)
       ? this.params.getMediaItem(item.mediaItemId)?.runtime.bunny?.bunnyMedia
@@ -42,6 +44,9 @@ export class ChainBuilder {
         item.runtime.bunnyClip?.clockwiseRotation ??
         0
       : 0
+
+    const renderConfig = TimelineItemQueries.getRenderConfig(item)
+    const hasMask = Boolean(renderConfig.mask?.enabled)
 
     const passes = [
       new RotateSourcePass(
@@ -52,24 +57,39 @@ export class ChainBuilder {
         () => this.params.getSourceTextureId(item.id),
         clockwiseRotation,
       ),
-      new DrawSourcePass(
-        `draw:${item.id}`,
+      new ItemLocalRasterPass(
+        `item-local:${item.id}`,
         this.params.programs,
         itemTargetTextureId,
         this.params.targets,
         () => clockwiseRotationSourceTextureId,
+        () => {
+          const config = TimelineItemQueries.getRenderConfig(item)
+          return {
+            width: config.width,
+            height: config.height,
+          }
+        },
       ),
+      ...(hasMask
+        ? [new MaskPass(
+            `mask:${item.id}`,
+            this.params.programs,
+            itemTargetTextureId,
+            maskedItemTextureId,
+            this.params.targets,
+            () => TimelineItemQueries.getRenderConfig(item).mask,
+          )]
+        : []),
       new CompositeToMainPass(
         this.params.programs,
         `composite:${item.id}`,
-        itemTargetTextureId,
+        hasMask ? maskedItemTextureId : itemTargetTextureId,
         () => {
           const config = TimelineItemQueries.getRenderConfig(item)
           return {
             x: config.x,
             y: config.y,
-            width: config.width,
-            height: config.height,
             rotationRadians: degreesToRadians(-config.rotation),
             opacity: config.opacity ?? 1,
           }
@@ -78,5 +98,10 @@ export class ChainBuilder {
     ]
 
     return new RenderChain(`chain:${item.id}`, passes)
+  }
+
+  getSignature(item: VisualTimelineItem): string {
+    const mask = TimelineItemQueries.getRenderConfig(item).mask
+    return `mask:${mask?.enabled ? 'on' : 'off'}:${mask?.type ?? 'rectangle'}`
   }
 }

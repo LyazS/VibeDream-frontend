@@ -65,7 +65,7 @@ export class CompositeToMainPass implements RenderPass {
       ctx.canvasHeight,
     )
     gl.uniform2f(gl.getUniformLocation(this.program, 'u_translation'), uniforms.x, uniforms.y)
-    gl.uniform2f(gl.getUniformLocation(this.program, 'u_scale'), uniforms.width, uniforms.height)
+    gl.uniform2f(gl.getUniformLocation(this.program, 'u_scale'), overlay.width, overlay.height)
     gl.uniform1f(gl.getUniformLocation(this.program, 'u_rotation'), uniforms.rotationRadians)
     gl.uniform1f(gl.getUniformLocation(this.program, 'u_opacity'), uniforms.opacity)
 

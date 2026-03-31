@@ -5,6 +5,8 @@ import type { UnifiedDirectoryModule } from './UnifiedDirectoryModule'
 import type { CharacterDirectory } from '@/core/directory/types'
 import type { FileData } from '@/core/datasource/providers/ai-generation/types'
 
+export type PropertyTabKey = 'basic' | 'mask' | 'filter' | 'animation'
+
 /**
  * 角色编辑器状态接口
  */
@@ -26,6 +28,7 @@ export function createUnifiedUIModule(registry: ModuleRegistry): {
   // 状态
   isChatPanelVisible: Ref<boolean>
   aiPanelActiveTab: Ref<'ai-generate' | 'agent' | 'character-editor'>
+  activePropertyTab: Ref<PropertyTabKey>
   characterEditorState: Ref<CharacterEditorState>
 
   // 角色编辑器计算属性
@@ -36,6 +39,7 @@ export function createUnifiedUIModule(registry: ModuleRegistry): {
 
   // AI 面板状态管理方法
   setChatPanelVisible: (visible: boolean) => void
+  setActivePropertyTab: (tab: PropertyTabKey) => void
 
   // 角色编辑器方法
   openCharacterEditor: (mode: 'create' | 'edit', characterId?: string) => void
@@ -51,6 +55,9 @@ export function createUnifiedUIModule(registry: ModuleRegistry): {
 
   // AI 面板当前激活的标签页
   const aiPanelActiveTab = ref<'ai-generate' | 'agent' | 'character-editor'>('agent')
+
+  // 属性面板当前激活的标签页
+  const activePropertyTab = ref<PropertyTabKey>('basic')
 
   // 角色编辑器状态
   const characterEditorState = ref<CharacterEditorState>({
@@ -120,6 +127,10 @@ export function createUnifiedUIModule(registry: ModuleRegistry): {
     isChatPanelVisible.value = visible
   }
 
+  function setActivePropertyTab(tab: PropertyTabKey): void {
+    activePropertyTab.value = tab
+  }
+
   /**
    * 打开角色编辑器
    */
@@ -169,6 +180,7 @@ export function createUnifiedUIModule(registry: ModuleRegistry): {
     // AI 面板状态
     isChatPanelVisible,
     aiPanelActiveTab,
+    activePropertyTab,
 
     // 角色编辑器状态
     characterEditorState,
@@ -181,6 +193,7 @@ export function createUnifiedUIModule(registry: ModuleRegistry): {
 
     // AI 面板状态管理方法
     setChatPanelVisible,
+    setActivePropertyTab,
 
     // 角色编辑器方法
     openCharacterEditor,

@@ -4,66 +4,31 @@
       <h4>{{ t('properties.visual.visualProperties') }}</h4>
 
       <!-- 位置控制 -->
-      <div class="property-item">
-        <label :class="getAnimatedLabelClass(layoutButtonState)">
-          {{ t('properties.transform.position') }}
-        </label>
-        <div class="position-controls">
-          <div class="position-input-group">
-            <span class="position-label">{{ t('properties.transform.positionX') }}</span>
-            <NumberInput
-              :model-value="transformX"
-              @change="setTransformXDirectly"
-              :disabled="!canOperateTransforms"
-              :min="positionLimits.minX"
-              :max="positionLimits.maxX"
-              :step="1"
-              :precision="0"
-              :placeholder="t('properties.transform.centerFor0')"
-            />
-          </div>
-          <div class="position-input-group">
-            <span class="position-label">{{ t('properties.transform.positionY') }}</span>
-            <NumberInput
-              :model-value="transformY"
-              @change="setTransformYDirectly"
-              :disabled="!canOperateTransforms"
-              :min="positionLimits.minY"
-              :max="positionLimits.maxY"
-              :step="1"
-              :precision="0"
-              :placeholder="t('properties.transform.centerFor0')"
-            />
-          </div>
-          <div class="keyframe-nav-group">
-            <button
-              class="keyframe-nav-btn"
-              :disabled="!canOperateTransforms || !hasPreviousChannelKeyframe('layout')"
-              :title="t('properties.keyframes.previousKeyframe')"
-              @click="goToPreviousChannelKeyframe('layout')"
-            >
-              <component :is="IconComponents.PREV_KEYFRAME" size="11px" />
-            </button>
-            <button
-              class="property-keyframe-btn"
-              :class="`state-${layoutButtonState}`"
-              :title="getChannelKeyframeTooltip('layout')"
-              :disabled="!canOperateTransforms"
-              @click="toggleChannelKeyframe('layout')"
-            >
-              ◆
-            </button>
-            <button
-              class="keyframe-nav-btn"
-              :disabled="!canOperateTransforms || !hasNextChannelKeyframe('layout')"
-              :title="t('properties.keyframes.nextKeyframe')"
-              @click="goToNextChannelKeyframe('layout')"
-            >
-              <component :is="IconComponents.NEXT_KEYFRAME" size="11px" />
-            </button>
-          </div>
-        </div>
-      </div>
+      <KeyframedDualNumberField
+        :label="t('properties.transform.position')"
+        :state="layoutButtonState"
+        :tooltip="getChannelKeyframeTooltip('layout')"
+        :disabled="!canOperateTransforms"
+        :has-previous="hasPreviousChannelKeyframe('layout')"
+        :has-next="hasNextChannelKeyframe('layout')"
+        :first-label="t('properties.transform.positionX')"
+        :second-label="t('properties.transform.positionY')"
+        :first-value="transformX"
+        :second-value="transformY"
+        :first-min="positionLimits.minX"
+        :first-max="positionLimits.maxX"
+        :second-min="positionLimits.minY"
+        :second-max="positionLimits.maxY"
+        :step="1"
+        :precision="0"
+        :first-placeholder="t('properties.transform.centerFor0')"
+        :second-placeholder="t('properties.transform.centerFor0')"
+        @first-change="setTransformXDirectly"
+        @second-change="setTransformYDirectly"
+        @previous="goToPreviousChannelKeyframe('layout')"
+        @toggle="toggleChannelKeyframe('layout')"
+        @next="goToNextChannelKeyframe('layout')"
+      />
 
       <!-- 水平对齐 -->
       <div class="property-item">
@@ -247,116 +212,48 @@
         </div>
       </div>
       <!-- 旋转 -->
-      <div class="property-item">
-        <label :class="getAnimatedLabelClass(rotationButtonState)">
-          {{ t('properties.transform.rotation') }}
-        </label>
-        <div class="rotation-controls">
-          <SliderInput
-            :model-value="rotation"
-            @input="setRotationDeferred"
-            @change="commitDeferredUpdates"
-            :disabled="!canOperateTransforms"
-            :min="-180"
-            :max="180"
-            :step="0.1"
-            slider-class="rotation-slider"
-          />
-          <NumberInput
-            :model-value="rotation"
-            @change="setRotationDirectly"
-            :disabled="!canOperateTransforms"
-            :step="1"
-            :precision="1"
-            :show-controls="false"
-            input-class="scale-input"
-          />
-          <div class="keyframe-nav-group">
-            <button
-              class="keyframe-nav-btn"
-              :disabled="!canOperateTransforms || !hasPreviousChannelKeyframe('rotation')"
-              :title="t('properties.keyframes.previousKeyframe')"
-              @click="goToPreviousChannelKeyframe('rotation')"
-            >
-              <component :is="IconComponents.PREV_KEYFRAME" size="11px" />
-            </button>
-            <button
-              class="property-keyframe-btn"
-              :class="`state-${rotationButtonState}`"
-              :title="getChannelKeyframeTooltip('rotation')"
-              :disabled="!canOperateTransforms"
-              @click="toggleChannelKeyframe('rotation')"
-            >
-              ◆
-            </button>
-            <button
-              class="keyframe-nav-btn"
-              :disabled="!canOperateTransforms || !hasNextChannelKeyframe('rotation')"
-              :title="t('properties.keyframes.nextKeyframe')"
-              @click="goToNextChannelKeyframe('rotation')"
-            >
-              <component :is="IconComponents.NEXT_KEYFRAME" size="11px" />
-            </button>
-          </div>
-        </div>
-      </div>
+      <KeyframedSliderField
+        :label="t('properties.transform.rotation')"
+        :state="rotationButtonState"
+        :tooltip="getChannelKeyframeTooltip('rotation')"
+        :disabled="!canOperateTransforms"
+        :has-previous="hasPreviousChannelKeyframe('rotation')"
+        :has-next="hasNextChannelKeyframe('rotation')"
+        :value="rotation"
+        :min="-180"
+        :max="180"
+        :step="0.1"
+        :precision="1"
+        slider-class="rotation-slider"
+        @slider-input="setRotationDeferred"
+        @slider-change="commitDeferredUpdates"
+        @number-change="setRotationDirectly"
+        @previous="goToPreviousChannelKeyframe('rotation')"
+        @toggle="toggleChannelKeyframe('rotation')"
+        @next="goToNextChannelKeyframe('rotation')"
+      />
 
       <!-- 透明度 -->
-      <div class="property-item">
-        <label :class="getAnimatedLabelClass(opacityButtonState)">
-          {{ t('properties.transform.opacity') }}
-        </label>
-        <div class="opacity-controls">
-          <SliderInput
-            :model-value="opacity"
-            @input="setOpacityDeferred"
-            @change="commitDeferredUpdates"
-            :disabled="!canOperateTransforms"
-            :min="0"
-            :max="1"
-            :step="0.01"
-            slider-class="opacity-slider"
-          />
-          <NumberInput
-            :model-value="opacity"
-            @change="setOpacityDirectly"
-            :disabled="!canOperateTransforms"
-            :min="0"
-            :max="1"
-            :step="0.01"
-            :precision="2"
-            :show-controls="false"
-            input-class="scale-input"
-          />
-          <div class="keyframe-nav-group">
-            <button
-              class="keyframe-nav-btn"
-              :disabled="!canOperateTransforms || !hasPreviousChannelKeyframe('opacity')"
-              :title="t('properties.keyframes.previousKeyframe')"
-              @click="goToPreviousChannelKeyframe('opacity')"
-            >
-              <component :is="IconComponents.PREV_KEYFRAME" size="11px" />
-            </button>
-            <button
-              class="property-keyframe-btn"
-              :class="`state-${opacityButtonState}`"
-              :title="getChannelKeyframeTooltip('opacity')"
-              :disabled="!canOperateTransforms"
-              @click="toggleChannelKeyframe('opacity')"
-            >
-              ◆
-            </button>
-            <button
-              class="keyframe-nav-btn"
-              :disabled="!canOperateTransforms || !hasNextChannelKeyframe('opacity')"
-              :title="t('properties.keyframes.nextKeyframe')"
-              @click="goToNextChannelKeyframe('opacity')"
-            >
-              <component :is="IconComponents.NEXT_KEYFRAME" size="11px" />
-            </button>
-          </div>
-        </div>
-      </div>
+      <KeyframedSliderField
+        :label="t('properties.transform.opacity')"
+        :state="opacityButtonState"
+        :tooltip="getChannelKeyframeTooltip('opacity')"
+        :disabled="!canOperateTransforms"
+        :has-previous="hasPreviousChannelKeyframe('opacity')"
+        :has-next="hasNextChannelKeyframe('opacity')"
+        :value="opacity"
+        :min="0"
+        :max="1"
+        :step="0.01"
+        :precision="2"
+        slider-class="opacity-slider"
+        @slider-input="setOpacityDeferred"
+        @slider-change="commitDeferredUpdates"
+        @number-change="setOpacityDirectly"
+        @previous="goToPreviousChannelKeyframe('opacity')"
+        @toggle="toggleChannelKeyframe('opacity')"
+        @next="goToNextChannelKeyframe('opacity')"
+      />
     </div>
   </div>
 </template>
@@ -370,6 +267,8 @@ import { IconComponents } from '@/constants/iconComponents'
 import type { UnifiedTimelineItemData } from '@/core/timelineitem/type'
 import NumberInput from '@/components/base/NumberInput.vue'
 import SliderInput from '@/components/base/SliderInput.vue'
+import KeyframedDualNumberField from '@/components/properties/common/KeyframedDualNumberField.vue'
+import KeyframedSliderField from '@/components/properties/common/KeyframedSliderField.vue'
 
 interface Props {
   selectedTimelineItem: UnifiedTimelineItemData | null
@@ -617,76 +516,6 @@ const handleFillCanvas = () => {
   align-items: center;
   gap: var(--spacing-xs);
   flex: 1;
-}
-
-.keyframe-nav-group {
-  display: flex;
-  align-items: center;
-  gap: 0;
-  margin-left: auto;
-  flex: 0 0 auto;
-}
-
-.keyframe-nav-btn {
-  width: 12px;
-  height: 22px;
-  border-radius: 0;
-  border: none;
-  background: transparent;
-  color: var(--color-text-secondary);
-  cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0;
-  transition: all var(--transition-fast);
-  flex: 0 0 auto;
-}
-
-.keyframe-nav-group > .property-keyframe-btn {
-  border-radius: var(--border-radius-small);
-}
-
-.keyframe-nav-btn:hover:not(:disabled) {
-  background: transparent;
-  color: var(--color-text-primary);
-}
-
-.keyframe-nav-btn:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-  background: transparent;
-  color: var(--color-text-muted);
-}
-
-.property-keyframe-btn {
-  width: 22px;
-  height: 22px;
-  border-radius: var(--border-radius-small);
-  border: 1px solid var(--color-border-secondary);
-  background: var(--color-bg-active);
-  color: var(--color-text-secondary);
-  cursor: pointer;
-  font-size: 12px;
-  line-height: 1;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.property-keyframe-btn.state-on-keyframe {
-  color: #5ba6ff;
-  border-color: #5ba6ff;
-}
-
-.property-keyframe-btn.state-between-keyframes {
-  color: #d9a441;
-  border-color: #d9a441;
-}
-
-.property-keyframe-btn:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
 }
 
 .animated-property-label--on-keyframe {

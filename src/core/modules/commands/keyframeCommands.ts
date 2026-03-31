@@ -9,6 +9,7 @@ export {
   CreateKeyframeCommand,
   DeleteKeyframeCommand,
   UpdatePropertyCommand,
+  UpdateMaskCommand,
   ClearAllKeyframesCommand,
   ToggleKeyframeCommand,
   type KeyframeSnapshot,

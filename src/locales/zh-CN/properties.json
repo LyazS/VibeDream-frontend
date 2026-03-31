@@ -31,6 +31,28 @@
     "visual": {
       "visualProperties": "视觉属性"
     },
+    "mask": {
+      "enabled": "启用",
+      "type": "类型",
+      "inverted": "反相",
+      "center": "中心点",
+      "outerRange": "羽化",
+      "decayRate": "强度",
+      "size": "宽高",
+      "widthShort": "W",
+      "heightShort": "H",
+      "cornerRadius": "圆角",
+      "length": "长度",
+      "types": {
+        "rectangle": "矩形",
+        "ellipse": "椭圆",
+        "linear": "线性",
+        "mirror": "镜面",
+        "rectangleUpper": "矩形",
+        "ellipseUpper": "椭圆",
+        "mirrorUpper": "镜面"
+      }
+    },
     "text": {
       "textProperties": "文本属性"
     },
@@ -73,6 +95,11 @@
       "addKeyframe": "添加关键帧",
       "deleteKeyframe": "删除关键帧",
       "toggleKeyframe": "切换关键帧",
+      "outOfClipRange": "播放头不在当前片段时间范围内，无法操作关键帧",
+      "createAnimation": "点击创建关键帧动画",
+      "deleteCurrent": "当前在关键帧位置，点击删除关键帧",
+      "createAtCurrent": "点击在当前位置创建关键帧",
+      "control": "关键帧控制",
       "goToPrevious": "向前",
       "goToNext": "向后",
       "debugKeyframes": "调试关键帧"

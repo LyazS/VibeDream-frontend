@@ -31,6 +31,28 @@
     "visual": {
       "visualProperties": "Visual Properties"
     },
+    "mask": {
+      "enabled": "Enabled",
+      "type": "Type",
+      "inverted": "Inverted",
+      "center": "Center",
+      "outerRange": "Feather",
+      "decayRate": "Strength",
+      "size": "Size",
+      "widthShort": "W",
+      "heightShort": "H",
+      "cornerRadius": "Corner",
+      "length": "Length",
+      "types": {
+        "rectangle": "Rectangle",
+        "ellipse": "Ellipse",
+        "linear": "Linear",
+        "mirror": "Mirror",
+        "rectangleUpper": "RECTANGLE",
+        "ellipseUpper": "ELLIPSE",
+        "mirrorUpper": "MIRROR"
+      }
+    },
     "text": {
       "textProperties": "Text Properties"
     },
@@ -73,6 +95,11 @@
       "addKeyframe": "Add Keyframe",
       "deleteKeyframe": "Delete Keyframe",
       "toggleKeyframe": "Toggle Keyframe",
+      "outOfClipRange": "The playhead is outside the current clip range, so keyframes cannot be edited",
+      "createAnimation": "Click to create keyframe animation",
+      "deleteCurrent": "You are on a keyframe. Click to delete it",
+      "createAtCurrent": "Click to create a keyframe at the current position",
+      "control": "Keyframe Control",
       "goToPrevious": "Previous",
       "goToNext": "Next",
       "debugKeyframes": "Debug Keyframes"

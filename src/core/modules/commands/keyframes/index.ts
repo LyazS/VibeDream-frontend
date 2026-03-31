@@ -8,6 +8,7 @@
 export { CreateKeyframeCommand } from './CreateKeyframeCommand'
 export { DeleteKeyframeCommand } from './DeleteKeyframeCommand'
 export { UpdatePropertyCommand } from './UpdatePropertyCommand'
+export { UpdateMaskCommand } from './UpdateMaskCommand'
 export { ClearAllKeyframesCommand } from './ClearAllKeyframesCommand'
 export { ToggleKeyframeCommand } from './ToggleKeyframeCommand'
 

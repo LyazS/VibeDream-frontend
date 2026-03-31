@@ -28,6 +28,7 @@ export type {
   AudioMediaConfig,
   TextMediaConfig,
 } from './bunnytype'
+export type { MaskConfig, MaskType } from './mask'
 import type {
   AnimationChannelKey,
   VisualProps,

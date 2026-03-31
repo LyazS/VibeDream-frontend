@@ -5,6 +5,7 @@ import type { TextMediaConfig } from '@/core/timelineitem/type'
 import type { TextStyleConfig } from '@/core/timelineitem/texttype'
 import type { UnifiedTimeRange } from '@/core/types/timeRange'
 import { DEFAULT_TEXT_STYLE } from '@/core/timelineitem/texttype'
+import { createDefaultMaskConfig } from '@/core/timelineitem/mask'
 
 /**
  * 统一架构下的文本时间轴工具函数
@@ -74,6 +75,10 @@ export async function createTextTimelineItem(
     opacity: 1,
     // 等比缩放状态（默认开启）
     proportionalScale: true,
+    mask: createDefaultMaskConfig('rectangle', {
+      width: completeStyle.maxWidth ?? completeStyle.fontSize * 6,
+      height: completeStyle.fontSize * (completeStyle.lineHeight ?? 1.2),
+    }),
   }
 
   // 6. 创建统一时间轴项目（使用新架构，不包含sprite）

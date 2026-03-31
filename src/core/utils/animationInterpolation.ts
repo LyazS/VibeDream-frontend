@@ -11,10 +11,19 @@ import type {
   RotationAnimatableProps,
   OpacityAnimatableProps,
   AudioAnimatableProps,
+  MaskCenterAnimatableProps,
+  MaskRotationAnimatableProps,
+  MaskOuterRangeAnimatableProps,
+  MaskDecayRateAnimatableProps,
+  MaskRectangleSizeAnimatableProps,
+  MaskRectangleCornerAnimatableProps,
+  MaskEllipseSizeAnimatableProps,
+  MaskMirrorLengthAnimatableProps,
 } from '@/core/timelineitem/bunnytype'
 import type { MediaType } from '@/core/mediaitem'
 import { absoluteFrameToRelativeFrame } from './unifiedKeyframeUtils'
 import { frameToPercentage } from './keyframePositionUtils'
+import { type MaskPropertyPath, normalizeMaskConfig, setMaskPropertyValue } from '@/core/timelineitem/mask'
 
 type InterpolatedKeyframe = AnimateKeyframe<MediaType, AnimationChannelKey>
 type AnimationChannelEntry = { keyframes: InterpolatedKeyframe[] }
@@ -24,6 +33,52 @@ type InterpolatableProperties =
   | RotationAnimatableProps
   | OpacityAnimatableProps
   | AudioAnimatableProps
+  | MaskCenterAnimatableProps
+  | MaskRotationAnimatableProps
+  | MaskOuterRangeAnimatableProps
+  | MaskDecayRateAnimatableProps
+  | MaskRectangleSizeAnimatableProps
+  | MaskRectangleCornerAnimatableProps
+  | MaskEllipseSizeAnimatableProps
+  | MaskMirrorLengthAnimatableProps
+
+function createBaseRenderConfig(item: UnifiedTimelineItemData<MediaType>) {
+  const baseConfig = { ...item.config }
+  if ('mask' in baseConfig) {
+    const itemLocalSize =
+      'width' in item.config && 'height' in item.config
+        ? { width: item.config.width, height: item.config.height }
+        : undefined
+    ;(baseConfig as { mask?: ReturnType<typeof normalizeMaskConfig> }).mask = normalizeMaskConfig(
+      (item.config as { mask?: unknown }).mask as never,
+      itemLocalSize,
+    )
+  }
+  return baseConfig
+}
+
+function applyAnimatedPropsToRenderConfig(
+  renderConfig: Record<string, unknown>,
+  animatedProps: Record<string, number>,
+): void {
+  const itemLocalSize =
+    typeof renderConfig.width === 'number' && typeof renderConfig.height === 'number'
+      ? { width: renderConfig.width, height: renderConfig.height }
+      : undefined
+  for (const [property, value] of Object.entries(animatedProps)) {
+    if (property.startsWith('mask.')) {
+      renderConfig.mask = setMaskPropertyValue(
+        (renderConfig as { mask?: unknown }).mask as never,
+        property as MaskPropertyPath,
+        value,
+        itemLocalSize,
+      )
+      continue
+    }
+
+    renderConfig[property] = value
+  }
+}
 
 function lerp(start: number, end: number, t: number): number {
   return start + (end - start) * t
@@ -111,12 +166,9 @@ export function applyAnimationToConfig(
   item: UnifiedTimelineItemData<MediaType>,
   currentAbsoluteFrame: number,
 ): void {
-  if (!item.runtime.renderConfig) {
-    item.runtime.renderConfig = { ...item.config }
-  }
+  item.runtime.renderConfig = createBaseRenderConfig(item) as typeof item.runtime.renderConfig
 
   if (!item.animation?.channels || getAnimationChannels(item).length === 0) {
-    Object.assign(item.runtime.renderConfig, item.config)
     return
   }
 
@@ -125,7 +177,6 @@ export function applyAnimationToConfig(
     currentAbsoluteFrame <= item.timeRange.timelineEndTime
 
   if (!isInTimeRange) {
-    Object.assign(item.runtime.renderConfig, item.config)
     return
   }
 
@@ -134,7 +185,10 @@ export function applyAnimationToConfig(
     return acc
   }, {})
 
-  Object.assign(item.runtime.renderConfig, item.config, animatedProps)
+  applyAnimatedPropsToRenderConfig(
+    item.runtime.renderConfig as unknown as Record<string, unknown>,
+    animatedProps,
+  )
 }
 
 export function applyAnimationsToItems(

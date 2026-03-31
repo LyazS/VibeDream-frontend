@@ -77,6 +77,12 @@
               :current-frame="currentFrame"
             />
 
+            <MaskPropertiesGroup
+              v-else-if="activePropertyTab === 'mask' && selectedTimelineItem && hasVisualProperties(selectedTimelineItem)"
+              :selected-timeline-item="selectedTimelineItem"
+              :current-frame="currentFrame"
+            />
+
             <!-- 预留标签占位 -->
             <div v-else class="tab-placeholder-state">
               <component :is="IconComponents.CHECKBOX_BLANK" size="32px" />
@@ -119,31 +125,42 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, watch } from 'vue'
 import { useUnifiedStore } from '@/core/unifiedStore'
 import { useAppI18n } from '@/core/composables/useI18n'
 import { NScrollbar } from 'naive-ui'
 import type { UnifiedTimelineItemData } from '@/core/timelineitem/type'
 import { getStatusText } from '@/core/timelineitem/queries'
-import { isPlayheadInTimelineItem } from '@/core/utils/timelineSearchUtils'
+import { hasVisualProperties } from '@/core/timelineitem/queries'
 import { IconComponents } from '@/constants/iconComponents'
+import type { PropertyTabKey } from '@/core/modules/UnifiedUIModule'
 
 import UnifiedClipProperties from '@/components/properties/unified/UnifiedClipProperties.vue'
 import MediaItemProperties from '@/components/properties/MediaItemProperties.vue'
+import MaskPropertiesGroup from '@/components/properties/groups/MaskPropertiesGroup.vue'
 
 const unifiedStore = useUnifiedStore()
 const { t } = useAppI18n()
 
-const propertyTabs = [
+const basePropertyTabs = [
   { key: 'basic', labelKey: 'properties.tabs.basic' },
   { key: 'mask', labelKey: 'properties.tabs.mask' },
   { key: 'filter', labelKey: 'properties.tabs.filter' },
   { key: 'animation', labelKey: 'properties.tabs.animation' },
 ] as const
 
-type PropertyTabKey = (typeof propertyTabs)[number]['key']
+const activePropertyTab = computed<PropertyTabKey>({
+  get: () => unifiedStore.activePropertyTab,
+  set: (tab) => unifiedStore.setActivePropertyTab(tab),
+})
 
-const activePropertyTab = ref<PropertyTabKey>('basic')
+const propertyTabs = computed(() => {
+  if (selectedTimelineItem.value && !hasVisualProperties(selectedTimelineItem.value)) {
+    return basePropertyTabs.filter((tab) => tab.key !== 'mask')
+  }
+
+  return basePropertyTabs
+})
 
 // 选中的时间轴项目
 const selectedTimelineItem = computed(() => {
@@ -174,7 +191,7 @@ const selectedMediaItem = computed(() => {
 const currentFrame = computed(() => unifiedStore.currentFrame)
 
 const activeTabLabelKey = computed(() => {
-  return propertyTabs.find((tab) => tab.key === activePropertyTab.value)?.labelKey
+  return propertyTabs.value.find((tab) => tab.key === activePropertyTab.value)?.labelKey
     ?? 'properties.tabs.basic'
 })
 
@@ -217,6 +234,12 @@ const getItemDisplayName = (item: any) => {
     return unifiedStore.getMediaItem(item.mediaItemId)?.name || '未知素材'
   }
 }
+
+watch(propertyTabs, (tabs) => {
+  if (!tabs.some((tab) => tab.key === activePropertyTab.value)) {
+    unifiedStore.setActivePropertyTab('basic')
+  }
+}, { immediate: true })
 </script>
 
 <style scoped>

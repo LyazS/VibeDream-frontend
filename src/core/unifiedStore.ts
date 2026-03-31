@@ -152,6 +152,7 @@ export const useUnifiedStore = defineStore('unified', () => {
     createKeyframeWithHistory: historyOperations.createKeyframeWithHistory,
     deleteKeyframeWithHistory: historyOperations.deleteKeyframeWithHistory,
     updatePropertyWithHistory: historyOperations.updatePropertyWithHistory,
+    updateMaskWithHistory: historyOperations.updateMaskWithHistory,
     clearAllKeyframesWithHistory: historyOperations.clearAllKeyframesWithHistory,
     toggleKeyframeWithHistory: historyOperations.toggleKeyframeWithHistory,
     toggleProportionalScaleWithHistory: historyOperations.toggleProportionalScaleWithHistory,
@@ -606,6 +607,7 @@ export const useUnifiedStore = defineStore('unified', () => {
     // AI 面板状态
     isChatPanelVisible: unifiedUIModule.isChatPanelVisible,
     aiPanelActiveTab: unifiedUIModule.aiPanelActiveTab,
+    activePropertyTab: unifiedUIModule.activePropertyTab,
 
     // 角色编辑器状态
     characterEditorState: unifiedUIModule.characterEditorState,
@@ -616,6 +618,7 @@ export const useUnifiedStore = defineStore('unified', () => {
 
     // AI 面板状态管理方法
     setChatPanelVisible: unifiedUIModule.setChatPanelVisible,
+    setActivePropertyTab: unifiedUIModule.setActivePropertyTab,
 
     // 角色编辑器方法
     openCharacterEditor: unifiedUIModule.openCharacterEditor,

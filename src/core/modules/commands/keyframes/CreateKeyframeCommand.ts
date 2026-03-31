@@ -81,10 +81,6 @@ export class CreateKeyframeCommand implements SimpleCommand {
     }
 
     try {
-      // 1. 确保动画已启用
-      if (!item.animation) {
-        initializeAnimation(item)
-      }
       enableAnimation(item)
 
       // 2. 创建关键帧

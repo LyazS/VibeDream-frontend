@@ -163,3 +163,17 @@ export class BatchUpdatePropertiesCommand extends BaseBatchCommand {
     console.log(`📋 准备批量修改 ${this.subCommands.length} 个属性`)
   }
 }
+
+/**
+ * 批量蒙版属性修改命令
+ * 将多个蒙版属性修改操作组合为一个批量操作
+ */
+export class BatchUpdateMaskCommand extends BaseBatchCommand {
+  constructor(targetItemIds: string[], updateCommands: SimpleCommand[]) {
+    super(`批量修改 ${targetItemIds.length} 个项目的蒙版属性`)
+
+    updateCommands.forEach((command) => this.addCommand(command))
+
+    console.log(`📋 准备批量修改 ${this.subCommands.length} 个蒙版属性`)
+  }
+}

@@ -8,12 +8,19 @@ import type { KeyframeButtonState, KeyframeUIState } from '@/core/timelineitem/a
 import type {
   AnimateKeyframe,
   AnimationChannelKey,
-  ChannelKeyForMedia,
   GetAnimation,
   LayoutAnimatableProps,
   RotationAnimatableProps,
   OpacityAnimatableProps,
   AudioAnimatableProps,
+  MaskCenterAnimatableProps,
+  MaskRotationAnimatableProps,
+  MaskOuterRangeAnimatableProps,
+  MaskDecayRateAnimatableProps,
+  MaskRectangleSizeAnimatableProps,
+  MaskRectangleCornerAnimatableProps,
+  MaskEllipseSizeAnimatableProps,
+  MaskMirrorLengthAnimatableProps,
 } from '@/core/timelineitem/bunnytype'
 import {
   getAnimationChannelForProperty,
@@ -21,6 +28,19 @@ import {
 import type { UnifiedTimeRange } from '@/core/types/timeRange'
 import { TimelineItemQueries } from '@/core/timelineitem/queries'
 import type { MediaType } from '../mediaitem'
+import {
+  MASK_CENTER_PATHS,
+  MASK_ROTATION_PATHS,
+  MASK_OUTER_RANGE_PATHS,
+  MASK_DECAY_RATE_PATHS,
+  MASK_RECTANGLE_SIZE_PATHS,
+  MASK_RECTANGLE_CORNER_PATHS,
+  MASK_ELLIPSE_SIZE_PATHS,
+  MASK_MIRROR_LENGTH_PATHS,
+  type MaskPropertyPath,
+  getMaskAnimatableProps,
+  setMaskPropertyValue,
+} from '@/core/timelineitem/mask'
 import {
   percentageToFrame,
   frameToPercentage,
@@ -36,12 +56,28 @@ type AnyAnimatableProperties =
   | RotationAnimatableProps
   | OpacityAnimatableProps
   | AudioAnimatableProps
+  | MaskCenterAnimatableProps
+  | MaskRotationAnimatableProps
+  | MaskOuterRangeAnimatableProps
+  | MaskDecayRateAnimatableProps
+  | MaskRectangleSizeAnimatableProps
+  | MaskRectangleCornerAnimatableProps
+  | MaskEllipseSizeAnimatableProps
+  | MaskMirrorLengthAnimatableProps
 
 const CHANNEL_PROPERTIES: Record<AnimationChannelKey, readonly string[]> = {
   layout: ['x', 'y', 'width', 'height'],
   rotation: ['rotation'],
   opacity: ['opacity'],
   audio: ['volume'],
+  maskCenter: MASK_CENTER_PATHS,
+  maskRotation: MASK_ROTATION_PATHS,
+  maskOuterRange: MASK_OUTER_RANGE_PATHS,
+  maskDecayRate: MASK_DECAY_RATE_PATHS,
+  maskRectangleSize: MASK_RECTANGLE_SIZE_PATHS,
+  maskRectangleCorner: MASK_RECTANGLE_CORNER_PATHS,
+  maskEllipseSize: MASK_ELLIPSE_SIZE_PATHS,
+  maskMirrorLength: MASK_MIRROR_LENGTH_PATHS,
 }
 
 type ActionResult = 'no-animation' | 'updated-keyframe' | 'created-keyframe'
@@ -49,10 +85,10 @@ type ActionResult = 'no-animation' | 'updated-keyframe' | 'created-keyframe'
 function getSupportedChannels(item: UnifiedTimelineItemData): AnimationChannelKey[] {
   switch (item.mediaType) {
     case 'video':
-      return ['layout', 'rotation', 'opacity', 'audio']
+      return ['layout', 'rotation', 'opacity', 'audio', 'maskCenter', 'maskRotation', 'maskOuterRange', 'maskDecayRate', 'maskRectangleSize', 'maskRectangleCorner', 'maskEllipseSize', 'maskMirrorLength']
     case 'image':
     case 'text':
-      return ['layout', 'rotation', 'opacity']
+      return ['layout', 'rotation', 'opacity', 'maskCenter', 'maskRotation', 'maskOuterRange', 'maskDecayRate', 'maskRectangleSize', 'maskRectangleCorner', 'maskEllipseSize', 'maskMirrorLength']
     case 'audio':
       return ['audio']
     default:
@@ -113,6 +149,97 @@ function getChannelPropertySnapshot(
         throw new Error(`Channel "${channel}" requires audio properties`)
       }
       return { volume: TimelineItemQueries.getRenderConfig(item).volume }
+    case 'maskCenter':
+      if (!TimelineItemQueries.hasVisualProperties(item)) {
+        throw new Error(`Channel "${channel}" requires visual properties`)
+      }
+      const maskCenterProps = getMaskAnimatableProps(
+        TimelineItemQueries.getRenderConfig(item).mask,
+        getItemLocalSize(item),
+      )
+      return {
+        'mask.centerX': maskCenterProps['mask.centerX'],
+        'mask.centerY': maskCenterProps['mask.centerY'],
+      }
+    case 'maskRotation':
+      if (!TimelineItemQueries.hasVisualProperties(item)) {
+        throw new Error(`Channel "${channel}" requires visual properties`)
+      }
+      const maskRotationProps = getMaskAnimatableProps(
+        TimelineItemQueries.getRenderConfig(item).mask,
+        getItemLocalSize(item),
+      )
+      return {
+        'mask.rotation': maskRotationProps['mask.rotation'],
+      }
+    case 'maskOuterRange':
+      if (!TimelineItemQueries.hasVisualProperties(item)) {
+        throw new Error(`Channel "${channel}" requires visual properties`)
+      }
+      const maskOuterRangeProps = getMaskAnimatableProps(
+        TimelineItemQueries.getRenderConfig(item).mask,
+        getItemLocalSize(item),
+      )
+      return {
+        'mask.outerRange': maskOuterRangeProps['mask.outerRange'],
+      }
+    case 'maskDecayRate':
+      if (!TimelineItemQueries.hasVisualProperties(item)) {
+        throw new Error(`Channel "${channel}" requires visual properties`)
+      }
+      const maskDecayRateProps = getMaskAnimatableProps(
+        TimelineItemQueries.getRenderConfig(item).mask,
+        getItemLocalSize(item),
+      )
+      return {
+        'mask.decayRate': maskDecayRateProps['mask.decayRate'],
+      }
+    case 'maskRectangleSize':
+      if (!TimelineItemQueries.hasVisualProperties(item)) {
+        throw new Error(`Channel "${channel}" requires visual properties`)
+      }
+      const maskRectangleSizeProps = getMaskAnimatableProps(
+        TimelineItemQueries.getRenderConfig(item).mask,
+        getItemLocalSize(item),
+      )
+      return {
+        'mask.width': maskRectangleSizeProps['mask.width'],
+        'mask.height': maskRectangleSizeProps['mask.height'],
+      }
+    case 'maskRectangleCorner':
+      if (!TimelineItemQueries.hasVisualProperties(item)) {
+        throw new Error(`Channel "${channel}" requires visual properties`)
+      }
+      const maskRectangleCornerProps = getMaskAnimatableProps(
+        TimelineItemQueries.getRenderConfig(item).mask,
+        getItemLocalSize(item),
+      )
+      return {
+        'mask.cornerRadius': maskRectangleCornerProps['mask.cornerRadius'],
+      }
+    case 'maskEllipseSize':
+      if (!TimelineItemQueries.hasVisualProperties(item)) {
+        throw new Error(`Channel "${channel}" requires visual properties`)
+      }
+      const maskEllipseSizeProps = getMaskAnimatableProps(
+        TimelineItemQueries.getRenderConfig(item).mask,
+        getItemLocalSize(item),
+      )
+      return {
+        'mask.ellipseWidth': maskEllipseSizeProps['mask.ellipseWidth'],
+        'mask.ellipseHeight': maskEllipseSizeProps['mask.ellipseHeight'],
+      }
+    case 'maskMirrorLength':
+      if (!TimelineItemQueries.hasVisualProperties(item)) {
+        throw new Error(`Channel "${channel}" requires visual properties`)
+      }
+      const maskMirrorLengthProps = getMaskAnimatableProps(
+        TimelineItemQueries.getRenderConfig(item).mask,
+        getItemLocalSize(item),
+      )
+      return {
+        'mask.length': maskMirrorLengthProps['mask.length'],
+      }
   }
 }
 
@@ -186,11 +313,32 @@ function createEmptyAnimation(): GetAnimation<MediaType> {
   return { channels: {} } as GetAnimation<MediaType>
 }
 
+function getItemLocalSize(item: UnifiedTimelineItemData) {
+  if (!TimelineItemQueries.hasVisualProperties(item)) {
+    return { width: 0, height: 0 }
+  }
+  const renderConfig = TimelineItemQueries.getRenderConfig(item)
+  return {
+    width: renderConfig.width,
+    height: renderConfig.height,
+  }
+}
+
 function setConfigProperty(
   item: UnifiedTimelineItemData,
   property: string,
   value: unknown,
 ): void {
+  if (property.startsWith('mask.') && typeof value === 'number' && TimelineItemQueries.hasVisualProperties(item)) {
+    item.config.mask = setMaskPropertyValue(
+      item.config.mask,
+      property as MaskPropertyPath,
+      value,
+      getItemLocalSize(item),
+    )
+    return
+  }
+
   const config = (item.config as unknown) as Record<string, unknown>
   if (!(property in config)) return
   config[property] = value
@@ -202,7 +350,6 @@ function setKeyframePropertyValue(
   value: unknown,
 ): void {
   const properties = keyframe.properties as AnyAnimatableProperties & Record<string, unknown>
-  if (!(property in properties)) return
   properties[property] = value
 }
 

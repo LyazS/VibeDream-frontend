@@ -35,6 +35,7 @@ import type { UnifiedMediaItemData } from '@/core/mediaitem/types'
 import type { IClip } from '@/core/mediabunny/IClip'
 import { TimelineItemFactory } from '@/core/timelineitem/factory'
 import { TimelineItemQueries } from '@/core/timelineitem/queries'
+import { createDefaultMaskConfig } from '@/core/timelineitem/mask'
 import { AudioSegmentRenderer } from '@/core/mediabunny/audio-segment-renderer'
 import { RENDERER_FPS, AUDIO_DEFAULT_SAMPLE_RATE } from '@/core/mediabunny/constant'
 import { applyAnimationToConfig } from '@/core/utils/animationInterpolation'
@@ -353,7 +354,7 @@ export class ExportManager {
           // 调用 tickN 获取音频数据（不请求视频）
           const { audio, state } = await bunnyClip.tickN(
             BigInt(frameIn30fps),
-            true,  // 需要音频
+            true, // 需要音频
             false, // 不需要视频
             0n,
           )
@@ -459,9 +460,7 @@ export class ExportManager {
       this.reportProgress('准备', 10, '初始化编码器...')
 
       // 根据导出类型选择格式
-      const outputFormat = isAudioOnly
-        ? new Mp3OutputFormat()
-        : new Mp4OutputFormat()
+      const outputFormat = isAudioOnly ? new Mp3OutputFormat() : new Mp4OutputFormat()
 
       this.output = new Output({
         format: outputFormat,
@@ -787,6 +786,10 @@ async function exportVideoMediaItem(
       rotation: 0,
       opacity: 1,
       proportionalScale: true,
+      mask: createDefaultMaskConfig('rectangle', {
+        width: bunnyMedia.width,
+        height: bunnyMedia.height,
+      }),
       volume: 1,
       isMuted: false,
     },
@@ -1053,14 +1056,22 @@ export async function exportTimelineItem(options: ExportTimelineItemOptions): Pr
   if (timelineItem.mediaType === 'video') {
     // 如果指定了音频导出类型，导出为音频
     if (exportType === 'audio') {
-      return await exportAudioTimelineItem(timelineItem as UnifiedTimelineItemData<'video'>, getMediaItem, onProgress)
+      return await exportAudioTimelineItem(
+        timelineItem as UnifiedTimelineItemData<'video'>,
+        getMediaItem,
+        onProgress,
+      )
     }
     return await exportVideoTimelineItem(timelineItem, getMediaItem, onProgress, frameRate)
   }
 
   if (timelineItem.mediaType === 'audio') {
     // 音频时间轴项目只能导出为音频
-    return await exportAudioTimelineItem(timelineItem as UnifiedTimelineItemData<'audio'>, getMediaItem, onProgress)
+    return await exportAudioTimelineItem(
+      timelineItem as UnifiedTimelineItemData<'audio'>,
+      getMediaItem,
+      onProgress,
+    )
   }
 
   throw new Error(`不支持导出 ${timelineItem.mediaType} 类型的时间轴项目`)

@@ -38,11 +38,13 @@ import {
   CreateKeyframeCommand,
   DeleteKeyframeCommand,
   UpdatePropertyCommand,
+  UpdateMaskCommand,
   ClearAllKeyframesCommand,
   ToggleKeyframeCommand,
   type TimelineModule as KeyframeTimelineModule,
   type PlaybackControls,
 } from '@/core/modules/commands/keyframeCommands'
+import type { MaskUpdateAction } from '@/core/modules/commands/keyframes/UpdateMaskCommand'
 import { ToggleProportionalScaleCommand } from '@/core/modules/commands/ToggleProportionalScaleCommand'
 
 // 变换属性类型定义
@@ -123,7 +125,6 @@ export function useHistoryOperations(
       const opacityChanged = Math.abs(oldTransform.opacity - newTransform.opacity) > 0.001
       if (opacityChanged) return true
     }
-
 
     // 检查时长变化
     if (newTransform.duration !== undefined && oldTransform.duration !== undefined) {
@@ -269,7 +270,6 @@ export function useHistoryOperations(
         oldTransform.opacity = config.opacity
       }
     }
-
 
     if (newTransform.duration !== undefined) {
       // 计算当前时长（帧数）
@@ -776,12 +776,18 @@ export function useHistoryOperations(
       console.log('🎬 [useHistoryOperations] 创建关键帧:', { timelineItemId, frame })
 
       // 创建关键帧命令
-      const command = new CreateKeyframeCommand(timelineItemId, frame, 'layout', unifiedTimelineModule, {
-        seekTo: (frame: number) => {
-          // 播放头控制应该由调用方提供，这里简化为不控制播放头
-          console.log('🔍 关键帧操作播放头控制:', frame)
+      const command = new CreateKeyframeCommand(
+        timelineItemId,
+        frame,
+        'layout',
+        unifiedTimelineModule,
+        {
+          seekTo: (frame: number) => {
+            // 播放头控制应该由调用方提供，这里简化为不控制播放头
+            console.log('🔍 关键帧操作播放头控制:', frame)
+          },
         },
-      })
+      )
 
       // 执行命令（带历史记录）
       await unifiedHistoryModule.executeCommand(command)
@@ -803,11 +809,17 @@ export function useHistoryOperations(
       console.log('🎬 [useHistoryOperations] 删除关键帧:', { timelineItemId, frame })
 
       // 创建删除关键帧命令
-      const command = new DeleteKeyframeCommand(timelineItemId, frame, 'layout', unifiedTimelineModule, {
-        seekTo: (frame: number) => {
-          console.log('🔍 关键帧操作播放头控制:', frame)
+      const command = new DeleteKeyframeCommand(
+        timelineItemId,
+        frame,
+        'layout',
+        unifiedTimelineModule,
+        {
+          seekTo: (frame: number) => {
+            console.log('🔍 关键帧操作播放头控制:', frame)
+          },
         },
-      })
+      )
 
       // 执行命令（带历史记录）
       await unifiedHistoryModule.executeCommand(command)
@@ -864,6 +876,32 @@ export function useHistoryOperations(
     }
   }
 
+  async function updateMaskWithHistory(
+    timelineItemId: string,
+    frame: number,
+    action: MaskUpdateAction,
+  ) {
+    try {
+      const command = new UpdateMaskCommand(
+        timelineItemId,
+        frame,
+        action,
+        unifiedTimelineModule,
+        unifiedMediaModule,
+        {
+          seekTo: (frame: number) => {
+            console.log('🔍 蒙版操作播放头控制:', frame)
+          },
+        },
+      )
+
+      await unifiedHistoryModule.executeCommand(command)
+    } catch (error) {
+      console.error('❌ [useHistoryOperations] 蒙版更新失败:', error)
+      throw error
+    }
+  }
+
   /**
    * 带历史记录的清除所有关键帧方法
    * @param timelineItemId 时间轴项目ID
@@ -894,16 +932,26 @@ export function useHistoryOperations(
    * @param timelineItemId 时间轴项目ID
    * @param frame 帧数
    */
-  async function toggleKeyframeWithHistory(timelineItemId: string, frame: number, channel: any = 'layout') {
+  async function toggleKeyframeWithHistory(
+    timelineItemId: string,
+    frame: number,
+    channel: any = 'layout',
+  ) {
     try {
       console.log('🎬 [useHistoryOperations] 切换关键帧:', { timelineItemId, frame })
 
       // 创建切换关键帧命令
-      const command = new ToggleKeyframeCommand(timelineItemId, frame, channel, unifiedTimelineModule, {
-        seekTo: (frame: number) => {
-          console.log('🔍 关键帧操作播放头控制:', frame)
+      const command = new ToggleKeyframeCommand(
+        timelineItemId,
+        frame,
+        channel,
+        unifiedTimelineModule,
+        {
+          seekTo: (frame: number) => {
+            console.log('🔍 关键帧操作播放头控制:', frame)
+          },
         },
-      })
+      )
 
       // 执行命令（带历史记录）
       await unifiedHistoryModule.executeCommand(command)
@@ -924,14 +972,10 @@ export function useHistoryOperations(
     try {
       console.log('🎬 [useHistoryOperations] 切换等比缩放:', { timelineItemId, frame })
 
-      const command = new ToggleProportionalScaleCommand(
-        timelineItemId,
-        frame,
-        {
-          getTimelineItem: unifiedTimelineModule.getTimelineItem,
-          getMediaItem: unifiedMediaModule.getMediaItem,
-        },
-      )
+      const command = new ToggleProportionalScaleCommand(timelineItemId, frame, {
+        getTimelineItem: unifiedTimelineModule.getTimelineItem,
+        getMediaItem: unifiedMediaModule.getMediaItem,
+      })
 
       await unifiedHistoryModule.executeCommand(command)
 
@@ -963,6 +1007,7 @@ export function useHistoryOperations(
     createKeyframeWithHistory,
     deleteKeyframeWithHistory,
     updatePropertyWithHistory,
+    updateMaskWithHistory,
     clearAllKeyframesWithHistory,
     toggleKeyframeWithHistory,
     toggleProportionalScaleWithHistory,

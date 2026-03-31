@@ -1,5 +1,32 @@
 import type { MediaType } from '@/core/mediaitem'
 import type { TextStyleConfig } from './texttype'
+import type {
+  MaskConfig,
+  MaskAnimatableProps,
+  MaskCenterAnimatableProps,
+  MaskRotationAnimatableProps,
+  MaskOuterRangeAnimatableProps,
+  MaskDecayRateAnimatableProps,
+  MaskShapeAnimatableProps,
+  MaskRectangleSizeAnimatableProps,
+  MaskRectangleCornerAnimatableProps,
+  MaskEllipseSizeAnimatableProps,
+  MaskMirrorLengthAnimatableProps,
+} from './mask'
+export type {
+  MaskConfig,
+  MaskAnimatableProps,
+  MaskCenterAnimatableProps,
+  MaskRotationAnimatableProps,
+  MaskOuterRangeAnimatableProps,
+  MaskDecayRateAnimatableProps,
+  MaskShapeAnimatableProps,
+  MaskRectangleSizeAnimatableProps,
+  MaskRectangleCornerAnimatableProps,
+  MaskEllipseSizeAnimatableProps,
+  MaskMirrorLengthAnimatableProps,
+  MaskType,
+} from './mask'
 
 export interface VisualProps {
   x: number
@@ -12,6 +39,7 @@ export interface VisualProps {
   opacity: number
   /** 等比缩放状态（每个clip独立） */
   proportionalScale: boolean
+  mask?: MaskConfig
 }
 
 export interface AudioProps {
@@ -56,13 +84,33 @@ export interface OpacityAnimatableProps {
   opacity: number
 }
 
-export type AnimationChannelKey = 'layout' | 'rotation' | 'opacity' | 'audio'
+export type AnimationChannelKey =
+  | 'layout'
+  | 'rotation'
+  | 'opacity'
+  | 'audio'
+  | 'maskCenter'
+  | 'maskRotation'
+  | 'maskOuterRange'
+  | 'maskDecayRate'
+  | 'maskRectangleSize'
+  | 'maskRectangleCorner'
+  | 'maskEllipseSize'
+  | 'maskMirrorLength'
 
 export type AnimationChannelPropertiesMap = {
   layout: LayoutAnimatableProps
   rotation: RotationAnimatableProps
   opacity: OpacityAnimatableProps
   audio: AudioAnimatableProps
+  maskCenter: MaskCenterAnimatableProps
+  maskRotation: MaskRotationAnimatableProps
+  maskOuterRange: MaskOuterRangeAnimatableProps
+  maskDecayRate: MaskDecayRateAnimatableProps
+  maskRectangleSize: MaskRectangleSizeAnimatableProps
+  maskRectangleCorner: MaskRectangleCornerAnimatableProps
+  maskEllipseSize: MaskEllipseSizeAnimatableProps
+  maskMirrorLength: MaskMirrorLengthAnimatableProps
 }
 
 export type MediaAnimationChannelMap = {
@@ -71,11 +119,27 @@ export type MediaAnimationChannelMap = {
     rotation: RotationAnimatableProps
     opacity: OpacityAnimatableProps
     audio: AudioAnimatableProps
+    maskCenter: MaskCenterAnimatableProps
+    maskRotation: MaskRotationAnimatableProps
+    maskOuterRange: MaskOuterRangeAnimatableProps
+    maskDecayRate: MaskDecayRateAnimatableProps
+    maskRectangleSize: MaskRectangleSizeAnimatableProps
+    maskRectangleCorner: MaskRectangleCornerAnimatableProps
+    maskEllipseSize: MaskEllipseSizeAnimatableProps
+    maskMirrorLength: MaskMirrorLengthAnimatableProps
   }
   image: {
     layout: LayoutAnimatableProps
     rotation: RotationAnimatableProps
     opacity: OpacityAnimatableProps
+    maskCenter: MaskCenterAnimatableProps
+    maskRotation: MaskRotationAnimatableProps
+    maskOuterRange: MaskOuterRangeAnimatableProps
+    maskDecayRate: MaskDecayRateAnimatableProps
+    maskRectangleSize: MaskRectangleSizeAnimatableProps
+    maskRectangleCorner: MaskRectangleCornerAnimatableProps
+    maskEllipseSize: MaskEllipseSizeAnimatableProps
+    maskMirrorLength: MaskMirrorLengthAnimatableProps
   }
   audio: {
     audio: AudioAnimatableProps
@@ -84,6 +148,14 @@ export type MediaAnimationChannelMap = {
     layout: LayoutAnimatableProps
     rotation: RotationAnimatableProps
     opacity: OpacityAnimatableProps
+    maskCenter: MaskCenterAnimatableProps
+    maskRotation: MaskRotationAnimatableProps
+    maskOuterRange: MaskOuterRangeAnimatableProps
+    maskDecayRate: MaskDecayRateAnimatableProps
+    maskRectangleSize: MaskRectangleSizeAnimatableProps
+    maskRectangleCorner: MaskRectangleCornerAnimatableProps
+    maskEllipseSize: MaskEllipseSizeAnimatableProps
+    maskMirrorLength: MaskMirrorLengthAnimatableProps
   }
 }
 
@@ -150,7 +222,20 @@ export type GetConfigs<T extends MediaType> = GetConfigMap[T]
 export type GetAnimation<T extends MediaType> = GetAnimationMap[T]
 
 export const VISUAL_CHANNELS = ['layout', 'rotation', 'opacity'] as const
-export const ALL_ANIMATION_CHANNELS = ['layout', 'rotation', 'opacity', 'audio'] as const
+export const ALL_ANIMATION_CHANNELS = [
+  'layout',
+  'rotation',
+  'opacity',
+  'audio',
+  'maskCenter',
+  'maskRotation',
+  'maskOuterRange',
+  'maskDecayRate',
+  'maskRectangleSize',
+  'maskRectangleCorner',
+  'maskEllipseSize',
+  'maskMirrorLength',
+] as const
 
 export const PROPERTY_TO_CHANNEL_MAP = {
   x: 'layout',
@@ -160,6 +245,17 @@ export const PROPERTY_TO_CHANNEL_MAP = {
   rotation: 'rotation',
   opacity: 'opacity',
   volume: 'audio',
+  'mask.centerX': 'maskCenter',
+  'mask.centerY': 'maskCenter',
+  'mask.rotation': 'maskRotation',
+  'mask.width': 'maskRectangleSize',
+  'mask.height': 'maskRectangleSize',
+  'mask.cornerRadius': 'maskRectangleCorner',
+  'mask.ellipseWidth': 'maskEllipseSize',
+  'mask.ellipseHeight': 'maskEllipseSize',
+  'mask.length': 'maskMirrorLength',
+  'mask.outerRange': 'maskOuterRange',
+  'mask.decayRate': 'maskDecayRate',
 } as const satisfies Record<string, AnimationChannelKey>
 
 export type AnimatablePropertyKey = keyof typeof PROPERTY_TO_CHANNEL_MAP

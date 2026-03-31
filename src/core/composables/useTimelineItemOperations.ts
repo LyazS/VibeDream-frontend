@@ -10,6 +10,7 @@ import type {
   TextMediaConfig,
 } from '@/core/timelineitem/type'
 import type { GetConfigs } from '@/core/timelineitem/bunnytype'
+import { createDefaultMaskConfig } from '@/core/timelineitem/mask'
 import { createTextTimelineItem } from '@/core/utils/textTimelineUtils'
 import { setupTimelineItemBunny } from '@/core/bunnyUtils/timelineItemSetup'
 
@@ -139,6 +140,10 @@ export function useTimelineItemOperations() {
           opacity: 1,
           // 等比缩放状态（默认开启）
           proportionalScale: true,
+          mask: createDefaultMaskConfig('rectangle', {
+            width: defaultWidth,
+            height: defaultHeight,
+          }),
           // 音频属性
           volume: 1,
           isMuted: false,
@@ -159,6 +164,10 @@ export function useTimelineItemOperations() {
           opacity: 1,
           // 等比缩放状态（默认开启）
           proportionalScale: true,
+          mask: createDefaultMaskConfig('rectangle', {
+            width: defaultWidth,
+            height: defaultHeight,
+          }),
         } as ImageMediaConfig
       }
 

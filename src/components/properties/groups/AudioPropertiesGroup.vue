@@ -37,33 +37,16 @@
         >
           <component :is="getMuteIcon(isMuted)" size="14px" />
         </button>
-        <div class="keyframe-nav-group">
-          <button
-            class="keyframe-nav-btn"
-            :disabled="!canOperateTransforms || !hasPreviousChannelKeyframe('audio')"
-            :title="t('properties.keyframes.previousKeyframe')"
-            @click="goToPreviousChannelKeyframe('audio')"
-          >
-            <component :is="IconComponents.PREV_KEYFRAME" size="11px" />
-          </button>
-          <button
-            class="property-keyframe-btn"
-            :class="`state-${audioButtonState}`"
-            :title="getChannelKeyframeTooltip('audio')"
-            :disabled="!canOperateTransforms"
-            @click="toggleChannelKeyframe('audio')"
-          >
-            ◆
-          </button>
-          <button
-            class="keyframe-nav-btn"
-            :disabled="!canOperateTransforms || !hasNextChannelKeyframe('audio')"
-            :title="t('properties.keyframes.nextKeyframe')"
-            @click="goToNextChannelKeyframe('audio')"
-          >
-            <component :is="IconComponents.NEXT_KEYFRAME" size="11px" />
-          </button>
-        </div>
+        <KeyframeNavButtons
+          :state="audioButtonState"
+          :tooltip="getChannelKeyframeTooltip('audio')"
+          :disabled="!canOperateTransforms"
+          :has-previous="hasPreviousChannelKeyframe('audio')"
+          :has-next="hasNextChannelKeyframe('audio')"
+          @previous="goToPreviousChannelKeyframe('audio')"
+          @toggle="toggleChannelKeyframe('audio')"
+          @next="goToNextChannelKeyframe('audio')"
+        />
       </div>
     </div>
   </div>
@@ -79,6 +62,7 @@ import { IconComponents, getMuteIcon } from '@/constants/iconComponents'
 import type { UnifiedTimelineItemData } from '@/core/timelineitem/type'
 import NumberInput from '@/components/base/NumberInput.vue'
 import SliderInput from '@/components/base/SliderInput.vue'
+import KeyframeNavButtons from '@/components/properties/common/KeyframeNavButtons.vue'
 
 interface Props {
   selectedTimelineItem: UnifiedTimelineItemData | null
@@ -161,13 +145,6 @@ const toggleMute = async () => {
   flex: 1;
 }
 
-.keyframe-nav-group {
-  display: flex;
-  align-items: center;
-  gap: 0;
-  flex: 0 0 auto;
-}
-
 .mute-btn {
   background: var(--color-bg-quaternary);
   border: 1px solid var(--color-border-secondary);
@@ -199,65 +176,6 @@ const toggleMute = async () => {
 .mute-btn:disabled:hover {
   background: var(--color-bg-tertiary);
   border-color: var(--color-border-secondary);
-}
-
-.property-keyframe-btn {
-  width: 22px;
-  height: 22px;
-  border-radius: var(--border-radius-small);
-  border: 1px solid var(--color-border-secondary);
-  background: var(--color-bg-active);
-  color: var(--color-text-secondary);
-  cursor: pointer;
-  font-size: 12px;
-  line-height: 1;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.keyframe-nav-btn {
-  width: 12px;
-  height: 22px;
-  border-radius: 0;
-  border: none;
-  background: transparent;
-  color: var(--color-text-secondary);
-  cursor: pointer;
-  font-size: 12px;
-  line-height: 1;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0;
-  transition: all 0.2s ease;
-  flex: 0 0 auto;
-}
-
-.keyframe-nav-group > .property-keyframe-btn {
-  border-radius: var(--border-radius-small);
-}
-
-.keyframe-nav-btn:hover:not(:disabled) {
-  background: transparent;
-  color: var(--color-text-primary);
-}
-
-.keyframe-nav-btn:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-  background: transparent;
-  color: var(--color-text-muted);
-}
-
-.property-keyframe-btn.state-on-keyframe {
-  color: #5ba6ff;
-  border-color: #5ba6ff;
-}
-
-.property-keyframe-btn.state-between-keyframes {
-  color: #d9a441;
-  border-color: #d9a441;
 }
 
 .animated-property-label--on-keyframe {

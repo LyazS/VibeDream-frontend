@@ -60,14 +60,11 @@ export interface MainRenderTarget {
  * 坐标系约定：
  * - x/y 以画布中心为原点
  * - y > 0 表示向上
- * - width/height 为最终在画布中的显示尺寸
  * - rotationRadians 已做过符号补偿，以保持现有用户旋转体感
  */
 export interface DrawSourceUniforms {
   x: number
   y: number
-  width: number
-  height: number
   rotationRadians: number
   opacity: number
 }
