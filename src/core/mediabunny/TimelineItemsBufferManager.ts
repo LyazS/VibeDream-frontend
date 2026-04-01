@@ -102,9 +102,9 @@ export class TimelineItemsBufferManager {
   async updateBackBuffer(
     allItems: UnifiedTimelineItemData<MediaType>[],
     currentFrame: number,
-  ): Promise<void> {
+  ): Promise<UnifiedTimelineItemData<MediaType>[]> {
     if (this.state.isUpdating) {
-      return
+      return []
     }
     
     this.state.isUpdating = true
@@ -139,10 +139,12 @@ export class TimelineItemsBufferManager {
       this.state.lastUpdateFrame = currentFrame
       
       // console.log(`🔄 后台缓冲更新完成: ${bufferedItems.length}/${allItems.length} items, 窗口 [${startFrame}, ${endFrame}]`)
+      return bufferedItems
     } catch (error) {
       console.error('❌ 后台缓冲更新失败:', error)
       this.state.backBuffer = null
       this.state.backBufferReady = false
+      return []
     } finally {
       this.state.isUpdating = false
     }

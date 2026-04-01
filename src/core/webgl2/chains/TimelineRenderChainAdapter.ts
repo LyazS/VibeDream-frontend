@@ -50,6 +50,13 @@ export class TimelineRenderChainAdapter {
   }
 
   /**
+   * 预热 item 对应的渲染链缓存，避免首次真正渲染时再创建 pass/program。
+   */
+  prepareChain(item: VisualTimelineItem): void {
+    this.getChain(item)
+  }
+
+  /**
    * 销毁所有缓存的 chain。
    */
   dispose(): void {

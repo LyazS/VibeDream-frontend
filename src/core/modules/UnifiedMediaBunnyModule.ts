@@ -342,7 +342,9 @@ export function createUnifiedMediaBunnyModule(
       mBufferManager.shouldUpdateBuffer(currentTime)
     ) {
       // 异步更新后台缓冲，不阻塞当前渲染
-      void mBufferManager.updateBackBuffer(timelineItems, currentTime)
+      void mBufferManager.updateBackBuffer(timelineItems, currentTime).then((bufferedItems) => {
+        mWebGLRenderer?.prepareRenderChains(bufferedItems)
+      })
     }
 
     for (const item of itemsToProcess) {

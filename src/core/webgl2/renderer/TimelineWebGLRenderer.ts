@@ -9,6 +9,7 @@ import { TimelineRenderChainAdapter } from '@/core/webgl2/chains/TimelineRenderC
 import { SourceTextureUploader } from '@/core/webgl2/renderer/SourceTextureUploader'
 import type { RenderPassContext } from '@/core/webgl2/renderchain/RenderPassContext'
 import type { FrameData } from '@/core/webgl2/types'
+import { TimelineItemQueries } from '@/core/timelineitem/queries'
 
 /**
  * 渲染器构造所需的宿主依赖。
@@ -102,6 +103,22 @@ export class TimelineWebGLRenderer {
     // 预览与导出统一走 present 到 canvas 的路径，
     // 保证最终可见画面与可编码画面完全一致。
     this.presentPass.render(ctx)
+  }
+
+  /**
+   * 为即将进入窗口的可视 item 预热渲染链。
+   * 这里只构建并缓存链对象，不做 texture 上传，也不触发 draw。
+   */
+  prepareRenderChains(timelineItems: UnifiedTimelineItemData<MediaType>[]): void {
+    for (const item of timelineItems) {
+      if (
+        TimelineItemQueries.isVideoTimelineItem(item) ||
+        TimelineItemQueries.isImageTimelineItem(item) ||
+        TimelineItemQueries.isTextTimelineItem(item)
+      ) {
+        this.chainAdapter.prepareChain(item)
+      }
+    }
   }
 
   /**
