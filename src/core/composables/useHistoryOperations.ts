@@ -3,6 +3,7 @@ import type {
   UnifiedTimelineItemData,
   VideoMediaConfig,
   AudioMediaConfig,
+  BlendMode,
 } from '@/core/timelineitem'
 import type { UnifiedTimeRange } from '@/core/types/timeRange'
 import type { UnifiedTrackType, UnifiedTrackData } from '@/core/track/TrackTypes'
@@ -63,6 +64,7 @@ interface TransformProperties {
   height?: number
   rotation?: number
   opacity?: number
+  blendMode?: BlendMode
   duration?: number // 时长（帧数）
   playbackRate?: number // 倍速
   volume?: number // 音量（0-1之间）
@@ -132,6 +134,11 @@ export function useHistoryOperations(
     if (newTransform.opacity !== undefined && oldTransform.opacity !== undefined) {
       const opacityChanged = Math.abs(oldTransform.opacity - newTransform.opacity) > 0.001
       if (opacityChanged) return true
+    }
+
+    if (newTransform.blendMode !== undefined && oldTransform.blendMode !== undefined) {
+      const blendModeChanged = oldTransform.blendMode !== newTransform.blendMode
+      if (blendModeChanged) return true
     }
 
     // 检查时长变化
@@ -276,6 +283,9 @@ export function useHistoryOperations(
       }
       if (newTransform.opacity !== undefined) {
         oldTransform.opacity = config.opacity
+      }
+      if (newTransform.blendMode !== undefined) {
+        oldTransform.blendMode = config.blendMode
       }
     }
 

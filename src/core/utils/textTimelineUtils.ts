@@ -6,6 +6,7 @@ import type { TextStyleConfig } from '@/core/timelineitem/texttype'
 import type { UnifiedTimeRange } from '@/core/types/timeRange'
 import { DEFAULT_TEXT_STYLE } from '@/core/timelineitem/texttype'
 import { createDefaultMaskConfig } from '@/core/timelineitem/mask'
+import { DEFAULT_BLEND_MODE } from '@/core/timelineitem'
 
 /**
  * 统一架构下的文本时间轴工具函数
@@ -73,6 +74,7 @@ export async function createTextTimelineItem(
     height: 0, // 等待后续更新
     rotation: 0,
     opacity: 1,
+    blendMode: DEFAULT_BLEND_MODE,
     // 等比缩放状态（默认开启）
     proportionalScale: true,
     mask: createDefaultMaskConfig('rectangle', {

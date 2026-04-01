@@ -31,6 +31,7 @@ import { setupTimelineItemBunny } from '@/core/bunnyUtils/timelineItemSetup'
 import { FRAME_RATE } from '@/constants/TimeConstants'
 import type { UnifiedTrackType } from '@/core/track/TrackTypes'
 import type { UnifiedTimeRange } from '@/core/types/timeRange'
+import { DEFAULT_BLEND_MODE } from '@/core/timelineitem'
 
 type OperationParams<T extends OperationConfig['type']> = Extract<OperationConfig, { type: T }>['params']
 
@@ -460,6 +461,7 @@ export class CommandFactory {
           height: defaultHeight,
           rotation: 0,
           opacity: 1,
+          blendMode: DEFAULT_BLEND_MODE,
           // 等比缩放状态（默认开启）
           proportionalScale: true,
           // 音频属性
@@ -480,6 +482,7 @@ export class CommandFactory {
           height: defaultHeight,
           rotation: 0,
           opacity: 1,
+          blendMode: DEFAULT_BLEND_MODE,
           // 等比缩放状态（默认开启）
           proportionalScale: true,
         }

@@ -1,5 +1,6 @@
 import { degreesToRadians } from '@/core/utils/rotationTransform'
 import type { UnifiedMediaItemData } from '@/core/mediaitem/types'
+import { DEFAULT_BLEND_MODE } from '@/core/timelineitem'
 import { TimelineItemQueries } from '@/core/timelineitem/queries'
 import type { UnifiedTimelineItemData } from '@/core/timelineitem/type'
 import { CompositeToMainPass } from '@/core/webgl2/passes/CompositeToMainPass'
@@ -85,6 +86,7 @@ export class ChainBuilder {
         this.params.programs,
         `composite:${item.id}`,
         hasMask ? maskedItemTextureId : itemTargetTextureId,
+        renderConfig.blendMode ?? DEFAULT_BLEND_MODE,
         () => {
           const config = TimelineItemQueries.getRenderConfig(item)
           return {
@@ -101,7 +103,8 @@ export class ChainBuilder {
   }
 
   getSignature(item: VisualTimelineItem): string {
-    const mask = TimelineItemQueries.getRenderConfig(item).mask
-    return `mask:${mask?.enabled ? 'on' : 'off'}:${mask?.type ?? 'rectangle'}`
+    const config = TimelineItemQueries.getRenderConfig(item)
+    const mask = config.mask
+    return `mask:${mask?.enabled ? 'on' : 'off'}:${mask?.type ?? 'rectangle'}:blend:${config.blendMode ?? DEFAULT_BLEND_MODE}`
   }
 }

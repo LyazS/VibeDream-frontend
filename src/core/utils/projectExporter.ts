@@ -35,6 +35,7 @@ import type { UnifiedMediaItemData } from '@/core/mediaitem/types'
 import type { IClip } from '@/core/mediabunny/IClip'
 import { TimelineItemFactory } from '@/core/timelineitem/factory'
 import { TimelineItemQueries } from '@/core/timelineitem/queries'
+import { DEFAULT_BLEND_MODE } from '@/core/timelineitem'
 import { createDefaultMaskConfig } from '@/core/timelineitem/mask'
 import { AudioSegmentRenderer } from '@/core/mediabunny/audio-segment-renderer'
 import { RENDERER_FPS, AUDIO_DEFAULT_SAMPLE_RATE } from '@/core/mediabunny/constant'
@@ -785,6 +786,7 @@ async function exportVideoMediaItem(
       height: bunnyMedia.height,
       rotation: 0,
       opacity: 1,
+      blendMode: DEFAULT_BLEND_MODE,
       proportionalScale: true,
       mask: createDefaultMaskConfig('rectangle', {
         width: bunnyMedia.width,
@@ -932,6 +934,7 @@ async function exportVideoTimelineItem(
       height: bunnyMedia.height,
       rotation: 0,
       opacity: 1,
+      blendMode: DEFAULT_BLEND_MODE,
       proportionalScale: true,
       volume: 1,
       isMuted: false,
@@ -1010,6 +1013,7 @@ async function exportAudioTimelineItem(
       height: timelineItem.mediaType === 'video' ? bunnyMedia.height : 0,
       rotation: 0,
       opacity: 1,
+      blendMode: DEFAULT_BLEND_MODE,
       proportionalScale: true,
       volume: 1,
       isMuted: false,

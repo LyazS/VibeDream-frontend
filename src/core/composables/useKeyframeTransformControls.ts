@@ -12,6 +12,7 @@ import {
 import { isPlayheadInTimelineItem } from '@/core/utils/timelineSearchUtils'
 import { normalizeAngle } from '@/core/utils/rotationTransform'
 import { AnimationSession } from '@/core/animation/session'
+import type { BlendMode } from '@/core/timelineitem'
 
 interface UnifiedKeyframeTransformControlsOptions {
   selectedTimelineItem: Ref<UnifiedTimelineItemData | null>
@@ -63,6 +64,7 @@ export function useUnifiedKeyframeTransformControls(
   const displayHeight = computed(() => (renderConfig.value as any)?.height ?? 0)
   const rotation = computed(() => (renderConfig.value as any)?.rotation ?? 0)
   const opacity = computed(() => (renderConfig.value as any)?.opacity ?? 1)
+  const blendMode = computed(() => (renderConfig.value as any)?.blendMode ?? 'normal')
   const volume = computed(() => (renderConfig.value as any)?.volume ?? 1)
   const elementWidth = computed(() => getOriginalDimensions().width)
   const elementHeight = computed(() => getOriginalDimensions().height)
@@ -281,6 +283,12 @@ export function useUnifiedKeyframeTransformControls(
     await updateGroupDirect('transform.opacity', { opacity: nextOpacity })
   }
 
+  const setBlendModeDirectly = async (nextBlendMode: BlendMode) => {
+    const item = selectedTimelineItem.value
+    if (!item || !canOperateTransforms.value) return
+    await unifiedStore.updateTimelineItemTransformWithHistory(item.id, { blendMode: nextBlendMode })
+  }
+
   const setVolume = async (nextVolume: number) => {
     await updateGroupDirect('audio.volume', { volume: nextVolume })
   }
@@ -321,6 +329,7 @@ export function useUnifiedKeyframeTransformControls(
     displayHeight,
     rotation,
     opacity,
+    blendMode,
     volume,
     proportionalScale,
     elementWidth,
@@ -341,6 +350,7 @@ export function useUnifiedKeyframeTransformControls(
     setSizeDirectly,
     setRotationDirectly,
     setOpacityDirectly,
+    setBlendModeDirectly,
     setVolume,
     toggleProportionalScale,
     alignHorizontal,

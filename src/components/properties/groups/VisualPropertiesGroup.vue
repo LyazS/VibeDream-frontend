@@ -170,9 +170,22 @@
         @next="goToNextChannelKeyframe('transform.rotation')"
       />
 
-      <!-- 透明度 -->
+      <div class="property-item">
+        <label>{{ t('properties.transform.blendMode') }}</label>
+        <SearchableSelect
+          class="blend-mode-select"
+          :model-value="blendMode"
+          :options="blendModeOptions"
+          :searchable="false"
+          :disabled="!canOperateTransforms"
+          :placeholder="t('properties.transform.blendMode')"
+          @update:model-value="handleBlendModeChange"
+        />
+      </div>
+
+      <!-- 混合强度 -->
       <KeyframedSliderField
-        :label="t('properties.transform.opacity')"
+        :label="t('properties.transform.blendIntensity')"
         :state="opacityButtonState"
         :tooltip="getChannelKeyframeTooltip('transform.opacity')"
         :disabled="!canOperateTransforms"
@@ -201,7 +214,9 @@ import { useAppI18n } from '@/core/composables/useI18n'
 import { useUnifiedStore } from '@/core/unifiedStore'
 import { useUnifiedKeyframeTransformControls } from '@/core/composables'
 import { IconComponents } from '@/constants/iconComponents'
-import type { UnifiedTimelineItemData } from '@/core/timelineitem/type'
+import type { BlendMode, UnifiedTimelineItemData } from '@/core/timelineitem/type'
+import { BLEND_MODE_VALUES } from '@/core/timelineitem'
+import SearchableSelect from '@/components/base/SearchableSelect.vue'
 import KeyframedDualNumberField from '@/components/properties/common/KeyframedDualNumberField.vue'
 import KeyframedSliderField from '@/components/properties/common/KeyframedSliderField.vue'
 
@@ -223,6 +238,7 @@ const {
   displayHeight,
   rotation,
   opacity,
+  blendMode,
   proportionalScale,
   elementWidth,
   elementHeight,
@@ -239,6 +255,7 @@ const {
   setSizeDirectly,
   setRotationDirectly,
   setOpacityDirectly,
+  setBlendModeDirectly,
 
   alignHorizontal,
   alignVertical,
@@ -258,6 +275,13 @@ const positionButtonState = computed(() => getChannelButtonState('transform.posi
 const sizeButtonState = computed(() => getChannelButtonState('transform.size'))
 const rotationButtonState = computed(() => getChannelButtonState('transform.rotation'))
 const opacityButtonState = computed(() => getChannelButtonState('transform.opacity'))
+
+const blendModeOptions = computed(() =>
+  BLEND_MODE_VALUES.map((value) => ({
+    value,
+    label: t(`properties.transform.blendModes.${value}`),
+  })),
+)
 
 const getAnimatedLabelClass = (state: string) => ({
   'animated-property-label': state !== 'none',
@@ -322,6 +346,10 @@ const handleFillCanvas = async () => {
   )
 
   await setSizeDirectly(targetWidth, targetHeight)
+}
+
+const handleBlendModeChange = async (value: BlendMode) => {
+  await setBlendModeDirectly(value)
 }
 </script>
 
@@ -447,6 +475,10 @@ const handleFillCanvas = async () => {
   display: flex;
   align-items: center;
   gap: var(--spacing-xs);
+  flex: 1;
+}
+
+.blend-mode-select {
   flex: 1;
 }
 

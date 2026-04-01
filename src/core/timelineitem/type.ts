@@ -14,6 +14,7 @@ import type { MediaType } from '@/core/mediaitem'
 import type { UnifiedTimeRange } from '@/core/types/timeRange'
 import type { BunnyClip } from '@/core/mediabunny/bunny-clip'
 import type { GetConfigs, GetAnimation } from './bunnytype'
+import type { BlendMode } from './blendMode'
 
 // 重新导出 bunnytype 中的类型供其他模块使用
 export type {
@@ -28,6 +29,7 @@ export type {
   AudioMediaConfig,
   TextMediaConfig,
 } from './bunnytype'
+export type { BlendMode } from './blendMode'
 export type { MaskConfig, MaskType } from './mask'
 import type {
   AnimationChannelKey,

@@ -10,6 +10,7 @@ export type {
   TimelineItemStatus,
   TransformData,
   TransformDataEx,
+  BlendMode,
   VideoMediaConfig,
   AudioMediaConfig,
 } from './type'
@@ -36,3 +37,11 @@ export type { StatusDisplayInfo } from './statusdisplayutils'
 
 // ==================== 查询工具导出 ====================
 export { TimelineItemQueries } from './queries'
+
+export {
+  BLEND_MODE_VALUES,
+  DEFAULT_BLEND_MODE,
+  BLEND_MODE_UNIFORM_VALUES,
+  BLEND_MODE_HISTORY_LABELS,
+  isBlendMode,
+} from './blendMode'

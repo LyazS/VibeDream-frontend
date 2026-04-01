@@ -15,6 +15,7 @@ import type {
   TransformData,
   TransformDataEx,
 } from '@/core/timelineitem'
+import { BLEND_MODE_HISTORY_LABELS } from '@/core/timelineitem'
 
 import type { UnifiedMediaItemData, MediaType } from '@/core/mediaitem'
 
@@ -79,6 +80,7 @@ export class UpdateTransformCommand implements SimpleCommand {
         height: this.newValues.height,
         rotation: this.newValues.rotation,
         opacity: this.newValues.opacity,
+        blendMode: this.newValues.blendMode,
         volume: this.newValues.volume,
         isMuted: this.newValues.isMuted,
       }
@@ -130,6 +132,7 @@ export class UpdateTransformCommand implements SimpleCommand {
         height: this.oldValues.height,
         rotation: this.oldValues.rotation,
         opacity: this.oldValues.opacity,
+        blendMode: this.oldValues.blendMode,
         volume: this.oldValues.volume,
         isMuted: this.oldValues.isMuted,
       }
@@ -206,6 +209,12 @@ export class UpdateTransformCommand implements SimpleCommand {
       const oldOpacity = (this.oldValues.opacity * 100).toFixed(0)
       const newOpacity = (this.newValues.opacity * 100).toFixed(0)
       changes.push(`透明度: ${oldOpacity}% → ${newOpacity}%`)
+    }
+
+    if (this.newValues.blendMode !== undefined && this.oldValues.blendMode !== undefined) {
+      const oldBlendMode = BLEND_MODE_HISTORY_LABELS[this.oldValues.blendMode]
+      const newBlendMode = BLEND_MODE_HISTORY_LABELS[this.newValues.blendMode]
+      changes.push(`混合模式: ${oldBlendMode} → ${newBlendMode}`)
     }
 
 

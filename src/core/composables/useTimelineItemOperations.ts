@@ -10,6 +10,7 @@ import type {
   TextMediaConfig,
 } from '@/core/timelineitem/type'
 import type { GetConfigs } from '@/core/timelineitem/bunnytype'
+import { DEFAULT_BLEND_MODE } from '@/core/timelineitem'
 import { createDefaultMaskConfig } from '@/core/timelineitem/mask'
 import { createTextTimelineItem } from '@/core/utils/textTimelineUtils'
 import { setupTimelineItemBunny } from '@/core/bunnyUtils/timelineItemSetup'
@@ -138,6 +139,7 @@ export function useTimelineItemOperations() {
           height: defaultHeight,
           rotation: 0,
           opacity: 1,
+          blendMode: DEFAULT_BLEND_MODE,
           // 等比缩放状态（默认开启）
           proportionalScale: true,
           mask: createDefaultMaskConfig('rectangle', {
@@ -162,6 +164,7 @@ export function useTimelineItemOperations() {
           height: defaultHeight,
           rotation: 0,
           opacity: 1,
+          blendMode: DEFAULT_BLEND_MODE,
           // 等比缩放状态（默认开启）
           proportionalScale: true,
           mask: createDefaultMaskConfig('rectangle', {

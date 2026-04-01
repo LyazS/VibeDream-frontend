@@ -148,6 +148,9 @@ export function createUnifiedTimelineModule(registry: ModuleRegistry) {
       if (transform.opacity !== undefined) {
         config.opacity = transform.opacity
       }
+      if (transform.blendMode !== undefined) {
+        config.blendMode = transform.blendMode
+      }
     }
 
     // 处理音频属性（对视频和音频有效）

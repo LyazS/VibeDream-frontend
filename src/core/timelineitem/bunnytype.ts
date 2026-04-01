@@ -1,5 +1,6 @@
 import type { MediaType } from '@/core/mediaitem'
 import type { TextStyleConfig } from './texttype'
+import type { BlendMode } from './blendMode'
 import type {
   MaskCenterValue,
   MaskConfig,
@@ -33,6 +34,7 @@ export interface VisualProps {
   height: number
   rotation: number
   opacity: number
+  blendMode: BlendMode
   proportionalScale: boolean
   mask?: MaskConfig
 }
