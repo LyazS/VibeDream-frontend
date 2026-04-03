@@ -1,15 +1,25 @@
-import { ref, type Raw, type Ref } from 'vue'
+import { ref } from 'vue'
 import { cleanupTimelineItemBunny } from '@/core/bunnyUtils/timelineItemSetup'
 import type { UnifiedTimelineItemData, TransformData } from '@/core/timelineitem/type'
 import { TimelineItemQueries } from '@/core/timelineitem/queries'
 import type { MediaType } from '@/core/mediaitem/types'
+import type { UnifiedTimeRange } from '@/core/types/timeRange'
 import { ModuleRegistry, MODULE_NAMES } from './ModuleRegistry'
 import type { UnifiedSelectionModule } from './UnifiedSelectionModule'
 
-import { isReady, isVideoTimelineItem, isAudioTimelineItem } from '@/core/timelineitem/queries'
+import { isVideoTimelineItem } from '@/core/timelineitem/queries'
 import { adjustKeyframesForDurationChange } from '@/core/utils/unifiedKeyframeUtils'
 import { hasAnimation } from '@/core/utils/unifiedKeyframeUtils'
 import { TimelineItemFactory } from '../timelineitem'
+import {
+  type ClipTransitionOutConfig,
+  normalizeClipTransitionOutConfig,
+  refreshClipTransitionsForItems,
+} from '@/core/timelineitem/transition'
+import {
+  createTimelineTransitionOverlay,
+  type TimelineTransitionOverlayViewModel,
+} from '@/core/timelineitem/transitionOverlay'
 
 /**
  * 统一时间轴核心管理模块
@@ -26,6 +36,10 @@ export function createUnifiedTimelineModule(registry: ModuleRegistry) {
 
   const timelineItems = ref<UnifiedTimelineItemData<MediaType>[]>([])
 
+  function refreshTransitionItems() {
+    refreshClipTransitionsForItems(timelineItems.value)
+  }
+
   // ==================== 时间轴管理方法 ====================
 
   /**
@@ -34,6 +48,7 @@ export function createUnifiedTimelineModule(registry: ModuleRegistry) {
    */
   async function addTimelineItem(timelineItem: UnifiedTimelineItemData<MediaType>) {
     timelineItems.value.push(timelineItem)
+    refreshTransitionItems()
   }
 
   /**
@@ -51,16 +66,15 @@ export function createUnifiedTimelineModule(registry: ModuleRegistry) {
       const item = timelineItems.value[index]
 
       // 🆕 同步清理选择集合中的对应ID
-      if (selectionModule.isTimelineItemSelected(timelineItemId)) {
-        selectionModule.removeFromMultiSelection(timelineItemId)
-        console.log(`🗑️ 已从选择集合中移除已删除的项目: ${timelineItemId}`)
-      }
+      selectionModule.clearSelectionsForTimelineItem(timelineItemId)
+      console.log(`🗑️ 已从选择集合中移除已删除的项目: ${timelineItemId}`)
 
       // 🆕 清理 Bunny 相关资源
       await cleanupTimelineItemBunny(item)
 
       // 从数组中移除
       timelineItems.value.splice(index, 1)
+      refreshTransitionItems()
     }
   }
 
@@ -114,7 +128,54 @@ export function createUnifiedTimelineModule(registry: ModuleRegistry) {
       if (newTrackId !== undefined) {
         item.trackId = newTrackId
       }
+
+      refreshTransitionItems()
     }
+  }
+
+  function setTimelineItemTimeRangeForCmd(
+    timelineItemId: string,
+    timeRange: Partial<UnifiedTimeRange>,
+  ) {
+    const item = getTimelineItem(timelineItemId)
+    if (!item) return
+
+    TimelineItemFactory.setTimeRange(item, timeRange)
+    refreshTransitionItems()
+  }
+
+  function setTimelineItemTransitionOutForCmd(
+    timelineItemId: string,
+    transitionOut?: ClipTransitionOutConfig,
+  ) {
+    const item = getTimelineItem(timelineItemId)
+    if (!item) return
+
+    item.transitionOut = transitionOut
+      ? normalizeClipTransitionOutConfig({
+          enabled: transitionOut.enabled,
+          preset: transitionOut.preset,
+          durationFrames: transitionOut.durationFrames,
+        })
+      : undefined
+
+    refreshTransitionItems()
+  }
+
+  function getTransitionOverlay(sourceItemId: string): TimelineTransitionOverlayViewModel | null {
+    const item = getTimelineItem(sourceItemId)
+    if (!item) {
+      return null
+    }
+
+    return createTimelineTransitionOverlay(item)
+  }
+
+  function getTransitionOverlaysByTrack(trackId: string): TimelineTransitionOverlayViewModel[] {
+    return timelineItems.value
+      .filter((item) => item.trackId === trackId)
+      .map((item) => createTimelineTransitionOverlay(item))
+      .filter((overlay): overlay is TimelineTransitionOverlayViewModel => overlay !== null)
   }
 
   /**
@@ -206,6 +267,8 @@ export function createUnifiedTimelineModule(registry: ModuleRegistry) {
       TimelineItemFactory.setTimeRange(item, {
         timelineEndTime: newTimelineEndTime,
       })
+
+      refreshTransitionItems()
     }
   }
 
@@ -223,6 +286,11 @@ export function createUnifiedTimelineModule(registry: ModuleRegistry) {
     updateTimelineItemPosition,
     updateTimelineItemTransform,
     updateTimelineItemPlaybackRate,
+    setTimelineItemTimeRangeForCmd,
+    setTimelineItemTransitionOutForCmd,
+    refreshTransitionItems,
+    getTransitionOverlay,
+    getTransitionOverlaysByTrack,
   }
 }
 

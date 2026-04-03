@@ -11,9 +11,6 @@ import type { UnifiedMediaItemData, MediaType } from '@/core/mediaitem/types'
 
 import type { UnifiedTimeRange } from '@/core/types/timeRange'
 
-import { TimelineItemQueries } from '@/core/timelineitem/queries'
-import { TimelineItemFactory } from '@/core/timelineitem'
-
 /**
  * 调整时间轴项目大小命令
  * 支持已知和未知时间轴项目时间范围调整（拖拽边缘）的撤销/重做操作
@@ -35,6 +32,10 @@ export class ResizeTimelineItemCommand implements SimpleCommand {
     newTimeRange: UnifiedTimeRange, // 新的时间范围
     private timelineModule: {
       getTimelineItem: (id: string) => UnifiedTimelineItemData<MediaType> | undefined
+      setTimelineItemTimeRangeForCmd: (
+        id: string,
+        timeRange: Partial<UnifiedTimeRange>,
+      ) => void
     },
     private mediaModule: {
       getMediaItem: (id: string | null) => UnifiedMediaItemData | undefined
@@ -90,8 +91,8 @@ export class ResizeTimelineItemCommand implements SimpleCommand {
       throw new Error(`找不到时间轴项目: ${this.timelineItemId}`)
     }
 
-    // 同步timeRange到TimelineItem
-    TimelineItemFactory.setTimeRange(timelineItem, timeRange)
+    // 同步 timeRange 到 TimelineItem，并在模块内统一刷新转场绑定
+    this.timelineModule.setTimelineItemTimeRangeForCmd(this.timelineItemId, timeRange)
 
     // 如果时长有变化且有关键帧，调整关键帧位置
     if (this.hasAnimation && this.oldDurationFrames !== this.newDurationFrames) {
@@ -123,6 +124,7 @@ export class ResizeTimelineItemCommand implements SimpleCommand {
         `🎬 [ResizeTimelineItemCommand] Animation duration updated after clip resize (${isUndo ? 'undo' : 'execute'})`,
       )
     }
+
   }
 
   /**

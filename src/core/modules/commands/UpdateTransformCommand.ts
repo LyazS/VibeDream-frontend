@@ -4,7 +4,7 @@
  */
 
 import { generateCommandId } from '@/core/utils/idGenerator'
-import { framesToMicroseconds, framesToTimecode } from '@/core/utils/timeUtils'
+import { framesToTimecode } from '@/core/utils/timeUtils'
 import type { SimpleCommand } from '@/core/modules/commands/types'
 
 // ==================== 新架构类型导入 ====================
@@ -18,10 +18,10 @@ import type {
 import { BLEND_MODE_HISTORY_LABELS } from '@/core/timelineitem'
 
 import type { UnifiedMediaItemData, MediaType } from '@/core/mediaitem'
+import type { UnifiedTimeRange } from '@/core/types/timeRange'
 
 // ==================== 新架构工具导入 ====================
 import { TimelineItemQueries } from '@/core/timelineitem/queries'
-import { TimelineItemFactory } from '@/core/timelineitem'
 
 /**
  * 更新变换属性命令
@@ -39,7 +39,11 @@ export class UpdateTransformCommand implements SimpleCommand {
     private timelineModule: {
       updateTimelineItemTransform: (id: string, transform: TransformData) => void
       getTimelineItem: (id: string) => UnifiedTimelineItemData<MediaType> | undefined
-      updateTimelineItemPlaybackRate?: (id: string, rate: number) => void
+      updateTimelineItemPlaybackRate: (id: string, rate: number) => void
+      setTimelineItemTimeRangeForCmd: (
+        id: string,
+        timeRange: Partial<UnifiedTimeRange>,
+      ) => void
     },
     private mediaModule: {
       getMediaItem: (id: string | null) => UnifiedMediaItemData | undefined
@@ -96,7 +100,7 @@ export class UpdateTransformCommand implements SimpleCommand {
 
       // 处理倍速更新（对视频和音频有效）
       if (this.newValues.playbackRate !== undefined) {
-        this.timelineModule.updateTimelineItemPlaybackRate?.(
+        this.timelineModule.updateTimelineItemPlaybackRate(
           this.timelineItemId,
           this.newValues.playbackRate,
         )
@@ -148,7 +152,7 @@ export class UpdateTransformCommand implements SimpleCommand {
 
       // 处理倍速恢复（对视频和音频有效）
       if (this.oldValues.playbackRate !== undefined) {
-        this.timelineModule.updateTimelineItemPlaybackRate?.(
+        this.timelineModule.updateTimelineItemPlaybackRate(
           this.timelineItemId,
           this.oldValues.playbackRate,
         )
@@ -259,8 +263,7 @@ export class UpdateTransformCommand implements SimpleCommand {
     const timelineStartFrames = timelineItem.timeRange.timelineStartTime
     const newTimelineEndFrames = timelineStartFrames + newDurationFrames
 
-    // 使用 TimelineItemFactory.setTimeRange 设置时间范围
-    TimelineItemFactory.setTimeRange(timelineItem, {
+    this.timelineModule.setTimelineItemTimeRangeForCmd(timelineItemId, {
       timelineEndTime: newTimelineEndFrames,
     })
 

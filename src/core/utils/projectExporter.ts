@@ -37,12 +37,17 @@ import { TimelineItemFactory } from '@/core/timelineitem/factory'
 import { TimelineItemQueries } from '@/core/timelineitem/queries'
 import { DEFAULT_BLEND_MODE } from '@/core/timelineitem'
 import { createDefaultMaskConfig } from '@/core/timelineitem/mask'
+import {
+  closeClipTransitionEdgeFrames,
+  refreshClipTransitionsForItems,
+} from '@/core/timelineitem/transition'
 import { AudioSegmentRenderer } from '@/core/mediabunny/audio-segment-renderer'
 import { RENDERER_FPS, AUDIO_DEFAULT_SAMPLE_RATE } from '@/core/mediabunny/constant'
 import { applyAnimationToConfig } from '@/core/utils/animationInterpolation'
 import { setupTimelineItemBunny } from '@/core/bunnyUtils/timelineItemSetup'
 import { WebGLExportRenderer } from '@/core/utils/WebGLExportRenderer'
 import type { FrameData } from '@/core/webgl2/types'
+import { TransitionEdgeFrameResolver } from '@/core/webgl2/transition/TransitionEdgeFrameResolver'
 
 /**
  * 导出类型
@@ -141,6 +146,7 @@ export class ExportManager {
 
   // 帧数据映射（类似 UnifiedMediaBunnyModule 的 bunnyCurFrameMap）
   private bunnyCurFrameMap: Map<string, FrameData> = new Map()
+  private transitionEdgeResolver: TransitionEdgeFrameResolver
 
   // 导出配置
   private config: ExportProjectOptions
@@ -155,6 +161,9 @@ export class ExportManager {
   constructor(config: ExportProjectOptions) {
     this.config = config
     this.frameRate = config.frameRate ?? RENDERER_FPS
+    this.transitionEdgeResolver = new TransitionEdgeFrameResolver((mediaItemId: string) =>
+      this.config.getMediaItem(mediaItemId),
+    )
     console.log(`✅ 导出帧率设置为: ${this.frameRate}fps`)
   }
 
@@ -251,7 +260,7 @@ export class ExportManager {
           // 检查是否在时间范围内（使用 30fps 的帧数）
           if (
             frameIn30fps < item.timeRange.timelineStartTime ||
-            frameIn30fps > item.timeRange.timelineEndTime
+            frameIn30fps >= item.timeRange.timelineEndTime
           ) {
             return
           }
@@ -341,7 +350,7 @@ export class ExportManager {
           // 检查是否在时间范围内（使用 30fps 的帧数）
           if (
             frameIn30fps < item.timeRange.timelineStartTime ||
-            frameIn30fps > item.timeRange.timelineEndTime
+            frameIn30fps >= item.timeRange.timelineEndTime
           ) {
             return
           }
@@ -456,6 +465,8 @@ export class ExportManager {
         this.config.timelineItems,
         this.config.getMediaItem,
       )
+      refreshClipTransitionsForItems(this.clonedTimelineItems)
+      await this.transitionEdgeResolver.prepareItems(this.clonedTimelineItems)
 
       // 阶段 3: 创建 MediaBunny 组件
       this.reportProgress('准备', 10, '初始化编码器...')
@@ -634,6 +645,9 @@ export class ExportManager {
     for (const item of this.clonedTimelineItems) {
       if (item.runtime.textBitmap) {
         item.runtime.textBitmap.close()
+      }
+      if (item.runtime.transition?.edgeFrames) {
+        closeClipTransitionEdgeFrames(item.runtime.transition.edgeFrames)
       }
     }
 

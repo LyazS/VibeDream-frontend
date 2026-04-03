@@ -24,6 +24,7 @@ import type { FileData } from '@/core/datasource/providers/ai-generation/types'
 import { RENDERER_FPS } from '@/core/mediabunny/constant'
 import { createTextTimelineItem } from '@/core/utils/textTimelineUtils'
 import { findOverlappingTimelineItemsOnTrack } from '@/core/utils/timelineSearchUtils'
+import { buildClipSelectionId } from '@/core/types/timelineSelection'
 
 /**
  * 菜单项类型定义
@@ -65,9 +66,10 @@ export function useTimelineContextMenu(
 
   // 右键菜单相关
   const showContextMenu = ref(false)
-  const contextMenuType = ref<'clip' | 'track' | 'empty'>('empty')
+  const contextMenuType = ref<'clip' | 'transition' | 'track' | 'empty'>('empty')
   const contextMenuTarget = ref<{
     clipId?: string
+    transitionSourceItemId?: string
     trackId?: string
     element?: HTMLElement
   }>({})
@@ -84,6 +86,8 @@ export function useTimelineContextMenu(
     switch (contextMenuType.value) {
       case 'clip':
         return getClipMenuItems()
+      case 'transition':
+        return getTransitionMenuItems()
       case 'track':
         return getTrackMenuItems()
       case 'empty':
@@ -173,6 +177,29 @@ export function useTimelineContextMenu(
     })
 
     return menuItems
+  }
+
+  function getTransitionMenuItems(): MenuItem[] {
+    const sourceItemId = contextMenuTarget.value.transitionSourceItemId
+    if (!sourceItemId) return []
+
+    return [
+      {
+        label: t('timeline.contextMenu.transition.placeholder'),
+        icon: IconComponents.LAYOUT,
+        onClick: () => {
+          showContextMenu.value = false
+        },
+      },
+      {
+        label: t('timeline.contextMenu.transition.selectSourceClip'),
+        icon: IconComponents.CHECKBOX_BLANK,
+        onClick: () => {
+          unifiedStore.selectTimelineSelection(buildClipSelectionId(sourceItemId))
+          showContextMenu.value = false
+        },
+      },
+    ]
   }
 
   /**
@@ -293,6 +320,20 @@ export function useTimelineContextMenu(
     // 判断右键点击的目标类型
     const target = event.target as HTMLElement
 
+    const transitionElement = target.closest('[data-transition-source-id]') as HTMLElement
+    if (transitionElement) {
+      const sourceItemId = transitionElement.getAttribute('data-transition-source-id')
+      if (sourceItemId) {
+        contextMenuType.value = 'transition'
+        contextMenuTarget.value = {
+          transitionSourceItemId: sourceItemId,
+          element: transitionElement,
+        }
+        showContextMenu.value = true
+        return
+      }
+    }
+
     // 查找最近的片段元素
     const clipElement = target.closest('[data-timeline-item-id]') as HTMLElement
     if (clipElement) {
@@ -358,6 +399,15 @@ export function useTimelineContextMenu(
     contextMenuOptions.value.y = event.clientY
     contextMenuType.value = 'clip'
     contextMenuTarget.value = { clipId: id }
+    showContextMenu.value = true
+  }
+
+  function handleTransitionContextMenu(event: MouseEvent, sourceItemId: string) {
+    event.preventDefault()
+    contextMenuOptions.value.x = event.clientX
+    contextMenuOptions.value.y = event.clientY
+    contextMenuType.value = 'transition'
+    contextMenuTarget.value = { transitionSourceItemId: sourceItemId }
     showContextMenu.value = true
   }
 
@@ -799,6 +849,7 @@ export function useTimelineContextMenu(
     // 方法
     handleContextMenu,
     handleTimelineItemContextMenu,
+    handleTransitionContextMenu,
     removeClip,
     duplicateClip,
     renameTrack,

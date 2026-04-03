@@ -52,7 +52,7 @@ export class TimelineItemSourceHandler implements DragSourceHandler {
       itemId: timelineParams.timelineItemId,
       trackId: item.trackId,
       startTime: item.timeRange.timelineStartTime,
-      selectedItems: Array.from(this.selectionModule.selectedTimelineItemIds.value),
+      selectedItems: [...this.selectionModule.selectedClipTimelineItemIds.value],
       dragOffset,
     }
 

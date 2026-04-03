@@ -606,6 +606,8 @@ export function createUnifiedProjectModule(registry: ModuleRegistry) {
         projectLoadMediaSyncs.push(mediaSync)  // 保存引用
       }
 
+      timelineModule.refreshTransitionItems?.()
+
       console.log(`✅ 时间轴项目恢复完成: ${timelineModule.timelineItems.value.length}个项目`)
       if (loadingItemsByMedia.size > 0) {
         console.log(`📊 创建了 ${projectLoadMediaSyncs.length} 个 MediaSync 实例，监听 ${loadingItemsByMedia.size} 个媒体项目`)

@@ -59,6 +59,7 @@ export class SplitTimelineItemCommand implements SimpleCommand {
       addTimelineItem: (item: UnifiedTimelineItemData<MediaType>) => Promise<void>
       removeTimelineItem: (id: string) => void
       getTimelineItem: (id: string) => UnifiedTimelineItemData<MediaType> | undefined
+      refreshTransitionItems?: () => void
     },
     private mediaModule: {
       getMediaItem: (id: string | null) => UnifiedMediaItemData | undefined
@@ -324,6 +325,8 @@ export class SplitTimelineItemCommand implements SimpleCommand {
         await this.timelineModule.addTimelineItem(item)
       }
 
+      this.timelineModule.refreshTransitionItems?.()
+
       const mediaItem = this.mediaModule.getMediaItem(this.originalTimelineItemData.mediaItemId)
       const splitPointsDesc = this.splitTimeFrames.map(t => framesToTimecode(t)).join(', ')
       console.log(
@@ -372,6 +375,8 @@ export class SplitTimelineItemCommand implements SimpleCommand {
 
       // 3. 添加原始项目到时间轴（已经是 ready 状态，不需要 MediaSync）
       await this.timelineModule.addTimelineItem(originalItem)
+
+      this.timelineModule.refreshTransitionItems?.()
 
       const mediaItem = this.mediaModule.getMediaItem(this.originalTimelineItemData.mediaItemId)
       console.log(`↩️ 已撤销分割时间轴项目: ${mediaItem?.name || '未知素材'}`)

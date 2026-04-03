@@ -31,6 +31,29 @@
     "visual": {
       "visualProperties": "Visual Properties"
     },
+    "transition": {
+      "title": "Transition",
+      "enabled": "Enable Transition",
+      "preset": "Preset",
+      "durationFrames": "Duration (Frames)",
+      "status": "Status",
+      "targetClip": "Target Clip: {name}",
+      "effectiveDuration": "Effective Duration: {frames} frames",
+      "presets": {
+        "crossfade": "Crossfade"
+      },
+      "statuses": {
+        "bound": "Bound to the clip on the right",
+        "unbound": "No seam on the right",
+        "invalidTarget": "Right clip type is unsupported or too short",
+        "invalidOverlap": "Overlaps with a neighboring transition",
+        "waitingEdge": "Preparing edge frames"
+      }
+    },
+    "transitionSelection": {
+      "sourceClip": "Source Clip",
+      "placeholder": "This panel is reserved for transition properties. Editing controls will be added later."
+    },
     "mask": {
       "enabled": "Enabled",
       "type": "Type",
@@ -214,6 +237,7 @@
     },
     "tabs": {
       "basic": "Basic",
+      "transition": "Transition",
       "mask": "Mask",
       "filter": "Filter",
       "animation": "Animation",

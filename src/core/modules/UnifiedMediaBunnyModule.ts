@@ -29,6 +29,7 @@ import type { UnifiedMediaModule } from './UnifiedMediaModule'
 import type { UnifiedPlaybackModule } from './UnifiedPlaybackModule'
 import type { UnifiedConfigModule } from './UnifiedConfigModule'
 import type { UnifiedTrackModule } from './UnifiedTrackModule'
+import type { UnifiedSelectionModule } from './UnifiedSelectionModule'
 import type { UnifiedTimelineItemData } from '@/core/timelineitem/type'
 import type { MediaType } from '@/core/mediaitem/types'
 import type { WrappedAudioBuffer } from 'mediabunny'
@@ -39,6 +40,7 @@ import {
 } from '@/core/webgl2/types'
 import { TimelineItemsBufferManager } from '@/core/mediabunny/TimelineItemsBufferManager'
 import { TimelineWebGLRenderer } from '@/core/webgl2/renderer/TimelineWebGLRenderer'
+import { TransitionEdgeFrameResolver } from '@/core/webgl2/transition/TransitionEdgeFrameResolver'
 
 if (!(await canEncodeAudio('mp3'))) {
   registerMp3Encoder()
@@ -53,6 +55,7 @@ export function createUnifiedMediaBunnyModule(
   const timelineModule = registry.get<UnifiedTimelineModule>(MODULE_NAMES.TIMELINE)
   const mediaModule = registry.get<UnifiedMediaModule>(MODULE_NAMES.MEDIA)
   const trackModule = registry.get<UnifiedTrackModule>(MODULE_NAMES.TRACK)
+  const selectionModule = registry.get<UnifiedSelectionModule>(MODULE_NAMES.SELECTION)
 
   // ==================== 状态定义 ====================
 
@@ -63,6 +66,7 @@ export function createUnifiedMediaBunnyModule(
   // Canvas 相关（由外部传入）
   let mCanvas: HTMLCanvasElement | null = null
   let mWebGLRenderer: TimelineWebGLRenderer | null = null
+  let mTransitionEdgeFrameResolver: TransitionEdgeFrameResolver | null = null
 
   // 渲染循环相关
   let mRenderLoopCleanup: (() => void) | null = null
@@ -110,7 +114,11 @@ export function createUnifiedMediaBunnyModule(
         getTrack: (trackId: string) => trackModule.getTrack(trackId),
         getMediaItem: (mediaItemId: string) => mediaModule.getMediaItem(mediaItemId),
         trackIndexMap: () => trackModule.trackIndexMap.value,
+        getSelectedTimelineItemId: () => selectionModule.selectedClipTimelineItemId.value,
       })
+      mTransitionEdgeFrameResolver = new TransitionEdgeFrameResolver((mediaItemId: string) =>
+        mediaModule.getMediaItem(mediaItemId),
+      )
 
       console.log('✅ Canvas 元素已设置', {
         width: mCanvas.width,
@@ -178,6 +186,7 @@ export function createUnifiedMediaBunnyModule(
     // 清理引用（不删除 canvas 元素，由 Vue 组件管理）
     mWebGLRenderer?.dispose()
     mWebGLRenderer = null
+    mTransitionEdgeFrameResolver = null
     mCanvas = null
     mGainNode = null
 
@@ -257,6 +266,99 @@ export function createUnifiedMediaBunnyModule(
     return mAudioContext.currentTime - mAudioContextStartTime + mPlaybackTimeAtStart
   }
 
+  function removeCurrentVideoFrame(itemId: string): void {
+    const oldFrame = mBunnyCurFrameMap.get(itemId)
+    oldFrame?.videoSample.close()
+    mBunnyCurFrameMap.delete(itemId)
+  }
+
+  function storeCurrentVideoFrame(
+    itemId: string,
+    frameNumber: number,
+    clockwiseRotation: number,
+    videoSample: FrameData['videoSample'],
+  ): void {
+    removeCurrentVideoFrame(itemId)
+    mBunnyCurFrameMap.set(itemId, {
+      frameNumber,
+      clockwiseRotation,
+      videoSample,
+    })
+  }
+
+  async function warmPreparedClipStartFrames(
+    items: UnifiedTimelineItemData<MediaType>[],
+    currentFrame: number,
+  ): Promise<void> {
+    const warmTasks: Promise<void>[] = []
+
+    for (const item of items) {
+      // 这里只为视频首帧做预热落图；音频仍走正常播放时钟调度。
+      if (!TimelineItemQueries.isVideoTimelineItem(item)) {
+        continue
+      }
+
+      // 只预热未来 clip。当前或过去的 clip 继续走常规 updateClipFrame，
+      // 避免和正在推进的解码状态互相覆盖。
+      if (item.timeRange.timelineStartTime <= currentFrame) {
+        continue
+      }
+
+      const bunnyClip = item.runtime.bunnyClip
+      if (!bunnyClip) {
+        continue
+      }
+
+      const warmTask = bunnyClip
+        .tickN(BigInt(item.timeRange.timelineStartTime), false, true)
+        .then(({ video, state }) => {
+          if (state !== 'success' || !video) {
+            return
+          }
+
+          // prepare() 只是把首帧留在 BunnyClip 内部 ready 状态；
+          // 这里显式取出 timelineStart 对应的视频帧，提前放进渲染 map，
+          // 这样播放头真正走到 clip 首帧时，render 不会先看到一个空洞。
+          storeCurrentVideoFrame(
+            item.id,
+            item.timeRange.timelineStartTime,
+            bunnyClip.clockwiseRotation,
+            video,
+          )
+        })
+        .catch((error) => {
+          console.error(`❌ 预热 clip 首帧失败: ${item.id}`, error)
+        })
+
+      warmTasks.push(warmTask)
+    }
+
+    if (warmTasks.length > 0) {
+      await Promise.all(warmTasks)
+    }
+  }
+
+  function cleanupBufferedPlaybackFrames(currentFrame: number): void {
+    if (!mBufferManager) {
+      return
+    }
+
+    // 预热首帧可能会让 future clip 在进入可见区前就占住一个 VideoSample，
+    // 播放窗口滑走后需要主动清掉，避免 map 里长期残留旧帧。
+    const bufferedItemIds = mBufferManager.getBufferedItemIds(currentFrame)
+    if (bufferedItemIds.size === 0) {
+      return
+    }
+
+    for (const [itemId] of mBunnyCurFrameMap) {
+      if (bufferedItemIds.has(itemId)) {
+        continue
+      }
+
+      removeCurrentVideoFrame(itemId)
+    }
+  }
+
   /**
    * 更新单个 clip 的帧数据
    * 异步调用 bunnyClip.tickN() 更新 bunnyCurFrameMap 和处理音频
@@ -269,6 +371,9 @@ export function createUnifiedMediaBunnyModule(
     currentTime: number,
     shouldPlayAudio: boolean,
     volume: number,
+    // sampleFrame 允许预览层在不改变播放头位置的前提下，采样相邻帧。
+    // 当前主要用于“选中 clip 且停在 timelineEndTime”时回退显示尾帧。
+    sampleFrame: number = currentTime,
   ): Promise<void> {
     const bunnyClip = item.runtime.bunnyClip
     if (!bunnyClip) return
@@ -285,7 +390,7 @@ export function createUnifiedMediaBunnyModule(
     // 未解码完就再次执行 tickN 会返回 ‘skip’
     // 这是第二层频率限制
     const { audio, video, state } = await bunnyClip.tickN(
-      BigInt(currentTime),
+      BigInt(sampleFrame),
       shouldPlayAudio, //根据轨道和项目静音状态决定是否请求音频
       true, //总是请求视频帧
     )
@@ -294,13 +399,7 @@ export function createUnifiedMediaBunnyModule(
     } else if (state === 'success') {
       // 更新 bunnyCurFrameMap
       if (video) {
-        const oldFrame = mBunnyCurFrameMap.get(item.id)
-        oldFrame?.videoSample.close()
-        mBunnyCurFrameMap.set(item.id, {
-          frameNumber: currentTime,
-          clockwiseRotation: bunnyClip.clockwiseRotation,
-          videoSample: video,
-        })
+        storeCurrentVideoFrame(item.id, currentTime, bunnyClip.clockwiseRotation, video)
       }
 
       // 调度音频（只在需要播放音频时）
@@ -309,9 +408,7 @@ export function createUnifiedMediaBunnyModule(
       }
     } else {
       // 清理无效帧
-      const oldFrame = mBunnyCurFrameMap.get(item.id)
-      oldFrame?.videoSample.close()
-      mBunnyCurFrameMap.delete(item.id)
+      removeCurrentVideoFrame(item.id)
     }
   }
 
@@ -341,21 +438,46 @@ export function createUnifiedMediaBunnyModule(
       mBufferManager &&
       mBufferManager.shouldUpdateBuffer(currentTime)
     ) {
-      // 异步更新后台缓冲，不阻塞当前渲染
-      void mBufferManager.updateBackBuffer(timelineItems, currentTime).then((bufferedItems) => {
-        mWebGLRenderer?.prepareRenderChains(bufferedItems)
-      })
+      // 异步更新后台缓冲，不阻塞当前渲染。
+      // 这里先预热 render chain 和转场边界帧，减少进入播放窗口后的首次准备成本。
+      void mBufferManager.updateBackBuffer(timelineItems, currentTime).then(
+        ({ bufferedItems, newlyPreparedItems }) => {
+          mWebGLRenderer?.prepareRenderChains(bufferedItems)
+          void mTransitionEdgeFrameResolver?.prepareItems(bufferedItems)
+          void warmPreparedClipStartFrames(newlyPreparedItems, currentTime)
+        },
+      )
     }
 
+    if (playbackModule.isPlaying.value) {
+      cleanupBufferedPlaybackFrames(currentTime)
+    }
+
+    const selectedTimelineItemId = selectionModule.selectedClipTimelineItemId.value
+
     for (const item of itemsToProcess) {
+      const shouldPreviewSelectedBoundaryFrame =
+        selectedTimelineItemId === item.id &&
+        TimelineItemQueries.hasVisualProperties(item) &&
+        currentTime === item.timeRange.timelineEndTime
+      const visualFrame = shouldPreviewSelectedBoundaryFrame
+        ? Math.max(item.timeRange.timelineStartTime, item.timeRange.timelineEndTime - 1)
+        : currentTime
+
       // 应用动画插值到 config
-      applyAnimationToConfig(item, currentTime)
+      applyAnimationToConfig(item, visualFrame)
 
       // 处理视频/音频
       if (
         TimelineItemQueries.isVideoTimelineItem(item) ||
         TimelineItemQueries.isAudioTimelineItem(item)
       ) {
+        // future item 如果继续走常规 tickN(currentTime)，会得到 outofrange，
+        // 从而把刚才预热写入的首帧立刻删掉，所以播放态下要先跳过。
+        if (playbackModule.isPlaying.value && currentTime < item.timeRange.timelineStartTime) {
+          continue
+        }
+
         const track = trackModule.getTrack(item.trackId)
         const isTrackMuted = track?.isMuted ?? false
 
@@ -363,13 +485,21 @@ export function createUnifiedMediaBunnyModule(
         const config = TimelineItemQueries.getRenderConfig(item)
         const isItemMuted = config.isMuted ?? false
         const itemVolume = config.volume ?? 1.0
-        const shouldPlayAudio = playAudio && !isTrackMuted && !isItemMuted
+        const shouldRenderSelectedVideoBoundaryFrame =
+          shouldPreviewSelectedBoundaryFrame &&
+          TimelineItemQueries.isVideoTimelineItem(item)
+        const shouldPlayAudioForItem =
+          !shouldRenderSelectedVideoBoundaryFrame &&
+          playAudio &&
+          !isTrackMuted &&
+          !isItemMuted
+        const sampleFrame = shouldRenderSelectedVideoBoundaryFrame ? visualFrame : currentTime
 
         // 更新 clip 帧数据（不等待完成，使用 void）
         // 这里不等待，因此会后台执行，飞快地跳过这里，导致整个 updateClips 都会快速执行一遍
         // 按照 workerTimer 频率来执行，可能会在解码慢跟不上的时候多次重复执行
         // 因此内部也需要一些策略来限制频率
-        void updateClipFrame(item, currentTime, shouldPlayAudio, itemVolume)
+        void updateClipFrame(item, currentTime, shouldPlayAudioForItem, itemVolume, sampleFrame)
       }
     }
 
@@ -390,7 +520,9 @@ export function createUnifiedMediaBunnyModule(
   ): void {
     // 上游仍然沿用 MediaBunny 的解码与时间推进；这里只把“最终如何画到 canvas”
     // 切换为 WebGL2 RenderChain 后端。
+    // 这里保留一次直接准备路径，覆盖暂停、seek、首帧渲染和缓冲未命中时的即时渲染。
     if (!mCanvas || !mWebGLRenderer) return
+    void mTransitionEdgeFrameResolver?.prepareItems(timelineItems)
     mWebGLRenderer.render(timelineItems, currentTimeN, mBunnyCurFrameMap)
   }
 

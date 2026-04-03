@@ -15,6 +15,7 @@ import type { UnifiedTimeRange } from '@/core/types/timeRange'
 import type { BunnyClip } from '@/core/mediabunny/bunny-clip'
 import type { GetConfigs, GetAnimation } from './bunnytype'
 import type { BlendMode } from './blendMode'
+import type { ClipTransitionOutConfig, ClipTransitionRuntime } from './transition'
 
 // 重新导出 bunnytype 中的类型供其他模块使用
 export type {
@@ -81,6 +82,8 @@ export interface UnifiedTimelineItemRuntime<T extends MediaType = MediaType> {
   textBitmapVersion?: number // 文本位图重建版本，用于驱动 WebGL 纹理重新上传
   /** 动画插值后的临时配置（运行时数据，不持久化） */
   renderConfig?: GetConfigs<T>
+  /** 片段出场转场的运行时绑定与边界帧缓存 */
+  transition?: ClipTransitionRuntime
 
   /**
    * 标识时间轴项目是否已经从 mediaItem 初始化过（必选字段）
@@ -129,6 +132,9 @@ export interface UnifiedTimelineItemData<T extends MediaType = MediaType> {
 
   // ==================== 动画配置（类型安全） ====================
   animation?: GetAnimation<T>
+
+  // ==================== 片段转场配置（持久化） ====================
+  transitionOut?: ClipTransitionOutConfig
 
   // ==================== 运行时数据（不可持久化） ====================
   runtime: UnifiedTimelineItemRuntime<T>

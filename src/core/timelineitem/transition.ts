@@ -1,0 +1,371 @@
+import type { MediaType } from '@/core/mediaitem'
+import type { UnifiedTimelineItemData } from '@/core/timelineitem/type'
+
+export const DEFAULT_CLIP_TRANSITION_DURATION_FRAMES = 12
+
+export type ClipTransitionOutPreset = 'crossfade'
+
+export interface ClipTransitionOutConfig {
+  enabled: boolean
+  preset: ClipTransitionOutPreset
+  durationFrames: number
+}
+
+export type ClipTransitionBindingState =
+  | 'unbound'
+  | 'bound'
+  | 'invalid-target'
+  | 'invalid-overlap'
+  | 'waiting-edge'
+
+export interface ClipTransitionEdgeFrames {
+  leftTail?: ImageBitmap
+  rightHead?: ImageBitmap
+}
+
+export interface ClipTransitionRuntime {
+  bindingState: ClipTransitionBindingState
+  seamFrame: number | null
+  rightItemId: string | null
+  effectiveDurationFrames: number
+  leftHalfFrames: number
+  rightHalfFrames: number
+  activeRangeStart: number | null
+  activeRangeEnd: number | null
+  edgeFrames?: ClipTransitionEdgeFrames
+  edgeSignature?: string
+}
+
+export interface TransitionBoundaryFrames {
+  timelineHeadFrame: number
+  timelineTailFrame: number
+  clipHeadFrame: number
+  clipTailFrame: number
+}
+
+export interface ClipTransitionPlaybackState {
+  phase: 'entering-right' | 'exiting-left'
+  progress: number
+  liveItemId: string
+  frozenItemId: string
+  frozenEdgeKey: keyof ClipTransitionEdgeFrames
+  transitionItemId: string
+  activeRangeStart: number
+  activeRangeEnd: number
+}
+
+export type ClipTransitionVisualTimelineItem =
+  | UnifiedTimelineItemData<'video'>
+  | UnifiedTimelineItemData<'image'>
+
+function clampDurationFrames(durationFrames: number): number {
+  const rounded = Math.round(durationFrames)
+  if (!Number.isFinite(rounded)) {
+    return DEFAULT_CLIP_TRANSITION_DURATION_FRAMES
+  }
+  return Math.max(2, rounded)
+}
+
+export function createDefaultClipTransitionOutConfig(): ClipTransitionOutConfig {
+  return {
+    enabled: false,
+    preset: 'crossfade',
+    durationFrames: DEFAULT_CLIP_TRANSITION_DURATION_FRAMES,
+  }
+}
+
+export function normalizeClipTransitionOutConfig(
+  config?: Partial<ClipTransitionOutConfig> | null,
+): ClipTransitionOutConfig {
+  const defaults = createDefaultClipTransitionOutConfig()
+  return {
+    enabled: config?.enabled ?? defaults.enabled,
+    preset: config?.preset ?? defaults.preset,
+    durationFrames: clampDurationFrames(config?.durationFrames ?? defaults.durationFrames),
+  }
+}
+
+export function createEmptyClipTransitionRuntime(): ClipTransitionRuntime {
+  return {
+    bindingState: 'unbound',
+    seamFrame: null,
+    rightItemId: null,
+    effectiveDurationFrames: 0,
+    leftHalfFrames: 0,
+    rightHalfFrames: 0,
+    activeRangeStart: null,
+    activeRangeEnd: null,
+  }
+}
+
+export function supportsClipTransitionOutMediaType(
+  mediaType: MediaType,
+): mediaType is 'video' | 'image' {
+  return mediaType === 'video' || mediaType === 'image'
+}
+
+export function supportsClipTransitionOut(
+  item: UnifiedTimelineItemData<MediaType>,
+): item is ClipTransitionVisualTimelineItem {
+  return supportsClipTransitionOutMediaType(item.mediaType)
+}
+
+export function hasEnabledClipTransitionOut(
+  item: UnifiedTimelineItemData<MediaType>,
+): item is ClipTransitionVisualTimelineItem & { transitionOut: ClipTransitionOutConfig } {
+  return supportsClipTransitionOut(item) && Boolean(item.transitionOut?.enabled)
+}
+
+export function ensureClipTransitionRuntime(
+  item: UnifiedTimelineItemData<MediaType>,
+): ClipTransitionRuntime {
+  if (!item.runtime.transition) {
+    item.runtime.transition = createEmptyClipTransitionRuntime()
+  }
+  return item.runtime.transition
+}
+
+export function closeClipTransitionEdgeFrames(edgeFrames?: ClipTransitionEdgeFrames): void {
+  edgeFrames?.leftTail?.close()
+  edgeFrames?.rightHead?.close()
+}
+
+export function resetClipTransitionRuntime(item: UnifiedTimelineItemData<MediaType>): void {
+  if (item.runtime.transition?.edgeFrames) {
+    closeClipTransitionEdgeFrames(item.runtime.transition.edgeFrames)
+  }
+  item.runtime.transition = createEmptyClipTransitionRuntime()
+}
+
+export function resolveTransitionBoundaryFrames(
+  item: UnifiedTimelineItemData<MediaType>,
+): TransitionBoundaryFrames {
+  const timelineHeadFrame = item.timeRange.timelineStartTime
+  const timelineTailFrame = Math.max(
+    item.timeRange.timelineStartTime,
+    item.timeRange.timelineEndTime - 1,
+  )
+  const clipHeadFrame = item.timeRange.clipStartTime
+  const clipTailFrame = Math.max(item.timeRange.clipStartTime, item.timeRange.clipEndTime - 1)
+
+  return {
+    timelineHeadFrame,
+    timelineTailFrame,
+    clipHeadFrame,
+    clipTailFrame,
+  }
+}
+
+export function resolveClipTransitionBinding(
+  itemA: UnifiedTimelineItemData<MediaType>,
+  trackItems: UnifiedTimelineItemData<MediaType>[],
+): ClipTransitionRuntime {
+  const nextRuntime = createEmptyClipTransitionRuntime()
+
+  if (!supportsClipTransitionOut(itemA)) {
+    return nextRuntime
+  }
+
+  const seamFrame = itemA.timeRange.timelineEndTime
+  nextRuntime.seamFrame = seamFrame
+
+  const rightItem =
+    trackItems.find(
+      (candidate) =>
+        candidate.id !== itemA.id &&
+        candidate.trackId === itemA.trackId &&
+        candidate.timeRange.timelineStartTime === seamFrame,
+    ) ?? null
+
+  if (!rightItem) {
+    return nextRuntime
+  }
+
+  nextRuntime.rightItemId = rightItem.id
+
+  if (!supportsClipTransitionOut(rightItem)) {
+    nextRuntime.bindingState = 'invalid-target'
+    return nextRuntime
+  }
+
+  const transitionOut = normalizeClipTransitionOutConfig(itemA.transitionOut)
+  const desiredDurationFrames = transitionOut.durationFrames
+  const desiredLeftHalfFrames = Math.floor(desiredDurationFrames / 2)
+  const desiredRightHalfFrames = desiredDurationFrames - desiredLeftHalfFrames
+  const leftAvailableFrames = Math.max(0, seamFrame - itemA.timeRange.timelineStartTime)
+  const rightAvailableFrames = Math.max(0, rightItem.timeRange.timelineEndTime - seamFrame)
+
+  const effectiveLeftHalfFrames = Math.min(desiredLeftHalfFrames, leftAvailableFrames)
+  const effectiveRightHalfFrames = Math.min(desiredRightHalfFrames, rightAvailableFrames)
+
+  if (effectiveLeftHalfFrames <= 0 || effectiveRightHalfFrames <= 0) {
+    nextRuntime.bindingState = 'invalid-target'
+    return nextRuntime
+  }
+
+  nextRuntime.bindingState = 'bound'
+  nextRuntime.leftHalfFrames = effectiveLeftHalfFrames
+  nextRuntime.rightHalfFrames = effectiveRightHalfFrames
+  nextRuntime.effectiveDurationFrames = effectiveLeftHalfFrames + effectiveRightHalfFrames
+  nextRuntime.activeRangeStart = seamFrame - effectiveLeftHalfFrames
+  nextRuntime.activeRangeEnd = seamFrame + effectiveRightHalfFrames
+
+  return nextRuntime
+}
+
+export function resolveClipTransitionPlaybackState(
+  transitionItem: UnifiedTimelineItemData<MediaType>,
+  binding: ClipTransitionRuntime,
+  currentFrame: number,
+): ClipTransitionPlaybackState | null {
+  if (binding.bindingState !== 'bound') {
+    return null
+  }
+
+  if (
+    binding.seamFrame === null ||
+    binding.rightItemId === null ||
+    binding.activeRangeStart === null ||
+    binding.activeRangeEnd === null
+  ) {
+    return null
+  }
+
+  if (currentFrame < binding.activeRangeStart || currentFrame >= binding.activeRangeEnd) {
+    return null
+  }
+
+  const totalFrames = Math.max(1, binding.activeRangeEnd - binding.activeRangeStart)
+  const progress = Math.min(
+    1,
+    Math.max(0, (currentFrame - binding.activeRangeStart) / totalFrames),
+  )
+
+  if (currentFrame < binding.seamFrame) {
+    return {
+      phase: 'entering-right',
+      progress,
+      liveItemId: transitionItem.id,
+      frozenItemId: binding.rightItemId,
+      frozenEdgeKey: 'rightHead',
+      transitionItemId: transitionItem.id,
+      activeRangeStart: binding.activeRangeStart,
+      activeRangeEnd: binding.activeRangeEnd,
+    }
+  }
+
+  return {
+    phase: 'exiting-left',
+    progress,
+    liveItemId: binding.rightItemId,
+    frozenItemId: transitionItem.id,
+    frozenEdgeKey: 'leftTail',
+    transitionItemId: transitionItem.id,
+    activeRangeStart: binding.activeRangeStart,
+    activeRangeEnd: binding.activeRangeEnd,
+  }
+}
+
+export function doClipTransitionWindowsOverlap(
+  left: ClipTransitionRuntime,
+  right: ClipTransitionRuntime,
+): boolean {
+  if (
+    left.activeRangeStart === null ||
+    left.activeRangeEnd === null ||
+    right.activeRangeStart === null ||
+    right.activeRangeEnd === null
+  ) {
+    return false
+  }
+
+  return left.activeRangeStart < right.activeRangeEnd && left.activeRangeEnd > right.activeRangeStart
+}
+
+export function refreshClipTransitionsForItems(
+  timelineItems: UnifiedTimelineItemData<MediaType>[],
+): void {
+  const trackItemsMap = new Map<string, UnifiedTimelineItemData<MediaType>[]>()
+
+  for (const item of timelineItems) {
+    const itemsOnTrack = trackItemsMap.get(item.trackId) || []
+    itemsOnTrack.push(item)
+    trackItemsMap.set(item.trackId, itemsOnTrack)
+  }
+
+  for (const itemsOnTrack of trackItemsMap.values()) {
+    itemsOnTrack.sort((left, right) => {
+      const startDiff = left.timeRange.timelineStartTime - right.timeRange.timelineStartTime
+      if (startDiff !== 0) return startDiff
+      return left.id.localeCompare(right.id)
+    })
+  }
+
+  for (const item of timelineItems) {
+    const existingRuntime = item.runtime.transition
+
+    if (!supportsClipTransitionOut(item)) {
+      if (existingRuntime?.edgeFrames) {
+        closeClipTransitionEdgeFrames(existingRuntime.edgeFrames)
+      }
+      item.runtime.transition = undefined
+      continue
+    }
+
+    const nextRuntime = resolveClipTransitionBinding(item, trackItemsMap.get(item.trackId) || [])
+    const shouldPreserveEdges =
+      existingRuntime &&
+      existingRuntime.rightItemId === nextRuntime.rightItemId &&
+      existingRuntime.seamFrame === nextRuntime.seamFrame &&
+      existingRuntime.activeRangeStart === nextRuntime.activeRangeStart &&
+      existingRuntime.activeRangeEnd === nextRuntime.activeRangeEnd &&
+      existingRuntime.leftHalfFrames === nextRuntime.leftHalfFrames &&
+      existingRuntime.rightHalfFrames === nextRuntime.rightHalfFrames
+
+    if (shouldPreserveEdges && existingRuntime) {
+      nextRuntime.edgeFrames = existingRuntime.edgeFrames
+      nextRuntime.edgeSignature = existingRuntime.edgeSignature
+      if (existingRuntime.bindingState === 'waiting-edge' && nextRuntime.bindingState === 'bound') {
+        nextRuntime.bindingState = 'waiting-edge'
+      }
+    } else if (existingRuntime?.edgeFrames) {
+      closeClipTransitionEdgeFrames(existingRuntime.edgeFrames)
+    }
+
+    item.runtime.transition = nextRuntime
+  }
+
+  const activeTransitionItems = timelineItems.filter(
+    (item) =>
+      hasEnabledClipTransitionOut(item) &&
+      (item.runtime.transition?.bindingState === 'bound' ||
+        item.runtime.transition?.bindingState === 'waiting-edge') &&
+      item.runtime.transition.activeRangeStart !== null &&
+      item.runtime.transition.activeRangeEnd !== null,
+  )
+
+  for (let index = 0; index < activeTransitionItems.length; index++) {
+    const currentItem = activeTransitionItems[index]
+    const currentRuntime = currentItem.runtime.transition
+    if (!currentRuntime) continue
+
+    for (let compareIndex = index + 1; compareIndex < activeTransitionItems.length; compareIndex++) {
+      const compareItem = activeTransitionItems[compareIndex]
+      const compareRuntime = compareItem.runtime.transition
+      if (!compareRuntime) continue
+
+      const currentParticipants = new Set([currentItem.id, currentRuntime.rightItemId])
+      const compareParticipants = new Set([compareItem.id, compareRuntime.rightItemId])
+      const sharesParticipant = [...currentParticipants].some((id) => compareParticipants.has(id))
+
+      if (!sharesParticipant) {
+        continue
+      }
+
+      if (doClipTransitionWindowsOverlap(currentRuntime, compareRuntime)) {
+        currentRuntime.bindingState = 'invalid-overlap'
+        compareRuntime.bindingState = 'invalid-overlap'
+      }
+    }
+  }
+}

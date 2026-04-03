@@ -29,7 +29,7 @@ export function getVisibleTimelineItems(
     // 1. 检查是否在当前播放时间范围内
     if (
       currentFrame < item.timeRange.timelineStartTime ||
-      currentFrame > item.timeRange.timelineEndTime
+      currentFrame >= item.timeRange.timelineEndTime
     ) {
       return false
     }

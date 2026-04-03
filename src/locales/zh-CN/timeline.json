@@ -43,6 +43,10 @@
         "regenerateThumbnail": "重新生成缩略图",
         "deleteClip": "删除片段"
       },
+      "transition": {
+        "placeholder": "转场占位",
+        "selectSourceClip": "选中源片段"
+      },
       "track": {
         "addText": "添加文本",
         "autoArrangeClips": "自动排列片段",

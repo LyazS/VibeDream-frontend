@@ -11,6 +11,7 @@ import type {
 } from '@/core/timelineitem/type'
 import { TimelineStatusDisplayUtils } from '@/core/timelineitem/statusdisplayutils'
 import { useUnifiedStore } from '@/core/unifiedStore'
+import { supportsClipTransitionOut as itemSupportsClipTransitionOut } from '@/core/timelineitem/transition'
 
 // ==================== 类型守卫函数 ====================
 
@@ -60,6 +61,12 @@ export function hasAudioProperties(
   item: UnifiedTimelineItemData<MediaType>,
 ): item is UnifiedTimelineItemData<'video'> | UnifiedTimelineItemData<'audio'> {
   return isVideoTimelineItem(item) || isAudioTimelineItem(item)
+}
+
+export function supportsClipTransitionOut(
+  item: UnifiedTimelineItemData<MediaType>,
+): item is UnifiedTimelineItemData<'video'> | UnifiedTimelineItemData<'image'> {
+  return itemSupportsClipTransitionOut(item)
 }
 
 // ==================== 状态查询函数 ====================
@@ -178,6 +185,7 @@ export const TimelineItemQueries = {
   isTextTimelineItem,
   hasVisualProperties,
   hasAudioProperties,
+  supportsClipTransitionOut,
 
   // 状态查询
   isReady,

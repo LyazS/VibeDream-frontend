@@ -12,7 +12,7 @@
       <BunnyRender ref="bunnyRenderRef" />
       <MaskOverlay
         v-if="showMaskOverlay"
-        :selected-timeline-item-id="selectedTimelineItemId"
+        :selected-timeline-item-id="selectedClipTimelineItemId"
         :is-multi-select-mode="isMultiSelectMode"
         :container-element="rendererContainerRef"
         :canvas-resolution="canvasResolution"
@@ -24,7 +24,7 @@
       />
       <SelectionIndicator
         v-else
-        :selected-timeline-item-id="selectedTimelineItemId"
+        :selected-timeline-item-id="selectedClipTimelineItemId"
         :is-multi-select-mode="isMultiSelectMode"
         :canvas-resolution="canvasResolution"
         :canvas-display-size="canvasDisplaySize"
@@ -94,6 +94,7 @@ import {
 import { TimelineItemQueries } from '@/core/timelineitem/queries'
 import { useUnifiedKeyframeTransformControls } from '@/core/composables/useKeyframeTransformControls'
 import { calculateScaledSize, calculateRotationAngle } from '@/core/utils/transformMath'
+import { buildClipSelectionId } from '@/core/types/timelineSelection'
 
 const unifiedStore = useUnifiedStore()
 const { t } = useAppI18n()
@@ -107,12 +108,8 @@ const previewZoom = ref(1)
 const previewOffsetX = ref(0)
 const previewOffsetY = ref(0)
 
-const selectedTimelineItemId = computed(() => {
-  const ids = unifiedStore.selectedTimelineItemIds
-  return ids.size === 1 ? Array.from(ids)[0] : null
-})
-
-const isMultiSelectMode = computed(() => unifiedStore.selectedTimelineItemIds.size > 1)
+const selectedClipTimelineItemId = computed(() => unifiedStore.selectedClipTimelineItemId)
+const isMultiSelectMode = computed(() => unifiedStore.isTimelineSelectionMultiSelectMode)
 const canvasResolution = computed(() => unifiedStore.videoResolution)
 const canvasDisplaySize = computed(
   () => bunnyRenderRef.value?.canvasDisplaySize || { width: 0, height: 0 },
@@ -139,7 +136,7 @@ const showMaskOverlay = computed(
   () => {
     if (
       unifiedStore.activePropertyTab !== 'mask' ||
-      selectedTimelineItemId.value === null ||
+      selectedClipTimelineItemId.value === null ||
       isMultiSelectMode.value ||
       !selectedItem.value ||
       !TimelineItemQueries.hasVisualProperties(selectedItem.value)
@@ -152,8 +149,8 @@ const showMaskOverlay = computed(
 )
 
 const selectedItem = computed(() => {
-  if (!selectedTimelineItemId.value) return null
-  return unifiedStore.getTimelineItem(selectedTimelineItemId.value) ?? null
+  if (!selectedClipTimelineItemId.value) return null
+  return unifiedStore.getTimelineItem(selectedClipTimelineItemId.value) ?? null
 })
 
 const {
@@ -362,7 +359,7 @@ function handleAuxClick(event: MouseEvent) {
 }
 
 function handleDragStart(event: MouseEvent) {
-  if (!selectedTimelineItemId.value) return
+  if (!selectedClipTimelineItemId.value) return
 
   const item = selectedItem.value
   if (!item || !TimelineItemQueries.hasVisualProperties(item)) return
@@ -424,7 +421,7 @@ async function handleGlobalMouseUp(event: MouseEvent) {
 }
 
 function handleScaleStart(event: any) {
-  if (!selectedTimelineItemId.value) return
+  if (!selectedClipTimelineItemId.value) return
 
   const item = selectedItem.value
   if (!item || !TimelineItemQueries.hasVisualProperties(item)) return
@@ -511,7 +508,7 @@ async function handleGlobalScaleEnd(event: MouseEvent) {
 }
 
 function handleRotateStart(event: any) {
-  if (!selectedTimelineItemId.value) return
+  if (!selectedClipTimelineItemId.value) return
 
   const item = selectedItem.value
   if (!item || !TimelineItemQueries.hasVisualProperties(item)) return
@@ -631,8 +628,8 @@ function handleCanvasClick(event: MouseEvent): void {
   )
 
   if (clickedItemId) {
-    unifiedStore.selectTimelineItem(clickedItemId)
-  } else if (unifiedStore.selectedTimelineItemIds.size === 1) {
+    unifiedStore.selectTimelineSelection(buildClipSelectionId(clickedItemId))
+  } else if (unifiedStore.selectedTimelineSelectionIds.size > 0) {
     unifiedStore.clearTimelineSelection()
   }
 }

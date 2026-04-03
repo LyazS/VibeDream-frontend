@@ -69,6 +69,19 @@ export class SourceTextureUploader {
     return this.sourceTextureIds.get(itemId) || null
   }
 
+  ensureTextureForBitmap(
+    textureId: string,
+    bitmap?: ImageBitmap,
+    contentVersion?: number,
+  ): string | null {
+    return this.uploadStaticTexture(textureId, bitmap, contentVersion)
+  }
+
+  removeTexture(textureId: string): void {
+    this.cache.delete(textureId)
+    this.runtime.textures.remove(textureId)
+  }
+
   /**
    * 释放 uploader 自己维护的缓存关系，并同步删除对应的 source texture。
    */

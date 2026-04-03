@@ -1,6 +1,6 @@
 import type { MediaType } from '@/core/mediaitem'
 import type { UnifiedTimelineItemData } from '@/core/timelineitem/type'
-import type { AnimationGroupId } from '@/core/timelineitem/bunnytype'
+import type { AnimationGroupId, GetConfigs } from '@/core/timelineitem/bunnytype'
 import { normalizeMaskConfig } from '@/core/timelineitem/mask'
 import { AnimationRegistry } from '@/core/animation/registry'
 import {
@@ -8,7 +8,7 @@ import {
   getSupportedAnimationGroups,
 } from '@/core/animation/engine'
 
-function createBaseRenderConfig(item: UnifiedTimelineItemData<MediaType>) {
+export function createBaseRenderConfig(item: UnifiedTimelineItemData<MediaType>) {
   const baseConfig = { ...item.config }
   if ('mask' in baseConfig) {
     const width = typeof baseConfig.width === 'number' ? baseConfig.width : undefined
@@ -30,21 +30,36 @@ function getActiveAnimationGroups(item: UnifiedTimelineItemData<MediaType>): Ani
   })
 }
 
+export function resolveRenderConfigAtFrame<T extends MediaType>(
+  item: UnifiedTimelineItemData<T>,
+  currentAbsoluteFrame: number,
+): GetConfigs<T> {
+  const renderConfig = createBaseRenderConfig(item) as GetConfigs<T>
+
+  if (
+    currentAbsoluteFrame < item.timeRange.timelineStartTime ||
+    currentAbsoluteFrame >= item.timeRange.timelineEndTime
+  ) {
+    return renderConfig
+  }
+
+  const mutableRenderConfig = renderConfig as unknown as Record<string, unknown>
+  for (const groupId of getActiveAnimationGroups(item)) {
+    const definition = AnimationRegistry.get(groupId)
+    definition.applyValueToConfig(
+      mutableRenderConfig,
+      getCurrentGroupValue(item, currentAbsoluteFrame, groupId),
+    )
+  }
+
+  return renderConfig
+}
+
 export function applyAnimationToConfig(
   item: UnifiedTimelineItemData<MediaType>,
   currentAbsoluteFrame: number,
 ): void {
-  item.runtime.renderConfig = createBaseRenderConfig(item) as typeof item.runtime.renderConfig
-
-  if (currentAbsoluteFrame < item.timeRange.timelineStartTime || currentAbsoluteFrame > item.timeRange.timelineEndTime) {
-    return
-  }
-
-  const renderConfig = item.runtime.renderConfig as unknown as Record<string, unknown>
-  for (const groupId of getActiveAnimationGroups(item)) {
-    const definition = AnimationRegistry.get(groupId)
-    definition.applyValueToConfig(renderConfig, getCurrentGroupValue(item, currentAbsoluteFrame, groupId))
-  }
+  item.runtime.renderConfig = resolveRenderConfigAtFrame(item, currentAbsoluteFrame)
 }
 
 export function applyAnimationsToItems(

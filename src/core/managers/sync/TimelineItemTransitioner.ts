@@ -81,6 +81,7 @@ export class TimelineItemTransitioner {
 
     // ✅ 完成初始化后，标记为已初始化
     timelineItem.runtime.isInitialized = true
+    unifiedStore.refreshTransitionItems()
 
     console.log(`🎉 [TimelineItemTransitioner] 时间轴项目状态转换完成: ${this.timelineItemId}`)
   }

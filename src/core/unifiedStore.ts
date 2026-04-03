@@ -134,6 +134,7 @@ export const useUnifiedStore = defineStore('unified', () => {
     moveTimelineItemWithHistory: historyOperations.moveTimelineItemWithHistory,
     updateTimelineItemTransformWithHistory:
       historyOperations.updateTimelineItemTransformWithHistory,
+    updateTransitionOutWithHistory: historyOperations.updateTransitionOutWithHistory,
     splitTimelineItemAtTimeWithHistory: historyOperations.splitTimelineItemAtTimeWithHistory,
     duplicateTimelineItemWithHistory: historyOperations.duplicateTimelineItemWithHistory,
     resizeTimelineItemWithHistory: historyOperations.resizeTimelineItemWithHistory,
@@ -147,7 +148,7 @@ export const useUnifiedStore = defineStore('unified', () => {
     toggleTrackMuteWithHistory: historyOperations.toggleTrackMuteWithHistory,
     updateTextContentWithHistory: historyOperations.updateTextContentWithHistory,
     updateTextStyleWithHistory: historyOperations.updateTextStyleWithHistory,
-    selectTimelineItemsWithHistory: historyOperations.selectTimelineItemsWithHistory,
+    selectTimelineSelectionsWithHistory: historyOperations.selectTimelineSelectionsWithHistory,
     // 关键帧历史记录方法
     createKeyframeWithHistory: historyOperations.createKeyframeWithHistory,
     deleteKeyframeWithHistory: historyOperations.deleteKeyframeWithHistory,
@@ -229,6 +230,13 @@ export const useUnifiedStore = defineStore('unified', () => {
     getReadyTimelineItem: unifiedTimelineModule.getReadyTimelineItem,
     updateTimelineItemPosition: unifiedTimelineModule.updateTimelineItemPosition,
     updateTimelineItemTransform: unifiedTimelineModule.updateTimelineItemTransform,
+    updateTimelineItemPlaybackRate: unifiedTimelineModule.updateTimelineItemPlaybackRate,
+    setTimelineItemTimeRangeForCmd: unifiedTimelineModule.setTimelineItemTimeRangeForCmd,
+    setTimelineItemTransitionOutForCmd:
+      unifiedTimelineModule.setTimelineItemTransitionOutForCmd,
+    refreshTransitionItems: unifiedTimelineModule.refreshTransitionItems,
+    getTransitionOverlay: unifiedTimelineModule.getTransitionOverlay,
+    getTransitionOverlaysByTrack: unifiedTimelineModule.getTransitionOverlaysByTrack,
 
     // ==================== 统一项目模块状态和方法 ====================
 
@@ -404,30 +412,27 @@ export const useUnifiedStore = defineStore('unified', () => {
     clearMediaSelection: unifiedSelectionModule.clearMediaSelection,
 
     // 选择状态
-    selectedTimelineItemId: unifiedSelectionModule.selectedTimelineItemId,
-    selectedTimelineItemIds: unifiedSelectionModule.selectedTimelineItemIds,
-    isMultiSelectMode: unifiedSelectionModule.isMultiSelectMode,
+    selectedTimelineSelectionId: unifiedSelectionModule.selectedTimelineSelectionId,
+    selectedTimelineSelectionIds: unifiedSelectionModule.selectedTimelineSelectionIds,
+    isTimelineSelectionMultiSelectMode:
+      unifiedSelectionModule.isTimelineSelectionMultiSelectMode,
     hasSelection: unifiedSelectionModule.hasSelection,
+    selectedClipTimelineItemId: unifiedSelectionModule.selectedClipTimelineItemId,
+    selectedClipTimelineItemIds: unifiedSelectionModule.selectedClipTimelineItemIds,
+    selectedTransitionSourceItemId: unifiedSelectionModule.selectedTransitionSourceItemId,
+    selectedTransitionSourceItemIds: unifiedSelectionModule.selectedTransitionSourceItemIds,
 
     // 统一选择API
-    selectTimelineItems: unifiedSelectionModule.selectTimelineItems,
-
-    // 兼容性选择方法
-    selectTimelineItem: unifiedSelectionModule.selectTimelineItem,
+    selectTimelineSelections: unifiedSelectionModule.selectTimelineSelections,
+    selectTimelineSelection: unifiedSelectionModule.selectTimelineSelection,
     clearTimelineSelection: unifiedSelectionModule.clearTimelineSelection,
     clearAllSelections: unifiedSelectionModule.clearAllSelections,
-    toggleTimelineItemSelection: unifiedSelectionModule.toggleTimelineItemSelection,
-    isTimelineItemSelected: unifiedSelectionModule.isTimelineItemSelected,
-    getSelectedTimelineItem: unifiedSelectionModule.getSelectedTimelineItem,
+    isTimelineSelectionSelected: unifiedSelectionModule.isTimelineSelectionSelected,
+    clearSelectionsForTimelineItem: unifiedSelectionModule.clearSelectionsForTimelineItem,
+    getSelectedClipTimelineItem: unifiedSelectionModule.getSelectedClipTimelineItem,
+    getSelectedTransitionOverlay: unifiedSelectionModule.getSelectedTransitionOverlay,
     getSelectionSummary: unifiedSelectionModule.getSelectionSummary,
     resetSelectionToDefaults: unifiedSelectionModule.resetToDefaults,
-
-    // 多选兼容性方法
-    addToMultiSelection: unifiedSelectionModule.addToMultiSelection,
-    removeFromMultiSelection: unifiedSelectionModule.removeFromMultiSelection,
-    toggleMultiSelection: unifiedSelectionModule.toggleMultiSelection,
-    clearMultiSelection: unifiedSelectionModule.clearMultiSelection,
-    isInMultiSelection: unifiedSelectionModule.isInMultiSelection,
 
     // ==================== 坐标转换方法 ====================
     frameToPixel: (frames: number, timelineWidth: number) =>

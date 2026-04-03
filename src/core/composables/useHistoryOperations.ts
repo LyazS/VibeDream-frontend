@@ -20,6 +20,7 @@ import {
   RemoveTimelineItemCommand,
   MoveTimelineItemCommand,
   UpdateTransformCommand,
+  UpdateTransitionOutCommand,
   SplitTimelineItemCommand,
   ResizeTimelineItemCommand,
   AddTrackCommand,
@@ -27,7 +28,7 @@ import {
   RenameTrackCommand,
   ToggleTrackVisibilityCommand,
   ToggleTrackMuteCommand,
-  SelectTimelineItemsCommand,
+  SelectTimelineSelectionsCommand,
 } from '@/core/modules/commands/timelineCommands'
 import { BatchAutoArrangeTrackCommand } from '@/core/modules/commands/batchCommands'
 import { MoveTrackCommand } from '@/core/modules/commands/MoveTrackCommand'
@@ -55,6 +56,8 @@ import type {
   AnimationGroupValueMap,
 } from '@/core/timelineitem/bunnytype'
 import { getAnimationGroupForProperty } from '@/core/timelineitem/bunnytype'
+import type { ClipTransitionOutConfig } from '@/core/timelineitem/transition'
+import { normalizeClipTransitionOutConfig } from '@/core/timelineitem/transition'
 
 // 变换属性类型定义
 interface TransformProperties {
@@ -338,6 +341,41 @@ export function useHistoryOperations(
       newTransform,
       unifiedTimelineModule,
       unifiedMediaModule,
+    )
+    await unifiedHistoryModule.executeCommand(command)
+  }
+
+  async function updateTransitionOutWithHistory(
+    timelineItemId: string,
+    nextTransitionOut?: ClipTransitionOutConfig,
+  ) {
+    const timelineItem = unifiedTimelineModule.getTimelineItem(timelineItemId)
+    if (!timelineItem) {
+      console.warn(`⚠️ 时间轴项目不存在，无法更新转场: ${timelineItemId}`)
+      return
+    }
+
+    const currentTransitionOut = timelineItem.transitionOut
+      ? normalizeClipTransitionOutConfig(timelineItem.transitionOut)
+      : undefined
+    const normalizedNextTransitionOut = nextTransitionOut
+      ? normalizeClipTransitionOutConfig(nextTransitionOut)
+      : undefined
+
+    const hasSameValue =
+      currentTransitionOut?.enabled === normalizedNextTransitionOut?.enabled &&
+      currentTransitionOut?.preset === normalizedNextTransitionOut?.preset &&
+      currentTransitionOut?.durationFrames === normalizedNextTransitionOut?.durationFrames
+
+    if (hasSameValue) {
+      return
+    }
+
+    const command = new UpdateTransitionOutCommand(
+      timelineItemId,
+      currentTransitionOut,
+      normalizedNextTransitionOut,
+      unifiedTimelineModule,
     )
     await unifiedHistoryModule.executeCommand(command)
   }
@@ -706,12 +744,11 @@ export function useHistoryOperations(
    * @param mode 操作模式：'replace'替换选择，'toggle'切换选择状态
    * @param selectionModule 选择模块实例，提供选择状态和方法
    */
-  async function selectTimelineItemsWithHistory(
+  async function selectTimelineSelectionsWithHistory(
     itemIds: string[],
     mode: 'replace' | 'toggle' = 'replace',
   ) {
-    // 检查是否有实际的选择变化
-    const currentSelection = new Set(unifiedSelectionModule.selectedTimelineItemIds.value)
+    const currentSelection = new Set(unifiedSelectionModule.selectedTimelineSelectionIds.value)
     const newSelection = calculateNewSelection(itemIds, mode, currentSelection)
 
     // 如果选择状态没有变化，不创建历史记录
@@ -729,8 +766,8 @@ export function useHistoryOperations(
       })
 
       // 创建选择命令
-      const command = new SelectTimelineItemsCommand(
-        itemIds,
+      const command = new SelectTimelineSelectionsCommand(
+        itemIds as any,
         mode,
         unifiedSelectionModule,
         unifiedTimelineModule,
@@ -1080,6 +1117,7 @@ export function useHistoryOperations(
     removeTimelineItemWithHistory,
     moveTimelineItemWithHistory,
     updateTimelineItemTransformWithHistory,
+    updateTransitionOutWithHistory,
     splitTimelineItemAtTimeWithHistory,
     duplicateTimelineItemWithHistory,
     resizeTimelineItemWithHistory,
@@ -1092,7 +1130,7 @@ export function useHistoryOperations(
     moveTrackWithHistory,
     updateTextContentWithHistory,
     updateTextStyleWithHistory,
-    selectTimelineItemsWithHistory,
+    selectTimelineSelectionsWithHistory,
     createKeyframeWithHistory,
     deleteKeyframeWithHistory,
     updatePropertyWithHistory,

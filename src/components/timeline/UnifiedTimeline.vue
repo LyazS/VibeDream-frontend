@@ -184,6 +184,15 @@
               :key="item.id"
               :is="renderTimelineItem(item, track)"
             />
+            <UnifiedTimelineTransitionOverlay
+              v-for="overlay in getTransitionOverlaysForTrack(track.id)"
+              :key="overlay.selectionId"
+              :overlay="overlay"
+              :track-height="track.height"
+              :timeline-width="unifiedStore.TimelineContentWidth"
+              @select="handleSelectTransition"
+              @contextmenu="handleTransitionContextMenu"
+            />
           </div>
         </div>
 
@@ -273,6 +282,7 @@ import type { SnapResultState } from '@/core/composables/useTimelineSnap'
 
 import UnifiedPlayhead from '@/components/timeline/UnifiedPlayhead.vue'
 import UnifiedTimelineClip from '@/components/timeline/UnifiedTimelineClip.vue'
+import UnifiedTimelineTransitionOverlay from '@/components/timeline/UnifiedTimelineTransitionOverlay.vue'
 import UnifiedSnapIndicator from '@/components/timeline/UnifiedSnapIndicator.vue'
 import HoverButton from '@/components/base/HoverButton.vue'
 import {
@@ -299,6 +309,7 @@ import { useTimelineTimeScale } from '@/core/composables/useTimelineTimeScale'
 import { useTimelineDragPreview } from '@/core/composables/useTimelineDragPreview'
 import { useTimelineSnap } from '@/core/composables/useTimelineSnap'
 import { useTimelineDragHandlers } from '@/core/composables/useTimelineDragHandlers'
+import { buildClipSelectionId } from '@/core/types/timelineSelection'
 
 // Component name for Vue DevTools
 defineOptions({
@@ -376,6 +387,7 @@ const {
   currentMenuItems,
   handleContextMenu,
   handleTimelineItemContextMenu,
+  handleTransitionContextMenu,
   removeClip,
   duplicateClip,
   renameTrack,
@@ -446,13 +458,17 @@ const {
   },
 )
 
+function getTransitionOverlaysForTrack(trackId: string) {
+  return unifiedStore.getTransitionOverlaysByTrack(trackId)
+}
+
 // 类型安全的时间轴项目渲染函数 - 优化版本，仅传递必要状态
 function renderTimelineItem(item: UnifiedTimelineItemData, track: UnifiedTrackData) {
   const commonProps = {
     // CleanTimelineClip 需要的核心属性
     data: item,
-    isSelected: unifiedStore.isTimelineItemSelected(item.id),
-    isMultiSelected: unifiedStore.isMultiSelectMode,
+    isSelected: unifiedStore.isTimelineSelectionSelected(buildClipSelectionId(item.id)),
+    isMultiSelected: unifiedStore.isTimelineSelectionMultiSelectMode,
     trackHeight: track.height,
     timelineWidth: unifiedStore.TimelineContentWidth,
     viewportFrameRange: viewportFrameRange.value,
@@ -469,6 +485,15 @@ function renderTimelineItem(item: UnifiedTimelineItemData, track: UnifiedTrackDa
 
   // 使用统一的 UnifiedTimelineClip 组件
   return h(UnifiedTimelineClip, commonProps)
+}
+
+function handleSelectTransition(event: MouseEvent, selectionId: string) {
+  if (event.ctrlKey || event.metaKey) {
+    unifiedStore.selectTimelineSelections([selectionId as any], 'toggle')
+    return
+  }
+
+  unifiedStore.selectTimelineSelections([selectionId as any], 'replace')
 }
 
 // ========== 轨道拖拽排序 ==========

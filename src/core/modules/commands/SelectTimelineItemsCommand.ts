@@ -1,17 +1,15 @@
 import { generateCommandId } from '@/core/utils/idGenerator'
 import type { SimpleCommand } from '@/core/modules/commands/types'
-
-// 类型导入
 import type { UnifiedTimelineItemData } from '@/core/timelineitem/type'
-
 import type { UnifiedMediaItemData, MediaType } from '@/core/mediaitem/types'
+import { parseTimelineSelectionId, type TimelineSelectionId } from '@/core/types/timelineSelection'
 
 /**
  * 选择时间轴项目命令
  * 支持已知和未知时间轴项目的单选和多选操作的撤销/重做
  * 记录选择状态的变化，支持恢复到之前的选择状态
  */
-export class SelectTimelineItemsCommand implements SimpleCommand {
+export class SelectTimelineSelectionsCommand implements SimpleCommand {
   public readonly id: string
   public readonly description: string
   private previousSelection: Set<string> // 保存操作前的选择状态
@@ -19,11 +17,10 @@ export class SelectTimelineItemsCommand implements SimpleCommand {
   private _isDisposed = false
 
   constructor(
-    private itemIds: string[],
+    private itemIds: TimelineSelectionId[],
     private mode: 'replace' | 'toggle',
     private selectionModule: {
-      selectedTimelineItemIds: { value: Set<string> }
-      selectTimelineItems: (itemIds: string[], mode: 'replace' | 'toggle') => void
+      selectedTimelineSelectionIds: { value: Set<TimelineSelectionId> }
     },
     private timelineModule: {
       getTimelineItem: (id: string) => UnifiedTimelineItemData<MediaType> | undefined
@@ -35,7 +32,7 @@ export class SelectTimelineItemsCommand implements SimpleCommand {
     this.id = generateCommandId()
 
     // 保存当前选择状态
-    this.previousSelection = new Set(this.selectionModule.selectedTimelineItemIds.value)
+    this.previousSelection = new Set(this.selectionModule.selectedTimelineSelectionIds.value)
 
     // 计算新的选择状态
     this.newSelection = this.calculateNewSelection()
@@ -80,12 +77,15 @@ export class SelectTimelineItemsCommand implements SimpleCommand {
    */
   private generateDescription(): string {
     const itemNames = this.itemIds.map((id) => {
-      const timelineItem = this.timelineModule.getTimelineItem(id)
+      const parsed = parseTimelineSelectionId(id)
+      if (!parsed) return '未知项目'
+
+      const timelineItem = this.timelineModule.getTimelineItem(parsed.sourceId)
       if (!timelineItem) return '未知项目'
 
-      // 根据项目类型获取名称
       const mediaItem = this.mediaModule.getMediaItem(timelineItem.mediaItemId)
-      return mediaItem?.name || '未知素材'
+      const baseName = mediaItem?.name || '未知素材'
+      return parsed.kind === 'transition' ? `转场: ${baseName}` : baseName
     })
 
     if (this.mode === 'replace') {
@@ -145,9 +145,10 @@ export class SelectTimelineItemsCommand implements SimpleCommand {
    * 应用选择状态（不触发历史记录）
    */
   private applySelection(selection: Set<string>): void {
-    // 直接更新选择状态，不通过selectTimelineItems方法以避免循环调用
-    this.selectionModule.selectedTimelineItemIds.value.clear()
-    selection.forEach((id) => this.selectionModule.selectedTimelineItemIds.value.add(id))
+    this.selectionModule.selectedTimelineSelectionIds.value.clear()
+    selection.forEach((id) =>
+      this.selectionModule.selectedTimelineSelectionIds.value.add(id as TimelineSelectionId),
+    )
   }
 
   /**
@@ -166,6 +167,6 @@ export class SelectTimelineItemsCommand implements SimpleCommand {
     }
 
     this._isDisposed = true
-    console.log(`🗑️ [SelectTimelineItemsCommand] 命令资源已清理: ${this.id}`)
+    console.log(`🗑️ [SelectTimelineSelectionsCommand] 命令资源已清理: ${this.id}`)
   }
 }

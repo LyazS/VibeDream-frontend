@@ -1,6 +1,7 @@
 import { TimelineItemQueries } from '@/core/timelineitem/queries'
 import type { UnifiedTimelineItemData } from '@/core/timelineitem/type'
 import type { MediaType, UnifiedMediaItemData } from '@/core/mediaitem/types'
+import type { FrameData } from '@/core/webgl2/types'
 
 /**
  * 当前第一阶段允许进入 WebGL 渲染链的 item 类型。
@@ -17,10 +18,12 @@ interface VisibilityContext {
   currentFrame: number
   canvasWidth: number
   canvasHeight: number
-  bunnyCurFrameMap: Map<string, unknown>
+  bunnyCurFrameMap: Map<string, FrameData>
   getTrack: (trackId: string) => { isVisible: boolean } | undefined
   getMediaItem: (mediaItemId: string) => UnifiedMediaItemData | undefined
   trackIndexMap: Map<string, number>
+  selectedBoundaryItemId: string | null
+  selectedBoundaryTrackId: string | null
 }
 
 /**
@@ -68,9 +71,21 @@ export function getVisibleRenderableItems(
 ): VisualRenderableItem[] {
   return timelineItems
     .filter((item) => {
+      const isSelectedBoundaryItem = context.selectedBoundaryItemId === item.id
       if (
         context.currentFrame < item.timeRange.timelineStartTime ||
-        context.currentFrame > item.timeRange.timelineEndTime
+        context.currentFrame >= item.timeRange.timelineEndTime
+      ) {
+        if (!isSelectedBoundaryItem) {
+          return false
+        }
+      }
+
+      if (
+        context.selectedBoundaryTrackId &&
+        item.id !== context.selectedBoundaryItemId &&
+        item.trackId === context.selectedBoundaryTrackId &&
+        item.timeRange.timelineStartTime === context.currentFrame
       ) {
         return false
       }
@@ -85,7 +100,21 @@ export function getVisibleRenderableItems(
       }
 
       if (TimelineItemQueries.isVideoTimelineItem(item)) {
-        if (!context.bunnyCurFrameMap.has(item.id)) return false
+        const frameData = context.bunnyCurFrameMap.get(item.id)
+        if (!frameData) return false
+
+        if (isSelectedBoundaryItem) {
+          const clipTailFrame = Math.max(
+            item.timeRange.timelineStartTime,
+            item.timeRange.timelineEndTime - 1,
+          )
+          if (
+            frameData.frameNumber !== context.currentFrame &&
+            frameData.frameNumber !== clipTailFrame
+          ) {
+            return false
+          }
+        }
       } else if (TimelineItemQueries.isTextTimelineItem(item)) {
         if (!item.runtime.textBitmap) return false
       } else if (TimelineItemQueries.isImageTimelineItem(item)) {

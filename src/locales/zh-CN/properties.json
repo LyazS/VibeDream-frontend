@@ -31,6 +31,29 @@
     "visual": {
       "visualProperties": "视觉属性"
     },
+    "transition": {
+      "title": "转场",
+      "enabled": "启用转场",
+      "preset": "预设",
+      "durationFrames": "时长（帧）",
+      "status": "状态",
+      "targetClip": "目标片段：{name}",
+      "effectiveDuration": "生效时长：{frames} 帧",
+      "presets": {
+        "crossfade": "叠化"
+      },
+      "statuses": {
+        "bound": "已绑定到右侧片段",
+        "unbound": "右侧无接缝",
+        "invalidTarget": "右侧片段类型不支持或可用时长不足",
+        "invalidOverlap": "与相邻转场重叠",
+        "waitingEdge": "边界帧准备中"
+      }
+    },
+    "transitionSelection": {
+      "sourceClip": "源片段",
+      "placeholder": "这里先保留转场属性占位，后续会接入独立编辑能力。"
+    },
     "mask": {
       "enabled": "启用",
       "type": "类型",
@@ -214,6 +237,7 @@
     },
     "tabs": {
       "basic": "基础",
+      "transition": "转场",
       "mask": "蒙版",
       "filter": "滤镜",
       "animation": "动画",

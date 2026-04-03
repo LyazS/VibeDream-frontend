@@ -5,7 +5,7 @@ import type { UnifiedDirectoryModule } from './UnifiedDirectoryModule'
 import type { CharacterDirectory } from '@/core/directory/types'
 import type { FileData } from '@/core/datasource/providers/ai-generation/types'
 
-export type PropertyTabKey = 'basic' | 'mask' | 'filter' | 'animation'
+export type PropertyTabKey = 'basic' | 'transition' | 'mask' | 'filter' | 'animation'
 
 /**
  * 角色编辑器状态接口

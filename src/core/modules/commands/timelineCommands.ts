@@ -23,8 +23,9 @@ export { RemoveTrackCommand } from './RemoveTrackCommand' // ok
 export { ToggleTrackVisibilityCommand } from './ToggleTrackVisibilityCommand' // ok
 export { ToggleTrackMuteCommand } from './ToggleTrackMuteCommand' // ok
 export { ResizeTimelineItemCommand } from './ResizeTimelineItemCommand' // ok
-export { SelectTimelineItemsCommand } from './SelectTimelineItemsCommand' // ok
+export { SelectTimelineSelectionsCommand } from './SelectTimelineItemsCommand' // ok
 export { UpdateTextCommand } from './UpdateTextCommand' // ok
+export { UpdateTransitionOutCommand } from './UpdateTransitionOutCommand'
 
 // 导出类型定义
 export type { SimpleCommand } from './types'

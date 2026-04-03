@@ -4,6 +4,7 @@ import type { UnifiedMediaItemData } from '@/core/mediaitem/types'
 import type { TextMediaConfig } from '@/core/timelineitem/type'
 import { BunnyClip } from '@/core/mediabunny/bunny-clip'
 import { textToImageBitmap, textToImageBitmap2 } from './ToBitmap'
+import { closeClipTransitionEdgeFrames } from '@/core/timelineitem/transition'
 
 /**
  * 为时间轴项目设置对应的 Bunny 对象（会自动清理旧的对象）
@@ -96,4 +97,11 @@ export async function cleanupTimelineItemBunny(
   // 清理 textBitmap（文本类型）
   timelineItem.runtime.textBitmap?.close()
   timelineItem.runtime.textBitmap = undefined
+
+  // 清理转场边界帧缓存
+  if (timelineItem.runtime.transition?.edgeFrames) {
+    closeClipTransitionEdgeFrames(timelineItem.runtime.transition.edgeFrames)
+    timelineItem.runtime.transition.edgeFrames = undefined
+    timelineItem.runtime.transition.edgeSignature = undefined
+  }
 }

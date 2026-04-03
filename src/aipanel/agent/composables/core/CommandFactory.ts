@@ -293,6 +293,9 @@ export class CommandFactory {
     // 获取模块引用
     const timelineModule = {
       getTimelineItem: (id: string) => unifiedStore.getTimelineItem(id),
+      setTimelineItemTimeRangeForCmd: unifiedStore.setTimelineItemTimeRangeForCmd.bind(
+        unifiedStore,
+      ),
     }
     const mediaModule = this.getMediaModule()
 
@@ -800,7 +803,13 @@ export class CommandFactory {
     // 获取模块引用
     const timelineModule = {
       updateTimelineItemTransform: unifiedStore.updateTimelineItemTransform.bind(unifiedStore),
+      updateTimelineItemPlaybackRate: unifiedStore.updateTimelineItemPlaybackRate.bind(
+        unifiedStore,
+      ),
       getTimelineItem: (id: string) => unifiedStore.getTimelineItem(id),
+      setTimelineItemTimeRangeForCmd: unifiedStore.setTimelineItemTimeRangeForCmd.bind(
+        unifiedStore,
+      ),
     }
 
     const mediaModule = this.getMediaModule()

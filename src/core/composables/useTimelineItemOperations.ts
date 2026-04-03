@@ -14,6 +14,7 @@ import { DEFAULT_BLEND_MODE } from '@/core/timelineitem'
 import { createDefaultMaskConfig } from '@/core/timelineitem/mask'
 import { createTextTimelineItem } from '@/core/utils/textTimelineUtils'
 import { setupTimelineItemBunny } from '@/core/bunnyUtils/timelineItemSetup'
+import { buildClipSelectionId } from '@/core/types/timelineSelection'
 
 /**
  * 时间轴项目操作模块
@@ -313,7 +314,7 @@ export function useTimelineItemOperations() {
       })
 
       // 选中新创建的文本项目
-      unifiedStore.selectTimelineItem(textItem.id)
+      unifiedStore.selectTimelineSelection(buildClipSelectionId(textItem.id))
     } catch (error) {
       console.error('❌ [UnifiedTimeline] 创建文本项目失败:', error)
       unifiedStore.messageError(`创建文本项目失败：${(error as Error).message}`)

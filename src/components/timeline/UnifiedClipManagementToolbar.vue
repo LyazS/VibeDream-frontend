@@ -27,7 +27,7 @@
 
     <div v-if="timelineItems.length > 0" class="toolbar-section">
       <HoverButton
-        v-if="unifiedStore.selectedTimelineItemId"
+        v-if="unifiedStore.selectedClipTimelineItemId"
         :disabled="isSplitButtonDisabled"
         @click="splitSelectedClip"
         :title="t('toolbar.clip.splitTooltip')"
@@ -38,7 +38,7 @@
         {{ t('toolbar.clip.split') }}
       </HoverButton>
       <HoverButton
-        v-if="unifiedStore.selectedTimelineItemId"
+        v-if="unifiedStore.selectedClipTimelineItemId"
         @click="deleteSelectedClip"
         :title="t('toolbar.clip.deleteTooltip')"
       >
@@ -159,8 +159,8 @@ const overlappingCount = computed(() => {
 
 // 检查选中的项目是否支持裁剪（视频和音频支持，图片和文本不支持）
 const selectedItemSupportsSplit = computed(() => {
-  if (!unifiedStore.selectedTimelineItemId) return false
-  const item = unifiedStore.getTimelineItem(unifiedStore.selectedTimelineItemId)
+  if (!unifiedStore.selectedClipTimelineItemId) return false
+  const item = unifiedStore.getTimelineItem(unifiedStore.selectedClipTimelineItemId)
   if (!item) return false
 
   // 视频和音频支持裁剪，图片和文本不支持
@@ -169,8 +169,8 @@ const selectedItemSupportsSplit = computed(() => {
 
 // 检查选中的项目是否处于ready状态
 const isSelectedItemReady = computed(() => {
-  if (!unifiedStore.selectedTimelineItemId) return false
-  const item = unifiedStore.getTimelineItem(unifiedStore.selectedTimelineItemId)
+  if (!unifiedStore.selectedClipTimelineItemId) return false
+  const item = unifiedStore.getTimelineItem(unifiedStore.selectedClipTimelineItemId)
   if (!item) return false
 
   const mediaItem = unifiedStore.getMediaItem(item.mediaItemId)
@@ -186,18 +186,18 @@ const isSplitButtonDisabled = computed(() => {
 })
 
 async function splitSelectedClip() {
-  if (unifiedStore.selectedTimelineItemId) {
-    const item = unifiedStore.getTimelineItem(unifiedStore.selectedTimelineItemId)
+  if (unifiedStore.selectedClipTimelineItemId) {
+    const item = unifiedStore.getTimelineItem(unifiedStore.selectedClipTimelineItemId)
     const mediaItem = item ? unifiedStore.getMediaItem(item.mediaItemId) : null
     console.log(
-      `🔪 开始裁剪时间轴项目: ${mediaItem?.name || '未知'} (ID: ${unifiedStore.selectedTimelineItemId})`,
+      `🔪 开始裁剪时间轴项目: ${mediaItem?.name || '未知'} (ID: ${unifiedStore.selectedClipTimelineItemId})`,
     )
     console.log(
       `📍 裁剪时间位置: ${unifiedStore.currentFrame}帧 (${unifiedStore.formattedCurrentTime})`,
     )
 
     // 使用带历史记录的分割方法（传入帧数数组）
-    await unifiedStore.splitTimelineItemAtTimeWithHistory(unifiedStore.selectedTimelineItemId, [
+    await unifiedStore.splitTimelineItemAtTimeWithHistory(unifiedStore.selectedClipTimelineItemId, [
       unifiedStore.currentFrame,
     ])
     console.log('✅ 时间轴项目分割成功')
@@ -205,14 +205,14 @@ async function splitSelectedClip() {
 }
 
 async function deleteSelectedClip() {
-  if (unifiedStore.selectedTimelineItemId) {
-    const item = unifiedStore.getTimelineItem(unifiedStore.selectedTimelineItemId)
+  if (unifiedStore.selectedClipTimelineItemId) {
+    const item = unifiedStore.getTimelineItem(unifiedStore.selectedClipTimelineItemId)
     const mediaItem = item ? unifiedStore.getMediaItem(item.mediaItemId) : null
     console.log(
-      `🗑️ 删除时间轴项目: ${mediaItem?.name || '未知'} (ID: ${unifiedStore.selectedTimelineItemId})`,
+      `🗑️ 删除时间轴项目: ${mediaItem?.name || '未知'} (ID: ${unifiedStore.selectedClipTimelineItemId})`,
     )
 
-    await unifiedStore.removeTimelineItemWithHistory(unifiedStore.selectedTimelineItemId)
+    await unifiedStore.removeTimelineItemWithHistory(unifiedStore.selectedClipTimelineItemId)
     console.log('✅ 时间轴项目删除成功')
   }
 }

@@ -67,6 +67,7 @@ import {
 import { DEFAULT_TRACK_PADDING } from '@/constants/TrackConstants'
 import { getDefaultTrackHeight, mapMediaTypeToTrackType } from '@/core/track/TrackUtils'
 import { DragSourceType, type TimelineItemDragParams } from '@/core/types/drag'
+import { buildClipSelectionId } from '@/core/types/timelineSelection'
 
 // ==================== 组件定义 ====================
 
@@ -280,7 +281,7 @@ function handleDragStart(event: DragEvent) {
   }
 
   // 2. 检查是否有多个项目被选中，如果是则禁止拖拽
-  if (unifiedStore.selectedTimelineItemIds.size > 1) {
+  if (unifiedStore.selectedTimelineSelectionIds.size > 1) {
     console.log('🚫 [CleanTimelineClip] 多选状态下禁止拖拽')
     unifiedStore.messageWarning(t('timeline.clip.multiSelectDragWarning'))
     event.preventDefault()
@@ -291,8 +292,9 @@ function handleDragStart(event: DragEvent) {
   unifiedStore.pause()
 
   // 4. 确保项目被选中
-  if (!unifiedStore.selectedTimelineItemIds.has(props.data.id)) {
-    unifiedStore.selectTimelineItem(props.data.id)
+  const selectionId = buildClipSelectionId(props.data.id)
+  if (!unifiedStore.selectedTimelineSelectionIds.has(selectionId)) {
+    unifiedStore.selectTimelineSelection(selectionId)
   }
 
   // 5. 获取 TimelineItemSourceHandler（新架构）

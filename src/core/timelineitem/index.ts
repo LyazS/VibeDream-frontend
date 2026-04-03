@@ -14,6 +14,28 @@ export type {
   VideoMediaConfig,
   AudioMediaConfig,
 } from './type'
+export type {
+  ClipTransitionOutConfig,
+  ClipTransitionRuntime,
+  ClipTransitionBindingState,
+  ClipTransitionPlaybackState,
+  ClipTransitionVisualTimelineItem,
+} from './transition'
+export {
+  DEFAULT_CLIP_TRANSITION_DURATION_FRAMES,
+  createDefaultClipTransitionOutConfig,
+  normalizeClipTransitionOutConfig,
+  supportsClipTransitionOut,
+  supportsClipTransitionOutMediaType,
+  hasEnabledClipTransitionOut,
+  ensureClipTransitionRuntime,
+  closeClipTransitionEdgeFrames,
+  resetClipTransitionRuntime,
+  resolveTransitionBoundaryFrames,
+  resolveClipTransitionBinding,
+  resolveClipTransitionPlaybackState,
+  doClipTransitionWindowsOverlap,
+} from './transition'
 
 // 从 texttype.ts 导出文本相关类型
 export type { TextStyleConfig } from './texttype'

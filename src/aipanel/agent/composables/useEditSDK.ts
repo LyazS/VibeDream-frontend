@@ -324,12 +324,12 @@ function createEditSDK() {
 
         // 时间轴项目选中信息
         if (hasTimelineSelection) {
-          const selectedIds = Array.from(unifiedStore.selectedTimelineItemIds)
+          const selectedIds = Array.from(unifiedStore.selectedTimelineSelectionIds)
           const count = selectedIds.length
 
           if (count === 1) {
-            // 单选：显示详细信息
-            const selectedItem = unifiedStore.getSelectedTimelineItem()
+            const selectedItem = unifiedStore.getSelectedClipTimelineItem()
+            const selectedTransition = unifiedStore.getSelectedTransitionOverlay()
             if (selectedItem) {
               parts.push(`- 时间轴选中: 1 个项目`)
               parts.push(`  - ID: ${selectedItem.id}`)
@@ -341,6 +341,12 @@ function createEditSDK() {
               if (selectedItem.mediaItemId) {
                 parts.push(`  - 媒体项ID: ${selectedItem.mediaItemId}`)
               }
+            } else if (selectedTransition) {
+              parts.push(`- 时间轴选中: 1 个转场`)
+              parts.push(`  - ID: ${selectedTransition.selectionId}`)
+              parts.push(`  - 源片段ID: ${selectedTransition.sourceItemId}`)
+              parts.push(`  - 轨道ID: ${selectedTransition.trackId}`)
+              parts.push(`  - 预设: ${selectedTransition.preset}`)
             }
           } else {
             // 多选：只显示数量和ID列表

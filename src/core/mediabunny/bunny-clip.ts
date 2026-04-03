@@ -70,7 +70,7 @@ export class BunnyClip implements IClip {
     const clipDuration = Number(this.timeRange.clipEnd - this.timeRange.clipStart)
     const tlDuration = Number(this.timeRange.timelineEnd - this.timeRange.timelineStart)
     const clipStart = Number(this.timeRange.clipStart)
-    for (let tlN = startN; tlN <= this.timeRange.timelineEnd; tlN++) {
+    for (let tlN = startN; tlN < this.timeRange.timelineEnd; tlN++) {
       // 在clip上的小数帧位置
       const clipTimeN =
         (Number(tlN - this.timeRange.timelineStart) / tlDuration) * clipDuration + clipStart
@@ -94,7 +94,7 @@ export class BunnyClip implements IClip {
    */
   private async findVideoFrameN(timeN: bigint): Promise<VideoSample | null> {
     // 超出时间范围直接返回 null，这样可以确保在范围之内
-    if (timeN < this.timeRange.timelineStart || timeN > this.timeRange.timelineEnd) {
+    if (timeN < this.timeRange.timelineStart || timeN >= this.timeRange.timelineEnd) {
       return null
     }
     if (
@@ -169,7 +169,7 @@ export class BunnyClip implements IClip {
 
   private async findAudioBuffersN(timeN: bigint, headFrame: bigint): Promise<WrappedAudioBuffer[]> {
     // 超出时间范围直接返回 null，这样可以确保在范围之内
-    if (timeN < this.timeRange.timelineStart || timeN > this.timeRange.timelineEnd) {
+    if (timeN < this.timeRange.timelineStart || timeN >= this.timeRange.timelineEnd) {
       return []
     }
     // 将时间轴时间映射回 clip 时间（原始媒体时间）
@@ -342,7 +342,7 @@ export class BunnyClip implements IClip {
     }
     try {
       this.isTicking = true
-      if (timeN < this.timeRange.timelineStart || this.timeRange.timelineEnd < timeN) {
+      if (timeN < this.timeRange.timelineStart || timeN >= this.timeRange.timelineEnd) {
         return this.tickInterceptor(timeN, {
           audio: [],
           video: null,
