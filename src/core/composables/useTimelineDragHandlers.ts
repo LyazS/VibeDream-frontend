@@ -8,6 +8,7 @@ import {
   type MediaItemDragData,
   type TimelineItemDragData,
 } from '@/core/types/drag'
+import { effectTemplateHandlerRegistry } from '@/core/effect-template/registry'
 
 /**
  * 时间轴拖拽处理 Composable
@@ -120,12 +121,53 @@ export function useTimelineDragHandlers(
     let adjustedMouseX = mouseX // 用于存储考虑拖拽偏移后的鼠标位置
 
     if (canDrop) {
-      if (dragData.sourceType === DragSourceType.MEDIA_ITEM) {
+      if (dragData.sourceType === DragSourceType.ASSET || dragData.sourceType === DragSourceType.MEDIA_ITEM) {
         // MediaItemDragData 处理
         const mediaData = dragData as MediaItemDragData
 
+        if (mediaData.assetKind === 'effect-template') {
+          const track = unifiedStore.getTrack(targetTrack.trackId)
+          const handler = effectTemplateHandlerRegistry.get(mediaData.effectType)
+          const candidate =
+            track && handler
+              ? handler.resolveDropCandidate({
+                  dragData: mediaData,
+                  targetTrack: track,
+                  trackItems: unifiedStore.getTimelineItemsByTrack(targetTrack.trackId),
+                  hoveredFrame: originalFrame,
+                  thresholdFrames: resolveSnapThresholdFrames(),
+                })
+              : null
+
+          if (candidate?.canDrop && candidate.snappedFrame !== null) {
+            finalFrame = candidate.snappedFrame
+            updateSnapIndicator({
+              snapped: true,
+              frame: finalFrame,
+              snapPoint: {
+                type: 'clip-end',
+                frame: finalFrame,
+                priority: 1,
+                clipId: (candidate as any).sourceItemId!,
+                clipName: '',
+              },
+              distance: Math.abs(finalFrame - originalFrame),
+            })
+            targetInfo.position.time = finalFrame
+          } else {
+            clearSnapIndicator()
+          }
+
+          if (candidate?.canDrop && candidate.preview) {
+            handleDragPreview(event, targetTrack.trackId, finalFrame, candidate.preview)
+          } else {
+            hidePreview()
+          }
+          return
+        }
+
         // 获取素材时长（用于尾部吸附）
-        const mediaItem = unifiedStore.getMediaItem(mediaData.mediaItemId)
+        const mediaItem = unifiedStore.getMediaItem(mediaData.mediaItemId ?? null)
         if (mediaItem && mediaItem.duration) {
           clipDuration = mediaItem.duration
         }
@@ -220,12 +262,42 @@ export function useTimelineDragHandlers(
     let excludeClipIds: string[] = []
     let adjustedMouseX = mouseX // 用于存储考虑拖拽偏移后的鼠标位置
 
-    if (dragData.sourceType === DragSourceType.MEDIA_ITEM) {
+    if (dragData.sourceType === DragSourceType.ASSET || dragData.sourceType === DragSourceType.MEDIA_ITEM) {
       // MediaItemDragData 处理
       const mediaData = dragData as MediaItemDragData
 
+      if (mediaData.assetKind === 'effect-template') {
+        const track = unifiedStore.getTrack(targetTrack.trackId)
+        const handler = effectTemplateHandlerRegistry.get(mediaData.effectType)
+        const candidate =
+          track && handler
+            ? handler.resolveDropCandidate({
+                dragData: mediaData,
+                targetTrack: track,
+                trackItems: unifiedStore.getTimelineItemsByTrack(targetTrack.trackId),
+                hoveredFrame: unifiedStore.pixelToFrame(mouseX, unifiedStore.TimelineContentWidth),
+                thresholdFrames: resolveSnapThresholdFrames(),
+              })
+            : null
+
+        const targetInfo: DropTargetInfo = {
+          targetType: DropTargetType.TIMELINE_TRACK,
+          targetId: targetTrack.trackId,
+          position: {
+            time: candidate?.canDrop && candidate.snappedFrame !== null
+              ? candidate.snappedFrame
+              : unifiedStore.pixelToFrame(mouseX, unifiedStore.TimelineContentWidth),
+            x: event.clientX,
+            y: event.clientY,
+          },
+        }
+
+        await unifiedStore.handleDrop(event, targetInfo)
+        return
+      }
+
       // 获取素材时长（用于尾部吸附）
-      const mediaItem = unifiedStore.getMediaItem(mediaData.mediaItemId)
+      const mediaItem = unifiedStore.getMediaItem(mediaData.mediaItemId ?? null)
       if (mediaItem && mediaItem.duration) {
         clipDuration = mediaItem.duration
       }
@@ -300,6 +372,13 @@ export function useTimelineDragHandlers(
   function handleTimelineDragEnd(event: DragEvent) {
     hidePreview()
     clearSnapIndicator()
+  }
+
+  function resolveSnapThresholdFrames(): number {
+    const pixelsPerFrame =
+      (unifiedStore.TimelineContentWidth * unifiedStore.zoomLevel) /
+      Math.max(1, unifiedStore.totalDurationFrames)
+    return unifiedStore.snapConfig.threshold / Math.max(pixelsPerFrame, 0.0001)
   }
 
   return {

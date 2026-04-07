@@ -83,7 +83,7 @@ export function createUnifiedDirectoryModule(registry: ModuleRegistry) {
       parentId,
       createdAt: new Date().toISOString(),
       childDirIds: [],
-      mediaItemIds: [],
+      assetIds: [],
     }
 
     directories.value.set(newDir.id, newDir)
@@ -116,7 +116,7 @@ export function createUnifiedDirectoryModule(registry: ModuleRegistry) {
       parentId,
       createdAt: new Date().toISOString(),
       childDirIds: [],
-      mediaItemIds: [],
+      assetIds: [],
       character: {
         remark,
         refVideo,
@@ -182,24 +182,24 @@ export function createUnifiedDirectoryModule(registry: ModuleRegistry) {
    * @param dirId 目录ID
    * @param updateRefCount 是否更新引用计数，默认为true。剪切/拖拽移动时应设为false
    */
-  function addMediaToDirectory(
-    mediaId: string,
+  function addAssetToDirectory(
+    assetId: string,
     dirId: string,
     updateRefCount: boolean = true,
   ): boolean {
     const dir = directories.value.get(dirId)
     if (!dir) return false
 
-    if (!dir.mediaItemIds.includes(mediaId)) {
-      dir.mediaItemIds.push(mediaId)
+    if (!dir.assetIds.includes(assetId)) {
+      dir.assetIds.push(assetId)
 
       // 🆕 增加引用计数（仅在需要时）
       if (updateRefCount) {
-        const mediaItem = mediaModule.getMediaItem(mediaId)
-        if (mediaItem) {
-          mediaItem.runtime.refCount = (mediaItem.runtime.refCount || 0) + 1
+        const asset = mediaModule.getAsset(assetId)
+        if (asset) {
+          asset.runtime.refCount = (asset.runtime.refCount || 0) + 1
           console.log(
-            `📊 [addMediaToDirectory] 素材 ${mediaItem.name} 引用计数: ${mediaItem.runtime.refCount}`,
+            `📊 [addAssetToDirectory] 素材 ${asset.name} 引用计数: ${asset.runtime.refCount}`,
           )
         }
       }
@@ -215,32 +215,32 @@ export function createUnifiedDirectoryModule(registry: ModuleRegistry) {
    * @param dirId 目录ID
    * @param updateRefCount 是否更新引用计数，默认为true。剪切/拖拽移动时应设为false
    */
-  function removeMediaFromDirectory(
-    mediaId: string,
+  function removeAssetFromDirectory(
+    assetId: string,
     dirId: string,
     updateRefCount: boolean = true,
   ): boolean {
     const dir = directories.value.get(dirId)
     if (!dir) return false
 
-    const index = dir.mediaItemIds.indexOf(mediaId)
+    const index = dir.assetIds.indexOf(assetId)
     if (index > -1) {
-      dir.mediaItemIds.splice(index, 1)
+      dir.assetIds.splice(index, 1)
 
       // 🆕 减少引用计数（仅在需要时）
       if (updateRefCount) {
-        const mediaItem = mediaModule.getMediaItem(mediaId)
-        if (mediaItem && mediaItem.runtime.refCount !== undefined) {
-          mediaItem.runtime.refCount--
+        const asset = mediaModule.getAsset(assetId)
+        if (asset && asset.runtime.refCount !== undefined) {
+          asset.runtime.refCount--
 
           // 如果引用计数降为0，记录日志
-          if (mediaItem.runtime.refCount === 0) {
+          if (asset.runtime.refCount === 0) {
             console.warn(
-              `⚠️ [removeMediaFromDirectory] 素材引用计数为0: ${mediaItem.name}，可以删除`,
+              `⚠️ [removeAssetFromDirectory] 素材引用计数为0: ${asset.name}，可以删除`,
             )
           } else {
             console.log(
-              `📊 [removeMediaFromDirectory] 素材 ${mediaItem.name} 引用计数: ${mediaItem.runtime.refCount}`,
+              `📊 [removeAssetFromDirectory] 素材 ${asset.name} 引用计数: ${asset.runtime.refCount}`,
             )
           }
         }
@@ -256,14 +256,26 @@ export function createUnifiedDirectoryModule(registry: ModuleRegistry) {
    * @param mediaId 媒体项ID
    * @returns 目录ID数组，如果未找到返回空数组
    */
-  function findAllDirectoriesByMediaId(mediaId: string): string[] {
+  function findAllDirectoriesByAssetId(mediaId: string): string[] {
     const dirIds: string[] = []
     for (const [dirId, dir] of directories.value) {
-      if (dir.mediaItemIds.includes(mediaId)) {
+      if (dir.assetIds.includes(mediaId)) {
         dirIds.push(dirId)
       }
     }
     return dirIds
+  }
+
+  function addMediaToDirectory(mediaId: string, dirId: string, updateRefCount: boolean = true): boolean {
+    return addAssetToDirectory(mediaId, dirId, updateRefCount)
+  }
+
+  function removeMediaFromDirectory(mediaId: string, dirId: string, updateRefCount: boolean = true): boolean {
+    return removeAssetFromDirectory(mediaId, dirId, updateRefCount)
+  }
+
+  function findAllDirectoriesByMediaId(mediaId: string): string[] {
+    return findAllDirectoriesByAssetId(mediaId)
   }
 
   /**
@@ -284,10 +296,10 @@ export function createUnifiedDirectoryModule(registry: ModuleRegistry) {
     })
 
     // 添加媒体项
-    dir.mediaItemIds.forEach((mediaId) => {
+    dir.assetIds.forEach((mediaId) => {
       items.push({
         id: mediaId,
-        type: 'media',
+        type: 'asset',
       })
     })
 
@@ -369,9 +381,9 @@ export function createUnifiedDirectoryModule(registry: ModuleRegistry) {
     let startedCount = 0
 
     // 处理当前目录的媒体项
-    dir.mediaItemIds.forEach((mediaId) => {
+    dir.assetIds.forEach((mediaId) => {
       const mediaItem = mediaModule.getMediaItem(mediaId)
-      if (mediaItem?.mediaStatus === 'pending') {
+      if (mediaItem?.assetKind === 'media' && mediaItem.mediaStatus === 'pending') {
         mediaModule.startMediaProcessing(mediaItem)
         startedCount++
       }
@@ -381,9 +393,9 @@ export function createUnifiedDirectoryModule(registry: ModuleRegistry) {
     dir.childDirIds.forEach((childDirId) => {
       const childDir = directories.value.get(childDirId)
       if (childDir && isCharacterDirectory(childDir)) {
-        childDir.mediaItemIds.forEach((mediaId) => {
+        childDir.assetIds.forEach((mediaId) => {
           const mediaItem = mediaModule.getMediaItem(mediaId)
-          if (mediaItem?.mediaStatus === 'pending') {
+          if (mediaItem?.assetKind === 'media' && mediaItem.mediaStatus === 'pending') {
             mediaModule.startMediaProcessing(mediaItem)
             startedCount++
           }
@@ -718,8 +730,8 @@ export function createUnifiedDirectoryModule(registry: ModuleRegistry) {
     }
 
     // 复制媒体项
-    for (const mediaId of sourceDir.mediaItemIds) {
-      await copyItem({ id: mediaId, type: 'media' }, newDir.id)
+    for (const mediaId of sourceDir.assetIds) {
+      await copyItem({ id: mediaId, type: 'asset' }, newDir.id)
     }
 
     return newDir.id
@@ -936,7 +948,7 @@ export function createUnifiedDirectoryModule(registry: ModuleRegistry) {
           dirsToDelete.push(...currentDir.childDirIds)
 
           // 收集媒体项
-          currentDir.mediaItemIds.forEach((mediaId) => allMediaIds.add(mediaId))
+          currentDir.assetIds.forEach((mediaId) => allMediaIds.add(mediaId))
         }
 
         index++
@@ -953,19 +965,19 @@ export function createUnifiedDirectoryModule(registry: ModuleRegistry) {
       for (const currentDirId of dirsToDelete) {
         const currentDir = directories.value.get(currentDirId)
         if (currentDir) {
-          const mediaIds = [...currentDir.mediaItemIds]
+          const mediaIds = [...currentDir.assetIds]
           for (const mediaId of mediaIds) {
-            removeMediaFromDirectory(mediaId, currentDirId)
+            removeAssetFromDirectory(mediaId, currentDirId)
           }
         }
       }
 
       // 步骤3: 检查并删除引用计数为0的素材
       for (const mediaId of allMediaIds) {
-        const mediaItem = mediaModule.getMediaItem(mediaId)
-        if (mediaItem && mediaItem.runtime.refCount === 0) {
-          console.log(`🗑️ [deleteDirectory] 删除引用计数为0的素材: ${mediaItem.name}`)
-          await mediaModule.removeMediaItem(mediaId)
+        const asset = mediaModule.getAsset(mediaId)
+        if (asset && asset.runtime.refCount === 0) {
+          console.log(`🗑️ [deleteDirectory] 删除引用计数为0的素材: ${asset.name}`)
+          await mediaModule.removeAsset(mediaId)
           deletedMediaIds.push(mediaId)
         }
       }
@@ -1021,7 +1033,7 @@ export function createUnifiedDirectoryModule(registry: ModuleRegistry) {
   /**
    * 删除媒体项（从指定目录移除，如果引用计数为0则删除文件）
    */
-  async function deleteMediaItem(
+  async function deleteAssetItem(
     mediaId: string,
     dirId: string,
   ): Promise<{
@@ -1034,50 +1046,54 @@ export function createUnifiedDirectoryModule(registry: ModuleRegistry) {
       return { success: false, deletedFile: false, error: '目录不存在' }
     }
 
-    const mediaItem = mediaModule.getMediaItem(mediaId)
+    const mediaItem = mediaModule.getAsset(mediaId)
 
     try {
-      // 如果媒体项不存在，直接从目录移除该无效引用（不更新引用计数）
+      // 如果资产不存在，直接从目录移除该无效引用（不更新引用计数）
       if (!mediaItem) {
-        console.warn(`⚠️ [deleteMediaItem] 媒体项不存在，从目录移除无效引用: ${mediaId}`)
-        const removed = removeMediaFromDirectory(mediaId, dirId, false)
+        console.warn(`⚠️ [deleteAssetItem] 资产不存在，从目录移除无效引用: ${mediaId}`)
+        const removed = removeAssetFromDirectory(mediaId, dirId, false)
         if (removed) {
-          console.log(`✅ [deleteMediaItem] 已从目录移除无效引用: ${mediaId}`)
+          console.log(`✅ [deleteAssetItem] 已从目录移除无效引用: ${mediaId}`)
           return { success: true, deletedFile: false }
         }
-        return { success: false, deletedFile: false, error: '媒体项不在该目录中' }
+        return { success: false, deletedFile: false, error: '资产不在该目录中' }
       }
 
       // 步骤1: 从目录移除（会自动减少引用计数）
-      const removed = removeMediaFromDirectory(mediaId, dirId)
+      const removed = removeAssetFromDirectory(mediaId, dirId)
       if (!removed) {
-        return { success: false, deletedFile: false, error: '媒体项不在该目录中' }
+        return { success: false, deletedFile: false, error: '资产不在该目录中' }
       }
 
       // 步骤2: 检查引用计数，如果为0则删除素材文件
-      const updatedMediaItem = mediaModule.getMediaItem(mediaId)
+      const updatedMediaItem = mediaModule.getAsset(mediaId)
       let deletedFile = false
 
       if (updatedMediaItem && updatedMediaItem.runtime.refCount === 0) {
-        console.log(`🗑️ [deleteMediaItem] 删除引用计数为0的素材: ${mediaItem.name}`)
-        await mediaModule.removeMediaItem(mediaId)
+        console.log(`🗑️ [deleteAssetItem] 删除引用计数为0的素材: ${mediaItem.name}`)
+        await mediaModule.removeAsset(mediaId)
         deletedFile = true
       }
 
-      console.log(`✅ [deleteMediaItem] 媒体项删除成功: ${mediaItem.name}`, {
+      console.log(`✅ [deleteAssetItem] 资产删除成功: ${mediaItem.name}`, {
         deletedFile,
         remainingRefCount: updatedMediaItem?.runtime.refCount || 0,
       })
 
       return { success: true, deletedFile }
     } catch (error) {
-      console.error(`❌ [deleteMediaItem] 删除媒体项失败: ${mediaItem?.name || mediaId}`, error)
+      console.error(`❌ [deleteAssetItem] 删除资产失败: ${mediaItem?.name || mediaId}`, error)
       return {
         success: false,
         deletedFile: false,
         error: error instanceof Error ? error.message : '未知错误',
       }
     }
+  }
+
+  async function deleteMediaItem(mediaId: string, dirId: string) {
+    return deleteAssetItem(mediaId, dirId)
   }
 
   // ==================== 返回接口 ====================
@@ -1099,7 +1115,9 @@ export function createUnifiedDirectoryModule(registry: ModuleRegistry) {
     getDirectory,
     getCharacterDirectory, // 🆕 新增获取角色文件夹方法
     isCharacterDirectory, // 🆕 新增类型守卫方法
+    addAssetToDirectory,
     addMediaToDirectory,
+    removeAssetFromDirectory,
     removeMediaFromDirectory,
     getDirectoryContent,
     getBreadcrumb,
@@ -1108,7 +1126,9 @@ export function createUnifiedDirectoryModule(registry: ModuleRegistry) {
     navigateToDir,
     switchTab,
     deleteDirectory, // 🆕 新增删除文件夹方法
+    deleteAssetItem,
     deleteMediaItem, // 🆕 新增删除媒体项方法
+    findAllDirectoriesByAssetId,
     findAllDirectoriesByMediaId, // 🆕 新增查找媒体项所在所有目录方法
 
     // 初始化和管理方法

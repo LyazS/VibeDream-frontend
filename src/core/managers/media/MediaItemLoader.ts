@@ -10,6 +10,8 @@ import type { BaseBizyAirSourceData } from '@/core/datasource/providers/bizyair/
 import { BizyAirSourceFactory } from '@/core/datasource/providers/bizyair/BizyAirSource'
 import type { BaseASRSourceData } from '@/core/datasource/providers/asr/ASRSource'
 import { ASRSourceFactory } from '@/core/datasource/providers/asr/ASRSource'
+import type { UnifiedLibraryAssetData } from '@/core/asset/types'
+import { createTransitionTemplateAssetData } from '@/core/asset/types'
 
 /**
  * 媒体项目加载器（阶段二彻底重构版）
@@ -23,7 +25,7 @@ export class MediaItemLoader {
    * @param projectId 项目 ID
    * @returns 媒体项目数组
    */
-  async loadMediaItemsFromMeta(projectId: string): Promise<UnifiedMediaItemData[]> {
+  async loadMediaItemsFromMeta(projectId: string): Promise<UnifiedLibraryAssetData[]> {
     try {
       console.log(`📂 [MediaItemLoader] 开始从 Meta 文件加载媒体项目: ${projectId}`)
 
@@ -32,15 +34,15 @@ export class MediaItemLoader {
       console.log(`📄 [MediaItemLoader] 发现 ${metaFiles.length} 个 Meta 文件`)
 
       // 2. 从每个 Meta 文件重建媒体项目
-      const mediaItems: UnifiedMediaItemData[] = []
+      const mediaItems: UnifiedLibraryAssetData[] = []
 
       for (const metaData of metaFiles) {
         try {
           const mediaItem = await this.rebuildMediaItemFromMeta(metaData)
 
-          // 3. 只对 ready 状态的媒体项目验证文件是否存在
-          // 注意：text 类型没有实际媒体文件，跳过文件验证
-          if (mediaItem.mediaType === 'text') {
+          if (mediaItem.assetKind === 'effect-template') {
+            console.log(`✨ [MediaItemLoader] 模板资产加载成功: ${metaData.name}`)
+          } else if (mediaItem.mediaType === 'text') {
             // text 类型没有实际媒体文件，跳过文件验证
             console.log(`📝 [MediaItemLoader] 文本媒体项目加载（无文件）: ${metaData.name}`)
           } else if (mediaItem.mediaStatus === 'ready') {
@@ -77,7 +79,37 @@ export class MediaItemLoader {
    * @param metaData Meta 文件数据
    * @returns 重建的媒体项目
    */
-  private async rebuildMediaItemFromMeta(metaData: MediaMetaFile): Promise<UnifiedMediaItemData> {
+  private async rebuildMediaItemFromMeta(metaData: MediaMetaFile): Promise<UnifiedLibraryAssetData> {
+    if (metaData.assetKind === 'effect-template') {
+      if (metaData.effectType !== 'transition') {
+        throw new Error(`不支持的效果模板类型: ${metaData.effectType}`)
+      }
+
+      const templatePayload = metaData.templatePayload as {
+        durationFrames?: number
+        shader?: { vertexShader?: string; fragmentShader?: string }
+      } | undefined
+
+      if (!templatePayload?.shader?.fragmentShader) {
+        throw new Error(`效果模板缺少 shader 资源: ${metaData.id}`)
+      }
+
+      return createTransitionTemplateAssetData(
+        metaData.id,
+        metaData.name,
+        {
+          durationFrames: templatePayload.durationFrames ?? 12,
+          shader: {
+            vertexShader: templatePayload.shader.vertexShader,
+            fragmentShader: templatePayload.shader.fragmentShader,
+          },
+        },
+        {
+          createdAt: metaData.createdAt,
+        },
+      )
+    }
+
     // 1. 根据数据源类型创建相应的数据源（运行时状态）
     let source
 

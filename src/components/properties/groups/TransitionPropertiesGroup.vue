@@ -4,37 +4,18 @@
       <h4>{{ t('properties.transition.title') }}</h4>
 
       <div class="property-item">
-        <label>{{ t('properties.transition.enabled') }}</label>
-        <input
-          :checked="transitionConfig.enabled"
-          type="checkbox"
-          class="checkbox-input"
-          @change="handleToggleEnabled"
-        />
-      </div>
-
-      <div class="property-item">
-        <label>{{ t('properties.transition.preset') }}</label>
-        <SearchableSelect
-          :model-value="transitionConfig.preset"
-          :options="presetOptions"
-          :searchable="false"
-          :placeholder="t('properties.transition.preset')"
-          @update:model-value="handlePresetChange"
-        />
+        <label>{{ t('properties.transitionSelection.effectAsset') }}</label>
+        <div class="transition-template-name">{{ transitionTemplateName }}</div>
       </div>
 
       <div class="property-item">
         <label>{{ t('properties.transition.durationFrames') }}</label>
-        <NumberInput
+        <TimecodeInput
           :model-value="transitionConfig.durationFrames"
-          :min="2"
-          :max="300"
-          :step="1"
-          :precision="0"
-          :show-controls="true"
-          unit="f"
-          @change="handleDurationChange"
+          :placeholder="t('properties.timecodes.timecodeFormat')"
+          :input-style="{ maxWidth: '100%', textAlign: 'left' }"
+          @update:model-value="handleDurationChange"
+          @error="handleTimecodeError"
         />
       </div>
 
@@ -54,12 +35,10 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
-import SearchableSelect from '@/components/base/SearchableSelect.vue'
-import NumberInput from '@/components/base/NumberInput.vue'
+import TimecodeInput from '@/components/base/TimecodeInput.vue'
 import { useAppI18n } from '@/core/composables/useI18n'
 import { useUnifiedStore } from '@/core/unifiedStore'
 import type { UnifiedTimelineItemData } from '@/core/timelineitem/type'
-import type { ClipTransitionOutPreset } from '@/core/timelineitem/transition'
 import { normalizeClipTransitionOutConfig } from '@/core/timelineitem/transition'
 
 interface Props {
@@ -70,18 +49,17 @@ const props = defineProps<Props>()
 const { t } = useAppI18n()
 const unifiedStore = useUnifiedStore()
 
-const presetOptions = computed(() => [
-  {
-    label: t('properties.transition.presets.crossfade'),
-    value: 'crossfade',
-  },
-])
-
 const transitionConfig = computed(() =>
   normalizeClipTransitionOutConfig(props.selectedTimelineItem?.transitionOut),
 )
 
 const transitionRuntime = computed(() => props.selectedTimelineItem?.runtime.transition)
+
+const transitionTemplateName = computed(() => {
+  const assetId = transitionConfig.value.templateAssetId
+  if (!assetId) return '-'
+  return unifiedStore.getAsset(assetId)?.name || assetId
+})
 
 const boundRightItemName = computed(() => {
   const rightItemId = transitionRuntime.value?.rightItemId
@@ -123,8 +101,6 @@ const statusText = computed(() => {
 })
 
 async function updateTransition(nextPatch: {
-  enabled?: boolean
-  preset?: ClipTransitionOutPreset
   durationFrames?: number
 }) {
   if (!props.selectedTimelineItem) return
@@ -136,17 +112,12 @@ async function updateTransition(nextPatch: {
   })
 }
 
-function handleToggleEnabled(event: Event) {
-  const input = event.target as HTMLInputElement
-  void updateTransition({ enabled: input.checked })
-}
-
-function handlePresetChange(nextPreset: ClipTransitionOutPreset) {
-  void updateTransition({ preset: nextPreset })
-}
-
 function handleDurationChange(nextDurationFrames: number) {
   void updateTransition({ durationFrames: nextDurationFrames })
+}
+
+function handleTimecodeError(message: string) {
+  unifiedStore.messageError(message)
 }
 </script>
 
@@ -178,5 +149,17 @@ function handleDurationChange(nextDurationFrames: number) {
 .transition-status__meta {
   font-size: var(--font-size-sm);
   color: var(--color-text-secondary);
+}
+
+.transition-template-name {
+  min-height: 32px;
+  display: flex;
+  align-items: center;
+  padding: 0 10px;
+  border-radius: var(--border-radius-medium);
+  background: var(--color-bg-tertiary);
+  border: 1px solid var(--color-border-secondary);
+  color: var(--color-text-primary);
+  font-size: var(--font-size-sm);
 }
 </style>

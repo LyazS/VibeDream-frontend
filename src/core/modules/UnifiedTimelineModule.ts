@@ -12,10 +12,10 @@ import { adjustKeyframesForDurationChange } from '@/core/utils/unifiedKeyframeUt
 import { hasAnimation } from '@/core/utils/unifiedKeyframeUtils'
 import { TimelineItemFactory } from '../timelineitem'
 import {
-  type ClipTransitionOutConfig,
   normalizeClipTransitionOutConfig,
   refreshClipTransitionsForItems,
 } from '@/core/timelineitem/transition'
+import type { ClipTransitionOutConfig } from '@/core/transition/types'
 import {
   createTimelineTransitionOverlay,
   type TimelineTransitionOverlayViewModel,
@@ -153,9 +153,9 @@ export function createUnifiedTimelineModule(registry: ModuleRegistry) {
 
     item.transitionOut = transitionOut
       ? normalizeClipTransitionOutConfig({
-          enabled: transitionOut.enabled,
-          preset: transitionOut.preset,
           durationFrames: transitionOut.durationFrames,
+          templateAssetId: transitionOut.templateAssetId,
+          shader: transitionOut.shader,
         })
       : undefined
 

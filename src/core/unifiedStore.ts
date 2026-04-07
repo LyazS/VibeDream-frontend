@@ -169,6 +169,11 @@ export const useUnifiedStore = defineStore('unified', () => {
     addMediaItem: unifiedMediaModule.addMediaItem,
     removeMediaItem: unifiedMediaModule.removeMediaItem,
     getMediaItem: unifiedMediaModule.getMediaItem,
+    addAsset: unifiedMediaModule.addAsset,
+    removeAsset: unifiedMediaModule.removeAsset,
+    getAsset: unifiedMediaModule.getAsset,
+    getAllAssets: unifiedMediaModule.getAllAssets,
+    updateAssetName: unifiedMediaModule.updateAssetName,
     getMediaItemBySourceId: unifiedMediaModule.getMediaItemBySourceId,
     updateMediaItemName: unifiedMediaModule.updateMediaItemName,
     updateMediaItem: unifiedMediaModule.updateMediaItem,
@@ -551,12 +556,16 @@ export const useUnifiedStore = defineStore('unified', () => {
     createCharacterDirectory: unifiedDirectoryModule.createCharacterDirectory, // 🆕 新增创建角色文件夹方法
     renameDirectory: unifiedDirectoryModule.renameDirectory,
     deleteDirectory: unifiedDirectoryModule.deleteDirectory, // 🆕 新增删除文件夹方法
+    deleteAssetItem: unifiedDirectoryModule.deleteAssetItem,
     deleteMediaItem: unifiedDirectoryModule.deleteMediaItem, // 🆕 新增删除媒体项方法
+    findAllDirectoriesByAssetId: unifiedDirectoryModule.findAllDirectoriesByAssetId,
     findAllDirectoriesByMediaId: unifiedDirectoryModule.findAllDirectoriesByMediaId, // 🆕 新增查找媒体项所在所有目录方法
     getDirectory: unifiedDirectoryModule.getDirectory,
     getCharacterDirectory: unifiedDirectoryModule.getCharacterDirectory, // 🆕 新增获取角色文件夹方法
     isCharacterDirectory: unifiedDirectoryModule.isCharacterDirectory, // 🆕 新增类型守卫方法
+    addAssetToDirectory: unifiedDirectoryModule.addAssetToDirectory,
     addMediaToDirectory: unifiedDirectoryModule.addMediaToDirectory,
+    removeAssetFromDirectory: unifiedDirectoryModule.removeAssetFromDirectory,
     removeMediaFromDirectory: unifiedDirectoryModule.removeMediaFromDirectory,
     getDirectoryContent: unifiedDirectoryModule.getDirectoryContent,
     getBreadcrumb: unifiedDirectoryModule.getBreadcrumb,

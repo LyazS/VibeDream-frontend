@@ -38,9 +38,9 @@
         {{ t('toolbar.clip.split') }}
       </HoverButton>
       <HoverButton
-        v-if="unifiedStore.selectedClipTimelineItemId"
-        @click="deleteSelectedClip"
-        :title="t('toolbar.clip.deleteTooltip')"
+        v-if="deletableSelectionId"
+        @click="deleteSelectedSelection"
+        :title="deleteButtonTooltip"
       >
         <template #icon>
           <component :is="IconComponents.DELETE" size="14px" color="#ef4444" />
@@ -185,6 +185,18 @@ const isSplitButtonDisabled = computed(() => {
   return !selectedItemSupportsSplit.value || !isSelectedItemReady.value
 })
 
+const selectedTransitionSourceItemId = computed(() => unifiedStore.selectedTransitionSourceItemId)
+
+const deletableSelectionId = computed(() => {
+  return unifiedStore.selectedClipTimelineItemId || selectedTransitionSourceItemId.value || null
+})
+
+const deleteButtonTooltip = computed(() => {
+  return selectedTransitionSourceItemId.value
+    ? t('toolbar.clip.deleteTooltip')
+    : t('toolbar.clip.deleteTooltip')
+})
+
 async function splitSelectedClip() {
   if (unifiedStore.selectedClipTimelineItemId) {
     const item = unifiedStore.getTimelineItem(unifiedStore.selectedClipTimelineItemId)
@@ -204,7 +216,13 @@ async function splitSelectedClip() {
   }
 }
 
-async function deleteSelectedClip() {
+async function deleteSelectedSelection() {
+  if (selectedTransitionSourceItemId.value) {
+    await unifiedStore.updateTransitionOutWithHistory(selectedTransitionSourceItemId.value, undefined)
+    console.log('✅ 转场删除成功')
+    return
+  }
+
   if (unifiedStore.selectedClipTimelineItemId) {
     const item = unifiedStore.getTimelineItem(unifiedStore.selectedClipTimelineItemId)
     const mediaItem = item ? unifiedStore.getMediaItem(item.mediaItemId) : null

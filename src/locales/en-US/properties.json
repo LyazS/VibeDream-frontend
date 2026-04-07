@@ -51,6 +51,7 @@
       }
     },
     "transitionSelection": {
+      "effectAsset": "Effect Asset",
       "sourceClip": "Source Clip",
       "placeholder": "This panel is reserved for transition properties. Editing controls will be added later."
     },

@@ -8,21 +8,34 @@
     @click.stop="handleSelect"
     @contextmenu.stop.prevent="handleContextMenu"
   >
+    <div
+      v-if="isSelected"
+      class="resize-handle resize-handle-left"
+      @mousedown.stop="handleResizeStart('left', $event)"
+    ></div>
     <div class="timeline-transition-overlay__label">
-      {{ overlay.preset }}
+      {{ t('properties.transition.title') }}
     </div>
     <div class="clip-content timeline-transition-overlay__content">
       <div class="timeline-transition-overlay__stripe"></div>
     </div>
+    <div
+      v-if="isSelected"
+      class="resize-handle resize-handle-right"
+      @mousedown.stop="handleResizeStart('right', $event)"
+    ></div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, onUnmounted, ref } from 'vue'
 import { useUnifiedStore } from '@/core/unifiedStore'
+import { useAppI18n } from '@/core/composables/useI18n'
 import { DEFAULT_TRACK_PADDING } from '@/constants/TrackConstants'
 import { THUMBNAIL_CONSTANTS } from '@/constants/ThumbnailConstants'
 import type { TimelineTransitionOverlayViewModel } from '@/core/timelineitem/transitionOverlay'
+import { alignFramesToFrame } from '@/core/utils/timeUtils'
+import { normalizeClipTransitionOutConfig } from '@/core/timelineitem/transition'
 
 interface Props {
   overlay: TimelineTransitionOverlayViewModel
@@ -37,18 +50,83 @@ const emit = defineEmits<{
 }>()
 
 const unifiedStore = useUnifiedStore()
+const { t } = useAppI18n()
+const isResizing = ref(false)
+const resizeDirection = ref<'left' | 'right' | null>(null)
+const resizeStartX = ref(0)
+const resizeStartDurationFrames = ref(0)
+const tempDurationFrames = ref(0)
+const MIN_TRANSITION_DURATION_FRAMES = 2
 
 const overlayClasses = computed(() => [
   'unified-timeline-clip',
   'unified-timeline-transition-overlay',
   {
-    selected: unifiedStore.isTimelineSelectionSelected(props.overlay.selectionId),
+    selected: isSelected.value,
+    resizing: isResizing.value,
   },
 ])
 
+const isSelected = computed(() =>
+  unifiedStore.isTimelineSelectionSelected(props.overlay.selectionId),
+)
+
+const sourceTimelineItem = computed(
+  () => unifiedStore.getTimelineItem(props.overlay.sourceItemId) ?? null,
+)
+
+const transitionConfig = computed(() =>
+  normalizeClipTransitionOutConfig(sourceTimelineItem.value?.transitionOut),
+)
+
+const rightTimelineItem = computed(() => {
+  const rightItemId = sourceTimelineItem.value?.runtime.transition?.rightItemId
+  if (!rightItemId) return null
+  return unifiedStore.getTimelineItem(rightItemId) ?? null
+})
+
+const currentDurationFrames = computed(() =>
+  isResizing.value
+    ? tempDurationFrames.value
+    : clampResizeDurationFrames(transitionConfig.value.durationFrames),
+)
+
+const maxDurationFrames = computed(() => {
+  const leftDurationFrames = sourceTimelineItem.value
+    ? sourceTimelineItem.value.timeRange.timelineEndTime -
+      sourceTimelineItem.value.timeRange.timelineStartTime
+    : 2
+  const rightDurationFrames = rightTimelineItem.value
+    ? rightTimelineItem.value.timeRange.timelineEndTime -
+      rightTimelineItem.value.timeRange.timelineStartTime
+    : leftDurationFrames
+
+  return Math.max(
+    MIN_TRANSITION_DURATION_FRAMES,
+    Math.min(leftDurationFrames, rightDurationFrames) * 2,
+  )
+})
+
+function clampResizeDurationFrames(durationFrames: number): number {
+  return Math.min(
+    maxDurationFrames.value,
+    Math.max(MIN_TRANSITION_DURATION_FRAMES, Math.round(durationFrames)),
+  )
+}
+
+function resolveDisplayRange(durationFrames: number) {
+  const leftHalfFrames = Math.floor(durationFrames / 2)
+  const rightHalfFrames = durationFrames - leftHalfFrames
+  return {
+    startFrame: Math.max(0, props.overlay.seamFrame - leftHalfFrames),
+    endFrame: props.overlay.seamFrame + rightHalfFrames,
+  }
+}
+
 const overlayStyles = computed(() => {
-  const left = unifiedStore.frameToPixel(props.overlay.displayStartFrame, props.timelineWidth)
-  const right = unifiedStore.frameToPixel(props.overlay.displayEndFrame, props.timelineWidth)
+  const displayRange = resolveDisplayRange(currentDurationFrames.value)
+  const left = unifiedStore.frameToPixel(displayRange.startFrame, props.timelineWidth)
+  const right = unifiedStore.frameToPixel(displayRange.endFrame, props.timelineWidth)
   const overlayHeight = THUMBNAIL_CONSTANTS.HEIGHT
   const clipHeight = Math.max(props.trackHeight - DEFAULT_TRACK_PADDING * 2, 0)
   // Match VideoContent's actual vertical layout:
@@ -76,6 +154,74 @@ function handleSelect(event: MouseEvent) {
 function handleContextMenu(event: MouseEvent) {
   emit('contextMenu', event, props.overlay.sourceItemId)
 }
+
+function handleResizeStart(direction: 'left' | 'right', event: MouseEvent) {
+  unifiedStore.pause()
+  isResizing.value = true
+  resizeDirection.value = direction
+  resizeStartX.value = event.clientX
+  resizeStartDurationFrames.value = clampResizeDurationFrames(transitionConfig.value.durationFrames)
+  tempDurationFrames.value = resizeStartDurationFrames.value
+
+  document.addEventListener('mousemove', handleResize)
+  document.addEventListener('mouseup', stopResize)
+  event.preventDefault()
+}
+
+function handleResize(event: MouseEvent) {
+  if (!isResizing.value || !resizeDirection.value) return
+
+  const deltaX = event.clientX - resizeStartX.value
+  const initialDisplayRange = resolveDisplayRange(resizeStartDurationFrames.value)
+  const parity = resizeStartDurationFrames.value % 2
+  let nextDurationFrames = resizeStartDurationFrames.value
+
+  if (resizeDirection.value === 'left') {
+    const currentLeftPixel = unifiedStore.frameToPixel(initialDisplayRange.startFrame, props.timelineWidth)
+    const newLeftPixel = currentLeftPixel + deltaX
+    const newLeftFrame = alignFramesToFrame(
+      unifiedStore.pixelToFrame(newLeftPixel, props.timelineWidth),
+    )
+    const desiredLeftHalfFrames = Math.max(1, props.overlay.seamFrame - newLeftFrame)
+    nextDurationFrames = Math.max(MIN_TRANSITION_DURATION_FRAMES, desiredLeftHalfFrames * 2 + parity)
+  } else {
+    const currentRightPixel = unifiedStore.frameToPixel(initialDisplayRange.endFrame, props.timelineWidth)
+    const newRightPixel = currentRightPixel + deltaX
+    const newRightFrame = alignFramesToFrame(
+      unifiedStore.pixelToFrame(newRightPixel, props.timelineWidth),
+    )
+    const desiredRightHalfFrames = Math.max(1, newRightFrame - props.overlay.seamFrame)
+    nextDurationFrames = Math.max(MIN_TRANSITION_DURATION_FRAMES, desiredRightHalfFrames * 2 - parity)
+  }
+
+  tempDurationFrames.value = clampResizeDurationFrames(nextDurationFrames)
+}
+
+async function stopResize() {
+  if (!isResizing.value) return
+
+  document.removeEventListener('mousemove', handleResize)
+  document.removeEventListener('mouseup', stopResize)
+
+  const nextDurationFrames = clampResizeDurationFrames(tempDurationFrames.value)
+  const currentDurationFrames = transitionConfig.value.durationFrames
+  isResizing.value = false
+  resizeDirection.value = null
+
+  if (!sourceTimelineItem.value || nextDurationFrames === currentDurationFrames) {
+    return
+  }
+
+  await unifiedStore.updateTransitionOutWithHistory(sourceTimelineItem.value.id, {
+    ...transitionConfig.value,
+    durationFrames: nextDurationFrames,
+  })
+}
+
+onUnmounted(() => {
+  document.removeEventListener('mousemove', handleResize)
+  document.removeEventListener('mouseup', stopResize)
+})
 </script>
 
 <style scoped>

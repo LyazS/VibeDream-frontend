@@ -346,7 +346,6 @@ function createEditSDK() {
               parts.push(`  - ID: ${selectedTransition.selectionId}`)
               parts.push(`  - 源片段ID: ${selectedTransition.sourceItemId}`)
               parts.push(`  - 轨道ID: ${selectedTransition.trackId}`)
-              parts.push(`  - 预设: ${selectedTransition.preset}`)
             }
           } else {
             // 多选：只显示数量和ID列表

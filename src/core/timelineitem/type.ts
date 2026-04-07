@@ -15,7 +15,8 @@ import type { UnifiedTimeRange } from '@/core/types/timeRange'
 import type { BunnyClip } from '@/core/mediabunny/bunny-clip'
 import type { GetConfigs, GetAnimation } from './bunnytype'
 import type { BlendMode } from './blendMode'
-import type { ClipTransitionOutConfig, ClipTransitionRuntime } from './transition'
+import type { ClipTransitionRuntime } from './transition'
+import type { ClipTransitionOutConfig } from '@/core/transition/types'
 
 // 重新导出 bunnytype 中的类型供其他模块使用
 export type {

@@ -5,6 +5,7 @@
 import type {
   DragSourceHandler,
   DragSourceType,
+  AssetDragParams,
   MediaItemDragParams,
   MediaItemDragData,
   DragSourceParams,
@@ -13,9 +14,10 @@ import type {
 import { DragSourceType as SourceType } from '@/core/types/drag'
 import type { UnifiedMediaModule } from '@/core/modules/UnifiedMediaModule'
 import type { UnifiedDirectoryModule } from '@/core/modules/UnifiedDirectoryModule'
+import { isMediaAsset } from '@/core/asset/types'
 
 export class MediaItemSourceHandler implements DragSourceHandler {
-  readonly sourceType: DragSourceType = SourceType.MEDIA_ITEM
+  readonly sourceType: DragSourceType = SourceType.ASSET
 
   constructor(
     private mediaModule: UnifiedMediaModule,
@@ -27,26 +29,36 @@ export class MediaItemSourceHandler implements DragSourceHandler {
     event: DragEvent,
     params: DragSourceParams,
   ): UnifiedDragData {
-    const mediaParams = params as MediaItemDragParams
+    const assetParams = params as AssetDragParams | MediaItemDragParams
 
-    // 从 mediaModule 获取素材信息
-    const mediaItem = this.mediaModule.getMediaItem(mediaParams.mediaItemId)
+    const assetId = 'assetId' in assetParams ? assetParams.assetId : assetParams.mediaItemId
+    const selectedAssetIds =
+      'selectedAssetIds' in assetParams
+        ? assetParams.selectedAssetIds
+        : ('selectedMediaItemIds' in assetParams ? assetParams.selectedMediaItemIds : undefined)
 
-    if (!mediaItem) {
-      throw new Error(`Media item not found: ${mediaParams.mediaItemId}`)
+    const asset = this.mediaModule.getAsset(assetId)
+
+    if (!asset) {
+      throw new Error(`Asset not found: ${assetId}`)
     }
 
     // 从 directoryModule 获取当前文件夹信息
     const sourceFolderId = this.directoryModule.currentDir.value?.id
 
     const dragData: MediaItemDragData = {
-      sourceType: SourceType.MEDIA_ITEM,
+      sourceType: SourceType.ASSET,
       timestamp: Date.now(),
-      mediaItemIds: mediaParams.selectedMediaItemIds || [mediaParams.mediaItemId],
-      mediaItemId: mediaParams.mediaItemId,
-      name: mediaItem.name,
-      duration: mediaItem.duration || 0,
-      mediaType: mediaItem.mediaType,
+      assetIds: selectedAssetIds || [assetId],
+      assetId,
+      name: asset.name,
+      assetKind: asset.assetKind,
+      duration: isMediaAsset(asset) ? asset.duration || 0 : undefined,
+      mediaType: isMediaAsset(asset) ? asset.mediaType : undefined,
+      effectType: !isMediaAsset(asset) ? asset.effectType : undefined,
+      templatePayload: !isMediaAsset(asset) ? asset.templatePayload : undefined,
+      mediaItemIds: isMediaAsset(asset) ? (selectedAssetIds || [assetId]) : undefined,
+      mediaItemId: isMediaAsset(asset) ? assetId : undefined,
       sourceFolderId,
     }
 

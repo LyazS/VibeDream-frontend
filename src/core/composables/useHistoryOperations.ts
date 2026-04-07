@@ -56,8 +56,11 @@ import type {
   AnimationGroupValueMap,
 } from '@/core/timelineitem/bunnytype'
 import { getAnimationGroupForProperty } from '@/core/timelineitem/bunnytype'
-import type { ClipTransitionOutConfig } from '@/core/timelineitem/transition'
-import { normalizeClipTransitionOutConfig } from '@/core/timelineitem/transition'
+import type { ClipTransitionOutConfig } from '@/core/transition/types'
+import {
+  areClipTransitionOutConfigsEqual,
+  normalizeClipTransitionOutConfig,
+} from '@/core/timelineitem/transition'
 
 // 变换属性类型定义
 interface TransformProperties {
@@ -362,10 +365,10 @@ export function useHistoryOperations(
       ? normalizeClipTransitionOutConfig(nextTransitionOut)
       : undefined
 
-    const hasSameValue =
-      currentTransitionOut?.enabled === normalizedNextTransitionOut?.enabled &&
-      currentTransitionOut?.preset === normalizedNextTransitionOut?.preset &&
-      currentTransitionOut?.durationFrames === normalizedNextTransitionOut?.durationFrames
+    const hasSameValue = areClipTransitionOutConfigsEqual(
+      currentTransitionOut,
+      normalizedNextTransitionOut,
+    )
 
     if (hasSameValue) {
       return
@@ -376,6 +379,7 @@ export function useHistoryOperations(
       currentTransitionOut,
       normalizedNextTransitionOut,
       unifiedTimelineModule,
+      unifiedMediaModule,
     )
     await unifiedHistoryModule.executeCommand(command)
   }

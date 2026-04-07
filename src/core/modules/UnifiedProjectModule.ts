@@ -8,6 +8,7 @@ import type { UnifiedTrackData, UnifiedTrackType } from '@/core/track/TrackTypes
 import { createUnifiedTrackData } from '@/core/track/TrackTypes'
 import { globalMetaFileManager } from '@/core/managers/media/globalMetaFileManager'
 import { globalMediaItemLoader } from '@/core/managers/media/MediaItemLoader'
+import { isMediaAsset } from '@/core/asset/types'
 import { useProjectThumbnailService } from '@/core/composables/useProjectThumbnailService'
 import { MediaSync } from '@/core/managers/sync'
 import { framesToSeconds } from '@/core/utils/timeUtils'
@@ -348,7 +349,7 @@ export function createUnifiedProjectModule(registry: ModuleRegistry) {
 
       // 遍历所有目录，统计每个素材被引用的次数
       directoryModule.directories.value.forEach((dir) => {
-        dir.mediaItemIds.forEach((mediaId) => {
+        dir.assetIds.forEach((mediaId) => {
           refCountMap.set(mediaId, (refCountMap.get(mediaId) || 0) + 1)
         })
       })
@@ -385,13 +386,13 @@ export function createUnifiedProjectModule(registry: ModuleRegistry) {
           const activeDir = directoryModule.directories.value.get(activeTab.dirId)
           if (activeDir) {
             // 收集当前目录的媒体ID
-            activeDir.mediaItemIds.forEach((id) => immediateLoadIds.add(id))
+            activeDir.assetIds.forEach((id) => immediateLoadIds.add(id))
 
             // 收集角色类型子文件夹中的媒体ID
             activeDir.childDirIds.forEach((childDirId) => {
               const childDir = directoryModule.directories.value.get(childDirId)
               if (childDir && directoryModule.isCharacterDirectory(childDir)) {
-                childDir.mediaItemIds.forEach((id) => immediateLoadIds.add(id))
+                childDir.assetIds.forEach((id) => immediateLoadIds.add(id))
               }
             })
           }
@@ -405,9 +406,9 @@ export function createUnifiedProjectModule(registry: ModuleRegistry) {
       let deferredCount = 0
 
       for (const mediaItem of metaMediaItems) {
-        mediaModule.addMediaItem(mediaItem)
+        mediaModule.addAsset(mediaItem)
 
-        if (immediateLoadIds.has(mediaItem.id)) {
+        if (isMediaAsset(mediaItem) && immediateLoadIds.has(mediaItem.id)) {
           mediaModule.startMediaProcessing(mediaItem)
           immediateCount++
         } else {

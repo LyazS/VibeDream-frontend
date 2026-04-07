@@ -47,6 +47,10 @@ export class TransitionChainBuilder {
         transitionItem.runtime.transition!,
         this.params.getCurrentFrame(),
       )
+    const transitionShader = transitionItem.transitionOut?.shader
+    if (!transitionShader?.fragmentShader) {
+      throw new Error(`转场片段缺少 shader 资源: ${transitionItem.id}`)
+    }
 
     const passes = [
       ...this.buildBranchPasses({
@@ -115,6 +119,8 @@ export class TransitionChainBuilder {
           const totalFrames = Math.max(1, runtime.activeRangeEnd - runtime.activeRangeStart)
           return Math.min(1, Math.max(0, (currentFrame - runtime.activeRangeStart) / totalFrames))
         },
+        transitionShader.fragmentShader,
+        transitionShader.vertexShader,
       ),
       new CompositeToMainPass(
         this.params.programs,
@@ -137,7 +143,8 @@ export class TransitionChainBuilder {
     return [
       `left:${this.getBranchSignature(transitionItem)}`,
       `right:${this.getBranchSignature(rightItem)}`,
-      transitionItem.transitionOut?.preset ?? 'crossfade',
+      transitionItem.transitionOut?.templateAssetId ?? '',
+      transitionItem.transitionOut?.shader.fragmentShader ?? '',
     ].join('|')
   }
 

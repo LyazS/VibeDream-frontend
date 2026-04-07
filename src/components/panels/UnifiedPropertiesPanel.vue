@@ -45,9 +45,9 @@
       </div>
     </n-scrollbar>
 
-    <n-scrollbar v-else-if="selectedTransitionOverlay" class="properties-scroll-area">
+    <n-scrollbar v-else-if="selectedTransitionOverlay && selectedTransitionTimelineItem" class="properties-scroll-area">
       <div class="properties-content">
-        <TransitionSelectionPlaceholderGroup :overlay="selectedTransitionOverlay" />
+        <TransitionPropertiesGroup :selected-timeline-item="selectedTransitionTimelineItem" />
       </div>
     </n-scrollbar>
 
@@ -83,11 +83,6 @@
               v-else-if="activePropertyTab === 'mask' && selectedTimelineItem && hasVisualProperties(selectedTimelineItem)"
               :selected-timeline-item="selectedTimelineItem"
               :current-frame="currentFrame"
-            />
-
-            <TransitionPropertiesGroup
-              v-else-if="activePropertyTab === 'transition' && selectedTimelineItem && supportsClipTransitionOut(selectedTimelineItem)"
-              :selected-timeline-item="selectedTimelineItem"
             />
 
             <!-- 预留标签占位 -->
@@ -147,7 +142,6 @@ import UnifiedClipProperties from '@/components/properties/unified/UnifiedClipPr
 import MediaItemProperties from '@/components/properties/MediaItemProperties.vue'
 import MaskPropertiesGroup from '@/components/properties/groups/MaskPropertiesGroup.vue'
 import TransitionPropertiesGroup from '@/components/properties/groups/TransitionPropertiesGroup.vue'
-import TransitionSelectionPlaceholderGroup from '@/components/properties/groups/TransitionSelectionPlaceholderGroup.vue'
 import { parseTimelineSelectionId } from '@/core/types/timelineSelection'
 
 const unifiedStore = useUnifiedStore()
@@ -155,7 +149,6 @@ const { t } = useAppI18n()
 
 const basePropertyTabs = [
   { key: 'basic', labelKey: 'properties.tabs.basic' },
-  { key: 'transition', labelKey: 'properties.tabs.transition' },
   { key: 'mask', labelKey: 'properties.tabs.mask' },
   { key: 'filter', labelKey: 'properties.tabs.filter' },
   { key: 'animation', labelKey: 'properties.tabs.animation' },
@@ -175,9 +168,6 @@ const propertyTabs = computed(() => {
     if (tab.key === 'mask') {
       return hasVisualProperties(selectedTimelineItem.value!)
     }
-    if (tab.key === 'transition') {
-      return supportsClipTransitionOut(selectedTimelineItem.value!)
-    }
     return true
   })
 })
@@ -192,6 +182,12 @@ const selectedTimelineItem = computed(() => {
 const selectedTransitionOverlay = computed(() => {
   if (unifiedStore.isTimelineSelectionMultiSelectMode) return null
   return unifiedStore.getSelectedTransitionOverlay()
+})
+
+const selectedTransitionTimelineItem = computed(() => {
+  if (!selectedTransitionOverlay.value) return null
+  const item = unifiedStore.getTimelineItem(selectedTransitionOverlay.value.sourceItemId) || null
+  return item && supportsClipTransitionOut(item) ? item : null
 })
 
 // 选中的媒体项目
@@ -233,10 +229,14 @@ const multiSelectInfo = computed(() => {
 
       if (parsed.kind === 'transition') {
         const overlay = unifiedStore.getTransitionOverlay(parsed.sourceId)
+        const sourceItem = overlay ? unifiedStore.getTimelineItem(overlay.sourceItemId) : null
+        const assetName = sourceItem?.transitionOut?.templateAssetId
+          ? unifiedStore.getAsset(sourceItem.transitionOut.templateAssetId)?.name
+          : ''
         return {
           id: selectionId,
           label: overlay
-            ? `${t('properties.transition.title')}: ${overlay.preset}`
+            ? `${t('properties.transition.title')}: ${assetName || '未命名'}`
             : t('properties.transition.title'),
           typeLabel: t('properties.transition.title'),
         }

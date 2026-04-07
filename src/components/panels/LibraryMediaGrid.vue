@@ -26,7 +26,7 @@
           class="content-item"
           :class="{
             'directory-item': item.type === 'directory',
-            'media-item': item.type === 'media',
+            'media-item': item.type === 'asset',
             selected: isItemSelected(item),
             'is-cut': isItemCut(item),
             'is-copy': isItemCopy(item),
@@ -59,10 +59,22 @@
               </div>
             </template>
 
-            <!-- 媒体项目 -->
+            <!-- 资产项目 -->
             <template v-else>
-              <div class="item-icon media-icon">
-                <MediaItemThumbnail :media-id="item.id" />
+              <div
+                class="item-icon media-icon"
+                :class="{ 'template-icon': isEffectTemplateAssetItem(item.id) }"
+              >
+                <template v-if="isEffectTemplateAssetItem(item.id)">
+                  <div class="effect-template-thumbnail">
+                    <component :is="IconComponents.SPARKLING" size="28px" />
+                    <span class="effect-template-tag">转场</span>
+                    <span class="effect-template-summary">{{ getEffectTemplateSummary(item.id) }}</span>
+                  </div>
+                </template>
+                <template v-else>
+                  <MediaItemThumbnail :media-id="item.id" />
+                </template>
               </div>
             </template>
           </div>
@@ -72,7 +84,7 @@
             {{
               item.type === 'directory'
                 ? getDirectory(item.id)?.name || ''
-                : getMediaItem(item.id)?.name || ''
+                : getAsset(item.id)?.name || ''
             }}
           </div>
         </div>
@@ -86,7 +98,7 @@
           class="list-item"
           :class="{
             'directory-item': item.type === 'directory',
-            'media-item': item.type === 'media',
+            'media-item': item.type === 'asset',
             selected: isItemSelected(item),
             'is-cut': isItemCut(item),
             'is-copy': isItemCopy(item),
@@ -114,7 +126,14 @@
               <FolderIcon :folder-id="item.id" size="20px" :is-list-view="true" />
             </template>
             <template v-else>
-              <MediaItemThumbnail :media-id="item.id" />
+              <template v-if="isEffectTemplateAssetItem(item.id)">
+                <div class="effect-template-list-icon">
+                  <component :is="IconComponents.SPARKLING" size="18px" />
+                </div>
+              </template>
+              <template v-else>
+                <MediaItemThumbnail :media-id="item.id" />
+              </template>
             </template>
           </div>
 
@@ -123,13 +142,13 @@
             {{
               item.type === 'directory'
                 ? getDirectory(item.id)?.name || ''
-                : getMediaItem(item.id)?.name || ''
+                : getAsset(item.id)?.name || ''
             }}
           </div>
 
           <!-- 类型列 -->
           <div class="list-item-type">
-            {{ item.type === 'directory' ? t('media.folder') : getMediaTypeLabel(item.id) }}
+            {{ item.type === 'directory' ? t('media.folder') : getAssetTypeLabel(item.id) }}
           </div>
         </div>
       </div>
@@ -221,17 +240,17 @@ import { ref, computed } from 'vue'
 import { NScrollbar } from 'naive-ui'
 import { useAppI18n } from '@/core/composables/useI18n'
 import { useUnifiedStore } from '@/core/unifiedStore'
-import type { DisplayItem, VirtualDirectory, ClipboardItem, ViewMode, SortBy, SortOrder } from '@/core/directory/types'
+import type { DisplayItem, VirtualDirectory, ClipboardItem, SortBy } from '@/core/directory/types'
 import {
   DragSourceType,
   DropTargetType,
-  type MediaItemDragParams,
+  type AssetDragParams,
   type FolderDragParams,
   type DropTargetInfo,
 } from '@/core/types/drag'
 import type { UnifiedMediaItemData } from '@/core'
 import { DataSourceFactory } from '@/core'
-import { generateMediaId, extractExtension } from '@/core/utils/idGenerator'
+import { generateAssetId, generateMediaId, extractExtension } from '@/core/utils/idGenerator'
 import {
   AIGenerationSourceFactory,
   TaskStatus,
@@ -261,6 +280,13 @@ import {
   shouldShowRechargePrompt,
   isRetryableError,
 } from '@/utils/errorMessageBuilder'
+import type { UnifiedLibraryAssetData } from '@/core/asset/types'
+import {
+  createTransitionTemplateAssetData,
+  isEffectTemplateAsset,
+  isMediaAsset,
+} from '@/core/asset/types'
+import COPY_VERTEX_SHADER from '@/core/webgl2/shaders/copy.vert?raw'
 
 const unifiedStore = useUnifiedStore()
 const { t } = useAppI18n()
@@ -378,11 +404,11 @@ function sortItems(items: DisplayItem[]): DisplayItem[] {
         const nameA =
           a.type === 'directory'
             ? (getDirectory(a.id)?.name || '').toLowerCase()
-            : (getMediaItem(a.id)?.name || '').toLowerCase()
+            : (getAsset(a.id)?.name || '').toLowerCase()
         const nameB =
           b.type === 'directory'
             ? (getDirectory(b.id)?.name || '').toLowerCase()
-            : (getMediaItem(b.id)?.name || '').toLowerCase()
+            : (getAsset(b.id)?.name || '').toLowerCase()
         comparison = nameA.localeCompare(nameB, 'zh-CN')
         break
       }
@@ -391,11 +417,11 @@ function sortItems(items: DisplayItem[]): DisplayItem[] {
         const dateA =
           a.type === 'directory'
             ? getDirectory(a.id)?.createdAt || ''
-            : getMediaItem(a.id)?.createdAt || ''
+            : getAsset(a.id)?.createdAt || ''
         const dateB =
           b.type === 'directory'
             ? getDirectory(b.id)?.createdAt || ''
-            : getMediaItem(b.id)?.createdAt || ''
+            : getAsset(b.id)?.createdAt || ''
         comparison = dateA.localeCompare(dateB)
         break
       }
@@ -406,15 +432,14 @@ function sortItems(items: DisplayItem[]): DisplayItem[] {
           const nameA = (getDirectory(a.id)?.name || '').toLowerCase()
           const nameB = (getDirectory(b.id)?.name || '').toLowerCase()
           comparison = nameA.localeCompare(nameB, 'zh-CN')
-        } else if (a.type === 'media' && b.type === 'media') {
-          // 两个都是媒体，按媒体类型排序
-          const typeA = getMediaItem(a.id)?.mediaType || 'unknown'
-          const typeB = getMediaItem(b.id)?.mediaType || 'unknown'
+        } else if (a.type === 'asset' && b.type === 'asset') {
+          const typeA = getAssetSortKey(a.id)
+          const typeB = getAssetSortKey(b.id)
           comparison = typeA.localeCompare(typeB)
           // 如果类型相同，按名称排序
           if (comparison === 0) {
-            const nameA = (getMediaItem(a.id)?.name || '').toLowerCase()
-            const nameB = (getMediaItem(b.id)?.name || '').toLowerCase()
+            const nameA = (getAsset(a.id)?.name || '').toLowerCase()
+            const nameB = (getAsset(b.id)?.name || '').toLowerCase()
             comparison = nameA.localeCompare(nameB, 'zh-CN')
           }
         }
@@ -476,6 +501,14 @@ const currentMenuItems = computed((): MenuItem[] => {
             icon: IconComponents.UPLOAD,
             onClick: () => {
               triggerFileInput()
+              showContextMenu.value = false
+            },
+          },
+          {
+            label: '转场（测试）',
+            icon: IconComponents.SPARKLING,
+            onClick: () => {
+              void createTransitionTemplateAsset()
               showContextMenu.value = false
             },
           },
@@ -653,7 +686,7 @@ const currentMenuItems = computed((): MenuItem[] => {
       },
     ]
   } else {
-    // 媒体文件菜单
+    // 资产菜单
     return [
       {
         label: t('media.cut'),
@@ -674,27 +707,29 @@ const currentMenuItems = computed((): MenuItem[] => {
           showContextMenu.value = false
         },
       },
-      { type: 'separator' },
-      // 🆕 新增：取消选项
-      {
-        label: t('media.cancel'),
-        icon: IconComponents.CLOSE,
-        onClick: handleCancelTask,
-        disabled: !canCancel(target),
-      },
-      // 🆕 新增：重试选项
-      {
-        label: t('media.retry'),
-        icon: IconComponents.REFRESH,
-        onClick: handleRetry,
-        disabled: !canRetry(target),
-      },
+      ...(isMediaAsset(getAsset(target.id))
+        ? ([
+            { type: 'separator' as const },
+            {
+              label: t('media.cancel'),
+              icon: IconComponents.CLOSE,
+              onClick: handleCancelTask,
+              disabled: !canCancel(target),
+            },
+            {
+              label: t('media.retry'),
+              icon: IconComponents.REFRESH,
+              onClick: handleRetry,
+              disabled: !canRetry(target),
+            },
+          ] satisfies MenuItem[])
+        : []),
       { type: 'separator' },
       {
         label: t('media.delete'),
         icon: IconComponents.DELETE,
         onClick: () => {
-          removeMediaItem(target.id)
+          removeAssetItem(target.id)
           showContextMenu.value = false
         },
       },
@@ -709,9 +744,12 @@ function getDirectory(id: string): VirtualDirectory | undefined {
   return unifiedStore.getDirectory(id)
 }
 
-// 获取媒体项
 function getMediaItem(id: string): UnifiedMediaItemData | undefined {
   return unifiedStore.getMediaItem(id)
+}
+
+function getAsset(id: string): UnifiedLibraryAssetData | undefined {
+  return unifiedStore.getAsset(id)
 }
 
 // 获取图标大小（返回像素值）
@@ -728,12 +766,15 @@ function getIconSize() {
   }
 }
 
-// 获取媒体类型标签
-function getMediaTypeLabel(mediaId: string): string {
-  const mediaItem = getMediaItem(mediaId)
-  if (!mediaItem) return t('media.unknown')
+function getAssetTypeLabel(assetId: string): string {
+  const asset = getAsset(assetId)
+  if (!asset) return t('media.unknown')
 
-  switch (mediaItem.mediaType) {
+  if (isEffectTemplateAsset(asset)) {
+    return asset.effectType === 'transition' ? '转场' : asset.effectType
+  }
+
+  switch (asset.mediaType) {
     case 'video':
       return t('media.video')
     case 'audio':
@@ -745,10 +786,31 @@ function getMediaTypeLabel(mediaId: string): string {
   }
 }
 
+function getAssetSortKey(assetId: string): string {
+  const asset = getAsset(assetId)
+  if (!asset) return 'unknown'
+  return isEffectTemplateAsset(asset) ? `effect-${asset.effectType}` : `media-${asset.mediaType}`
+}
+
+function isEffectTemplateAssetItem(assetId: string): boolean {
+  return isEffectTemplateAsset(getAsset(assetId))
+}
+
+function getEffectTemplateSummary(assetId: string): string {
+  const asset = getAsset(assetId)
+  if (!asset || !isEffectTemplateAsset(asset) || asset.effectType !== 'transition') {
+    return ''
+  }
+
+  const payload = asset.templatePayload as { durationFrames?: number }
+  return `转场 / ${payload.durationFrames || 0}f`
+}
+
 // 检查媒体项是否可拖拽
 function isMediaItemDraggable(mediaId: string): boolean {
-  const mediaItem = getMediaItem(mediaId)
+  const mediaItem = getAsset(mediaId)
   if (!mediaItem) return false
+  if (isEffectTemplateAsset(mediaItem)) return true
   return mediaItem.mediaType !== 'unknown' && (mediaItem.duration || 0) > 0
 }
 
@@ -782,16 +844,19 @@ function onItemDoubleClick(item: DisplayItem): void {
       unifiedStore.navigateToDir(item.id)  // 普通文件夹导航
     }
   } else {
-    // 检查媒体是否已经ready
-    const mediaItem = getMediaItem(item.id)
-    if (!mediaItem) {
+    const asset = getAsset(item.id)
+    if (!asset) {
       unifiedStore.messageError(t('media.mediaNotFound'))
       return
     }
 
+    if (isEffectTemplateAsset(asset)) {
+      return
+    }
+
     // 只有ready状态的媒体才能预览
-    if (mediaItem.mediaStatus !== 'ready') {
-      unifiedStore.messageWarning(t('media.previewNotReady', { name: mediaItem.name }))
+    if (asset.mediaStatus !== 'ready') {
+      unifiedStore.messageWarning(t('media.previewNotReady', { name: asset.name }))
       return
     }
 
@@ -853,7 +918,7 @@ function handleContainerClick(event: MouseEvent): void {
 // 拖拽开始（使用新的统一拖拽架构）
 function handleItemDragStart(event: DragEvent, item: DisplayItem): void {
   // 根据项目类型选择不同的处理器
-  if (item.type === 'media') {
+  if (item.type === 'asset') {
     handleMediaItemDrag(event, item)
   } else if (item.type === 'directory') {
     handleFolderDrag(event, item)
@@ -862,23 +927,19 @@ function handleItemDragStart(event: DragEvent, item: DisplayItem): void {
 
 // 处理媒体项拖拽
 function handleMediaItemDrag(event: DragEvent, item: DisplayItem): void {
-  const mediaItem = getMediaItem(item.id)
-  if (!mediaItem) return
+  const asset = getAsset(item.id)
+  if (!asset) return
 
   // 获取源处理器
-  const sourceHandler = unifiedStore.getSourceHandler(DragSourceType.MEDIA_ITEM)
+  const sourceHandler = unifiedStore.getSourceHandler(DragSourceType.ASSET)
   if (!sourceHandler) {
     console.warn('⚠️ [LibraryMediaGrid] 未找到 MediaItem 源处理器')
     return
   }
 
   // 准备拖拽参数
-  const params: MediaItemDragParams = {
-    mediaItemId: item.id,
-    // TODO: 支持多选拖拽
-    // selectedMediaItemIds: selectedItems.value
-    //   .filter(item => item.type === 'media')
-    //   .map(item => item.id)
+  const params: AssetDragParams = {
+    assetId: item.id,
   }
 
   try {
@@ -1060,8 +1121,8 @@ function startRename(item: DisplayItem): void {
     const dir = getDirectory(item.id)
     renameCurrentName.value = dir?.name || ''
   } else {
-    const media = getMediaItem(item.id)
-    renameCurrentName.value = media?.name || ''
+    const asset = getAsset(item.id)
+    renameCurrentName.value = asset?.name || ''
   }
 
   showRenameModal.value = true
@@ -1092,8 +1153,7 @@ async function handleRenameConfirm(newName: string): Promise<void> {
         unifiedStore.messageError(t('media.folderRenameFailed'))
       }
     } else {
-      // 重命名媒体项
-      unifiedStore.updateMediaItemName(target.id, newName)
+      unifiedStore.updateAssetName(target.id, newName)
       unifiedStore.messageSuccess(t('media.mediaRenameSuccess'))
     }
 
@@ -1253,6 +1313,45 @@ async function addMediaItem(file: File): Promise<void> {
   }
 }
 
+async function createTransitionTemplateAsset(): Promise<void> {
+  if (!currentDir.value) {
+    unifiedStore.messageError(t('media.selectDirectoryFirst'))
+    return
+  }
+
+  const timestamp = Date.now()
+  const assetId = generateAssetId('effect')
+  const assetName = `转场_叠化_${timestamp}`
+  const testTransitionCrossfadeFragmentShader = `#version 300 es
+precision mediump float;
+
+in vec2 v_uv;
+out vec4 outColor;
+
+uniform sampler2D u_fromTexture;
+uniform sampler2D u_toTexture;
+uniform float u_progress;
+
+void main() {
+  vec4 colorA = texture(u_fromTexture, v_uv);
+  vec4 colorB = texture(u_toTexture, v_uv);
+  float progress = clamp(u_progress, 0.0, 1.0);
+  outColor = mix(colorA, colorB, progress);
+}
+`
+  const asset = createTransitionTemplateAssetData(assetId, assetName, {
+    durationFrames: 12,
+    shader: {
+      vertexShader: COPY_VERTEX_SHADER,
+      fragmentShader: testTransitionCrossfadeFragmentShader,
+    },
+  })
+
+  unifiedStore.addAsset(asset)
+  unifiedStore.addAssetToDirectory(asset.id, currentDir.value.id)
+  unifiedStore.messageSuccess('转场模板已创建')
+}
+
 // 提交AI生成任务到后端
 async function submitAIGenerationTask(
   requestParams: MediaGenerationRequest,
@@ -1287,7 +1386,7 @@ async function submitAIGenerationTask(
  * 只有 pending 状态的任务才可以取消
  */
 function canCancel(item: DisplayItem): boolean {
-  if (item.type !== 'media') return false
+  if (item.type !== 'asset') return false
 
   const mediaItem = getMediaItem(item.id)
   if (!mediaItem) return false
@@ -1300,7 +1399,7 @@ function canCancel(item: DisplayItem): boolean {
  * 处理取消操作
  */
 async function handleCancelTask(): Promise<void> {
-  if (!contextMenuTarget.value || contextMenuTarget.value.type !== 'media') return
+  if (!contextMenuTarget.value || contextMenuTarget.value.type !== 'asset') return
 
   const mediaItem = getMediaItem(contextMenuTarget.value.id)
   if (!mediaItem) return
@@ -1333,7 +1432,7 @@ async function handleCancelTask(): Promise<void> {
  * 判断素材是否可以重试
  */
 function canRetry(item: DisplayItem): boolean {
-  if (item.type !== 'media') return false
+  if (item.type !== 'asset') return false
 
   const mediaItem = getMediaItem(item.id)
   if (!mediaItem) return false
@@ -1351,7 +1450,7 @@ function canRetry(item: DisplayItem): boolean {
  * 处理重试操作
  */
 async function handleRetry(): Promise<void> {
-  if (!contextMenuTarget.value || contextMenuTarget.value.type !== 'media') return
+  if (!contextMenuTarget.value || contextMenuTarget.value.type !== 'asset') return
 
   const mediaItem = getMediaItem(contextMenuTarget.value.id)
   if (!mediaItem) return
@@ -1413,13 +1512,13 @@ async function retryAIGeneration(mediaItem: UnifiedMediaItemData): Promise<void>
   unifiedStore.messageSuccess(t('media.retryStarted', { name: mediaItem.name }))
 }
 
-// 移除媒体项（考虑引用计数）
-function removeMediaItem(mediaId: string): void {
+// 移除资产（考虑引用计数）
+function removeAssetItem(mediaId: string): void {
   if (!currentDir.value) return
 
-  const mediaItem = getMediaItem(mediaId)
+  const mediaItem = getAsset(mediaId)
 
-  // 如果媒体项不存在，直接移除无效引用
+  // 如果资产不存在，直接移除无效引用
   if (!mediaItem) {
     unifiedStore.dialogWarning({
       title: t('media.deleteMedia'),
@@ -1429,7 +1528,7 @@ function removeMediaItem(mediaId: string): void {
       draggable: true,
       onPositiveClick: async () => {
         try {
-          const result = await unifiedStore.deleteMediaItem(mediaId, currentDir.value!.id)
+          const result = await unifiedStore.deleteAssetItem(mediaId, currentDir.value!.id)
           if (result.success) {
             unifiedStore.messageSuccess(t('media.invalidMediaRemoved'))
           } else {
@@ -1467,8 +1566,7 @@ function removeMediaItem(mediaId: string): void {
     draggable: true,
     onPositiveClick: async () => {
       try {
-        // 使用统一的 deleteMediaItem 方法
-        const result = await unifiedStore.deleteMediaItem(mediaId, currentDir.value!.id)
+        const result = await unifiedStore.deleteAssetItem(mediaId, currentDir.value!.id)
 
         if (result.success) {
           if (result.deletedFile) {
@@ -2009,5 +2107,42 @@ async function handleBatchDelete(): Promise<void> {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.template-icon {
+  background: linear-gradient(135deg, rgba(255, 173, 66, 0.18), rgba(255, 110, 64, 0.08));
+  border: 1px solid rgba(255, 173, 66, 0.22);
+}
+
+.effect-template-thumbnail {
+  width: 100%;
+  height: 100%;
+  min-height: 72px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  color: #ffb36b;
+}
+
+.effect-template-tag {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.effect-template-summary {
+  font-size: 11px;
+  color: var(--color-text-secondary);
+}
+
+.effect-template-list-icon {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #ffb36b;
 }
 </style>

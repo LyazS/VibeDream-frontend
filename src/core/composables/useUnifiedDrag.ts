@@ -3,8 +3,10 @@
  * 负责协调源处理器和目标处理器
  */
 
-import type {
+import {
   DragSourceType,
+} from '@/core/types/drag'
+import type {
   DropTargetType,
   DragSourceHandler,
   DropTargetHandler,
@@ -207,7 +209,9 @@ export function useUnifiedDrag(
   console.log(`🎯 [UnifiedDrag] 开始自动注册所有处理器`)
 
   // 注册源处理器
-  registerSourceHandler(new MediaItemSourceHandler(mediaModule, directoryModule))
+  const assetSourceHandler = new MediaItemSourceHandler(mediaModule, directoryModule)
+  registerSourceHandler(assetSourceHandler)
+  sourceHandlers.set(DragSourceType.MEDIA_ITEM, assetSourceHandler)
   registerSourceHandler(new FolderSourceHandler(directoryModule))
   registerSourceHandler(new TimelineItemSourceHandler(timelineModule, selectionModule))
 

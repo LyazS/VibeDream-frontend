@@ -9,7 +9,8 @@ import type { UnifiedMediaModule } from './UnifiedMediaModule'
 import type { UnifiedConfigModule } from './UnifiedConfigModule'
 import type { UnifiedDirectoryModule } from './UnifiedDirectoryModule'
 import { globalMetaFileManager } from '@/core/managers/media/globalMetaFileManager'
-import type { UnifiedMediaItemData } from '@/core/mediaitem/types'
+import type { UnifiedLibraryAssetData } from '@/core/asset/types'
+import { isMediaAsset } from '@/core/asset/types'
 
 /**
  * 自动保存配置
@@ -123,7 +124,7 @@ export function createUnifiedAutoSaveModule(
    * 为单个 mediaItem 设置 watch
    * @param mediaItem 媒体项目
    */
-  function setupMediaItemWatcher(mediaItem: UnifiedMediaItemData): void {
+  function setupMediaItemWatcher(mediaItem: UnifiedLibraryAssetData): void {
     // 如果已经存在 watcher，先清理
     const existingUnwatch = mediaItemWatchers.get(mediaItem.id)
     if (existingUnwatch) {
@@ -152,18 +153,22 @@ export function createUnifiedAutoSaveModule(
     const unwatch = watch(
       () => ({
         name: mediaItem.name,
-        metadata: mediaItem.metadata,
+        metadata: isMediaAsset(mediaItem) ? mediaItem.metadata : undefined,
+        templatePayload: !isMediaAsset(mediaItem) ? mediaItem.templatePayload : undefined,
       }),
       (newValues, oldValues) => {
         // 检查是否有变化
         const nameChanged = newValues.name !== oldValues.name
         const metadataChanged =
           JSON.stringify(newValues.metadata) !== JSON.stringify(oldValues.metadata)
+        const templatePayloadChanged =
+          JSON.stringify(newValues.templatePayload) !== JSON.stringify(oldValues.templatePayload)
 
-        if (nameChanged || metadataChanged) {
+        if (nameChanged || metadataChanged || templatePayloadChanged) {
           console.log(`📝 [AutoSave] 检测到 mediaItem 变化: ${mediaItem.id}`, {
             nameChanged,
             metadataChanged,
+            templatePayloadChanged,
             oldName: oldValues.name,
             newName: newValues.name,
           })

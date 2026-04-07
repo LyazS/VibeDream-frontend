@@ -5,8 +5,8 @@
 
       <div class="placeholder-card">
         <div class="placeholder-row">
-          <span>{{ t('properties.transition.preset') }}</span>
-          <strong>{{ overlay.preset }}</strong>
+          <span>{{ t('properties.transitionSelection.effectAsset') }}</span>
+          <strong>{{ templateName }}</strong>
         </div>
         <div class="placeholder-row">
           <span>{{ t('properties.transition.status') }}</span>
@@ -45,6 +45,13 @@ const sourceClipName = computed(() => {
   }
 
   return unifiedStore.getMediaItem(sourceItem.mediaItemId)?.name || '-'
+})
+
+const templateName = computed(() => {
+  const sourceItem = unifiedStore.getTimelineItem(props.overlay.sourceItemId)
+  const assetId = sourceItem?.transitionOut?.templateAssetId
+  if (!assetId) return '-'
+  return unifiedStore.getAsset(assetId)?.name || assetId
 })
 
 const bindingStateText = computed(() => {

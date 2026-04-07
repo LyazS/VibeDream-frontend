@@ -11,7 +11,6 @@ export interface TimelineTransitionOverlayViewModel {
   selectionId: TimelineSelectionId
   sourceItemId: string
   trackId: string
-  preset: string
   bindingState: ClipTransitionBindingState
   seamFrame: number
   displayStartFrame: number
@@ -21,7 +20,7 @@ export interface TimelineTransitionOverlayViewModel {
 export function createTimelineTransitionOverlay(
   item: UnifiedTimelineItemData<MediaType>,
 ): TimelineTransitionOverlayViewModel | null {
-  if (!supportsClipTransitionOut(item) || !item.transitionOut?.enabled) {
+  if (!supportsClipTransitionOut(item) || !item.transitionOut) {
     return null
   }
 
@@ -34,7 +33,6 @@ export function createTimelineTransitionOverlay(
     selectionId: buildTransitionSelectionId(item.id),
     sourceItemId: item.id,
     trackId: item.trackId,
-    preset: transitionOut.preset,
     bindingState: item.runtime.transition?.bindingState ?? 'unbound',
     seamFrame,
     displayStartFrame: Math.max(0, seamFrame - leftHalfFrames),

@@ -73,6 +73,19 @@ export function generateMediaId(extension: string): string {
 }
 
 /**
+ * 生成通用资产 ID
+ */
+export function generateAssetId(prefix: 'asset' | 'effect', extension?: string): string {
+  const nanoId = nanoid(12)
+  if (!extension) {
+    return `${prefix}_${nanoId}`
+  }
+
+  const ext = extension.startsWith('.') ? extension : `.${extension}`
+  return `${prefix}_${nanoId}${ext}`
+}
+
+/**
  * 从文件名提取扩展名
  * @param fileName 文件名
  * @returns 扩展名（包含点，如 ".mp4"）

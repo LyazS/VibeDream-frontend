@@ -28,7 +28,7 @@ export interface CharacterInfo {
 
 /**
  * 虚拟目录数据结构
- * 包含子文件夹和媒体项的完整信息
+ * 包含子文件夹和资产的完整信息
  */
 export interface VirtualDirectory {
   readonly type: DirectoryType // 目录类型，用于区分不同类型的特殊文件夹（默认：'base'）
@@ -40,7 +40,7 @@ export interface VirtualDirectory {
 
   // 内容引用
   childDirIds: string[] // 子目录ID列表
-  mediaItemIds: string[] // 媒体项ID列表
+  assetIds: string[] // 资产ID列表
 }
 
 /**
@@ -63,12 +63,12 @@ export interface DisplayTab {
 
 /**
  * 右侧内容区显示项
- * 文件夹和媒体项共用此结构
+ * 文件夹和资产共用此结构
  * 只保存 ID，通过索引获取完整数据
  */
 export interface DisplayItem {
-  id: string // 唯一标识（目录ID或媒体ID）
-  type: 'directory' | 'media' // 项目类型
+  id: string // 唯一标识（目录ID或资产ID）
+  type: 'directory' | 'asset' // 项目类型
 }
 
 /**

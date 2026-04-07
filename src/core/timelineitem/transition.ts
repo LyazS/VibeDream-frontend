@@ -1,15 +1,9 @@
 import type { MediaType } from '@/core/mediaitem'
 import type { UnifiedTimelineItemData } from '@/core/timelineitem/type'
-
-export const DEFAULT_CLIP_TRANSITION_DURATION_FRAMES = 12
-
-export type ClipTransitionOutPreset = 'crossfade'
-
-export interface ClipTransitionOutConfig {
-  enabled: boolean
-  preset: ClipTransitionOutPreset
-  durationFrames: number
-}
+import {
+  DEFAULT_CLIP_TRANSITION_DURATION_FRAMES,
+  type ClipTransitionOutConfig,
+} from '@/core/transition/types'
 
 export type ClipTransitionBindingState =
   | 'unbound'
@@ -54,6 +48,15 @@ export interface ClipTransitionPlaybackState {
   activeRangeEnd: number
 }
 
+export interface TransitionTemplateDropCandidate {
+  canDrop: boolean
+  seamFrame: number | null
+  sourceItemId: string | null
+  matchCount: number
+  sourceItemStartFrame: number | null
+  sourceItemEndFrame: number | null
+}
+
 export type ClipTransitionVisualTimelineItem =
   | UnifiedTimelineItemData<'video'>
   | UnifiedTimelineItemData<'image'>
@@ -68,9 +71,10 @@ function clampDurationFrames(durationFrames: number): number {
 
 export function createDefaultClipTransitionOutConfig(): ClipTransitionOutConfig {
   return {
-    enabled: false,
-    preset: 'crossfade',
     durationFrames: DEFAULT_CLIP_TRANSITION_DURATION_FRAMES,
+    shader: {
+      fragmentShader: '',
+    },
   }
 }
 
@@ -79,10 +83,30 @@ export function normalizeClipTransitionOutConfig(
 ): ClipTransitionOutConfig {
   const defaults = createDefaultClipTransitionOutConfig()
   return {
-    enabled: config?.enabled ?? defaults.enabled,
-    preset: config?.preset ?? defaults.preset,
     durationFrames: clampDurationFrames(config?.durationFrames ?? defaults.durationFrames),
+    templateAssetId: config?.templateAssetId,
+    shader: config?.shader ?? defaults.shader,
   }
+}
+
+export function areClipTransitionOutConfigsEqual(
+  a?: ClipTransitionOutConfig,
+  b?: ClipTransitionOutConfig,
+): boolean {
+  if (!a && !b) {
+    return true
+  }
+
+  if (!a || !b) {
+    return false
+  }
+
+  return (
+    a.durationFrames === b.durationFrames &&
+    a.templateAssetId === b.templateAssetId &&
+    a.shader.fragmentShader === b.shader.fragmentShader &&
+    a.shader.vertexShader === b.shader.vertexShader
+  )
 }
 
 export function createEmptyClipTransitionRuntime(): ClipTransitionRuntime {
@@ -113,7 +137,7 @@ export function supportsClipTransitionOut(
 export function hasEnabledClipTransitionOut(
   item: UnifiedTimelineItemData<MediaType>,
 ): item is ClipTransitionVisualTimelineItem & { transitionOut: ClipTransitionOutConfig } {
-  return supportsClipTransitionOut(item) && Boolean(item.transitionOut?.enabled)
+  return supportsClipTransitionOut(item) && Boolean(item.transitionOut)
 }
 
 export function ensureClipTransitionRuntime(
@@ -211,6 +235,59 @@ export function resolveClipTransitionBinding(
   nextRuntime.activeRangeEnd = seamFrame + effectiveRightHalfFrames
 
   return nextRuntime
+}
+
+export function resolveTransitionTemplateDropCandidate(
+  trackItems: UnifiedTimelineItemData<MediaType>[],
+  hoveredFrame: number,
+  thresholdFrames: number,
+): TransitionTemplateDropCandidate {
+  const visualItems = trackItems.filter(supportsClipTransitionOut)
+
+  let bestSeamFrame: number | null = null
+  let bestDistance = Infinity
+
+  for (const item of visualItems) {
+    const seamFrame = item.timeRange.timelineEndTime
+    const distance = Math.abs(seamFrame - hoveredFrame)
+    if (distance <= thresholdFrames && distance < bestDistance) {
+      bestSeamFrame = seamFrame
+      bestDistance = distance
+    }
+  }
+
+  if (bestSeamFrame === null) {
+    return {
+      canDrop: false,
+      seamFrame: null,
+      sourceItemId: null,
+      matchCount: 0,
+      sourceItemStartFrame: null,
+      sourceItemEndFrame: null,
+    }
+  }
+
+  const matchedItems = visualItems.filter((item) => item.timeRange.timelineEndTime === bestSeamFrame)
+
+  if (matchedItems.length !== 1) {
+    return {
+      canDrop: false,
+      seamFrame: bestSeamFrame,
+      sourceItemId: null,
+      matchCount: matchedItems.length,
+      sourceItemStartFrame: null,
+      sourceItemEndFrame: null,
+    }
+  }
+
+  return {
+    canDrop: true,
+    seamFrame: bestSeamFrame,
+    sourceItemId: matchedItems[0].id,
+    matchCount: 1,
+    sourceItemStartFrame: matchedItems[0].timeRange.timelineStartTime,
+    sourceItemEndFrame: matchedItems[0].timeRange.timelineEndTime,
+  }
 }
 
 export function resolveClipTransitionPlaybackState(

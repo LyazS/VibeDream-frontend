@@ -51,6 +51,7 @@ export interface UnifiedMediaItemData {
   readonly id: string
   name: string
   createdAt: string
+  assetKind: 'media'
 
   // ==================== 状态信息 ====================
   mediaStatus: MediaStatus
@@ -195,6 +196,7 @@ export function createUnifiedMediaItemData(
     id,
     name,
     createdAt: new Date().toISOString(),
+    assetKind: 'media' as const,
     mediaStatus: 'pending' as MediaStatus,
     mediaType: 'unknown' as MediaType | 'unknown',
     source,

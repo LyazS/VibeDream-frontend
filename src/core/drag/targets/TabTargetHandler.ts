@@ -24,6 +24,7 @@ export class TabTargetHandler implements DropTargetHandler {
   canAccept(dragData: UnifiedDragData): boolean {
     // 只接受素材项目和文件夹
     return (
+      dragData.sourceType === DragSourceType.ASSET ||
       dragData.sourceType === DragSourceType.MEDIA_ITEM ||
       dragData.sourceType === DragSourceType.FOLDER
     )
@@ -50,6 +51,7 @@ export class TabTargetHandler implements DropTargetHandler {
 
     // 根据拖拽源类型分别处理
     switch (dragData.sourceType) {
+      case DragSourceType.ASSET:
       case DragSourceType.MEDIA_ITEM: {
         const mediaData = dragData as MediaItemDragData
 
@@ -116,11 +118,12 @@ export class TabTargetHandler implements DropTargetHandler {
     try {
       // 根据拖拽源类型执行不同的操作
       switch (dragData.sourceType) {
+        case DragSourceType.ASSET:
         case DragSourceType.MEDIA_ITEM: {
           const mediaData = dragData as MediaItemDragData
 
           await this.directoryModule.dragMoveMediaItems(
-            mediaData.mediaItemIds,
+            mediaData.assetIds,
             mediaData.sourceFolderId || null,
             targetDirId,
           )

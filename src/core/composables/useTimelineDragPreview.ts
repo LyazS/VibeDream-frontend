@@ -5,6 +5,7 @@
 
 import { DragSourceType } from '@/core/types/drag'
 import { getDefaultTrackHeight } from '@/core/track/TrackUtils'
+import type { EffectTemplatePreviewData } from '@/core/effect-template/types'
 
 interface TimelineDragPreviewDeps {
   frameToPixel: (frames: number) => number
@@ -98,6 +99,25 @@ export function useTimelineDragPreview(deps: TimelineDragPreviewDeps) {
     updatePreviewPosition(trackId, startFrame, durationFrames, status)
   }
 
+  function showEffectTemplatePreview(trackId: string, preview: EffectTemplatePreviewData) {
+    if (!previewElement) {
+      previewElement = createPreviewElement()
+      document.body.appendChild(previewElement)
+    }
+
+    previewElement.innerHTML = `
+      <div style="position:absolute;inset:0;background:linear-gradient(90deg,rgba(59,130,246,0.12),rgba(59,130,246,0.42));border-radius:4px;"></div>
+      <div style="position:absolute;top:2px;left:6px;font-size:10px;font-weight:600;color:#dbeafe;text-shadow:none;">${preview.label}</div>
+      <div style="position:absolute;top:-2px;right:-1px;width:2px;height:calc(100% + 4px);background:#93c5fd;box-shadow:0 0 0 1px rgba(15,23,42,0.25);"></div>
+    `
+    previewElement.style.background = 'rgba(30, 64, 175, 0.18)'
+    previewElement.style.border = '1px solid rgba(147, 197, 253, 0.9)'
+    previewElement.style.borderRadius = '4px'
+    previewElement.style.overflow = 'visible'
+
+    updatePreviewPosition(trackId, preview.startFrame, preview.durationFrames, 'compatible')
+  }
+
   /**
    * 更新预览位置
    * 使用 transform 而非 left/top 以获得更好的性能
@@ -176,7 +196,12 @@ export function useTimelineDragPreview(deps: TimelineDragPreviewDeps) {
   /**
    * 处理拖拽预览（支持素材库和时间轴项目拖拽）
    */
-  function handleDragPreview(event: DragEvent, targetTrackId: string, dropTime: number) {
+  function handleDragPreview(
+    event: DragEvent,
+    targetTrackId: string,
+    dropTime: number,
+    effectPreview?: EffectTemplatePreviewData | null,
+  ) {
     const dragData = deps.getCurrentDragData(event)
 
     if (!dragData) {
@@ -184,8 +209,8 @@ export function useTimelineDragPreview(deps: TimelineDragPreviewDeps) {
       return
     }
 
-    if (dragData.sourceType === DragSourceType.MEDIA_ITEM) {
-      handleMediaItemPreview(dragData, targetTrackId, dropTime)
+    if (dragData.sourceType === DragSourceType.ASSET || dragData.sourceType === DragSourceType.MEDIA_ITEM) {
+      handleMediaItemPreview(dragData, targetTrackId, dropTime, effectPreview)
     } else if (dragData.sourceType === DragSourceType.TIMELINE_ITEM) {
       handleTimelineItemPreview(dragData, targetTrackId, dropTime)
     } else {
@@ -215,8 +240,22 @@ export function useTimelineDragPreview(deps: TimelineDragPreviewDeps) {
   /**
    * 处理素材拖拽预览
    */
-  function handleMediaItemPreview(dragData: any, targetTrackId: string, dropTime: number) {
+  function handleMediaItemPreview(
+    dragData: any,
+    targetTrackId: string,
+    dropTime: number,
+    effectPreview?: EffectTemplatePreviewData | null,
+  ) {
     try {
+      if (dragData.assetKind === 'effect-template') {
+        if (effectPreview) {
+          showEffectTemplatePreview(targetTrackId, effectPreview)
+        } else {
+          hidePreview()
+        }
+        return
+      }
+
       const mediaItem = deps.getMediaItem(dragData.mediaItemId)
       if (!mediaItem) {
         hidePreview()

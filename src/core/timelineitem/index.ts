@@ -15,14 +15,13 @@ export type {
   AudioMediaConfig,
 } from './type'
 export type {
-  ClipTransitionOutConfig,
   ClipTransitionRuntime,
   ClipTransitionBindingState,
   ClipTransitionPlaybackState,
   ClipTransitionVisualTimelineItem,
 } from './transition'
+export type { ClipTransitionOutConfig } from '@/core/transition/types'
 export {
-  DEFAULT_CLIP_TRANSITION_DURATION_FRAMES,
   createDefaultClipTransitionOutConfig,
   normalizeClipTransitionOutConfig,
   supportsClipTransitionOut,
@@ -36,6 +35,7 @@ export {
   resolveClipTransitionPlaybackState,
   doClipTransitionWindowsOverlap,
 } from './transition'
+export { DEFAULT_CLIP_TRANSITION_DURATION_FRAMES } from '@/core/transition/types'
 
 // 从 texttype.ts 导出文本相关类型
 export type { TextStyleConfig } from './texttype'

@@ -7,6 +7,7 @@ import type { UnifiedTimelineModule } from './UnifiedTimelineModule'
 import type { UnifiedDirectoryModule } from './UnifiedDirectoryModule'
 import type { UnifiedMediaModule } from './UnifiedMediaModule'
 import type { DisplayItem } from '@/core/directory/types'
+import { isEffectTemplateAsset } from '@/core/asset/types'
 import {
   buildClipSelectionId,
   buildTransitionSelectionId,
@@ -184,9 +185,9 @@ export function createUnifiedSelectionModule(registry: ModuleRegistry) {
         const nameA = (dirA?.name || '').toLowerCase()
         const nameB = (dirB?.name || '').toLowerCase()
         comparison = nameA.localeCompare(nameB, 'zh-CN')
-      } else if (a.type === 'media' && b.type === 'media') {
-        const mediaA = mediaModule.getMediaItem(a.id)
-        const mediaB = mediaModule.getMediaItem(b.id)
+      } else if (a.type === 'asset' && b.type === 'asset') {
+        const mediaA = mediaModule.getAsset(a.id)
+        const mediaB = mediaModule.getAsset(b.id)
 
         if (!mediaA || !mediaB) return 0
 
@@ -198,7 +199,15 @@ export function createUnifiedSelectionModule(registry: ModuleRegistry) {
             comparison = (mediaA.createdAt || '').localeCompare(mediaB.createdAt || '')
             break
           case 'type':
-            comparison = mediaA.mediaType.localeCompare(mediaB.mediaType)
+            comparison = (
+              isEffectTemplateAsset(mediaA)
+                ? `effect-${mediaA.effectType}`
+                : `media-${mediaA.mediaType}`
+            ).localeCompare(
+              isEffectTemplateAsset(mediaB)
+                ? `effect-${mediaB.effectType}`
+                : `media-${mediaB.mediaType}`,
+            )
             if (comparison === 0) {
               comparison = mediaA.name.localeCompare(mediaB.name, 'zh-CN')
             }
@@ -313,7 +322,6 @@ export function createUnifiedSelectionModule(registry: ModuleRegistry) {
         ? {
             sourceItemId: selectedTransition.sourceItemId,
             trackId: selectedTransition.trackId,
-            preset: selectedTransition.preset,
           }
         : null,
     }

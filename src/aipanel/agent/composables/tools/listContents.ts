@@ -15,7 +15,7 @@ interface VirtualEntry {
   /** 名称 */
   name: string
   /** 类型 */
-  type: 'directory' | 'media'
+  type: 'directory' | 'asset'
 }
 
 /**
@@ -112,7 +112,7 @@ function getDirectoryEntries(dirId: string): VirtualEntry[] {
   try {
     const store = useUnifiedStore()
     const directoriesMap = store.directories || new Map()
-    const mediaItemsArray = store.mediaItems || []
+    const mediaItemsArray = store.getAllAssets ? store.getAllAssets() : store.mediaItems || []
     const mediaItemsMap = new Map(mediaItemsArray.map((item: any) => [item.id, item]))
 
     const dir = directoriesMap.get(dirId)
@@ -134,14 +134,14 @@ function getDirectoryEntries(dirId: string): VirtualEntry[] {
       }
     }
 
-    // 添加媒体项
-    for (const mediaId of dir.mediaItemIds) {
+    // 添加资产项
+    for (const mediaId of dir.assetIds) {
       const media = mediaItemsMap.get(mediaId)
       if (media) {
         entries.push({
           id: mediaId,
           name: media.name,
-          type: 'media'
+          type: 'asset'
         })
       }
     }

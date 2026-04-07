@@ -3,7 +3,6 @@ import type { RenderPassContext } from '@/core/webgl2/renderchain/RenderPassCont
 import type { ProgramManager } from '@/core/webgl2/runtime/ProgramManager'
 import type { RenderTargetPool } from '@/core/webgl2/runtime/RenderTargetPool'
 import COPY_VERTEX_SHADER from '@/core/webgl2/shaders/copy.vert?raw'
-import TRANSITION_CROSSFADE_FRAGMENT_SHADER from '@/core/webgl2/shaders/transition-crossfade.frag?raw'
 
 export class CrossfadePass implements RenderPass {
   readonly id: string
@@ -17,9 +16,11 @@ export class CrossfadePass implements RenderPass {
     private readonly getFromTextureId: () => string | null,
     private readonly getToTextureId: () => string | null,
     private readonly getProgress: () => number,
+    fragmentShaderSource: string,
+    vertexShaderSource: string = COPY_VERTEX_SHADER,
   ) {
     this.id = id
-    this.program = programs.createProgram(COPY_VERTEX_SHADER, TRANSITION_CROSSFADE_FRAGMENT_SHADER)
+    this.program = programs.createProgram(vertexShaderSource, fragmentShaderSource)
   }
 
   render(ctx: RenderPassContext): void {

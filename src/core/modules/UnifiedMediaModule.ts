@@ -16,6 +16,14 @@ import type { UnifiedTimelineModule } from '@/core/modules/UnifiedTimelineModule
 import type { UnifiedAutoSaveModule } from '@/core/modules/UnifiedAutoSaveModule'
 import { getDataSourceRegistry } from '@/core/datasource/registry'
 import { globalMetaFileManager } from '@/core/managers/media/globalMetaFileManager'
+import type {
+  EffectTemplateAssetData,
+  UnifiedLibraryAssetData,
+} from '@/core/asset/types'
+import {
+  isEffectTemplateAsset,
+  isMediaAsset,
+} from '@/core/asset/types'
 
 // ==================== 统一媒体项目调试工具 ====================
 
@@ -77,6 +85,7 @@ export function createUnifiedMediaModule(registry: ModuleRegistry) {
 
   // 统一媒体项目列表
   const mediaItems = ref<UnifiedMediaItemData[]>([])
+  const effectTemplateAssets = ref<EffectTemplateAssetData[]>([])
 
   // ==================== 媒体项目管理方法 ====================
 
@@ -98,6 +107,18 @@ export function createUnifiedMediaModule(registry: ModuleRegistry) {
       },
       getAllMediaItems(),
     )
+  }
+
+  function addAsset(asset: UnifiedLibraryAssetData) {
+    if (isMediaAsset(asset)) {
+      addMediaItem(asset)
+      return
+    }
+
+    effectTemplateAssets.value.push(asset)
+    const autoSaveModule = registry.get<UnifiedAutoSaveModule>(MODULE_NAMES.AUTOSAVE)
+    autoSaveModule.setupMediaItemWatcher(asset)
+    void globalMetaFileManager.saveMetaFile(asset)
   }
 
   /**
@@ -162,6 +183,26 @@ export function createUnifiedMediaModule(registry: ModuleRegistry) {
     }
   }
 
+  async function removeAsset(assetId: string) {
+    const mediaItem = getMediaItem(assetId)
+    if (mediaItem) {
+      await removeMediaItem(assetId)
+      return
+    }
+
+    const index = effectTemplateAssets.value.findIndex((item) => item.id === assetId)
+    if (index === -1) {
+      return
+    }
+
+    const asset = effectTemplateAssets.value[index]
+    const autoSaveModule = registry.get<UnifiedAutoSaveModule>(MODULE_NAMES.AUTOSAVE)
+    autoSaveModule.cleanupMediaItemWatcher(assetId)
+    await cleanupRelatedTransitionTemplateReferences(assetId)
+    await globalMetaFileManager.deleteAssetFiles(asset)
+    effectTemplateAssets.value.splice(index, 1)
+  }
+
   /**
    * 根据ID获取媒体项目
    * @param mediaItemId 媒体项目ID（可以为null，此时返回undefined）
@@ -172,6 +213,21 @@ export function createUnifiedMediaModule(registry: ModuleRegistry) {
       return undefined
     }
     return mediaItems.value.find((item: UnifiedMediaItemData) => item.id === mediaItemId)
+  }
+
+  function getAsset(assetId: string | null): UnifiedLibraryAssetData | undefined {
+    if (assetId === null) {
+      return undefined
+    }
+
+    return (
+      getMediaItem(assetId) ??
+      effectTemplateAssets.value.find((item) => item.id === assetId)
+    )
+  }
+
+  function getAllAssets(): UnifiedLibraryAssetData[] {
+    return [...mediaItems.value, ...effectTemplateAssets.value]
   }
 
   /**
@@ -203,7 +259,16 @@ export function createUnifiedMediaModule(registry: ModuleRegistry) {
     const mediaItem = getMediaItem(mediaItemId)
     if (mediaItem) {
       UnifiedMediaItemActions.updateName(mediaItem, newName)
+      void globalMetaFileManager.saveMetaFile(mediaItem)
     }
+  }
+
+  function updateAssetName(assetId: string, newName: string) {
+    const asset = getAsset(assetId)
+    if (!asset) return
+
+    asset.name = newName.trim()
+    void globalMetaFileManager.saveMetaFile(asset)
   }
 
   /**
@@ -496,10 +561,38 @@ export function createUnifiedMediaModule(registry: ModuleRegistry) {
     }
   }
 
+  async function cleanupRelatedTransitionTemplateReferences(assetId: string): Promise<void> {
+    try {
+      const timelineModule = registry.get<UnifiedTimelineModule>(MODULE_NAMES.TIMELINE)
+
+      if (!timelineModule) {
+        console.warn('⚠️ 时间轴模块未初始化，跳过转场模板引用清理')
+        return
+      }
+
+      const relatedTimelineItems = timelineModule.timelineItems.value.filter(
+        (item: UnifiedTimelineItemData) => item.transitionOut?.templateAssetId === assetId,
+      )
+
+      for (const timelineItem of relatedTimelineItems) {
+        timelineModule.setTimelineItemTransitionOutForCmd(timelineItem.id, undefined)
+      }
+
+      if (relatedTimelineItems.length > 0) {
+        console.log(
+          `🧹 已清理 ${relatedTimelineItems.length} 个引用效果素材 ${assetId} 的时间轴转场`,
+        )
+      }
+    } catch (error) {
+      console.error(`❌ 清理效果素材转场引用失败: ${assetId}`, error)
+    }
+  }
+
 
   return {
     // 状态
     mediaItems,
+    effectTemplateAssets,
 
     // 媒体项目管理方法
     addMediaItem,
@@ -510,6 +603,11 @@ export function createUnifiedMediaModule(registry: ModuleRegistry) {
     updateMediaItem,
     updateMediaItemMetadata,
     getAllMediaItems,
+    addAsset,
+    removeAsset,
+    getAsset,
+    getAllAssets,
+    updateAssetName,
 
     // 分辨率管理方法
     getVideoOriginalResolution,
@@ -532,6 +630,7 @@ export function createUnifiedMediaModule(registry: ModuleRegistry) {
 
     // 清理方法
     cleanupRelatedTimelineItems,
+    cleanupRelatedTransitionTemplateReferences,
 
     // 工厂函数和查询函数
     createUnifiedMediaItemData,
