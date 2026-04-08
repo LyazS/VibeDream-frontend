@@ -6,12 +6,14 @@ import type {
   SnapCalculationOptions,
   SnapPointCollectionOptions,
   ClipBoundarySnapPoint,
+  TransitionBoundarySnapPoint,
   KeyframeSnapPoint,
   PlayheadSnapPoint,
   TimelineStartSnapPoint,
 } from '@/types/snap'
 import { DEFAULT_SNAP_CONFIG } from '@/types/snap'
 import type { UnifiedTimelineItemData } from '@/core/timelineitem/type'
+import { hasEnabledClipTransitionOut } from '@/core/timelineitem/transition'
 import { relativeFrameToAbsoluteFrame } from '@/core/utils/unifiedKeyframeUtils'
 import { getVisibleKeyframesForTimeline } from '@/core/utils/unifiedKeyframeUtils'
 import type { ModuleRegistry } from './ModuleRegistry'
@@ -145,6 +147,38 @@ export function createUnifiedSnapModule(registry: ModuleRegistry) {
             clipName,
           }
           targets.push(endPoint)
+
+          const transitionRuntime = item.runtime.transition
+          const transitionStartFrame = transitionRuntime?.activeRangeStart
+          const transitionEndFrame = transitionRuntime?.activeRangeEnd
+          const hasTransitionWindow =
+            hasEnabledClipTransitionOut(item) &&
+            (transitionRuntime?.bindingState === 'bound' ||
+              transitionRuntime?.bindingState === 'waiting-edge') &&
+            transitionStartFrame !== null &&
+            transitionStartFrame !== undefined &&
+            transitionEndFrame !== null &&
+            transitionEndFrame !== undefined
+
+          if (hasTransitionWindow) {
+            const transitionStartPoint: TransitionBoundarySnapPoint = {
+              type: 'transition-start',
+              frame: transitionStartFrame,
+              priority: 1,
+              clipId: item.id,
+              clipName,
+            }
+            targets.push(transitionStartPoint)
+
+            const transitionEndPoint: TransitionBoundarySnapPoint = {
+              type: 'transition-end',
+              frame: transitionEndFrame,
+              priority: 1,
+              clipId: item.id,
+              clipName,
+            }
+            targets.push(transitionEndPoint)
+          }
         })
       }
 

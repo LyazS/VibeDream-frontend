@@ -22,6 +22,16 @@ export interface ClipBoundarySnapPoint extends BaseSnapPoint {
 }
 
 /**
+ * 转场边界吸附点
+ */
+export interface TransitionBoundarySnapPoint extends BaseSnapPoint {
+  type: 'transition-start' | 'transition-end'
+  clipId: string
+  clipName: string
+  priority: 1
+}
+
+/**
  * 关键帧吸附点
  */
 export interface KeyframeSnapPoint extends BaseSnapPoint {
@@ -53,6 +63,7 @@ export interface TimelineStartSnapPoint extends BaseSnapPoint {
  */
 export type SnapPoint =
   | ClipBoundarySnapPoint
+  | TransitionBoundarySnapPoint
   | KeyframeSnapPoint
   | PlayheadSnapPoint
   | TimelineStartSnapPoint

@@ -243,12 +243,30 @@ export function resolveTransitionTemplateDropCandidate(
   thresholdFrames: number,
 ): TransitionTemplateDropCandidate {
   const visualItems = trackItems.filter(supportsClipTransitionOut)
+  const validSeamFrames = new Set<number>()
+
+  for (const item of visualItems) {
+    const seamFrame = item.timeRange.timelineEndTime
+    const hasRightNeighbor = visualItems.some(
+      (candidate) =>
+        candidate.id !== item.id &&
+        candidate.trackId === item.trackId &&
+        candidate.timeRange.timelineStartTime === seamFrame,
+    )
+
+    if (hasRightNeighbor) {
+      validSeamFrames.add(seamFrame)
+    }
+  }
 
   let bestSeamFrame: number | null = null
   let bestDistance = Infinity
 
   for (const item of visualItems) {
     const seamFrame = item.timeRange.timelineEndTime
+    if (!validSeamFrames.has(seamFrame)) {
+      continue
+    }
     const distance = Math.abs(seamFrame - hoveredFrame)
     if (distance <= thresholdFrames && distance < bestDistance) {
       bestSeamFrame = seamFrame

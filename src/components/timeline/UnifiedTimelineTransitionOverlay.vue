@@ -36,6 +36,8 @@ import { THUMBNAIL_CONSTANTS } from '@/constants/ThumbnailConstants'
 import type { TimelineTransitionOverlayViewModel } from '@/core/timelineitem/transitionOverlay'
 import { alignFramesToFrame } from '@/core/utils/timeUtils'
 import { normalizeClipTransitionOutConfig } from '@/core/timelineitem/transition'
+import type { SnapPoint } from '@/types/snap'
+import type { SnapResultState } from '@/core/composables/useTimelineSnap'
 
 interface Props {
   overlay: TimelineTransitionOverlayViewModel
@@ -47,6 +49,7 @@ const props = defineProps<Props>()
 const emit = defineEmits<{
   select: [event: MouseEvent, selectionId: string]
   contextMenu: [event: MouseEvent, sourceItemId: string]
+  updateSnapResult: [snapResult: SnapResultState | null]
 }>()
 
 const unifiedStore = useUnifiedStore()
@@ -179,17 +182,31 @@ function handleResize(event: MouseEvent) {
   if (resizeDirection.value === 'left') {
     const currentLeftPixel = unifiedStore.frameToPixel(initialDisplayRange.startFrame, props.timelineWidth)
     const newLeftPixel = currentLeftPixel + deltaX
-    const newLeftFrame = alignFramesToFrame(
+    let newLeftFrame = alignFramesToFrame(
       unifiedStore.pixelToFrame(newLeftPixel, props.timelineWidth),
     )
+    const leftSnapResult = resolveTransitionBoundarySnap(newLeftFrame)
+    if (leftSnapResult) {
+      newLeftFrame = leftSnapResult.frame
+      emit('updateSnapResult', leftSnapResult.indicator)
+    } else {
+      emit('updateSnapResult', null)
+    }
     const desiredLeftHalfFrames = Math.max(1, props.overlay.seamFrame - newLeftFrame)
     nextDurationFrames = Math.max(MIN_TRANSITION_DURATION_FRAMES, desiredLeftHalfFrames * 2 + parity)
   } else {
     const currentRightPixel = unifiedStore.frameToPixel(initialDisplayRange.endFrame, props.timelineWidth)
     const newRightPixel = currentRightPixel + deltaX
-    const newRightFrame = alignFramesToFrame(
+    let newRightFrame = alignFramesToFrame(
       unifiedStore.pixelToFrame(newRightPixel, props.timelineWidth),
     )
+    const rightSnapResult = resolveTransitionBoundarySnap(newRightFrame)
+    if (rightSnapResult) {
+      newRightFrame = rightSnapResult.frame
+      emit('updateSnapResult', rightSnapResult.indicator)
+    } else {
+      emit('updateSnapResult', null)
+    }
     const desiredRightHalfFrames = Math.max(1, newRightFrame - props.overlay.seamFrame)
     nextDurationFrames = Math.max(MIN_TRANSITION_DURATION_FRAMES, desiredRightHalfFrames * 2 - parity)
   }
@@ -207,6 +224,7 @@ async function stopResize() {
   const currentDurationFrames = transitionConfig.value.durationFrames
   isResizing.value = false
   resizeDirection.value = null
+  emit('updateSnapResult', null)
 
   if (!sourceTimelineItem.value || nextDurationFrames === currentDurationFrames) {
     return
@@ -222,6 +240,63 @@ onUnmounted(() => {
   document.removeEventListener('mousemove', handleResize)
   document.removeEventListener('mouseup', stopResize)
 })
+
+function resolveTransitionBoundarySnap(frame: number): {
+  frame: number
+  indicator: SnapResultState
+} | null {
+  const snapTargets = unifiedStore.collectSnapTargets({
+    includeClipBoundaries: unifiedStore.snapConfig.clipBoundaries,
+    includePlayhead: unifiedStore.snapConfig.playhead,
+    includeTimelineStart: unifiedStore.snapConfig.timelineStart,
+    includeKeyframes: unifiedStore.snapConfig.keyframes,
+  })
+
+  const filteredTargets = snapTargets.filter((target) => {
+    if (target.frame === props.overlay.seamFrame) {
+      return false
+    }
+
+    if (
+      (target.type === 'transition-start' || target.type === 'transition-end') &&
+      target.clipId === props.overlay.sourceItemId
+    ) {
+      return false
+    }
+
+    return true
+  })
+
+  const pixelsPerFrame =
+    (props.timelineWidth * unifiedStore.zoomLevel) /
+    Math.max(1, unifiedStore.totalDurationFrames)
+  const frameThreshold = unifiedStore.snapConfig.threshold / Math.max(pixelsPerFrame, 0.0001)
+
+  let bestTarget: SnapPoint | null = null
+  let bestDistance = Infinity
+
+  for (const target of filteredTargets) {
+    const distance = Math.abs(frame - target.frame)
+    if (distance < bestDistance && distance <= frameThreshold) {
+      bestDistance = distance
+      bestTarget = target
+    }
+  }
+
+  if (!bestTarget) {
+    return null
+  }
+
+  return {
+    frame: bestTarget.frame,
+    indicator: {
+      snapped: true,
+      frame: bestTarget.frame,
+      snapPoint: bestTarget,
+      distance: bestDistance,
+    },
+  }
+}
 </script>
 
 <style scoped>

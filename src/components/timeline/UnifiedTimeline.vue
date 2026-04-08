@@ -192,6 +192,7 @@
               :timeline-width="unifiedStore.TimelineContentWidth"
               @select="handleSelectTransition"
               @contextmenu="handleTransitionContextMenu"
+              @updateSnapResult="handleTransitionOverlaySnapResult"
             />
           </div>
         </div>
@@ -460,6 +461,10 @@ const {
 
 function getTransitionOverlaysForTrack(trackId: string) {
   return unifiedStore.getTransitionOverlaysByTrack(trackId)
+}
+
+function handleTransitionOverlaySnapResult(snapResult: SnapResultState | null) {
+  currentSnapResult.value = snapResult
 }
 
 // 类型安全的时间轴项目渲染函数 - 优化版本，仅传递必要状态
