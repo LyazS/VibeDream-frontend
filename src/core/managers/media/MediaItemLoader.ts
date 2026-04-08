@@ -11,7 +11,10 @@ import { BizyAirSourceFactory } from '@/core/datasource/providers/bizyair/BizyAi
 import type { BaseASRSourceData } from '@/core/datasource/providers/asr/ASRSource'
 import { ASRSourceFactory } from '@/core/datasource/providers/asr/ASRSource'
 import type { UnifiedLibraryAssetData } from '@/core/asset/types'
-import { createTransitionTemplateAssetData } from '@/core/asset/types'
+import {
+  createEffectTemplateSourceData,
+  createTransitionTemplateAssetData,
+} from '@/core/asset/types'
 
 /**
  * 媒体项目加载器（阶段二彻底重构版）
@@ -98,7 +101,7 @@ export class MediaItemLoader {
         metaData.id,
         metaData.name,
         {
-          durationFrames: templatePayload.durationFrames ?? 12,
+          durationFrames: templatePayload.durationFrames ?? 30,
           shader: {
             vertexShader: templatePayload.shader.vertexShader,
             fragmentShader: templatePayload.shader.fragmentShader,
@@ -106,6 +109,7 @@ export class MediaItemLoader {
         },
         {
           createdAt: metaData.createdAt,
+          source: createEffectTemplateSourceData(),
         },
       )
     }

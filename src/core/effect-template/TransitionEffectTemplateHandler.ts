@@ -18,7 +18,7 @@ interface TransitionTemplateResolvedCandidate extends TransitionTemplateDropCand
 }
 
 function resolveTemplateDurationFrames(dragData: MediaItemDragData): number {
-  return Math.max(2, Math.round(Number((dragData.templatePayload as any)?.durationFrames ?? 12)))
+  return Math.max(2, Math.round(Number((dragData.templatePayload as any)?.durationFrames ?? 30)))
 }
 
 function resolveTemplateShader(dragData: MediaItemDragData): TransitionShaderResource | null {

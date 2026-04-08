@@ -13,7 +13,6 @@ export type EffectType = 'transition' | 'filter' | 'animation'
 
 export interface EffectTemplateSourceData {
   type: 'effect-template'
-  origin: 'local'
 }
 
 export interface TransitionTemplatePayload {
@@ -72,7 +71,6 @@ export function isEffectTemplateAsset(
 export function createEffectTemplateSourceData(): EffectTemplateSourceData {
   return {
     type: 'effect-template',
-    origin: 'local',
   }
 }
 

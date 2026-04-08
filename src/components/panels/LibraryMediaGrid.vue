@@ -221,6 +221,13 @@
         @close="showMediaPreviewModal = false"
       />
 
+      <TransitionTemplatePickerModal
+        :show="showTransitionTemplatePickerModal"
+        :directory-id="currentDir?.id || null"
+        @update:show="showTransitionTemplatePickerModal = $event"
+        @close="showTransitionTemplatePickerModal = false"
+      />
+
       <!-- 隐藏的文件输入 -->
       <input
         ref="fileInput"
@@ -250,7 +257,7 @@ import {
 } from '@/core/types/drag'
 import type { UnifiedMediaItemData } from '@/core'
 import { DataSourceFactory } from '@/core'
-import { generateAssetId, generateMediaId, extractExtension } from '@/core/utils/idGenerator'
+import { generateMediaId, extractExtension } from '@/core/utils/idGenerator'
 import {
   AIGenerationSourceFactory,
   TaskStatus,
@@ -272,6 +279,7 @@ import CreateFolderModal from '@/components/modals/CreateFolderModal.vue'
 import RenameModal from '@/components/modals/RenameModal.vue'
 import MediaItemThumbnail from '@/components/panels/MediaItemThumbnail.vue'
 import MediaPreviewModal from '@/components/modals/MediaPreviewModal.vue'
+import TransitionTemplatePickerModal from '@/components/modals/TransitionTemplatePickerModal.vue'
 import FolderIcon from '@/components/utils/FolderIcon.vue'
 import type { TaskSubmitResponse } from '@/types/taskApi'
 import { TaskSubmitErrorCode } from '@/types/taskApi'
@@ -282,11 +290,9 @@ import {
 } from '@/utils/errorMessageBuilder'
 import type { UnifiedLibraryAssetData } from '@/core/asset/types'
 import {
-  createTransitionTemplateAssetData,
   isEffectTemplateAsset,
   isMediaAsset,
 } from '@/core/asset/types'
-import COPY_VERTEX_SHADER from '@/core/webgl2/shaders/copy.vert?raw'
 
 const unifiedStore = useUnifiedStore()
 const { t } = useAppI18n()
@@ -317,7 +323,7 @@ const renameTarget = ref<DisplayItem | null>(null)
 // 预览模态框状态
 const showMediaPreviewModal = ref(false)
 const previewMediaItemId = ref<string>('')
-
+const showTransitionTemplatePickerModal = ref(false)
 
 // 文件夹拖拽状态（每个文件夹独立状态）
 const folderDragState = ref<Record<string, { isDragOver: boolean; canDrop: boolean }>>({})
@@ -505,10 +511,10 @@ const currentMenuItems = computed((): MenuItem[] => {
             },
           },
           {
-            label: '转场（测试）',
+            label: t('media.createTransitionAsset'),
             icon: IconComponents.SPARKLING,
             onClick: () => {
-              void createTransitionTemplateAsset()
+              openTransitionTemplatePicker()
               showContextMenu.value = false
             },
           },
@@ -1313,43 +1319,12 @@ async function addMediaItem(file: File): Promise<void> {
   }
 }
 
-async function createTransitionTemplateAsset(): Promise<void> {
+function openTransitionTemplatePicker(): void {
   if (!currentDir.value) {
     unifiedStore.messageError(t('media.selectDirectoryFirst'))
     return
   }
-
-  const timestamp = Date.now()
-  const assetId = generateAssetId('effect')
-  const assetName = `转场_叠化_${timestamp}`
-  const testTransitionCrossfadeFragmentShader = `#version 300 es
-precision mediump float;
-
-in vec2 v_uv;
-out vec4 outColor;
-
-uniform sampler2D u_fromTexture;
-uniform sampler2D u_toTexture;
-uniform float u_progress;
-
-void main() {
-  vec4 colorA = texture(u_fromTexture, v_uv);
-  vec4 colorB = texture(u_toTexture, v_uv);
-  float progress = clamp(u_progress, 0.0, 1.0);
-  outColor = mix(colorA, colorB, progress);
-}
-`
-  const asset = createTransitionTemplateAssetData(assetId, assetName, {
-    durationFrames: 12,
-    shader: {
-      vertexShader: COPY_VERTEX_SHADER,
-      fragmentShader: testTransitionCrossfadeFragmentShader,
-    },
-  })
-
-  unifiedStore.addAsset(asset)
-  unifiedStore.addAssetToDirectory(asset.id, currentDir.value.id)
-  unifiedStore.messageSuccess('转场模板已创建')
+  showTransitionTemplatePickerModal.value = true
 }
 
 // 提交AI生成任务到后端
