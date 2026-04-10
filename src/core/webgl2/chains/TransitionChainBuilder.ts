@@ -1,3 +1,6 @@
+import { isEffectTemplateAsset, type UnifiedLibraryAssetData } from '@/core/asset/types'
+import { effectPackageRegistry } from '@/core/effect-package/EffectPackageRegistry'
+import { EffectPackageTransitionPass } from '@/core/effect-package/runtime/EffectPackageTransitionPass'
 import { degreesToRadians } from '@/core/utils/rotationTransform'
 import type { UnifiedMediaItemData } from '@/core/mediaitem/types'
 import { DEFAULT_BLEND_MODE } from '@/core/timelineitem'
@@ -10,7 +13,6 @@ import type { UnifiedTimelineItemData } from '@/core/timelineitem/type'
 import { resolveRenderConfigAtFrame } from '@/core/utils/animationInterpolation'
 import { CompositeToMainPass } from '@/core/webgl2/passes/CompositeToMainPass'
 import { CompositeToRenderTargetPass } from '@/core/webgl2/passes/CompositeToRenderTargetPass'
-import { CrossfadePass } from '@/core/webgl2/passes/CrossfadePass'
 import { ItemLocalRasterPass } from '@/core/webgl2/passes/ItemLocalRasterPass'
 import { MaskPass } from '@/core/webgl2/passes/MaskPass'
 import { RotateSourcePass } from '@/core/webgl2/passes/RotateSourcePass'
@@ -28,6 +30,7 @@ interface TransitionChainBuilderParams {
   getSourceTextureId: (itemId: string) => string | null
   getTransitionEdgeTextureId: (transitionItemId: string, edgeKey: 'leftTail' | 'rightHead') => string | null
   getMediaItem: (mediaItemId: string) => UnifiedMediaItemData | undefined
+  getAsset: (assetId: string | null) => UnifiedLibraryAssetData | undefined
   getCurrentFrame: () => number
 }
 
@@ -41,15 +44,15 @@ export class TransitionChainBuilder {
     const rightEdgeOutput = `transition-right-edge:${transitionItem.id}:projected`
     const mixedOutput = `transition-mixed:${transitionItem.id}`
 
-    const getPlaybackState = () =>
-      resolveClipTransitionPlaybackState(
-        transitionItem,
-        transitionItem.runtime.transition!,
-        this.params.getCurrentFrame(),
-      )
-    const transitionShader = transitionItem.transitionOut?.shader
-    if (!transitionShader?.fragmentShader) {
-      throw new Error(`转场片段缺少 shader 资源: ${transitionItem.id}`)
+    const transitionOut = transitionItem.transitionOut
+    const packageAssetId = transitionOut?.packageAssetId
+    const packageAsset = packageAssetId ? this.params.getAsset(packageAssetId) : undefined
+    const loadedPackage =
+      packageAssetId && isEffectTemplateAsset(packageAsset)
+        ? effectPackageRegistry.getPackage(packageAssetId)
+        : null
+    if (!loadedPackage) {
+      throw new Error(`转场片段缺少已安装的 effect package: ${transitionItem.id}`)
     }
 
     const passes = [
@@ -85,42 +88,35 @@ export class TransitionChainBuilder {
             resolveTransitionBoundaryFrames(rightItem).timelineHeadFrame,
           ),
       }),
-      new CrossfadePass(
-        `transition-crossfade:${transitionItem.id}`,
-        this.params.programs,
+      new EffectPackageTransitionPass(
+        `transition-package:${transitionItem.id}`,
+        loadedPackage,
         mixedOutput,
-        this.params.targets,
+        () => this.params.getCurrentFrame(),
+        () => this.getTransitionProgress(transitionItem),
+        () => ({
+          ...loadedPackage.payload.defaultParams,
+          ...(transitionOut?.params ?? {}),
+        }),
         () => {
-          const playbackState = getPlaybackState()
-          if (!playbackState) {
-            return null
+          const playbackState = resolveClipTransitionPlaybackState(
+            transitionItem,
+            transitionItem.runtime.transition!,
+            this.params.getCurrentFrame(),
+          )
+
+          return {
+            'input:from':
+              playbackState?.phase === 'entering-right' ? leftCurrentOutput : leftEdgeOutput,
+            'input:to':
+              playbackState?.phase === 'entering-right' ? rightEdgeOutput : rightCurrentOutput,
+            'input:fromCurrent': leftCurrentOutput,
+            'input:fromEdge': leftEdgeOutput,
+            'input:toCurrent': rightCurrentOutput,
+            'input:toEdge': rightEdgeOutput,
           }
-          return playbackState.phase === 'entering-right' ? leftCurrentOutput : leftEdgeOutput
         },
-        () => {
-          const playbackState = getPlaybackState()
-          if (!playbackState) {
-            return null
-          }
-          return playbackState.phase === 'entering-right' ? rightEdgeOutput : rightCurrentOutput
-        },
-        () => {
-          const runtime = transitionItem.runtime.transition
-          const currentFrame = this.params.getCurrentFrame()
-          if (
-            !runtime ||
-            runtime.activeRangeStart === null ||
-            runtime.activeRangeEnd === null ||
-            currentFrame < runtime.activeRangeStart ||
-            currentFrame >= runtime.activeRangeEnd
-          ) {
-            return 0
-          }
-          const totalFrames = Math.max(1, runtime.activeRangeEnd - runtime.activeRangeStart)
-          return Math.min(1, Math.max(0, (currentFrame - runtime.activeRangeStart) / totalFrames))
-        },
-        transitionShader.fragmentShader,
-        transitionShader.vertexShader,
+        (name) => `transition-package:${transitionItem.id}:${name}`,
       ),
       new CompositeToMainPass(
         this.params.programs,
@@ -144,8 +140,26 @@ export class TransitionChainBuilder {
       `left:${this.getBranchSignature(transitionItem)}`,
       `right:${this.getBranchSignature(rightItem)}`,
       transitionItem.transitionOut?.templateAssetId ?? '',
-      transitionItem.transitionOut?.shader.fragmentShader ?? '',
+      transitionItem.transitionOut?.packageAssetId ?? '',
+      transitionItem.transitionOut?.packagePayload?.version ?? '',
+      transitionItem.transitionOut?.packagePayload?.scriptHash ?? '',
     ].join('|')
+  }
+
+  private getTransitionProgress(transitionItem: TransitionItem): number {
+    const runtime = transitionItem.runtime.transition
+    const currentFrame = this.params.getCurrentFrame()
+    if (
+      !runtime ||
+      runtime.activeRangeStart === null ||
+      runtime.activeRangeEnd === null ||
+      currentFrame < runtime.activeRangeStart ||
+      currentFrame >= runtime.activeRangeEnd
+    ) {
+      return 0
+    }
+    const totalFrames = Math.max(1, runtime.activeRangeEnd - runtime.activeRangeStart)
+    return Math.min(1, Math.max(0, (currentFrame - runtime.activeRangeStart) / totalFrames))
   }
 
   private buildBranchPasses(params: {

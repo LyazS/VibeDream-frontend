@@ -1,5 +1,3 @@
-import type { TransitionShaderResource } from '@/core/transition/types'
-
 export interface LocalizedText {
   zh: string
   en: string
@@ -26,8 +24,31 @@ export interface TransitionTemplateSummary {
   updated_at: string
 }
 
-export interface TransitionTemplateDetail extends TransitionTemplateSummary {
-  shader: TransitionShaderResource
+export interface TransitionTemplatePackageManifest {
+  apiVersion: '1.0'
+  effectType: 'transition'
+  packageId: string
+  version: string
+  name: LocalizedText
+  summary: LocalizedText
+  tags: LocalizedTagList
+  cover: string | null
+  entry: string
+  defaultDurationFrames: number
+  parameters: Record<string, unknown>
+  sort_order: number
+  is_active: boolean
+}
+
+export interface TransitionTemplatePackageFile {
+  path: string
+  content: string
+  encoding: 'utf-8' | 'base64'
+}
+
+export interface TransitionTemplateDownloadResponse extends TransitionTemplateSummary {
+  package_manifest: TransitionTemplatePackageManifest
+  package_files: TransitionTemplatePackageFile[]
 }
 
 export interface TransitionTemplateListResponse {

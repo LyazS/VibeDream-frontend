@@ -8,7 +8,7 @@ import type { UnifiedTrackData, UnifiedTrackType } from '@/core/track/TrackTypes
 import { createUnifiedTrackData } from '@/core/track/TrackTypes'
 import { globalMetaFileManager } from '@/core/managers/media/globalMetaFileManager'
 import { globalMediaItemLoader } from '@/core/managers/media/MediaItemLoader'
-import { isMediaAsset } from '@/core/asset/types'
+import { isEffectTemplateAsset, isMediaAsset } from '@/core/asset/types'
 import { useProjectThumbnailService } from '@/core/composables/useProjectThumbnailService'
 import { MediaSync } from '@/core/managers/sync'
 import { framesToSeconds } from '@/core/utils/timeUtils'
@@ -408,13 +408,24 @@ export function createUnifiedProjectModule(registry: ModuleRegistry) {
       for (const mediaItem of metaMediaItems) {
         mediaModule.addAsset(mediaItem)
 
-        if (isMediaAsset(mediaItem) && immediateLoadIds.has(mediaItem.id)) {
-          mediaModule.startMediaProcessing(mediaItem)
-          immediateCount++
-        } else {
-          // 其他媒体保持 pending 状态
-          deferredCount++
+        if (immediateLoadIds.has(mediaItem.id)) {
+          if (isMediaAsset(mediaItem) && mediaItem.mediaStatus === 'pending') {
+            mediaModule.startMediaProcessing(mediaItem)
+            immediateCount++
+            continue
+          }
+
+          if (
+            isEffectTemplateAsset(mediaItem) &&
+            ['pending', 'missing'].includes(mediaItem.templateStatus)
+          ) {
+            void mediaModule.startTemplateProcessing(mediaItem.id)
+            immediateCount++
+            continue
+          }
         }
+
+        deferredCount++
       }
 
       console.log(`✅ [rebuildMediaItems] 媒体项目加载完成`)

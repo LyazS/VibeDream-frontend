@@ -12,9 +12,10 @@ import type { BaseASRSourceData } from '@/core/datasource/providers/asr/ASRSourc
 import { ASRSourceFactory } from '@/core/datasource/providers/asr/ASRSource'
 import type { UnifiedLibraryAssetData } from '@/core/asset/types'
 import {
-  createEffectTemplateSourceData,
+  createEffectTemplateSourceDataFromTemplate,
   createTransitionTemplateAssetData,
 } from '@/core/asset/types'
+import { effectPackageRegistry } from '@/core/effect-package/EffectPackageRegistry'
 
 /**
  * 媒体项目加载器（阶段二彻底重构版）
@@ -31,6 +32,8 @@ export class MediaItemLoader {
   async loadMediaItemsFromMeta(projectId: string): Promise<UnifiedLibraryAssetData[]> {
     try {
       console.log(`📂 [MediaItemLoader] 开始从 Meta 文件加载媒体项目: ${projectId}`)
+      const discoveredEffectPackages = await effectPackageRegistry.discoverProjectPackages(projectId)
+      const discoveredPackageIdSet = new Set(discoveredEffectPackages.map((item) => item.id))
 
       // 1. 扫描所有 Meta 文件
       const metaFiles = await globalMetaFileManager.scanAllMetaFiles()
@@ -39,8 +42,17 @@ export class MediaItemLoader {
       // 2. 从每个 Meta 文件重建媒体项目
       const mediaItems: UnifiedLibraryAssetData[] = []
 
+      mediaItems.push(...discoveredEffectPackages)
+
       for (const metaData of metaFiles) {
         try {
+          if (
+            metaData.assetKind === 'effect-template' &&
+            discoveredPackageIdSet.has(metaData.id)
+          ) {
+            continue
+          }
+
           const mediaItem = await this.rebuildMediaItemFromMeta(metaData)
 
           if (mediaItem.assetKind === 'effect-template') {
@@ -88,38 +100,46 @@ export class MediaItemLoader {
         throw new Error(`不支持的效果模板类型: ${metaData.effectType}`)
       }
 
-      const templatePayload = metaData.templatePayload as {
-        durationFrames?: number
-        shader?: { vertexShader?: string; fragmentShader?: string }
-      } | undefined
+      const templateId = metaData.source.templateId
+        || (typeof metaData.templatePayload === 'object' && metaData.templatePayload && 'packageId' in metaData.templatePayload
+          ? String((metaData.templatePayload as { packageId?: unknown }).packageId || '')
+          : '')
+        || metaData.id
 
-      if (!templatePayload?.shader?.fragmentShader) {
-        throw new Error(`效果模板缺少 shader 资源: ${metaData.id}`)
+      const installedPackage = effectPackageRegistry.getPackage(metaData.id)
+      if (installedPackage) {
+        return createTransitionTemplateAssetData(metaData.id, metaData.name, installedPackage.payload, {
+          createdAt: metaData.createdAt,
+          source: createEffectTemplateSourceDataFromTemplate(
+            templateId || installedPackage.payload.packageId,
+            metaData.source.catalogVersion,
+            SourceOrigin.PROJECT_LOAD,
+          ),
+          templateStatus: 'ready',
+        })
       }
 
-      return createTransitionTemplateAssetData(
-        metaData.id,
-        metaData.name,
-        {
-          durationFrames: templatePayload.durationFrames ?? 30,
-          shader: {
-            vertexShader: templatePayload.shader.vertexShader,
-            fragmentShader: templatePayload.shader.fragmentShader,
-          },
-        },
-        {
-          createdAt: metaData.createdAt,
-          source: createEffectTemplateSourceData(),
-        },
-      )
+      const restoredStatus = ['error', 'cancelled', 'missing'].includes(metaData.templateStatus)
+        ? metaData.templateStatus
+        : 'pending'
+
+      return createTransitionTemplateAssetData(metaData.id, metaData.name, null, {
+        createdAt: metaData.createdAt,
+        source: createEffectTemplateSourceDataFromTemplate(
+          templateId,
+          metaData.source.catalogVersion,
+          SourceOrigin.PROJECT_LOAD,
+        ),
+        templateStatus: restoredStatus,
+        templatePayload:
+          metaData.templatePayload && typeof metaData.templatePayload === 'object'
+            ? metaData.templatePayload as Record<string, unknown>
+            : null,
+      })
     }
 
     // 1. 根据数据源类型创建相应的数据源（运行时状态）
     let source
-
-    if (!metaData.source) {
-      throw new Error(`无效的数据源配置: ${metaData.id}`)
-    }
 
     const sourceType = metaData.source.type
 

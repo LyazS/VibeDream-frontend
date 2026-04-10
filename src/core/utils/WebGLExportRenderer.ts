@@ -1,3 +1,4 @@
+import type { UnifiedLibraryAssetData } from '@/core/asset/types'
 import type { UnifiedMediaItemData } from '@/core/mediaitem/types'
 import type { FrameData } from '@/core/webgl2/types'
 import { TimelineWebGLRenderer } from '@/core/webgl2/renderer/TimelineWebGLRenderer'
@@ -9,6 +10,7 @@ interface WebGLExportRendererOptions {
   height: number
   getTrack: (trackId: string) => { isVisible: boolean } | undefined
   getMediaItem: (mediaItemId: string) => UnifiedMediaItemData | undefined
+  getAsset: (assetId: string | null) => UnifiedLibraryAssetData | undefined
   trackIndexMap: () => Map<string, number>
 }
 
@@ -33,6 +35,7 @@ export class WebGLExportRenderer {
       canvas: this.canvas,
       getTrack: options.getTrack,
       getMediaItem: options.getMediaItem,
+      getAsset: options.getAsset,
       trackIndexMap: options.trackIndexMap,
     })
   }

@@ -72,9 +72,7 @@ function clampDurationFrames(durationFrames: number): number {
 export function createDefaultClipTransitionOutConfig(): ClipTransitionOutConfig {
   return {
     durationFrames: DEFAULT_CLIP_TRANSITION_DURATION_FRAMES,
-    shader: {
-      fragmentShader: '',
-    },
+    params: {},
   }
 }
 
@@ -85,7 +83,9 @@ export function normalizeClipTransitionOutConfig(
   return {
     durationFrames: clampDurationFrames(config?.durationFrames ?? defaults.durationFrames),
     templateAssetId: config?.templateAssetId,
-    shader: config?.shader ?? defaults.shader,
+    packageAssetId: config?.packageAssetId,
+    params: config?.params ? JSON.parse(JSON.stringify(config.params)) : {},
+    packagePayload: config?.packagePayload,
   }
 }
 
@@ -104,8 +104,8 @@ export function areClipTransitionOutConfigsEqual(
   return (
     a.durationFrames === b.durationFrames &&
     a.templateAssetId === b.templateAssetId &&
-    a.shader.fragmentShader === b.shader.fragmentShader &&
-    a.shader.vertexShader === b.shader.vertexShader
+    a.packageAssetId === b.packageAssetId &&
+    JSON.stringify(a.params ?? {}) === JSON.stringify(b.params ?? {})
   )
 }
 

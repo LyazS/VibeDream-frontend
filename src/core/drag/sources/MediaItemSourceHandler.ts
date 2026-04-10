@@ -35,7 +35,7 @@ export class MediaItemSourceHandler implements DragSourceHandler {
     const selectedAssetIds =
       'selectedAssetIds' in assetParams
         ? assetParams.selectedAssetIds
-        : ('selectedMediaItemIds' in assetParams ? assetParams.selectedMediaItemIds : undefined)
+        : undefined
 
     const asset = this.mediaModule.getAsset(assetId)
 

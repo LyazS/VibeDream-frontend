@@ -3,7 +3,11 @@ import type { SimpleCommand } from '@/core/modules/commands/types'
 import type { UnifiedTimelineItemData } from '@/core/timelineitem/type'
 import type { MediaType } from '@/core/mediaitem/types'
 import type { ClipTransitionOutConfig } from '@/core/transition/types'
-import { isEffectTemplateAsset, type UnifiedLibraryAssetData } from '@/core/asset/types'
+import {
+  isEffectTemplateAsset,
+  isReadyEffectTemplateAsset,
+  type UnifiedLibraryAssetData,
+} from '@/core/asset/types'
 
 export class UpdateTransitionOutCommand implements SimpleCommand {
   public readonly id: string
@@ -43,10 +47,14 @@ export class UpdateTransitionOutCommand implements SimpleCommand {
       throw new Error(`时间轴项目不存在: ${this.timelineItemId}`)
     }
 
-    if (nextValue?.templateAssetId) {
-      const templateAsset = this.mediaModule.getAsset(nextValue.templateAssetId)
+    const targetAssetId = nextValue?.packageAssetId ?? nextValue?.templateAssetId
+    if (targetAssetId) {
+      const templateAsset = this.mediaModule.getAsset(targetAssetId)
       if (!isEffectTemplateAsset(templateAsset)) {
-        throw new Error(`转场效果素材不存在或类型无效: ${nextValue.templateAssetId}`)
+        throw new Error(`转场效果素材不存在或类型无效: ${targetAssetId}`)
+      }
+      if (!isReadyEffectTemplateAsset(templateAsset)) {
+        throw new Error(`转场效果素材尚未就绪: ${targetAssetId}`)
       }
     }
 

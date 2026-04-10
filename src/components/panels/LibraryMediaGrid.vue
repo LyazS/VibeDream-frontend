@@ -68,8 +68,20 @@
                 <template v-if="isEffectTemplateAssetItem(item.id)">
                   <div class="effect-template-thumbnail">
                     <component :is="IconComponents.SPARKLING" size="28px" />
-                    <span class="effect-template-tag">转场</span>
-                    <span class="effect-template-summary">{{ getEffectTemplateSummary(item.id) }}</span>
+                    <div
+                      v-if="hasEffectTemplateStatusIndicator(item.id)"
+                      class="effect-template-status-indicator"
+                      :class="`effect-template-status-indicator--${getEffectTemplateStatusTone(item.id)}`"
+                    >
+                      <component
+                        :is="getEffectTemplateStatusIcon(item.id)"
+                        size="12px"
+                        :class="{
+                          'effect-template-status-indicator__icon--spin':
+                            getEffectTemplateStatusTone(item.id) === 'processing',
+                        }"
+                      />
+                    </div>
                   </div>
                 </template>
                 <template v-else>
@@ -621,7 +633,7 @@ const currentMenuItems = computed((): MenuItem[] => {
   }
 
   // 检查是否为多选状态
-  if (unifiedStore.selectedMediaItemIds.size > 1) {
+  if (unifiedStore.selectedLibraryAssetIds.size > 1) {
     // 多选状态菜单
     return [
       {
@@ -713,7 +725,7 @@ const currentMenuItems = computed((): MenuItem[] => {
           showContextMenu.value = false
         },
       },
-      ...(isMediaAsset(getAsset(target.id))
+      ...(isMediaAsset(getAsset(target.id)) || isEffectTemplateAsset(getAsset(target.id))
         ? ([
             { type: 'separator' as const },
             {
@@ -777,6 +789,9 @@ function getAssetTypeLabel(assetId: string): string {
   if (!asset) return t('media.unknown')
 
   if (isEffectTemplateAsset(asset)) {
+    if (asset.templateStatus !== 'ready') {
+      return `${asset.effectType === 'transition' ? '转场' : asset.effectType} / ${getEffectTemplateStatusLabel(assetId)}`
+    }
     return asset.effectType === 'transition' ? '转场' : asset.effectType
   }
 
@@ -802,21 +817,78 @@ function isEffectTemplateAssetItem(assetId: string): boolean {
   return isEffectTemplateAsset(getAsset(assetId))
 }
 
-function getEffectTemplateSummary(assetId: string): string {
+function getEffectTemplateStatusLabel(assetId: string): string {
   const asset = getAsset(assetId)
-  if (!asset || !isEffectTemplateAsset(asset) || asset.effectType !== 'transition') {
+  if (!asset || !isEffectTemplateAsset(asset)) {
     return ''
   }
 
-  const payload = asset.templatePayload as { durationFrames?: number }
-  return `转场 / ${payload.durationFrames || 0}f`
+  switch (asset.templateStatus) {
+    case 'pending':
+    case 'asyncprocessing':
+      return t('media.effectTemplateDownloading')
+    case 'decoding':
+      return t('media.effectTemplateInstalling')
+    case 'error':
+      return t('media.effectTemplateFailed')
+    case 'cancelled':
+      return t('media.badge.cancelled')
+    case 'missing':
+      return t('media.effectTemplateMissing')
+    default:
+      return ''
+  }
+}
+
+function hasEffectTemplateStatusIndicator(assetId: string): boolean {
+  const asset = getAsset(assetId)
+  return Boolean(asset && isEffectTemplateAsset(asset) && asset.templateStatus !== 'ready')
+}
+
+function getEffectTemplateStatusIcon(assetId: string) {
+  const asset = getAsset(assetId)
+  if (!asset || !isEffectTemplateAsset(asset)) {
+    return IconComponents.SPARKLING
+  }
+
+  switch (asset.templateStatus) {
+    case 'pending':
+      return IconComponents.TIME
+    case 'asyncprocessing':
+    case 'decoding':
+      return IconComponents.LOADING
+    case 'cancelled':
+      return IconComponents.CLOSE
+    case 'error':
+    case 'missing':
+      return IconComponents.WARNING
+    default:
+      return IconComponents.SPARKLING
+  }
+}
+
+function getEffectTemplateStatusTone(assetId: string): 'processing' | 'error' | 'idle' {
+  const asset = getAsset(assetId)
+  if (!asset || !isEffectTemplateAsset(asset)) {
+    return 'idle'
+  }
+
+  if (asset.templateStatus === 'error' || asset.templateStatus === 'missing') {
+    return 'error'
+  }
+
+  if (asset.templateStatus !== 'ready') {
+    return 'processing'
+  }
+
+  return 'idle'
 }
 
 // 检查媒体项是否可拖拽
 function isMediaItemDraggable(mediaId: string): boolean {
   const mediaItem = getAsset(mediaId)
   if (!mediaItem) return false
-  if (isEffectTemplateAsset(mediaItem)) return true
+  if (isEffectTemplateAsset(mediaItem)) return mediaItem.templateStatus === 'ready'
   return mediaItem.mediaType !== 'unknown' && (mediaItem.duration || 0) > 0
 }
 
@@ -833,7 +905,7 @@ function isDraggable(item: DisplayItem): boolean {
 
 // 检查项目是否被选中
 function isItemSelected(item: DisplayItem): boolean {
-  return unifiedStore.isMediaItemSelected(item.id)
+  return unifiedStore.isLibraryAssetSelected(item.id)
 }
 
 // ==================== 交互处理 ====================
@@ -876,13 +948,13 @@ function onItemDoubleClick(item: DisplayItem): void {
 function onItemClick(item: DisplayItem, event: MouseEvent): void {
   if (event.ctrlKey || event.metaKey) {
     // Ctrl+点击：切换选择状态
-    unifiedStore.selectMediaItems([item.id], 'toggle')
+    unifiedStore.selectLibraryAssets([item.id], 'toggle')
   } else if (event.shiftKey) {
     // Shift+点击：范围选择
-    unifiedStore.selectMediaItems([item.id], 'range')
+    unifiedStore.selectLibraryAssets([item.id], 'range')
   } else {
     // 普通点击：单选
-    unifiedStore.selectMediaItems([item.id], 'replace')
+    unifiedStore.selectLibraryAssets([item.id], 'replace')
   }
 }
 
@@ -893,7 +965,7 @@ function onItemContextMenu(item: DisplayItem, event: MouseEvent): void {
 
   // 如果右键的项目不在选中列表中，则将其设为唯一选中项
   if (!isItemSelected(item)) {
-    unifiedStore.selectMediaItems([item.id], 'replace')
+    unifiedStore.selectLibraryAssets([item.id], 'replace')
   }
 
   contextMenuOptions.value.x = event.clientX
@@ -914,8 +986,14 @@ function handleContextMenu(event: MouseEvent): void {
 
 // 点击空白区域
 function handleContainerClick(event: MouseEvent): void {
-  if (!event.target || !(event.target as Element).closest('.content-item')) {
-    unifiedStore.clearMediaSelection()
+  if (!event.target) {
+    unifiedStore.clearLibraryAssetSelection()
+    return
+  }
+
+  const target = event.target as Element
+  if (!target.closest('.content-item') && !target.closest('.list-item')) {
+    unifiedStore.clearLibraryAssetSelection()
   }
 }
 
@@ -1363,10 +1441,14 @@ async function submitAIGenerationTask(
 function canCancel(item: DisplayItem): boolean {
   if (item.type !== 'asset') return false
 
+  const effectAsset = getAsset(item.id)
+  if (effectAsset && isEffectTemplateAsset(effectAsset)) {
+    return ['pending', 'asyncprocessing', 'decoding'].includes(effectAsset.templateStatus)
+  }
+
   const mediaItem = getMediaItem(item.id)
   if (!mediaItem) return false
 
-  // 🌟 只有 pending 状态才可以取消
   return mediaItem.mediaStatus === 'pending'
 }
 
@@ -1375,6 +1457,29 @@ function canCancel(item: DisplayItem): boolean {
  */
 async function handleCancelTask(): Promise<void> {
   if (!contextMenuTarget.value || contextMenuTarget.value.type !== 'asset') return
+
+  const effectAsset = getAsset(contextMenuTarget.value.id)
+  if (effectAsset && isEffectTemplateAsset(effectAsset)) {
+    showContextMenu.value = false
+
+    try {
+      const success = await unifiedStore.cancelTemplateProcessing(effectAsset.id)
+
+      if (success) {
+        unifiedStore.messageSuccess(t('media.cancelSuccess', { name: effectAsset.name }))
+      } else {
+        unifiedStore.messageWarning(t('media.cancelFailed', { name: effectAsset.name }))
+      }
+    } catch (error) {
+      console.error('取消效果素材下载失败:', error)
+      unifiedStore.messageError(
+        t('media.cancelFailed', {
+          name: effectAsset.name,
+        }),
+      )
+    }
+    return
+  }
 
   const mediaItem = getMediaItem(contextMenuTarget.value.id)
   if (!mediaItem) return
@@ -1409,6 +1514,11 @@ async function handleCancelTask(): Promise<void> {
 function canRetry(item: DisplayItem): boolean {
   if (item.type !== 'asset') return false
 
+  const effectAsset = getAsset(item.id)
+  if (effectAsset && isEffectTemplateAsset(effectAsset)) {
+    return ['error', 'cancelled', 'missing'].includes(effectAsset.templateStatus)
+  }
+
   const mediaItem = getMediaItem(item.id)
   if (!mediaItem) return false
 
@@ -1426,6 +1536,24 @@ function canRetry(item: DisplayItem): boolean {
  */
 async function handleRetry(): Promise<void> {
   if (!contextMenuTarget.value || contextMenuTarget.value.type !== 'asset') return
+
+  const effectAsset = getAsset(contextMenuTarget.value.id)
+  if (effectAsset && isEffectTemplateAsset(effectAsset)) {
+    showContextMenu.value = false
+
+    try {
+      await unifiedStore.retryTemplateProcessing(effectAsset.id)
+      unifiedStore.messageSuccess(t('media.retryStarted', { name: effectAsset.name }))
+    } catch (error) {
+      console.error('重试效果素材下载失败:', error)
+      unifiedStore.messageError(
+        t('media.retryFailed', {
+          error: error instanceof Error ? error.message : '未知错误',
+        }),
+      )
+    }
+    return
+  }
 
   const mediaItem = getMediaItem(contextMenuTarget.value.id)
   if (!mediaItem) return
@@ -1617,7 +1745,7 @@ async function deleteFolder(folderId: string): Promise<void> {
 
 // 获取选中的显示项列表
 function getSelectedDisplayItems(): DisplayItem[] {
-  const selectedIds = Array.from(unifiedStore.selectedMediaItemIds)
+  const selectedIds = Array.from(unifiedStore.selectedLibraryAssetIds)
   return displayItems.value.filter(item => selectedIds.includes(item.id))
 }
 
@@ -1654,7 +1782,7 @@ async function handlePaste(): Promise<void> {
   }
 
   // 清空选择
-  unifiedStore.clearMediaSelection()
+  unifiedStore.clearLibraryAssetSelection()
 }
 
 // 粘贴到指定文件夹
@@ -1737,7 +1865,7 @@ async function handleBatchDelete(): Promise<void> {
       }
 
       // 清空选择
-      unifiedStore.clearMediaSelection()
+      unifiedStore.clearLibraryAssetSelection()
 
       // 显示结果消息
       if (failedCount === 0) {
@@ -2090,26 +2218,50 @@ async function handleBatchDelete(): Promise<void> {
 }
 
 .effect-template-thumbnail {
+  position: relative;
   width: 100%;
   height: 100%;
   min-height: 72px;
   display: flex;
-  flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 6px;
   color: #ffb36b;
 }
 
-.effect-template-tag {
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--color-text-primary);
+.effect-template-status-indicator {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 18px;
+  height: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: rgba(15, 15, 15, 0.72);
+  color: var(--color-text-secondary);
+  backdrop-filter: blur(4px);
 }
 
-.effect-template-summary {
-  font-size: 11px;
-  color: var(--color-text-secondary);
+.effect-template-status-indicator--processing {
+  color: #ffcf9a;
+}
+
+.effect-template-status-indicator--error {
+  color: #ff9e9e;
+}
+
+.effect-template-status-indicator__icon--spin {
+  animation: effect-template-spin 1s linear infinite;
+}
+
+@keyframes effect-template-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .effect-template-list-icon {

@@ -316,9 +316,9 @@ function createEditSDK() {
     // 选中状态信息
     try {
       const hasTimelineSelection = unifiedStore.hasSelection
-      const hasMediaSelection = unifiedStore.hasMediaSelection
+      const hasLibraryAssetSelection = unifiedStore.hasLibraryAssetSelection
 
-      if (hasTimelineSelection || hasMediaSelection) {
+      if (hasTimelineSelection || hasLibraryAssetSelection) {
         parts.push('')
         parts.push('[当前选中状态]')
 
@@ -355,18 +355,18 @@ function createEditSDK() {
         }
 
         // 媒体项目选中信息
-        if (hasMediaSelection) {
-          const selectedMediaIds = Array.from(unifiedStore.selectedMediaItemIds)
+        if (hasLibraryAssetSelection) {
+          const selectedMediaIds = Array.from(unifiedStore.selectedLibraryAssetIds)
           const mediaCount = selectedMediaIds.length
           parts.push(`- 媒体库选中: ${mediaCount} 个项目`)
           if (mediaCount === 1) {
             const mediaId = selectedMediaIds[0]
             if (mediaId) {
               parts.push(`  - ID: ${mediaId}`)
-              const mediaItem = unifiedStore.getMediaItem(mediaId)
-              if (mediaItem) {
-                parts.push(`  - 名称: ${mediaItem.name}`)
-                parts.push(`  - 类型: ${mediaItem.mediaType}`)
+              const asset = unifiedStore.getAsset(mediaId)
+              if (asset) {
+                parts.push(`  - 名称: ${asset.name}`)
+                parts.push(`  - 类型: ${asset.assetKind === 'effect-template' ? asset.effectType : asset.mediaType}`)
               }
             }
           } else {

@@ -1,10 +1,10 @@
 import { fileSystemService } from '@/core/managers/filesystem/fileSystemService'
-import type { MediaMetaFile } from '@/core/project/metaTypes'
+import { parseLibraryAssetMetaFile, type MediaMetaFile } from '@/core/project/metaTypes'
 import type { UnifiedMediaItemData, MediaStatus } from '@/core/mediaitem/types'
 import { getMediaPath, getMetaPath } from '@/core/utils/mediaPathUtils'
 import { extractSourceData } from '@/core/datasource/core/DataSourceTypes'
 import type { UnifiedLibraryAssetData } from '@/core/asset/types'
-import { isMediaAsset } from '@/core/asset/types'
+import { extractEffectTemplateSourceData, isMediaAsset } from '@/core/asset/types'
 
 /**
  * 媒体保存结果接口
@@ -169,9 +169,12 @@ class GlobalMetaFileManager {
             name: asset.name,
             createdAt: asset.createdAt,
             assetKind: 'effect-template',
-            source: asset.source,
+            source: extractEffectTemplateSourceData(asset.source),
             effectType: asset.effectType,
-            templatePayload: JSON.parse(JSON.stringify(asset.templatePayload)),
+            templateStatus: asset.templateStatus,
+            ...(asset.templatePayload && {
+              templatePayload: JSON.parse(JSON.stringify(asset.templatePayload)),
+            }),
           }
 
       // 2. 检查工作空间权限
@@ -206,7 +209,7 @@ class GlobalMetaFileManager {
     try {
       const metaPath = fileSystemService.paths.getMetaPath(this.projectId, id)
       const content = await fileSystemService.readFile(metaPath)
-      return JSON.parse(content) as MediaMetaFile
+      return parseLibraryAssetMetaFile(JSON.parse(content) as unknown)
     } catch (error) {
       console.error(`❌ [globalMetaFileManager] 读取 Meta 文件失败: ${id}`, error)
       return null
@@ -228,7 +231,7 @@ class GlobalMetaFileManager {
         if (entry.kind === 'file' && entry.name.endsWith('.meta')) {
           try {
             const content = await fileSystemService.readFile(entry.path)
-            const metaData = JSON.parse(content) as MediaMetaFile
+            const metaData = parseLibraryAssetMetaFile(JSON.parse(content) as unknown)
             metaFiles.push(metaData)
           } catch (error) {
             console.warn(`⚠️ [globalMetaFileManager] 解析 Meta 文件失败: ${entry.name}`, error)
@@ -379,6 +382,12 @@ class GlobalMetaFileManager {
     }
 
     try {
+      const packageDirPath = fileSystemService.paths.getMediaPath(this.projectId, asset.id)
+      const packageDirExists = await fileSystemService.directoryExists(packageDirPath)
+      if (packageDirExists) {
+        await fileSystemService.deleteDirectory(packageDirPath, true)
+      }
+
       const metaPath = fileSystemService.paths.getMetaPath(this.projectId, asset.id)
       const metaExists = await fileSystemService.fileExists(metaPath)
       if (metaExists) {
@@ -386,8 +395,8 @@ class GlobalMetaFileManager {
       }
 
       return {
-        success: metaExists,
-        deletedMedia: false,
+        success: packageDirExists || metaExists,
+        deletedMedia: packageDirExists,
         deletedMeta: metaExists,
       }
     } catch (error) {

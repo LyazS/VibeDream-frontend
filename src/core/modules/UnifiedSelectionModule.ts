@@ -1,6 +1,5 @@
 import { ref, computed } from 'vue'
 import type { UnifiedTimelineItemData } from '@/core/timelineitem/type'
-import type { UnifiedMediaItemData } from '@/core/mediaitem/types'
 import type { ModuleRegistry } from './ModuleRegistry'
 import { MODULE_NAMES } from './ModuleRegistry'
 import type { UnifiedTimelineModule } from './UnifiedTimelineModule'
@@ -16,7 +15,7 @@ import {
 } from '@/core/types/timelineSelection'
 import type { TimelineTransitionOverlayViewModel } from '@/core/timelineitem/transitionOverlay'
 
-export type SelectionItemType = 'timeline-selection' | 'media-item'
+export type SelectionItemType = 'timeline-selection' | 'library-asset'
 export type SelectionMode = 'replace' | 'toggle' | 'range'
 
 export function createUnifiedSelectionModule(registry: ModuleRegistry) {
@@ -28,8 +27,8 @@ export function createUnifiedSelectionModule(registry: ModuleRegistry) {
   const selectedTimelineSelectionIds = ref<Set<TimelineSelectionId>>(new Set())
   const lastSelectedTimelineSelectionId = ref<TimelineSelectionId | null>(null)
 
-  const selectedMediaItemIds = ref<Set<string>>(new Set())
-  const lastSelectedMediaItemId = ref<string | null>(null)
+  const selectedLibraryAssetIds = ref<Set<string>>(new Set())
+  const lastSelectedLibraryAssetId = ref<string | null>(null)
 
   const selectedTimelineSelectionId = computed(() => {
     return selectedTimelineSelectionIds.value.size === 1
@@ -66,14 +65,14 @@ export function createUnifiedSelectionModule(registry: ModuleRegistry) {
     return parsed?.kind === 'transition' ? parsed.sourceId : null
   })
 
-  const selectedMediaItemId = computed(() => {
-    return selectedMediaItemIds.value.size === 1
-      ? Array.from(selectedMediaItemIds.value)[0]
+  const selectedLibraryAssetId = computed(() => {
+    return selectedLibraryAssetIds.value.size === 1
+      ? Array.from(selectedLibraryAssetIds.value)[0]
       : null
   })
 
-  const isMediaMultiSelectMode = computed(() => selectedMediaItemIds.value.size > 1)
-  const hasMediaSelection = computed(() => selectedMediaItemIds.value.size > 0)
+  const isLibraryAssetMultiSelectMode = computed(() => selectedLibraryAssetIds.value.size > 1)
+  const hasLibraryAssetSelection = computed(() => selectedLibraryAssetIds.value.size > 0)
 
   function selectItems(
     itemIds: string[],
@@ -83,21 +82,21 @@ export function createUnifiedSelectionModule(registry: ModuleRegistry) {
     const targetSet =
       itemType === 'timeline-selection'
         ? (selectedTimelineSelectionIds.value as unknown as Set<string>)
-        : selectedMediaItemIds.value
+        : selectedLibraryAssetIds.value
 
     const oldSelection = new Set(targetSet)
 
-    if (itemType === 'timeline-selection' && selectedMediaItemIds.value.size > 0) {
-      selectedMediaItemIds.value.clear()
-      lastSelectedMediaItemId.value = null
-    } else if (itemType === 'media-item' && selectedTimelineSelectionIds.value.size > 0) {
+    if (itemType === 'timeline-selection' && selectedLibraryAssetIds.value.size > 0) {
+      selectedLibraryAssetIds.value.clear()
+      lastSelectedLibraryAssetId.value = null
+    } else if (itemType === 'library-asset' && selectedTimelineSelectionIds.value.size > 0) {
       selectedTimelineSelectionIds.value.clear()
       lastSelectedTimelineSelectionId.value = null
     }
 
     if (mode === 'range') {
-      if (itemType === 'media-item') {
-        handleMediaRangeSelection(itemIds[0])
+      if (itemType === 'library-asset') {
+        handleLibraryAssetRangeSelection(itemIds[0])
       } else {
         console.warn('⚠️ 时间轴选择不支持范围选择模式')
       }
@@ -121,13 +120,13 @@ export function createUnifiedSelectionModule(registry: ModuleRegistry) {
       if (itemType === 'timeline-selection') {
         lastSelectedTimelineSelectionId.value = null
       } else {
-        lastSelectedMediaItemId.value = null
+        lastSelectedLibraryAssetId.value = null
       }
     } else if (itemIds.length > 0) {
       if (itemType === 'timeline-selection') {
         lastSelectedTimelineSelectionId.value = itemIds[itemIds.length - 1] as TimelineSelectionId
       } else {
-        lastSelectedMediaItemId.value = itemIds[itemIds.length - 1]
+        lastSelectedLibraryAssetId.value = itemIds[itemIds.length - 1]
       }
     }
 
@@ -140,15 +139,15 @@ export function createUnifiedSelectionModule(registry: ModuleRegistry) {
     })
   }
 
-  function handleMediaRangeSelection(endItemId: string) {
+  function handleLibraryAssetRangeSelection(endItemId: string) {
     const allItems = getOrderedDisplayItems()
 
     if (!allItems || allItems.length === 0) return
 
-    const startItemId = lastSelectedMediaItemId.value
+    const startItemId = lastSelectedLibraryAssetId.value
 
     if (!startItemId) {
-      selectItems([endItemId], 'replace', 'media-item')
+      selectItems([endItemId], 'replace', 'library-asset')
       return
     }
 
@@ -156,14 +155,14 @@ export function createUnifiedSelectionModule(registry: ModuleRegistry) {
     const endIndex = allItems.findIndex((item) => item.id === endItemId)
 
     if (startIndex === -1 || endIndex === -1) {
-      selectItems([endItemId], 'replace', 'media-item')
+      selectItems([endItemId], 'replace', 'library-asset')
       return
     }
 
     const [minIndex, maxIndex] = [Math.min(startIndex, endIndex), Math.max(startIndex, endIndex)]
     const rangeItems = allItems.slice(minIndex, maxIndex + 1).map((item) => item.id)
 
-    selectItems(rangeItems, 'replace', 'media-item')
+    selectItems(rangeItems, 'replace', 'library-asset')
   }
 
   function sortDisplayItems(
@@ -244,20 +243,20 @@ export function createUnifiedSelectionModule(registry: ModuleRegistry) {
     }
   }
 
-  function selectMediaItems(itemIds: string[], mode: SelectionMode = 'replace') {
-    return selectItems(itemIds, mode, 'media-item')
+  function selectLibraryAssets(itemIds: string[], mode: SelectionMode = 'replace') {
+    return selectItems(itemIds, mode, 'library-asset')
   }
 
-  function selectMediaItem(mediaItemId: string | null) {
-    if (mediaItemId) {
-      selectMediaItems([mediaItemId], 'replace')
+  function selectLibraryAsset(libraryAssetId: string | null) {
+    if (libraryAssetId) {
+      selectLibraryAssets([libraryAssetId], 'replace')
     } else {
-      selectMediaItems([], 'replace')
+      selectLibraryAssets([], 'replace')
     }
   }
 
-  function isMediaItemSelected(mediaItemId: string): boolean {
-    return selectedMediaItemIds.value.has(mediaItemId)
+  function isLibraryAssetSelected(libraryAssetId: string): boolean {
+    return selectedLibraryAssetIds.value.has(libraryAssetId)
   }
 
   function isTimelineSelectionSelected(selectionId: TimelineSelectionId): boolean {
@@ -270,15 +269,15 @@ export function createUnifiedSelectionModule(registry: ModuleRegistry) {
     console.log('🔄 时间轴选择已清除')
   }
 
-  function clearMediaSelection() {
-    selectedMediaItemIds.value.clear()
-    lastSelectedMediaItemId.value = null
-    console.log('🔄 媒体项目选择已清除')
+  function clearLibraryAssetSelection() {
+    selectedLibraryAssetIds.value.clear()
+    lastSelectedLibraryAssetId.value = null
+    console.log('🔄 库素材选择已清除')
   }
 
   function clearAllSelections() {
     clearTimelineSelection()
-    clearMediaSelection()
+    clearLibraryAssetSelection()
   }
 
   function clearSelectionsForTimelineItem(timelineItemId: string) {
@@ -341,10 +340,10 @@ export function createUnifiedSelectionModule(registry: ModuleRegistry) {
     selectedClipTimelineItemIds,
     selectedTransitionSourceItemId,
     selectedTransitionSourceItemIds,
-    selectedMediaItemId,
-    selectedMediaItemIds,
-    isMediaMultiSelectMode,
-    hasMediaSelection,
+    selectedLibraryAssetId,
+    selectedLibraryAssetIds,
+    isLibraryAssetMultiSelectMode,
+    hasLibraryAssetSelection,
     selectTimelineSelections,
     selectTimelineSelection,
     isTimelineSelectionSelected,
@@ -352,10 +351,10 @@ export function createUnifiedSelectionModule(registry: ModuleRegistry) {
     clearSelectionsForTimelineItem,
     getSelectedClipTimelineItem,
     getSelectedTransitionOverlay,
-    selectMediaItems,
-    selectMediaItem,
-    isMediaItemSelected,
-    clearMediaSelection,
+    selectLibraryAssets,
+    selectLibraryAsset,
+    isLibraryAssetSelected,
+    clearLibraryAssetSelection,
     clearAllSelections,
     getSelectionSummary,
     resetToDefaults,

@@ -21,6 +21,7 @@ import { DirectoryType } from '@/core/directory/types'
 import { ClipboardOperation as ClipboardOp } from '@/core/directory/types'
 import { ModuleRegistry, MODULE_NAMES } from './ModuleRegistry'
 import type { UnifiedMediaModule } from './UnifiedMediaModule'
+import { isEffectTemplateAsset } from '@/core/asset/types'
 
 /**
  * 统一目录模块（简化版）
@@ -371,40 +372,47 @@ export function createUnifiedDirectoryModule(registry: ModuleRegistry) {
   }
 
   /**
-   * 启动目录中 pending 状态的媒体
-   * 包括当前目录的媒体项和角色类型子文件夹中的媒体项
+   * 启动目录中 pending 状态的资产
+   * 包括当前目录的资产项和角色类型子文件夹中的资产项
    */
-  function startPendingMediaInDirectory(dirId: string): void {
+  function startPendingAssetsInDirectory(dirId: string): void {
     const dir = directories.value.get(dirId)
     if (!dir || !mediaModule) return
 
     let startedCount = 0
 
-    // 处理当前目录的媒体项
-    dir.assetIds.forEach((mediaId) => {
-      const mediaItem = mediaModule.getMediaItem(mediaId)
+    const startAssetIfNeeded = (assetId: string) => {
+      const mediaItem = mediaModule.getMediaItem(assetId)
       if (mediaItem?.assetKind === 'media' && mediaItem.mediaStatus === 'pending') {
         mediaModule.startMediaProcessing(mediaItem)
         startedCount++
+        return
       }
-    })
 
-    // 处理角色类型子文件夹中的媒体项
+      const asset = mediaModule.getAsset(assetId)
+      if (
+        asset &&
+        isEffectTemplateAsset(asset) &&
+        ['pending', 'missing'].includes(asset.templateStatus)
+      ) {
+        void mediaModule.startTemplateProcessing(asset.id)
+        startedCount++
+      }
+    }
+
+    // 处理当前目录的资产项
+    dir.assetIds.forEach(startAssetIfNeeded)
+
+    // 处理角色类型子文件夹中的资产项
     dir.childDirIds.forEach((childDirId) => {
       const childDir = directories.value.get(childDirId)
       if (childDir && isCharacterDirectory(childDir)) {
-        childDir.assetIds.forEach((mediaId) => {
-          const mediaItem = mediaModule.getMediaItem(mediaId)
-          if (mediaItem?.assetKind === 'media' && mediaItem.mediaStatus === 'pending') {
-            mediaModule.startMediaProcessing(mediaItem)
-            startedCount++
-          }
-        })
+        childDir.assetIds.forEach(startAssetIfNeeded)
       }
     })
 
     if (startedCount > 0) {
-      console.log(`🚀 [DirectoryModule] 启动了 ${startedCount} 个延迟加载的媒体`)
+      console.log(`🚀 [DirectoryModule] 启动了 ${startedCount} 个延迟加载的资产`)
     }
   }
 
@@ -419,8 +427,8 @@ export function createUnifiedDirectoryModule(registry: ModuleRegistry) {
 
     activeTab.value.dirId = dirId
 
-    // 启动该目录中 pending 状态的媒体
-    startPendingMediaInDirectory(dirId)
+    // 启动该目录中 pending 状态的资产
+    startPendingAssetsInDirectory(dirId)
 
     return true
   }
@@ -434,8 +442,8 @@ export function createUnifiedDirectoryModule(registry: ModuleRegistry) {
 
     activeTabId.value = tabId
 
-    // 启动目标目录中 pending 状态的媒体
-    startPendingMediaInDirectory(tab.dirId)
+    // 启动目标目录中 pending 状态的资产
+    startPendingAssetsInDirectory(tab.dirId)
 
     return true
   }

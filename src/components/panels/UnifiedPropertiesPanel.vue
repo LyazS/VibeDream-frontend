@@ -13,9 +13,7 @@
             <span class="item-name">
               {{ item?.name || t('properties.multiSelect.unknownMedia') }}
             </span>
-            <span class="item-type">{{
-              t('properties.mediaTypes.' + (item?.mediaType || 'unknown'))
-            }}</span>
+            <span class="item-type">{{ item ? getLibraryAssetTypeLabel(item) : t('properties.mediaTypes.unknown') }}</span>
           </div>
         </div>
       </div>
@@ -25,6 +23,38 @@
     <n-scrollbar v-else-if="selectedMediaItem" class="properties-scroll-area">
       <div class="media-properties-content">
         <MediaItemProperties :media-item="selectedMediaItem" />
+      </div>
+    </n-scrollbar>
+
+    <n-scrollbar v-else-if="selectedEffectTemplateAsset" class="properties-scroll-area">
+      <div class="effect-template-properties">
+        <div class="properties-section">
+          <h3 class="section-title">{{ t('properties.mediaItem.basicInfo') }}</h3>
+          <div class="info-row">
+            <span class="info-label">{{ t('properties.mediaItem.name') }}</span>
+            <span class="info-value">{{ selectedEffectTemplateAsset.name }}</span>
+          </div>
+          <div class="info-row">
+            <span class="info-label">{{ t('properties.mediaItem.type') }}</span>
+            <span class="info-value">{{ getLibraryAssetTypeLabel(selectedEffectTemplateAsset) }}</span>
+          </div>
+          <div class="info-row">
+            <span class="info-label">{{ t('properties.mediaItem.createdAt') }}</span>
+            <span class="info-value">{{ formatDate(selectedEffectTemplateAsset.createdAt) }}</span>
+          </div>
+        </div>
+
+        <div class="properties-section">
+          <h3 class="section-title">{{ t('properties.mediaItem.statusInfo') }}</h3>
+          <div class="info-row">
+            <span class="info-label">{{ t('properties.transition.status') }}</span>
+            <span class="info-value">{{ getEffectTemplateStatusText(selectedEffectTemplateAsset.templateStatus) }}</span>
+          </div>
+          <div class="info-row">
+            <span class="info-label">Template ID</span>
+            <span class="info-value">{{ selectedEffectTemplateAsset.source.templateId || '-' }}</span>
+          </div>
+        </div>
       </div>
     </n-scrollbar>
 
@@ -143,6 +173,11 @@ import MediaItemProperties from '@/components/properties/MediaItemProperties.vue
 import MaskPropertiesGroup from '@/components/properties/groups/MaskPropertiesGroup.vue'
 import TransitionPropertiesGroup from '@/components/properties/groups/TransitionPropertiesGroup.vue'
 import { parseTimelineSelectionId } from '@/core/types/timelineSelection'
+import {
+  isEffectTemplateAsset,
+  type EffectTemplateStatus,
+  type UnifiedLibraryAssetData,
+} from '@/core/asset/types'
 
 const unifiedStore = useUnifiedStore()
 const { t } = useAppI18n()
@@ -191,15 +226,23 @@ const selectedTransitionTimelineItem = computed(() => {
 })
 
 // 选中的媒体项目
-const selectedMediaItem = computed(() => {
-  // 多选模式时返回null，显示占位内容
-  if (unifiedStore.isMediaMultiSelectMode) return null
+const selectedLibraryAsset = computed(() => {
+  if (unifiedStore.isLibraryAssetMultiSelectMode) return null
 
-  // 单选模式时返回选中项
-  const selectedId = unifiedStore.selectedMediaItemId
+  const selectedId = unifiedStore.selectedLibraryAssetId
   if (!selectedId) return null
 
-  return unifiedStore.getMediaItem(selectedId) || null
+  return unifiedStore.getAsset(selectedId) || null
+})
+
+const selectedMediaItem = computed(() => {
+  const asset = selectedLibraryAsset.value
+  return asset && !isEffectTemplateAsset(asset) ? asset : null
+})
+
+const selectedEffectTemplateAsset = computed(() => {
+  const asset = selectedLibraryAsset.value
+  return asset && isEffectTemplateAsset(asset) ? asset : null
 })
 
 // 当前播放帧数
@@ -254,13 +297,13 @@ const multiSelectInfo = computed(() => {
 
 // 媒体多选状态信息
 const mediaMultiSelectInfo = computed(() => {
-  if (!unifiedStore.isMediaMultiSelectMode) return null
+  if (!unifiedStore.isLibraryAssetMultiSelectMode) return null
 
-  const selectedIds = unifiedStore.selectedMediaItemIds
+  const selectedIds = unifiedStore.selectedLibraryAssetIds
   return {
     count: selectedIds.size,
     items: Array.from(selectedIds)
-      .map((id) => unifiedStore.getMediaItem(id))
+      .map((id) => unifiedStore.getAsset(id))
       .filter(Boolean),
   }
 })
@@ -277,6 +320,43 @@ const getItemDisplayName = (item: any) => {
     // 其他类型显示素材名称
     return unifiedStore.getMediaItem(item.mediaItemId)?.name || '未知素材'
   }
+}
+
+function getLibraryAssetTypeLabel(asset: UnifiedLibraryAssetData): string {
+  if (isEffectTemplateAsset(asset)) {
+    return t('properties.transition.title')
+  }
+
+  return t('properties.mediaTypes.' + (asset.mediaType || 'unknown'))
+}
+
+function getEffectTemplateStatusText(status: EffectTemplateStatus): string {
+  switch (status) {
+    case 'pending':
+    case 'asyncprocessing':
+      return t('media.effectTemplateDownloading')
+    case 'decoding':
+      return t('media.effectTemplateInstalling')
+    case 'error':
+      return t('media.effectTemplateFailed')
+    case 'cancelled':
+      return t('media.badge.cancelled')
+    case 'missing':
+      return t('media.effectTemplateMissing')
+    case 'ready':
+      return 'Ready'
+    default:
+      return status
+  }
+}
+
+function formatDate(value: string): string {
+  if (!value) return '-'
+
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return value
+
+  return date.toLocaleString()
 }
 
 watch(propertyTabs, (tabs) => {
@@ -346,6 +426,39 @@ watch(propertyTabs, (tabs) => {
 /* 媒体属性内容 */
 .media-properties-content {
   padding: 0;
+}
+
+.effect-template-properties {
+  padding: var(--spacing-md) var(--spacing-lg);
+}
+
+.properties-section + .properties-section {
+  margin-top: var(--spacing-lg);
+}
+
+.section-title {
+  margin: 0 0 var(--spacing-sm);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-primary);
+}
+
+.info-row {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--spacing-md);
+  padding: var(--spacing-xs) 0;
+}
+
+.info-label {
+  color: var(--color-text-secondary);
+  flex-shrink: 0;
+}
+
+.info-value {
+  color: var(--color-text-primary);
+  text-align: right;
+  word-break: break-word;
 }
 
 /* 多选状态样式 */

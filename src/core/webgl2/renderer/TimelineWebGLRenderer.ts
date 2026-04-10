@@ -1,3 +1,4 @@
+import type { UnifiedLibraryAssetData } from '@/core/asset/types'
 import type { UnifiedTimelineItemData } from '@/core/timelineitem/type'
 import type { MediaType, UnifiedMediaItemData } from '@/core/mediaitem/types'
 import { WebGL2Runtime } from '@/core/webgl2/runtime/WebGL2Runtime'
@@ -27,6 +28,7 @@ interface TimelineWebGLRendererOptions {
   canvas: HTMLCanvasElement
   getTrack: (trackId: string) => { isVisible: boolean } | undefined
   getMediaItem: (mediaItemId: string) => UnifiedMediaItemData | undefined
+  getAsset: (assetId: string | null) => UnifiedLibraryAssetData | undefined
   trackIndexMap: () => Map<string, number>
   getSelectedTimelineItemId?: () => string | null
 }
@@ -74,6 +76,7 @@ export class TimelineWebGLRenderer {
       getTransitionEdgeTextureId: (transitionItemId, edgeKey) =>
         this.getTransitionEdgeTextureId(transitionItemId, edgeKey),
       getMediaItem: options.getMediaItem,
+      getAsset: options.getAsset,
       getCurrentFrame: () => this.currentRenderFrame,
     })
     this.transitionChainAdapter = new TransitionRenderChainAdapter(this.transitionChainBuilder)

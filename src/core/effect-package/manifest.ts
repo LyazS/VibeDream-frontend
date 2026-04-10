@@ -1,0 +1,192 @@
+import type {
+  EffectPackageManifest,
+  EffectPackageParameterDefinition,
+  TransitionPackagePayload,
+} from '@/core/effect-package/types'
+
+function normalizeLocalizedText(value: unknown, fallback: string): { zh: string; en: string } {
+  if (typeof value === 'object' && value && !Array.isArray(value)) {
+    const record = value as Record<string, unknown>
+    const zh = String(record.zh ?? fallback).trim() || fallback
+    const en = String(record.en ?? fallback).trim() || fallback
+    return { zh, en }
+  }
+
+  const normalized = String(value ?? fallback).trim() || fallback
+  return { zh: normalized, en: normalized }
+}
+
+function normalizeLocalizedTags(value: unknown): { zh: string[]; en: string[] } {
+  if (typeof value === 'object' && value && !Array.isArray(value)) {
+    const record = value as Record<string, unknown>
+    const zh = Array.isArray(record.zh) ? record.zh.map((item) => String(item).trim()).filter(Boolean) : []
+    const en = Array.isArray(record.en) ? record.en.map((item) => String(item).trim()).filter(Boolean) : []
+    return { zh, en }
+  }
+
+  if (Array.isArray(value)) {
+    const normalized = value.map((item) => String(item).trim()).filter(Boolean)
+    return { zh: normalized, en: normalized }
+  }
+
+  return { zh: [], en: [] }
+}
+
+function normalizePath(path: string): string {
+  return path.replace(/^\.?\//, '').replace(/\\/g, '/')
+}
+
+function normalizeNumberArray(value: unknown, size: number): number[] {
+  if (!Array.isArray(value) || value.length !== size) {
+    return new Array(size).fill(0)
+  }
+
+  return value.map((item) => Number(item) || 0)
+}
+
+function parseHexColor(input: string): [number, number, number, number] {
+  const hex = input.trim().replace('#', '')
+  if (hex.length !== 6 && hex.length !== 8) {
+    return [1, 1, 1, 1]
+  }
+
+  const r = Number.parseInt(hex.slice(0, 2), 16) / 255
+  const g = Number.parseInt(hex.slice(2, 4), 16) / 255
+  const b = Number.parseInt(hex.slice(4, 6), 16) / 255
+  const a = hex.length === 8 ? Number.parseInt(hex.slice(6, 8), 16) / 255 : 1
+  return [r, g, b, a]
+}
+
+export function hashString(value: string): string {
+  let hash = 2166136261
+  for (let index = 0; index < value.length; index += 1) {
+    hash ^= value.charCodeAt(index)
+    hash = Math.imul(hash, 16777619)
+  }
+
+  return (hash >>> 0).toString(16)
+}
+
+export function normalizeManifest(raw: unknown): EffectPackageManifest {
+  if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) {
+    throw new Error('effect package manifest 必须是对象')
+  }
+
+  const payload = raw as Record<string, unknown>
+  const apiVersion = String(payload.apiVersion ?? '').trim()
+  const effectType = String(payload.effectType ?? '').trim()
+  const packageId = String(payload.packageId ?? '').trim()
+  const version = String(payload.version ?? '').trim()
+  const entry = normalizePath(String(payload.entry ?? '').trim())
+
+  if (apiVersion !== '1.0') {
+    throw new Error(`不支持的 effect package apiVersion: ${apiVersion || '(empty)'}`)
+  }
+  if (effectType !== 'transition') {
+    throw new Error(`第一阶段仅支持 transition effect package: ${effectType || '(empty)'}`)
+  }
+  if (!packageId) {
+    throw new Error('effect package 缺少 packageId')
+  }
+  if (!version) {
+    throw new Error('effect package 缺少 version')
+  }
+  if (!entry) {
+    throw new Error('effect package 缺少 entry')
+  }
+
+  const parametersRaw =
+    typeof payload.parameters === 'object' && payload.parameters && !Array.isArray(payload.parameters)
+      ? (payload.parameters as Record<string, unknown>)
+      : {}
+
+  const parameters: Record<string, EffectPackageParameterDefinition> = {}
+  for (const [key, value] of Object.entries(parametersRaw)) {
+    if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+      continue
+    }
+
+    const definition = value as Record<string, unknown>
+    const type = String(definition.type ?? '').trim() as EffectPackageParameterDefinition['type']
+    if (!['number', 'boolean', 'color', 'vec2'].includes(type)) {
+      continue
+    }
+
+    parameters[key] = {
+      type,
+      default: definition.default,
+      min: definition.min === undefined ? undefined : Number(definition.min),
+      max: definition.max === undefined ? undefined : Number(definition.max),
+      step: definition.step === undefined ? undefined : Number(definition.step),
+    }
+  }
+
+  return {
+    apiVersion: '1.0',
+    effectType: 'transition',
+    packageId,
+    version,
+    name: normalizeLocalizedText(payload.name, packageId),
+    summary: normalizeLocalizedText(payload.summary, ''),
+    tags: normalizeLocalizedTags(payload.tags),
+    cover: payload.cover ? normalizePath(String(payload.cover)) : null,
+    entry,
+    defaultDurationFrames: Math.max(2, Math.round(Number(payload.defaultDurationFrames ?? 30) || 30)),
+    parameters,
+    sort_order: Math.round(Number(payload.sort_order ?? 0) || 0),
+    is_active: payload.is_active === undefined ? true : Boolean(payload.is_active),
+  }
+}
+
+export function resolveDefaultParams(
+  parameters: Record<string, EffectPackageParameterDefinition>,
+): Record<string, unknown> {
+  const defaults: Record<string, unknown> = {}
+
+  for (const [key, definition] of Object.entries(parameters)) {
+    const value = definition.default
+    switch (definition.type) {
+      case 'number':
+        defaults[key] = Number(value ?? 0)
+        break
+      case 'boolean':
+        defaults[key] = Boolean(value)
+        break
+      case 'color':
+        defaults[key] = typeof value === 'string' ? parseHexColor(value) : normalizeNumberArray(value, 4)
+        break
+      case 'vec2':
+        defaults[key] = normalizeNumberArray(value, 2)
+        break
+    }
+  }
+
+  return defaults
+}
+
+export function buildTransitionPackagePayload(
+  packageDir: string,
+  manifest: EffectPackageManifest,
+  scriptHash: string,
+): TransitionPackagePayload {
+  return {
+    packageDir: normalizePath(packageDir),
+    packageId: manifest.packageId,
+    version: manifest.version,
+    entryFile: manifest.entry,
+    defaultDurationFrames: manifest.defaultDurationFrames,
+    parameterSchema: manifest.parameters,
+    defaultParams: resolveDefaultParams(manifest.parameters),
+    manifestSnapshot: {
+      name: manifest.name,
+      summary: manifest.summary,
+      tags: manifest.tags,
+      cover: manifest.cover ?? null,
+    },
+    scriptHash,
+  }
+}
+
+export function normalizePackageResourcePath(path: string): string {
+  return normalizePath(path)
+}

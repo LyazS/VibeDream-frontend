@@ -174,6 +174,11 @@ export const useUnifiedStore = defineStore('unified', () => {
     getAsset: unifiedMediaModule.getAsset,
     getAllAssets: unifiedMediaModule.getAllAssets,
     updateAssetName: unifiedMediaModule.updateAssetName,
+    createTransitionTemplatePlaceholder:
+      unifiedMediaModule.createTransitionTemplatePlaceholder,
+    startTemplateProcessing: unifiedMediaModule.startTemplateProcessing,
+    retryTemplateProcessing: unifiedMediaModule.retryTemplateProcessing,
+    cancelTemplateProcessing: unifiedMediaModule.cancelTemplateProcessing,
     getMediaItemBySourceId: unifiedMediaModule.getMediaItemBySourceId,
     updateMediaItemName: unifiedMediaModule.updateMediaItemName,
     updateMediaItem: unifiedMediaModule.updateMediaItem,
@@ -193,6 +198,7 @@ export const useUnifiedStore = defineStore('unified', () => {
 
     // 便捷查询方法
     getReadyMediaItems: unifiedMediaModule.getReadyMediaItems,
+    getReadyEffectTemplateAssets: unifiedMediaModule.getReadyEffectTemplateAssets,
     getProcessingMediaItems: unifiedMediaModule.getProcessingMediaItems,
     getErrorMediaItems: unifiedMediaModule.getErrorMediaItems,
     getMediaItemsBySourceType: unifiedMediaModule.getMediaItemsBySourceType,
@@ -408,13 +414,14 @@ export const useUnifiedStore = defineStore('unified', () => {
     executeBatchCommand: unifiedHistoryModule.executeBatchCommand,
 
     // ==================== 统一选择模块状态和方法 ====================
-    selectedMediaItemIds: unifiedSelectionModule.selectedMediaItemIds,
-    selectedMediaItemId: unifiedSelectionModule.selectedMediaItemId,
-    hasMediaSelection: unifiedSelectionModule.hasMediaSelection,
-    isMediaMultiSelectMode: unifiedSelectionModule.isMediaMultiSelectMode,
-    selectMediaItems: unifiedSelectionModule.selectMediaItems,
-    isMediaItemSelected: unifiedSelectionModule.isMediaItemSelected,
-    clearMediaSelection: unifiedSelectionModule.clearMediaSelection,
+    selectedLibraryAssetIds: unifiedSelectionModule.selectedLibraryAssetIds,
+    selectedLibraryAssetId: unifiedSelectionModule.selectedLibraryAssetId,
+    hasLibraryAssetSelection: unifiedSelectionModule.hasLibraryAssetSelection,
+    isLibraryAssetMultiSelectMode: unifiedSelectionModule.isLibraryAssetMultiSelectMode,
+    selectLibraryAssets: unifiedSelectionModule.selectLibraryAssets,
+    selectLibraryAsset: unifiedSelectionModule.selectLibraryAsset,
+    isLibraryAssetSelected: unifiedSelectionModule.isLibraryAssetSelected,
+    clearLibraryAssetSelection: unifiedSelectionModule.clearLibraryAssetSelection,
 
     // 选择状态
     selectedTimelineSelectionId: unifiedSelectionModule.selectedTimelineSelectionId,

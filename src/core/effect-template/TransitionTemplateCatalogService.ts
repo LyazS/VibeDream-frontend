@@ -1,7 +1,7 @@
-import { fetchClient } from '@/utils/fetchClient'
+import { fetchClient, type RequestConfig } from '@/utils/fetchClient'
 import type {
   TransitionCatalogVersionResponse,
-  TransitionTemplateDetail,
+  TransitionTemplateDownloadResponse,
   TransitionTemplateListResponse,
 } from '@/core/effect-template/catalogTypes'
 
@@ -20,9 +20,13 @@ export class TransitionTemplateCatalogService {
     return response.data
   }
 
-  async getTemplateDetail(templateId: string): Promise<TransitionTemplateDetail> {
-    const response = await fetchClient.get<TransitionTemplateDetail>(
-      `/api/effect-templates/transitions/${templateId}`,
+  async downloadTemplatePackage(
+    templateId: string,
+    config?: RequestConfig,
+  ): Promise<TransitionTemplateDownloadResponse> {
+    const response = await fetchClient.get<TransitionTemplateDownloadResponse>(
+      `/api/effect-templates/transitions/${templateId}/download`,
+      config,
     )
     return response.data
   }

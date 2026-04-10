@@ -247,6 +247,7 @@ async function handleExportWithSettings(settings: {
         timelineItems: unifiedStore.timelineItems,
         tracks: unifiedStore.tracks,
         getMediaItem: (id: string) => unifiedStore.getMediaItem(id),
+        getAsset: (id: string | null) => unifiedStore.getAsset(id),
         videoQuality: settings.videoQuality,
         audioQuality: settings.audioQuality,
         frameRate: settings.frameRate,

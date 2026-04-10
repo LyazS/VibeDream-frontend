@@ -15,6 +15,7 @@ import type { UnifiedProjectModule } from '@/core/modules/UnifiedProjectModule'
 import type { UnifiedTimelineModule } from '@/core/modules/UnifiedTimelineModule'
 import type { UnifiedAutoSaveModule } from '@/core/modules/UnifiedAutoSaveModule'
 import { getDataSourceRegistry } from '@/core/datasource/registry'
+import { SourceOrigin } from '@/core/datasource/core/BaseDataSource'
 import { globalMetaFileManager } from '@/core/managers/media/globalMetaFileManager'
 import type {
   EffectTemplateAssetData,
@@ -24,6 +25,7 @@ import {
   isEffectTemplateAsset,
   isMediaAsset,
 } from '@/core/asset/types'
+import { EffectTemplateManager } from '@/core/effect-template/EffectTemplateManager'
 
 // ==================== 统一媒体项目调试工具 ====================
 
@@ -86,6 +88,10 @@ export function createUnifiedMediaModule(registry: ModuleRegistry) {
   // 统一媒体项目列表
   const mediaItems = ref<UnifiedMediaItemData[]>([])
   const effectTemplateAssets = ref<EffectTemplateAssetData[]>([])
+  const effectTemplateManager = new EffectTemplateManager(
+    registry,
+    (assetId) => effectTemplateAssets.value.find((item) => item.id === assetId),
+  )
 
   // ==================== 媒体项目管理方法 ====================
 
@@ -118,7 +124,12 @@ export function createUnifiedMediaModule(registry: ModuleRegistry) {
     effectTemplateAssets.value.push(asset)
     const autoSaveModule = registry.get<UnifiedAutoSaveModule>(MODULE_NAMES.AUTOSAVE)
     autoSaveModule.setupMediaItemWatcher(asset)
-    void globalMetaFileManager.saveMetaFile(asset)
+
+    // Project restore should only hydrate in-memory state and watchers.
+    // Initial meta persistence is reserved for user-created template assets.
+    if (asset.source.sourceOrigin === SourceOrigin.USER_CREATE) {
+      void globalMetaFileManager.saveMetaFile(asset)
+    }
   }
 
   /**
@@ -196,6 +207,7 @@ export function createUnifiedMediaModule(registry: ModuleRegistry) {
     }
 
     const asset = effectTemplateAssets.value[index]
+    await effectTemplateManager.cleanupTemplateProcessing(assetId)
     const autoSaveModule = registry.get<UnifiedAutoSaveModule>(MODULE_NAMES.AUTOSAVE)
     autoSaveModule.cleanupMediaItemWatcher(assetId)
     await cleanupRelatedTransitionTemplateReferences(assetId)
@@ -468,6 +480,30 @@ export function createUnifiedMediaModule(registry: ModuleRegistry) {
     }
   }
 
+  function createTransitionTemplatePlaceholder(params: {
+    templateId: string
+    name: string
+    catalogVersion?: string
+  }): EffectTemplateAssetData {
+    return effectTemplateManager.createTransitionTemplatePlaceholder(params)
+  }
+
+  async function startTemplateProcessing(assetId: string): Promise<void> {
+    await effectTemplateManager.startTemplateProcessing(assetId)
+  }
+
+  async function retryTemplateProcessing(assetId: string): Promise<void> {
+    await effectTemplateManager.retryTemplateProcessing(assetId)
+  }
+
+  async function cancelTemplateProcessing(assetId: string): Promise<boolean> {
+    return effectTemplateManager.cancelTemplateProcessing(assetId)
+  }
+
+  function getReadyEffectTemplateAssets(): EffectTemplateAssetData[] {
+    return effectTemplateAssets.value.filter((item) => item.templateStatus === 'ready')
+  }
+
   // ==================== 便捷查询方法 ====================
 
   /**
@@ -608,6 +644,11 @@ export function createUnifiedMediaModule(registry: ModuleRegistry) {
     getAsset,
     getAllAssets,
     updateAssetName,
+    createTransitionTemplatePlaceholder,
+    startTemplateProcessing,
+    retryTemplateProcessing,
+    cancelTemplateProcessing,
+    getReadyEffectTemplateAssets,
 
     // 分辨率管理方法
     getVideoOriginalResolution,

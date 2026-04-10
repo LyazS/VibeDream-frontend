@@ -30,6 +30,7 @@ export interface AudioBufferWithVolume {
   volume: number
 }
 import type { UnifiedTimelineItemData } from '@/core/timelineitem/type'
+import type { UnifiedLibraryAssetData } from '@/core/asset/types'
 import type { MediaType } from '@/core/mediaitem'
 import type { UnifiedMediaItemData } from '@/core/mediaitem/types'
 import type { IClip } from '@/core/mediabunny/IClip'
@@ -72,6 +73,8 @@ export interface ExportProjectOptions {
   tracks: { id: string; isVisible: boolean; isMuted: boolean }[]
   /** 获取媒体项目的函数 */
   getMediaItem: (id: string) => UnifiedMediaItemData | undefined
+  /** 获取素材资产的函数 */
+  getAsset: (id: string | null) => UnifiedLibraryAssetData | undefined
   /** 进度更新回调函数（可选） */
   onProgress?: (stage: string, progress: number, details?: string) => void
   /** 视频质量 */
@@ -184,6 +187,7 @@ export class ExportManager {
           : undefined
       },
       getMediaItem: this.config.getMediaItem,
+      getAsset: this.config.getAsset,
       trackIndexMap: () => new Map(this.config.tracks.map((track, index) => [track.id, index])),
     })
     this.canvas = this.webglRenderer.canvas
@@ -823,6 +827,7 @@ async function exportVideoMediaItem(
     timelineItems: [tempTimelineItem],
     tracks: [{ id: 'temp-track', isVisible: true, isMuted: false }],
     getMediaItem: (id: string) => (id === mediaItem.id ? mediaItem : undefined),
+    getAsset: () => undefined,
     onProgress: onProgress ? (stage, progress) => onProgress(progress) : undefined,
     videoQuality: QUALITY_MEDIUM,
     audioQuality: QUALITY_MEDIUM,
@@ -967,6 +972,7 @@ async function exportVideoTimelineItem(
     timelineItems: [cleanTimelineItem],
     tracks: [{ id: 'temp-track', isVisible: true, isMuted: false }],
     getMediaItem: (id: string) => (id === mediaItem.id ? mediaItem : undefined),
+    getAsset: () => undefined,
     onProgress: onProgress ? (stage, progress) => onProgress(progress) : undefined,
     videoQuality: QUALITY_MEDIUM,
     audioQuality: QUALITY_MEDIUM,
@@ -1046,6 +1052,7 @@ async function exportAudioTimelineItem(
     timelineItems: [cleanTimelineItem],
     tracks: [{ id: 'temp-track', isVisible: true, isMuted: false }],
     getMediaItem: (id: string) => (id === mediaItem.id ? mediaItem : undefined),
+    getAsset: () => undefined,
     onProgress: onProgress ? (stage, progress) => onProgress(progress) : undefined,
     videoQuality: QUALITY_MEDIUM,
     audioQuality: QUALITY_MEDIUM,

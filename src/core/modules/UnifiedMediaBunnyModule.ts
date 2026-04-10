@@ -113,6 +113,7 @@ export function createUnifiedMediaBunnyModule(
         canvas: mCanvas,
         getTrack: (trackId: string) => trackModule.getTrack(trackId),
         getMediaItem: (mediaItemId: string) => mediaModule.getMediaItem(mediaItemId),
+        getAsset: (assetId: string | null) => mediaModule.getAsset(assetId),
         trackIndexMap: () => trackModule.trackIndexMap.value,
         getSelectedTimelineItemId: () => selectionModule.selectedClipTimelineItemId.value,
       })

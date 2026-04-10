@@ -10,7 +10,7 @@ import type {
   EffectTemplateApplyContext,
   EffectTemplatePreviewData,
 } from '@/core/effect-template/types'
-import type { TransitionShaderResource } from '@/core/transition/types'
+import type { TransitionPackagePayload } from '@/core/effect-package/types'
 
 interface TransitionTemplateResolvedCandidate extends TransitionTemplateDropCandidate {
   snappedFrame: number | null
@@ -18,15 +18,16 @@ interface TransitionTemplateResolvedCandidate extends TransitionTemplateDropCand
 }
 
 function resolveTemplateDurationFrames(dragData: MediaItemDragData): number {
-  return Math.max(2, Math.round(Number((dragData.templatePayload as any)?.durationFrames ?? 30)))
+  const payload = dragData.templatePayload as any
+  return Math.max(
+    2,
+    Math.round(Number(payload?.defaultDurationFrames ?? payload?.durationFrames ?? 30)),
+  )
 }
 
-function resolveTemplateShader(dragData: MediaItemDragData): TransitionShaderResource | null {
-  const shader = (dragData.templatePayload as any)?.shader as TransitionShaderResource | undefined
-  if (!shader?.fragmentShader) {
-    return null
-  }
-  return shader
+function resolveTemplatePackage(dragData: MediaItemDragData): TransitionPackagePayload | null {
+  const payload = dragData.templatePayload as TransitionPackagePayload | undefined
+  return payload && 'packageId' in payload ? payload : null
 }
 
 export class TransitionEffectTemplateHandler
@@ -99,16 +100,18 @@ export class TransitionEffectTemplateHandler
 
     const store = useUnifiedStore()
     const durationFrames = resolveTemplateDurationFrames(dragData)
-    const shader = resolveTemplateShader(dragData)
-    if (!shader) {
-      return { success: false, error: '模板资产缺少 shader 资源' }
+    const packagePayload = resolveTemplatePackage(dragData)
+    if (!packagePayload) {
+      return { success: false, error: '模板资产缺少可下载的 effect package' }
     }
 
     store.pause()
     await store.updateTransitionOutWithHistory(candidate.sourceItemId, {
       durationFrames,
       templateAssetId: dragData.assetId,
-      shader,
+      packageAssetId: dragData.assetId,
+      packagePayload: packagePayload,
+      params: JSON.parse(JSON.stringify(packagePayload.defaultParams)),
     })
 
     return { success: true }

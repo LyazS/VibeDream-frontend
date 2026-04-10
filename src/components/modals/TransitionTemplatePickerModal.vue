@@ -93,8 +93,6 @@ import HoverButton from '@/components/base/HoverButton.vue'
 import { IconComponents } from '@/constants/iconComponents'
 import { useAppI18n } from '@/core/composables/useI18n'
 import { useUnifiedStore } from '@/core/unifiedStore'
-import { createTransitionTemplateAssetData } from '@/core/asset/types'
-import { generateAssetId } from '@/core/utils/idGenerator'
 import type {
   LocalizedTagList,
   LocalizedText,
@@ -186,21 +184,22 @@ async function handleTemplateSelect(templateId: string): Promise<void> {
 
   creatingTemplateId.value = templateId
   try {
-    const detail = await transitionTemplateCatalogService.getTemplateDetail(templateId)
-    const asset = createTransitionTemplateAssetData(
-      generateAssetId('effect'),
-      resolveLocalizedText(detail.name),
-      {
-        durationFrames: detail.duration_frames,
-        shader: detail.shader,
-      },
-    )
+    const template = items.value.find((item) => item.id === templateId)
+    if (!template) {
+      throw new Error('模板不存在')
+    }
 
+    const asset = unifiedStore.createTransitionTemplatePlaceholder({
+      templateId,
+      name: resolveLocalizedText(template.name),
+      catalogVersion: catalogVersion.value || undefined,
+    })
     unifiedStore.addAsset(asset)
     unifiedStore.addAssetToDirectory(asset.id, props.directoryId)
+    void unifiedStore.startTemplateProcessing(asset.id)
     unifiedStore.messageSuccess(
       t('media.transitionTemplateCreated', {
-        name: resolveLocalizedText(detail.name),
+        name: asset.name,
       }),
     )
     emit('update:show', false)

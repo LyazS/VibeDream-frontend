@@ -4,7 +4,8 @@
  */
 
 import type { FileInputConfig, MultiFileData } from '@/core/datasource/providers/ai-generation/types'
-import type { AssetKind, EffectType, TransitionTemplatePayload } from '@/core/asset/types'
+import type { AssetKind, EffectType } from '@/core/asset/types'
+import type { TransitionPackagePayload } from '@/core/effect-package/types'
 import type { MediaTypeOrUnknown } from '@/core/mediaitem/types'
 
 // ==================== 拖拽源类型 ====================
@@ -29,7 +30,7 @@ export interface AssetDragParams {
 
 export interface MediaItemDragParams {
   mediaItemId: string
-  selectedMediaItemIds?: string[] // 可选：支持多选
+  selectedAssetIds?: string[] // 可选：支持多选
 }
 
 /**
@@ -86,7 +87,7 @@ export interface AssetDragData extends BaseDragData {
   duration?: number
   mediaType?: MediaTypeOrUnknown
   effectType?: EffectType
-  templatePayload?: TransitionTemplatePayload | unknown
+  templatePayload?: TransitionPackagePayload | unknown
   mediaItemIds?: string[]
   mediaItemId?: string
   type?: 'media-item' // 兼容旧代码
