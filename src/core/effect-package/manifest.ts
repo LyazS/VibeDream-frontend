@@ -1,6 +1,7 @@
 import type {
   EffectPackageManifest,
   EffectPackageParameterDefinition,
+  TransitionEffectPackageHost,
   TransitionPackagePayload,
 } from '@/core/effect-package/types'
 
@@ -67,6 +68,34 @@ export function hashString(value: string): string {
   return (hash >>> 0).toString(16)
 }
 
+function normalizeTransitionHost(value: unknown): TransitionEffectPackageHost {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    throw new Error('transition effect package 缺少 host.transition.defaultDurationFrames')
+  }
+
+  const hostPayload = value as Record<string, unknown>
+  if (typeof hostPayload.transition !== 'object' || hostPayload.transition === null || Array.isArray(hostPayload.transition)) {
+    throw new Error('transition effect package 缺少 host.transition.defaultDurationFrames')
+  }
+
+  const transitionPayload = hostPayload.transition as Record<string, unknown>
+  const rawDefaultDurationFrames = transitionPayload.defaultDurationFrames
+  if (typeof rawDefaultDurationFrames !== 'number' || !Number.isFinite(rawDefaultDurationFrames)) {
+    throw new Error('transition effect package 缺少有效的 host.transition.defaultDurationFrames')
+  }
+
+  const defaultDurationFrames = Math.round(rawDefaultDurationFrames)
+  if (defaultDurationFrames < 2) {
+    throw new Error('transition effect package 的 host.transition.defaultDurationFrames 必须大于等于 2')
+  }
+
+  return {
+    transition: {
+      defaultDurationFrames,
+    },
+  }
+}
+
 export function normalizeManifest(raw: unknown): EffectPackageManifest {
   if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) {
     throw new Error('effect package manifest 必须是对象')
@@ -131,7 +160,7 @@ export function normalizeManifest(raw: unknown): EffectPackageManifest {
     tags: normalizeLocalizedTags(payload.tags),
     cover: payload.cover ? normalizePath(String(payload.cover)) : null,
     entry,
-    defaultDurationFrames: Math.max(2, Math.round(Number(payload.defaultDurationFrames ?? 30) || 30)),
+    host: normalizeTransitionHost(payload.host),
     parameters,
     sort_order: Math.round(Number(payload.sort_order ?? 0) || 0),
     is_active: payload.is_active === undefined ? true : Boolean(payload.is_active),
@@ -174,7 +203,11 @@ export function buildTransitionPackagePayload(
     packageId: manifest.packageId,
     version: manifest.version,
     entryFile: manifest.entry,
-    defaultDurationFrames: manifest.defaultDurationFrames,
+    host: {
+      transition: {
+        defaultDurationFrames: manifest.host.transition.defaultDurationFrames,
+      },
+    },
     parameterSchema: manifest.parameters,
     defaultParams: resolveDefaultParams(manifest.parameters),
     manifestSnapshot: {

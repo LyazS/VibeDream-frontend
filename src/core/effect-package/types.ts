@@ -2,6 +2,12 @@ import type { LocalizedTagList, LocalizedText } from '@/core/effect-template/cat
 
 export type EffectPackageParameterType = 'number' | 'boolean' | 'color' | 'vec2'
 
+export interface TransitionEffectPackageHost {
+  transition: {
+    defaultDurationFrames: number
+  }
+}
+
 export interface EffectPackageParameterDefinition {
   type: EffectPackageParameterType
   default?: unknown
@@ -27,7 +33,7 @@ export interface EffectPackageManifest {
   tags: LocalizedTagList
   cover?: string | null
   entry: string
-  defaultDurationFrames: number
+  host: TransitionEffectPackageHost
   parameters: Record<string, EffectPackageParameterDefinition>
   sort_order: number
   is_active: boolean
@@ -38,7 +44,7 @@ export interface TransitionPackagePayload {
   packageId: string
   version: string
   entryFile: string
-  defaultDurationFrames: number
+  host: TransitionEffectPackageHost
   parameterSchema: Record<string, EffectPackageParameterDefinition>
   defaultParams: Record<string, unknown>
   manifestSnapshot: EffectPackageManifestSnapshot
@@ -57,4 +63,35 @@ export interface LoadedEffectPackage {
   textureResources: Map<string, ImageBitmap>
   pendingTextureLoads: Map<string, Promise<ImageBitmap>>
   payload: TransitionPackagePayload
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+export function isTransitionEffectPackageHost(value: unknown): value is TransitionEffectPackageHost {
+  if (!isRecord(value) || !isRecord(value.transition)) {
+    return false
+  }
+
+  const defaultDurationFrames = value.transition.defaultDurationFrames
+  return typeof defaultDurationFrames === 'number'
+    && Number.isFinite(defaultDurationFrames)
+    && defaultDurationFrames >= 2
+}
+
+export function isTransitionPackagePayload(value: unknown): value is TransitionPackagePayload {
+  if (!isRecord(value)) {
+    return false
+  }
+
+  return typeof value.packageDir === 'string'
+    && typeof value.packageId === 'string'
+    && typeof value.version === 'string'
+    && typeof value.entryFile === 'string'
+    && isTransitionEffectPackageHost(value.host)
+    && isRecord(value.parameterSchema)
+    && isRecord(value.defaultParams)
+    && isRecord(value.manifestSnapshot)
+    && typeof value.scriptHash === 'string'
 }

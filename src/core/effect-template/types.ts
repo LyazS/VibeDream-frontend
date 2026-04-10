@@ -24,6 +24,7 @@ export interface EffectTemplateDropCandidate {
   canDrop: boolean
   snappedFrame: number | null
   preview: EffectTemplatePreviewData | null
+  invalidReason?: string
 }
 
 export interface EffectTemplateApplyContext<TCandidate extends EffectTemplateDropCandidate> {

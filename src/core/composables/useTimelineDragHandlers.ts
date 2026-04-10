@@ -292,7 +292,10 @@ export function useTimelineDragHandlers(
           },
         }
 
-        await unifiedStore.handleDrop(event, targetInfo)
+        const result = await unifiedStore.handleDrop(event, targetInfo)
+        if (!result.success && result.error) {
+          unifiedStore.messageError(result.error)
+        }
         return
       }
 
@@ -351,7 +354,10 @@ export function useTimelineDragHandlers(
     }
 
     // 7. 调用拖拽管理器处理放置
-    await unifiedStore.handleDrop(event, targetInfo)
+    const result = await unifiedStore.handleDrop(event, targetInfo)
+    if (!result.success && result.error) {
+      unifiedStore.messageError(result.error)
+    }
   }
 
   /**

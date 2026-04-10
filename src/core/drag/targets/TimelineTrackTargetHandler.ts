@@ -223,7 +223,9 @@ export class TimelineTrackTargetHandler implements DropTargetHandler {
     })
 
     if (!candidate.canDrop) {
-      return { success: false }
+      return candidate.invalidReason
+        ? { success: false, error: candidate.invalidReason }
+        : { success: false }
     }
 
     return handler.applyTemplate({

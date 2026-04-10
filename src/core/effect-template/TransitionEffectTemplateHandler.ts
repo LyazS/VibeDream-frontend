@@ -10,24 +10,32 @@ import type {
   EffectTemplateApplyContext,
   EffectTemplatePreviewData,
 } from '@/core/effect-template/types'
-import type { TransitionPackagePayload } from '@/core/effect-package/types'
+import { isTransitionPackagePayload, type TransitionPackagePayload } from '@/core/effect-package/types'
 
 interface TransitionTemplateResolvedCandidate extends TransitionTemplateDropCandidate {
   snappedFrame: number | null
   preview: EffectTemplatePreviewData | null
+  invalidReason?: string
 }
 
-function resolveTemplateDurationFrames(dragData: MediaItemDragData): number {
-  const payload = dragData.templatePayload as any
-  return Math.max(
-    2,
-    Math.round(Number(payload?.defaultDurationFrames ?? payload?.durationFrames ?? 30)),
-  )
-}
+const INVALID_TEMPLATE_PACKAGE_ERROR = '模板资产缺少有效的 transition effect package 配置'
 
 function resolveTemplatePackage(dragData: MediaItemDragData): TransitionPackagePayload | null {
-  const payload = dragData.templatePayload as TransitionPackagePayload | undefined
-  return payload && 'packageId' in payload ? payload : null
+  return isTransitionPackagePayload(dragData.templatePayload) ? dragData.templatePayload : null
+}
+
+function createRejectedCandidate(invalidReason?: string): TransitionTemplateResolvedCandidate {
+  return {
+    canDrop: false,
+    seamFrame: null,
+    sourceItemId: null,
+    matchCount: 0,
+    sourceItemStartFrame: null,
+    sourceItemEndFrame: null,
+    snappedFrame: null,
+    preview: null,
+    invalidReason,
+  }
 }
 
 export class TransitionEffectTemplateHandler
@@ -37,16 +45,12 @@ export class TransitionEffectTemplateHandler
 
   resolveDropCandidate(context: EffectTemplateResolveContext): TransitionTemplateResolvedCandidate {
     if (context.targetTrack.type !== 'video') {
-      return {
-        canDrop: false,
-        seamFrame: null,
-        sourceItemId: null,
-        matchCount: 0,
-        sourceItemStartFrame: null,
-        sourceItemEndFrame: null,
-        snappedFrame: null,
-        preview: null,
-      }
+      return createRejectedCandidate()
+    }
+
+    const packagePayload = resolveTemplatePackage(context.dragData)
+    if (!packagePayload) {
+      return createRejectedCandidate(INVALID_TEMPLATE_PACKAGE_ERROR)
     }
 
     const candidate = resolveTransitionTemplateDropCandidate(
@@ -69,7 +73,7 @@ export class TransitionEffectTemplateHandler
     }
 
     const durationFrames = Math.min(
-      resolveTemplateDurationFrames(context.dragData),
+      packagePayload.host.transition.defaultDurationFrames,
       Math.max(2, candidate.sourceItemEndFrame - candidate.sourceItemStartFrame),
     )
     const leftHalfFrames = Math.floor(durationFrames / 2)
@@ -99,11 +103,11 @@ export class TransitionEffectTemplateHandler
     }
 
     const store = useUnifiedStore()
-    const durationFrames = resolveTemplateDurationFrames(dragData)
     const packagePayload = resolveTemplatePackage(dragData)
     if (!packagePayload) {
-      return { success: false, error: '模板资产缺少可下载的 effect package' }
+      return { success: false, error: INVALID_TEMPLATE_PACKAGE_ERROR }
     }
+    const durationFrames = packagePayload.host.transition.defaultDurationFrames
 
     store.pause()
     await store.updateTransitionOutWithHistory(candidate.sourceItemId, {

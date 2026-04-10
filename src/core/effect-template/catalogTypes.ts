@@ -34,7 +34,11 @@ export interface TransitionTemplatePackageManifest {
   tags: LocalizedTagList
   cover: string | null
   entry: string
-  defaultDurationFrames: number
+  host: {
+    transition: {
+      defaultDurationFrames: number
+    }
+  }
   parameters: Record<string, unknown>
   sort_order: number
   is_active: boolean
