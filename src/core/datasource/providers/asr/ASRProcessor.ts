@@ -427,7 +427,7 @@ export class ASRProcessor extends DataSourceProcessor {
 
     // 6. 删除ASR的text media item（已无用）
     // 查找mediaItem所在的所有目录
-    const dirIds = unifiedStore.findAllDirectoriesByMediaId(mediaItem.id)
+    const dirIds = unifiedStore.findAllDirectoriesByAssetId(mediaItem.id)
     if (dirIds.length > 0) {
       // 逐个从文件夹中移除（会更新引用计数）
       // 注意：只有最后一个目录删除时才会真正删除文件（引用计数降为0）

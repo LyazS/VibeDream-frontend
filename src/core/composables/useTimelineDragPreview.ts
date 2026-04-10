@@ -256,7 +256,9 @@ export function useTimelineDragPreview(deps: TimelineDragPreviewDeps) {
         return
       }
 
-      const mediaItem = deps.getMediaItem(dragData.mediaItemId)
+      const mediaItem = dragData.assetKind === 'media'
+        ? deps.getMediaItem(dragData.assetId)
+        : null
       if (!mediaItem) {
         hidePreview()
         return
@@ -298,7 +300,7 @@ export function useTimelineDragPreview(deps: TimelineDragPreviewDeps) {
     try {
       const timelineItem = deps
         .getTimelineItemsByTrack(dragData.trackId)
-        .find((item) => item.id === dragData.itemId)
+        .find((item) => item.id === dragData.timelineItemId)
 
       if (!timelineItem) {
         hidePreview()
@@ -319,7 +321,7 @@ export function useTimelineDragPreview(deps: TimelineDragPreviewDeps) {
       const isCompatible = checkTrackCompatibility(timelineItem.mediaType, track.type)
 
       // 检查时间冲突（排除当前拖拽的项目）
-      const excludeIds = [dragData.itemId, ...(dragData.selectedItems || [])]
+      const excludeIds = [dragData.timelineItemId, ...(dragData.selectedItems || [])]
       const hasTimeConflict = hasConflictWithExclusions(
         targetTrackId,
         dropTime,

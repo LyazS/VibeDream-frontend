@@ -607,7 +607,7 @@ export function createUnifiedMediaModule(registry: ModuleRegistry) {
       }
 
       const relatedTimelineItems = timelineModule.timelineItems.value.filter(
-        (item: UnifiedTimelineItemData) => item.transitionOut?.templateAssetId === assetId,
+        (item: UnifiedTimelineItemData) => item.transitionOut?.assetId === assetId,
       )
 
       for (const timelineItem of relatedTimelineItems) {

@@ -49,7 +49,7 @@ export class TimelineItemSourceHandler implements DragSourceHandler {
     const dragData: TimelineItemDragData = {
       sourceType: SourceType.TIMELINE_ITEM,
       timestamp: Date.now(),
-      itemId: timelineParams.timelineItemId,
+      timelineItemId: timelineParams.timelineItemId,
       trackId: item.trackId,
       startTime: item.timeRange.timelineStartTime,
       selectedItems: [...this.selectionModule.selectedClipTimelineItemIds.value],

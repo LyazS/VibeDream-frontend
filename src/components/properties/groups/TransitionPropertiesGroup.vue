@@ -56,7 +56,7 @@ const transitionConfig = computed(() =>
 const transitionRuntime = computed(() => props.selectedTimelineItem?.runtime.transition)
 
 const transitionTemplateName = computed(() => {
-  const assetId = transitionConfig.value.templateAssetId
+  const assetId = transitionConfig.value.assetId
   if (!assetId) return '-'
   return unifiedStore.getAsset(assetId)?.name || assetId
 })

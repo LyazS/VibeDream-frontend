@@ -45,11 +45,11 @@ export class TransitionChainBuilder {
     const mixedOutput = `transition-mixed:${transitionItem.id}`
 
     const transitionOut = transitionItem.transitionOut
-    const packageAssetId = transitionOut?.packageAssetId
-    const packageAsset = packageAssetId ? this.params.getAsset(packageAssetId) : undefined
+    const assetId = transitionOut?.assetId
+    const packageAsset = assetId ? this.params.getAsset(assetId) : undefined
     const loadedPackage =
-      packageAssetId && isEffectTemplateAsset(packageAsset)
-        ? effectPackageRegistry.getPackage(packageAssetId)
+      assetId && isEffectTemplateAsset(packageAsset)
+        ? effectPackageRegistry.getPackage(assetId)
         : null
     if (!loadedPackage) {
       throw new Error(`转场片段缺少已安装的 effect package: ${transitionItem.id}`)
@@ -139,8 +139,7 @@ export class TransitionChainBuilder {
     return [
       `left:${this.getBranchSignature(transitionItem)}`,
       `right:${this.getBranchSignature(rightItem)}`,
-      transitionItem.transitionOut?.templateAssetId ?? '',
-      transitionItem.transitionOut?.packageAssetId ?? '',
+      transitionItem.transitionOut?.assetId ?? '',
       transitionItem.transitionOut?.packagePayload?.version ?? '',
       transitionItem.transitionOut?.packagePayload?.scriptHash ?? '',
     ].join('|')

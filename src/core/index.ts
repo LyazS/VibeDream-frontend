@@ -212,7 +212,6 @@ export {
   DropTargetType,
 
   // 拖拽参数
-  type MediaItemDragParams,
   type FolderDragParams,
   type TimelineItemDragParams,
   type DragSourceParams,

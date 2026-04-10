@@ -47,7 +47,7 @@ export class UpdateTransitionOutCommand implements SimpleCommand {
       throw new Error(`时间轴项目不存在: ${this.timelineItemId}`)
     }
 
-    const targetAssetId = nextValue?.packageAssetId ?? nextValue?.templateAssetId
+    const targetAssetId = nextValue?.assetId
     if (targetAssetId) {
       const templateAsset = this.mediaModule.getAsset(targetAssetId)
       if (!isEffectTemplateAsset(templateAsset)) {

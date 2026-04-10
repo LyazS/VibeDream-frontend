@@ -493,7 +493,7 @@ async function handleGenerate() {
     }
 
     // 11. 将 MediaItem 添加到角色文件夹
-    unifiedStore.addMediaToDirectory(mediaId, characterDirId)
+    unifiedStore.addAssetToDirectory(mediaId, characterDirId)
 
     // 12. 保存 MediaItem ID 到角色信息中
     const characterDir = unifiedStore.getCharacterDirectory(characterDirId)

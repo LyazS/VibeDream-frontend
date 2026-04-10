@@ -752,7 +752,7 @@ export function useTimelineContextMenu(
 
       // 添加到当前目录
       if (unifiedStore.currentDir) {
-        unifiedStore.addMediaToDirectory(mediaId, unifiedStore.currentDir.id)
+        unifiedStore.addAssetToDirectory(mediaId, unifiedStore.currentDir.id)
       }
 
       // 6. 启动媒体处理流程

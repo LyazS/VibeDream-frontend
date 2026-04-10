@@ -4,8 +4,7 @@ export const DEFAULT_CLIP_TRANSITION_DURATION_FRAMES = 30
 
 export interface ClipTransitionOutConfig {
   durationFrames: number
-  templateAssetId?: string
-  packageAssetId?: string
+  assetId?: string
   params?: Record<string, unknown>
   packagePayload?: TransitionPackagePayload
 }

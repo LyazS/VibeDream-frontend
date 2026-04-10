@@ -82,8 +82,7 @@ export function normalizeClipTransitionOutConfig(
   const defaults = createDefaultClipTransitionOutConfig()
   return {
     durationFrames: clampDurationFrames(config?.durationFrames ?? defaults.durationFrames),
-    templateAssetId: config?.templateAssetId,
-    packageAssetId: config?.packageAssetId,
+    assetId: config?.assetId,
     params: config?.params ? JSON.parse(JSON.stringify(config.params)) : {},
     packagePayload: config?.packagePayload,
   }
@@ -103,8 +102,7 @@ export function areClipTransitionOutConfigsEqual(
 
   return (
     a.durationFrames === b.durationFrames &&
-    a.templateAssetId === b.templateAssetId &&
-    a.packageAssetId === b.packageAssetId &&
+    a.assetId === b.assetId &&
     JSON.stringify(a.params ?? {}) === JSON.stringify(b.params ?? {})
   )
 }

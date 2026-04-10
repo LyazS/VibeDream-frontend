@@ -28,11 +28,6 @@ export interface AssetDragParams {
   selectedAssetIds?: string[]
 }
 
-export interface MediaItemDragParams {
-  mediaItemId: string
-  selectedAssetIds?: string[] // 可选：支持多选
-}
-
 /**
  * 文件夹拖拽参数
  */
@@ -50,7 +45,7 @@ export interface TimelineItemDragParams {
 /**
  * 拖拽源参数联合类型
  */
-export type DragSourceParams = AssetDragParams | MediaItemDragParams | FolderDragParams | TimelineItemDragParams
+export type DragSourceParams = AssetDragParams | FolderDragParams | TimelineItemDragParams
 
 // ==================== 拖拽目标类型 ====================
 
@@ -88,8 +83,6 @@ export interface AssetDragData extends BaseDragData {
   mediaType?: MediaTypeOrUnknown
   effectType?: EffectType
   templatePayload?: TransitionPackagePayload | unknown
-  mediaItemIds?: string[]
-  mediaItemId?: string
   type?: 'media-item' // 兼容旧代码
 }
 
@@ -110,7 +103,7 @@ export interface FolderDragData extends BaseDragData {
  */
 export interface TimelineItemDragData extends BaseDragData {
   sourceType: DragSourceType.TIMELINE_ITEM
-  itemId: string
+  timelineItemId: string
   trackId: string
   startTime: number
   selectedItems: string[]

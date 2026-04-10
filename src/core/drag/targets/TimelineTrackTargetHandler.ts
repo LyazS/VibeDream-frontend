@@ -78,7 +78,7 @@ export class TimelineTrackTargetHandler implements DropTargetHandler {
       const timelineData = dragData as TimelineItemDragData
 
       // 获取时间轴项目信息
-      const timelineItem = this.timelineModule.getTimelineItem(timelineData.itemId)
+      const timelineItem = this.timelineModule.getTimelineItem(timelineData.timelineItemId)
       if (!timelineItem) {
         return false
       }
@@ -158,18 +158,18 @@ export class TimelineTrackTargetHandler implements DropTargetHandler {
 
     // 5. 调用 createTimelineItemFromMediaItem 创建片段
     try {
-      if (!mediaData.mediaItemId) {
+      if (mediaData.assetKind !== 'media') {
         return { success: false }
       }
 
       await this.timelineItemOperations.createTimelineItemFromMediaItem(
-        mediaData.mediaItemId,
+        mediaData.assetId,
         finalDropTime,
         targetInfo.targetId,
       )
 
       console.log(`✅ 成功创建时间轴片段:`, {
-        mediaItemId: mediaData.mediaItemId,
+        mediaItemId: mediaData.assetId,
         trackId: targetInfo.targetId,
         startTime: finalDropTime,
       })
@@ -247,9 +247,9 @@ export class TimelineTrackTargetHandler implements DropTargetHandler {
     const timelineData = dragData as TimelineItemDragData
 
     // 1. 获取时间轴项目信息
-    const timelineItem = this.timelineModule.getTimelineItem(timelineData.itemId)
+    const timelineItem = this.timelineModule.getTimelineItem(timelineData.timelineItemId)
     if (!timelineItem) {
-      console.error('找不到时间轴项目:', timelineData.itemId)
+      console.error('找不到时间轴项目:', timelineData.timelineItemId)
       return { success: false }
     }
 
@@ -269,13 +269,13 @@ export class TimelineTrackTargetHandler implements DropTargetHandler {
     // 4. 调用 moveSingleItem 移动项目
     try {
       await this.timelineItemOperations.moveSingleItem(
-        timelineData.itemId,
+        timelineData.timelineItemId,
         finalDropTime,
         targetInfo.targetId,
       )
 
       console.log(`✅ 成功移动时间轴项目:`, {
-        itemId: timelineData.itemId,
+        timelineItemId: timelineData.timelineItemId,
         trackId: targetInfo.targetId,
         startTime: finalDropTime,
       })

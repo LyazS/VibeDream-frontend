@@ -6,7 +6,6 @@ import type {
   DragSourceHandler,
   DragSourceType,
   AssetDragParams,
-  MediaItemDragParams,
   MediaItemDragData,
   DragSourceParams,
   UnifiedDragData,
@@ -29,9 +28,8 @@ export class MediaItemSourceHandler implements DragSourceHandler {
     event: DragEvent,
     params: DragSourceParams,
   ): UnifiedDragData {
-    const assetParams = params as AssetDragParams | MediaItemDragParams
-
-    const assetId = 'assetId' in assetParams ? assetParams.assetId : assetParams.mediaItemId
+    const assetParams = params as AssetDragParams
+    const assetId = assetParams.assetId
     const selectedAssetIds =
       'selectedAssetIds' in assetParams
         ? assetParams.selectedAssetIds
@@ -57,8 +55,6 @@ export class MediaItemSourceHandler implements DragSourceHandler {
       mediaType: isMediaAsset(asset) ? asset.mediaType : undefined,
       effectType: !isMediaAsset(asset) ? asset.effectType : undefined,
       templatePayload: !isMediaAsset(asset) ? asset.templatePayload : undefined,
-      mediaItemIds: isMediaAsset(asset) ? (selectedAssetIds || [assetId]) : undefined,
-      mediaItemId: isMediaAsset(asset) ? assetId : undefined,
       sourceFolderId,
     }
 

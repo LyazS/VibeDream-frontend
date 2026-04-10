@@ -154,8 +154,7 @@ export function createUnifiedTimelineModule(registry: ModuleRegistry) {
     item.transitionOut = transitionOut
       ? normalizeClipTransitionOutConfig({
           durationFrames: transitionOut.durationFrames,
-          templateAssetId: transitionOut.templateAssetId,
-          packageAssetId: transitionOut.packageAssetId,
+          assetId: transitionOut.assetId,
           params: transitionOut.params,
           packagePayload: transitionOut.packagePayload,
         })

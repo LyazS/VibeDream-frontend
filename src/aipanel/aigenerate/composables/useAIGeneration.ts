@@ -231,7 +231,7 @@ export function useAIGeneration() {
     // 根据输出位置添加到目录
     if (outputLocation.value === 'current') {
       if (unifiedStore.currentDir) {
-        unifiedStore.addMediaToDirectory(mediaId, unifiedStore.currentDir.id)
+        unifiedStore.addAssetToDirectory(mediaId, unifiedStore.currentDir.id)
       } else {
         console.warn('⚠️ [useAIGeneration] 当前目录不存在，无法添加媒体项')
       }

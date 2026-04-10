@@ -167,7 +167,9 @@ export function useTimelineDragHandlers(
         }
 
         // 获取素材时长（用于尾部吸附）
-        const mediaItem = unifiedStore.getMediaItem(mediaData.mediaItemId ?? null)
+        const mediaItem = mediaData.assetKind === 'media'
+          ? unifiedStore.getMediaItem(mediaData.assetId)
+          : null
         if (mediaItem && mediaItem.duration) {
           clipDuration = mediaItem.duration
         }
@@ -179,14 +181,14 @@ export function useTimelineDragHandlers(
         const timelineData = dragData as TimelineItemDragData
 
         // 获取时间轴项目信息
-        const timelineItem = unifiedStore.getTimelineItem(timelineData.itemId)
+        const timelineItem = unifiedStore.getTimelineItem(timelineData.timelineItemId)
         if (timelineItem) {
           // 使用时间轴项目的时长
           clipDuration =
             timelineItem.timeRange.timelineEndTime - timelineItem.timeRange.timelineStartTime
 
           // 排除当前拖拽的项目（避免自我吸附）
-          excludeClipIds = [timelineData.itemId]
+          excludeClipIds = [timelineData.timelineItemId]
 
           // 如果是多选，排除所有选中的项目
           if (timelineData.selectedItems && timelineData.selectedItems.length > 0) {
@@ -300,7 +302,9 @@ export function useTimelineDragHandlers(
       }
 
       // 获取素材时长（用于尾部吸附）
-      const mediaItem = unifiedStore.getMediaItem(mediaData.mediaItemId ?? null)
+      const mediaItem = mediaData.assetKind === 'media'
+        ? unifiedStore.getMediaItem(mediaData.assetId)
+        : null
       if (mediaItem && mediaItem.duration) {
         clipDuration = mediaItem.duration
       }
@@ -312,14 +316,14 @@ export function useTimelineDragHandlers(
       const timelineData = dragData as TimelineItemDragData
 
       // 获取时间轴项目信息
-      const timelineItem = unifiedStore.getTimelineItem(timelineData.itemId)
+      const timelineItem = unifiedStore.getTimelineItem(timelineData.timelineItemId)
       if (timelineItem) {
         // 使用时间轴项目的时长
         clipDuration =
           timelineItem.timeRange.timelineEndTime - timelineItem.timeRange.timelineStartTime
 
         // 排除当前拖拽的项目（避免自我吸附）
-        excludeClipIds = [timelineData.itemId]
+        excludeClipIds = [timelineData.timelineItemId]
 
         // 如果是多选，排除所有选中的项目
         if (timelineData.selectedItems && timelineData.selectedItems.length > 0) {

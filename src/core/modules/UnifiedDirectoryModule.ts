@@ -257,26 +257,14 @@ export function createUnifiedDirectoryModule(registry: ModuleRegistry) {
    * @param mediaId 媒体项ID
    * @returns 目录ID数组，如果未找到返回空数组
    */
-  function findAllDirectoriesByAssetId(mediaId: string): string[] {
+  function findAllDirectoriesByAssetId(assetId: string): string[] {
     const dirIds: string[] = []
     for (const [dirId, dir] of directories.value) {
-      if (dir.assetIds.includes(mediaId)) {
+      if (dir.assetIds.includes(assetId)) {
         dirIds.push(dirId)
       }
     }
     return dirIds
-  }
-
-  function addMediaToDirectory(mediaId: string, dirId: string, updateRefCount: boolean = true): boolean {
-    return addAssetToDirectory(mediaId, dirId, updateRefCount)
-  }
-
-  function removeMediaFromDirectory(mediaId: string, dirId: string, updateRefCount: boolean = true): boolean {
-    return removeAssetFromDirectory(mediaId, dirId, updateRefCount)
-  }
-
-  function findAllDirectoriesByMediaId(mediaId: string): string[] {
-    return findAllDirectoriesByAssetId(mediaId)
   }
 
   /**
@@ -535,28 +523,28 @@ export function createUnifiedDirectoryModule(registry: ModuleRegistry) {
 
   /**
    * 拖拽移动媒体项到目标文件夹
-   * @param mediaItemIds 媒体项ID列表
+   * @param assetIds 资产ID列表
    * @param sourceFolderId 源文件夹ID（可能为null）
    * @param targetFolderId 目标文件夹ID
    */
   async function dragMoveMediaItems(
-    mediaItemIds: string[],
+    assetIds: string[],
     sourceFolderId: string | null,
     targetFolderId: string,
   ): Promise<void> {
     // 从源文件夹移除（不更新引用计数，因为是移动操作）
     if (sourceFolderId) {
-      for (const mediaId of mediaItemIds) {
-        removeMediaFromDirectory(mediaId, sourceFolderId, false)
+      for (const assetId of assetIds) {
+        removeAssetFromDirectory(assetId, sourceFolderId, false)
       }
     }
 
     // 添加到目标文件夹（不更新引用计数，因为是移动操作）
-    for (const mediaId of mediaItemIds) {
-      addMediaToDirectory(mediaId, targetFolderId, false)
+    for (const assetId of assetIds) {
+      addAssetToDirectory(assetId, targetFolderId, false)
     }
 
-    console.log(`✅ 拖拽移动 ${mediaItemIds.length} 个媒体项到文件夹 ${targetFolderId}`)
+    console.log(`✅ 拖拽移动 ${assetIds.length} 个资产到文件夹 ${targetFolderId}`)
   }
 
   /**
@@ -707,11 +695,11 @@ export function createUnifiedDirectoryModule(registry: ModuleRegistry) {
       // 移动媒体项（不更新引用计数，因为是剪切移动操作）
       // 从原目录移除
       if (clipboardState.value.sourceDirId) {
-        removeMediaFromDirectory(item.id, clipboardState.value.sourceDirId, false)
+        removeAssetFromDirectory(item.id, clipboardState.value.sourceDirId, false)
       }
 
       // 添加到目标目录
-      addMediaToDirectory(item.id, targetDirId, false)
+      addAssetToDirectory(item.id, targetDirId, false)
     }
   }
 
@@ -758,7 +746,7 @@ export function createUnifiedDirectoryModule(registry: ModuleRegistry) {
       // 复制媒体项（只复制引用）
       // 注意：这里需要访问 unifiedStore 的媒体数据
       // 暂时只复制引用到目标目录
-      addMediaToDirectory(item.id, targetDirId)
+      addAssetToDirectory(item.id, targetDirId)
     }
   }
 
@@ -1124,9 +1112,7 @@ export function createUnifiedDirectoryModule(registry: ModuleRegistry) {
     getCharacterDirectory, // 🆕 新增获取角色文件夹方法
     isCharacterDirectory, // 🆕 新增类型守卫方法
     addAssetToDirectory,
-    addMediaToDirectory,
     removeAssetFromDirectory,
-    removeMediaFromDirectory,
     getDirectoryContent,
     getBreadcrumb,
     openTab,
@@ -1137,7 +1123,6 @@ export function createUnifiedDirectoryModule(registry: ModuleRegistry) {
     deleteAssetItem,
     deleteMediaItem, // 🆕 新增删除媒体项方法
     findAllDirectoriesByAssetId,
-    findAllDirectoriesByMediaId, // 🆕 新增查找媒体项所在所有目录方法
 
     // 初始化和管理方法
     initializeRootDirectory,

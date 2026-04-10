@@ -49,7 +49,7 @@ const sourceClipName = computed(() => {
 
 const templateName = computed(() => {
   const sourceItem = unifiedStore.getTimelineItem(props.overlay.sourceItemId)
-  const assetId = sourceItem?.transitionOut?.templateAssetId
+  const assetId = sourceItem?.transitionOut?.assetId
   if (!assetId) return '-'
   return unifiedStore.getAsset(assetId)?.name || assetId
 })

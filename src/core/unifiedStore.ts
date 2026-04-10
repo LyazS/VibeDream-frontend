@@ -566,14 +566,11 @@ export const useUnifiedStore = defineStore('unified', () => {
     deleteAssetItem: unifiedDirectoryModule.deleteAssetItem,
     deleteMediaItem: unifiedDirectoryModule.deleteMediaItem, // 🆕 新增删除媒体项方法
     findAllDirectoriesByAssetId: unifiedDirectoryModule.findAllDirectoriesByAssetId,
-    findAllDirectoriesByMediaId: unifiedDirectoryModule.findAllDirectoriesByMediaId, // 🆕 新增查找媒体项所在所有目录方法
     getDirectory: unifiedDirectoryModule.getDirectory,
     getCharacterDirectory: unifiedDirectoryModule.getCharacterDirectory, // 🆕 新增获取角色文件夹方法
     isCharacterDirectory: unifiedDirectoryModule.isCharacterDirectory, // 🆕 新增类型守卫方法
     addAssetToDirectory: unifiedDirectoryModule.addAssetToDirectory,
-    addMediaToDirectory: unifiedDirectoryModule.addMediaToDirectory,
     removeAssetFromDirectory: unifiedDirectoryModule.removeAssetFromDirectory,
-    removeMediaFromDirectory: unifiedDirectoryModule.removeMediaFromDirectory,
     getDirectoryContent: unifiedDirectoryModule.getDirectoryContent,
     getBreadcrumb: unifiedDirectoryModule.getBreadcrumb,
     openTab: unifiedDirectoryModule.openTab,

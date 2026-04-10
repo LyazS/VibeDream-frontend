@@ -99,7 +99,7 @@ export class FolderTargetHandler implements DropTargetHandler {
     
     try {
       console.log(`📦 [FolderTargetHandler] 移动素材项到文件夹:`, {
-        mediaItemIds: dragData.assetIds,
+        assetIds: dragData.assetIds,
         sourceFolderId: dragData.sourceFolderId,
         targetFolderId: folderTargetInfo.targetId,
       })

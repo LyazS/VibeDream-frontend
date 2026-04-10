@@ -1386,7 +1386,7 @@ async function addMediaItem(file: File): Promise<void> {
     unifiedStore.addMediaItem(mediaItem)
 
     // 添加到当前目录
-    unifiedStore.addMediaToDirectory(mediaId, currentDir.value.id)
+    unifiedStore.addAssetToDirectory(mediaId, currentDir.value.id)
 
     // 启动媒体处理流程
     unifiedStore.startMediaProcessing(mediaItem)

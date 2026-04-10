@@ -273,8 +273,8 @@ const multiSelectInfo = computed(() => {
       if (parsed.kind === 'transition') {
         const overlay = unifiedStore.getTransitionOverlay(parsed.sourceId)
         const sourceItem = overlay ? unifiedStore.getTimelineItem(overlay.sourceItemId) : null
-        const assetName = sourceItem?.transitionOut?.templateAssetId
-          ? unifiedStore.getAsset(sourceItem.transitionOut.templateAssetId)?.name
+        const assetName = sourceItem?.transitionOut?.assetId
+          ? unifiedStore.getAsset(sourceItem.transitionOut.assetId)?.name
           : ''
         return {
           id: selectionId,
