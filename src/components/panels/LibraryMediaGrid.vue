@@ -67,7 +67,7 @@
               >
                 <template v-if="isEffectTemplateAssetItem(item.id)">
                   <div class="effect-template-thumbnail">
-                    <component :is="IconComponents.SPARKLING" size="28px" />
+                    <component :is="getEffectTemplateItemIcon(item.id)" size="28px" />
                     <div
                       v-if="hasEffectTemplateStatusIndicator(item.id)"
                       class="effect-template-status-indicator"
@@ -140,7 +140,7 @@
             <template v-else>
               <template v-if="isEffectTemplateAssetItem(item.id)">
                 <div class="effect-template-list-icon">
-                  <component :is="IconComponents.SPARKLING" size="18px" />
+                  <component :is="getEffectTemplateItemIcon(item.id)" size="18px" />
                 </div>
               </template>
               <template v-else>
@@ -287,7 +287,7 @@ import {
 } from '@/core/datasource/providers/ai-generation/AIGenerationSource'
 import { SourceOrigin } from '@/core/datasource/core/BaseDataSource'
 import { fetchClient } from '@/utils/fetchClient'
-import { IconComponents } from '@/constants/iconComponents'
+import { IconComponents, getEffectTypeIcon } from '@/constants/iconComponents'
 import {
   ContextMenu,
   ContextMenuItem,
@@ -533,7 +533,7 @@ const currentMenuItems = computed((): MenuItem[] => {
           },
           {
             label: t('media.createTransitionAsset'),
-            icon: IconComponents.SPARKLING,
+            icon: IconComponents.EFFECT_TRANSITION,
             onClick: () => {
               openTransitionTemplatePicker()
               showContextMenu.value = false
@@ -541,7 +541,7 @@ const currentMenuItems = computed((): MenuItem[] => {
           },
           {
             label: t('media.createFilterAsset'),
-            icon: IconComponents.MAGIC,
+            icon: IconComponents.EFFECT_FILTER,
             onClick: () => {
               openFilterTemplatePicker()
               showContextMenu.value = false
@@ -839,6 +839,15 @@ function isEffectTemplateAssetItem(assetId: string): boolean {
   return isEffectTemplateAsset(getAsset(assetId))
 }
 
+function getEffectTemplateItemIcon(assetId: string) {
+  const asset = getAsset(assetId)
+  if (!asset || !isEffectTemplateAsset(asset)) {
+    return IconComponents.SPARKLING
+  }
+
+  return getEffectTypeIcon(asset.effectType)
+}
+
 function getEffectTemplateStatusLabel(assetId: string): string {
   const asset = getAsset(assetId)
   if (!asset || !isEffectTemplateAsset(asset)) {
@@ -885,7 +894,7 @@ function getEffectTemplateStatusIcon(assetId: string) {
     case 'missing':
       return IconComponents.WARNING
     default:
-      return IconComponents.SPARKLING
+      return getEffectTypeIcon(asset.effectType)
   }
 }
 

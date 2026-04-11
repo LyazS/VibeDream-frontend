@@ -26,7 +26,7 @@
 
     <template v-else>
       <div class="filter-drop-zone__empty">
-        <component :is="IconComponents.SPARKLING" size="20px" />
+        <component :is="getEffectTypeIcon('filter')" size="20px" />
         <span>{{ t('properties.filter.dropHint') }}</span>
       </div>
     </template>
@@ -35,7 +35,7 @@
 
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import { IconComponents } from '@/constants/iconComponents'
+import { IconComponents, getEffectTypeIcon } from '@/constants/iconComponents'
 import { useAppI18n } from '@/core/composables/useI18n'
 import { useUnifiedStore } from '@/core/unifiedStore'
 import { DropTargetType, type ClipFilterDropTargetInfo } from '@/core/types/drag'

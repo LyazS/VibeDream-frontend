@@ -30,8 +30,8 @@
 
 .transition-template-picker__grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
-  gap: var(--spacing-lg);
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: var(--spacing-md);
   max-height: 56vh;
   overflow-y: auto;
   padding-right: var(--spacing-xs);
@@ -62,7 +62,7 @@
 
 .transition-template-picker__cover {
   position: relative;
-  height: 138px;
+  height: 110px;
   background:
     radial-gradient(circle at top left, rgba(255, 215, 128, 0.2), transparent 55%),
     linear-gradient(135deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.01));
@@ -87,8 +87,8 @@
 .transition-template-picker__body {
   display: flex;
   flex-direction: column;
-  gap: var(--spacing-sm);
-  padding: var(--spacing-lg);
+  gap: 10px;
+  padding: var(--spacing-md);
 }
 
 .transition-template-picker__title-row {
@@ -100,15 +100,15 @@
 
 .transition-template-picker__title {
   color: var(--color-text-primary);
-  font-size: 15px;
+  font-size: 14px;
 }
 
 .transition-template-picker__summary {
   margin: 0;
   color: var(--color-text-secondary);
-  font-size: var(--font-size-sm);
-  line-height: 1.5;
-  min-height: 42px;
+  font-size: 12px;
+  line-height: 1.4;
+  min-height: 34px;
 }
 
 .transition-template-picker__meta {
@@ -126,8 +126,8 @@
   border-radius: 999px;
   background: var(--color-bg-quaternary);
   color: var(--color-text-secondary);
-  padding: 2px 8px;
-  font-size: 12px;
+  padding: 2px 6px;
+  font-size: 11px;
 }
 
 .transition-template-picker__spin {

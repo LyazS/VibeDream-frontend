@@ -92,6 +92,7 @@ import {
   RiQuestionLine,
   RiMagicLine,
   RiTimeLine,
+  RiSwapLine,
 
   // 媒体相关
   RiMusic2Fill,
@@ -225,6 +226,8 @@ export const IconComponents = {
   QUESTION: RiQuestionLine,
   MAGIC: RiMagicLine,
   TIME: RiTimeLine,
+  EFFECT_TRANSITION: RiSwapLine,
+  EFFECT_FILTER: RiMagicLine,
 
   // 媒体
   MUSIC: RiMusic2Fill,
@@ -312,6 +315,17 @@ export function getSnapIcon(isEnabled: boolean) {
  */
 export function getUserStatusIcon(isLogin: boolean) {
   return isLogin ? IconComponents.USER_LOGIN : IconComponents.USER_LOGOUT
+}
+
+export function getEffectTypeIcon(effectType: string) {
+  switch (effectType) {
+    case 'transition':
+      return IconComponents.EFFECT_TRANSITION
+    case 'filter':
+      return IconComponents.EFFECT_FILTER
+    default:
+      return IconComponents.SPARKLING
+  }
 }
 
 /**

@@ -51,7 +51,7 @@
               class="transition-template-picker__cover-image"
             />
             <div v-else class="transition-template-picker__cover-fallback">
-              <component :is="IconComponents.SPARKLING" size="26px" />
+              <component :is="getEffectTypeIcon('filter')" size="26px" />
             </div>
           </div>
 
@@ -93,7 +93,7 @@
 import { ref, watch } from 'vue'
 import UniversalModal from '@/components/modals/UniversalModal.vue'
 import HoverButton from '@/components/base/HoverButton.vue'
-import { IconComponents } from '@/constants/iconComponents'
+import { IconComponents, getEffectTypeIcon } from '@/constants/iconComponents'
 import { useAppI18n } from '@/core/composables/useI18n'
 import { useUnifiedStore } from '@/core/unifiedStore'
 import type {
