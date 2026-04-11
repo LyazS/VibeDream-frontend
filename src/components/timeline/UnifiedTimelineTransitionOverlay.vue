@@ -14,7 +14,7 @@
       @mousedown.stop="handleResizeStart('left', $event)"
     ></div>
     <div class="timeline-transition-overlay__label">
-      {{ t('properties.transition.title') }}
+      {{ transitionLabel }}
     </div>
     <div class="clip-content timeline-transition-overlay__content">
       <div class="timeline-transition-overlay__stripe"></div>
@@ -81,6 +81,15 @@ const sourceTimelineItem = computed(
 const transitionConfig = computed(() =>
   normalizeClipTransitionOutConfig(sourceTimelineItem.value?.transitionOut),
 )
+
+const transitionLabel = computed(() => {
+  const assetId = sourceTimelineItem.value?.transitionOut?.assetId
+  if (!assetId) {
+    return t('properties.transition.title')
+  }
+
+  return unifiedStore.getAsset(assetId)?.name || t('properties.transition.title')
+})
 
 const rightTimelineItem = computed(() => {
   const rightItemId = sourceTimelineItem.value?.runtime.transition?.rightItemId
