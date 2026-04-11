@@ -11,6 +11,7 @@
 
       <KeyframedSliderField
         v-if="hasFilterEffect"
+        class="filter-properties-group__intensity"
         :label="t('properties.filter.intensity')"
         :state="getFilterChannelButtonState()"
         :tooltip="getFilterKeyframeTooltip()"
@@ -91,6 +92,10 @@ async function handleRemove() {
   display: flex;
   align-items: center;
   gap: 10px;
+}
+
+.filter-properties-group__intensity {
+  margin-top: var(--spacing-md);
 }
 
 .filter-properties-group__slider-value {

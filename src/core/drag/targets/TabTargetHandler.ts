@@ -123,7 +123,7 @@ export class TabTargetHandler implements DropTargetHandler {
           const mediaData = dragData as MediaItemDragData
 
           await this.directoryModule.dragMoveMediaItems(
-            mediaData.assetIds,
+            [mediaData.assetId],
             mediaData.sourceFolderId || null,
             targetDirId,
           )

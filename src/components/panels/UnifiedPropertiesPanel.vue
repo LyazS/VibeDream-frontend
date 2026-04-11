@@ -335,7 +335,16 @@ const getItemDisplayName = (item: any) => {
 
 function getLibraryAssetTypeLabel(asset: UnifiedLibraryAssetData): string {
   if (isEffectTemplateAsset(asset)) {
-    return t('properties.transition.title')
+    switch (asset.effectType) {
+      case 'transition':
+        return t('properties.tabs.transition')
+      case 'filter':
+        return t('properties.tabs.filter')
+      case 'animation':
+        return t('properties.tabs.animation')
+      default:
+        return t('properties.mediaTypes.unknown')
+    }
   }
 
   return t('properties.mediaTypes.' + (asset.mediaType || 'unknown'))

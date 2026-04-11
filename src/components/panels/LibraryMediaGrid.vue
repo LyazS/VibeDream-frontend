@@ -1052,9 +1052,14 @@ function handleMediaItemDrag(event: DragEvent, item: DisplayItem): void {
     return
   }
 
+  const selectedAssetIds = isItemSelected(item)
+    ? Array.from(unifiedStore.selectedLibraryAssetIds)
+    : undefined
+
   // 准备拖拽参数
   const params: AssetDragParams = {
     assetId: item.id,
+    selectedAssetIds,
   }
 
   try {
