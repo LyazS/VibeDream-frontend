@@ -1,3 +1,6 @@
+import { isEffectTemplateAsset, type UnifiedLibraryAssetData } from '@/core/asset/types'
+import { effectPackageRegistry } from '@/core/effect-package/EffectPackageRegistry'
+import { EffectPackageFilterPass } from '@/core/effect-package/runtime/EffectPackageFilterPass'
 import { degreesToRadians } from '@/core/utils/rotationTransform'
 import type { UnifiedMediaItemData } from '@/core/mediaitem/types'
 import { DEFAULT_BLEND_MODE } from '@/core/timelineitem'
@@ -24,6 +27,8 @@ interface ChainBuilderParams {
   targets: Pick<RenderTargetPool, 'releaseRenderTarget' | 'ensureRenderTarget'>
   getSourceTextureId: (itemId: string) => string | null
   getMediaItem: (mediaItemId: string) => UnifiedMediaItemData | undefined
+  getAsset: (assetId: string | null) => UnifiedLibraryAssetData | undefined
+  getCurrentFrame: () => number
 }
 
 /**
@@ -35,9 +40,20 @@ interface ChainBuilderParams {
 export class ChainBuilder {
   constructor(private readonly params: ChainBuilderParams) {}
 
+  private resolveLoadedFilterPackage(item: VisualTimelineItem) {
+    const filterEffect = TimelineItemQueries.getRenderFilterEffect(item)
+    const filterAsset = filterEffect?.assetId ? this.params.getAsset(filterEffect.assetId) : undefined
+    return filterEffect?.assetId
+      && isEffectTemplateAsset(filterAsset)
+      && filterAsset.effectType === 'filter'
+      ? effectPackageRegistry.getPackage(filterEffect.assetId)
+      : null
+  }
+
   build(item: VisualTimelineItem): RenderChain {
     const itemTargetTextureId = `item:${item.id}`
     const maskedItemTextureId = `mask:${item.id}`
+    const filteredItemTextureId = `filter:${item.id}`
     const clockwiseRotationSourceTextureId = `clockwiseRotation-source:${item.id}`
     const clockwiseRotation = TimelineItemQueries.isVideoTimelineItem(item)
       ? this.params.getMediaItem(item.mediaItemId)?.runtime.bunny?.bunnyMedia
@@ -47,7 +63,11 @@ export class ChainBuilder {
       : 0
 
     const renderConfig = TimelineItemQueries.getRenderConfig(item)
+    const renderFilterEffect = TimelineItemQueries.getRenderFilterEffect(item)
     const hasMask = Boolean(renderConfig.mask?.enabled)
+    const loadedFilterPackage = this.resolveLoadedFilterPackage(item)
+    const hasFilter = Boolean(renderFilterEffect && loadedFilterPackage)
+    const getEffectEvaluationFrame = () => this.params.getCurrentFrame()
 
     const passes = [
       new RotateSourcePass(
@@ -82,10 +102,27 @@ export class ChainBuilder {
             () => TimelineItemQueries.getRenderConfig(item).mask,
           )]
         : []),
+      ...(hasFilter && loadedFilterPackage
+        ? [new EffectPackageFilterPass(
+            this.params.programs,
+            this.params.targets,
+            `filter:${item.id}`,
+            loadedFilterPackage,
+            filteredItemTextureId,
+            getEffectEvaluationFrame,
+            () => TimelineItemQueries.getRenderFilterEffect(item)?.intensity ?? 1,
+            () => ({
+              ...loadedFilterPackage.payload.defaultParams,
+              ...(TimelineItemQueries.getRenderFilterEffect(item)?.params ?? {}),
+            }),
+            () => (hasMask ? maskedItemTextureId : itemTargetTextureId),
+            (name) => `filter:${item.id}:${name}`,
+          )]
+        : []),
       new CompositeToMainPass(
         this.params.programs,
         `composite:${item.id}`,
-        hasMask ? maskedItemTextureId : itemTargetTextureId,
+        hasFilter ? filteredItemTextureId : (hasMask ? maskedItemTextureId : itemTargetTextureId),
         renderConfig.blendMode ?? DEFAULT_BLEND_MODE,
         () => {
           const config = TimelineItemQueries.getRenderConfig(item)
@@ -105,6 +142,14 @@ export class ChainBuilder {
   getSignature(item: VisualTimelineItem): string {
     const config = TimelineItemQueries.getRenderConfig(item)
     const mask = config.mask
-    return `mask:${mask?.enabled ? 'on' : 'off'}:${mask?.type ?? 'rectangle'}:blend:${config.blendMode ?? DEFAULT_BLEND_MODE}`
+    const loadedFilterPackage = this.resolveLoadedFilterPackage(item)
+    return [
+      `mask:${mask?.enabled ? 'on' : 'off'}:${mask?.type ?? 'rectangle'}`,
+      `blend:${config.blendMode ?? DEFAULT_BLEND_MODE}`,
+      `filter:${TimelineItemQueries.getRenderFilterEffect(item)?.assetId ?? ''}`,
+      `filter-installed:${loadedFilterPackage ? 'ready' : 'missing'}`,
+      `filter-version:${loadedFilterPackage?.payload.version ?? TimelineItemQueries.getRenderFilterEffect(item)?.packagePayload?.version ?? ''}`,
+      `filter-script:${loadedFilterPackage?.payload.scriptHash ?? TimelineItemQueries.getRenderFilterEffect(item)?.packagePayload?.scriptHash ?? ''}`,
+    ].join(':')
   }
 }

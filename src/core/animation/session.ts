@@ -11,6 +11,7 @@ export interface AnimationSessionState {
   isActive: boolean
   originalConfig: unknown
   originalAnimation: unknown
+  originalFilterEffect: unknown
   pendingPatches: GroupPatchMap
 }
 
@@ -19,6 +20,7 @@ export class AnimationSession {
     isActive: false,
     originalConfig: null,
     originalAnimation: null,
+    originalFilterEffect: null,
     pendingPatches: {},
   }
 
@@ -28,6 +30,7 @@ export class AnimationSession {
       isActive: true,
       originalConfig: cloneDeep(item.config),
       originalAnimation: cloneDeep(item.animation),
+      originalFilterEffect: cloneDeep(item.filterEffect),
       pendingPatches: {},
     }
   }
@@ -53,6 +56,8 @@ export class AnimationSession {
     if (!this.state.isActive) return
     item.config = cloneDeep(this.state.originalConfig) as typeof item.config
     item.animation = cloneDeep(this.state.originalAnimation) as typeof item.animation
+    item.filterEffect = cloneDeep(this.state.originalFilterEffect) as typeof item.filterEffect
+    item.runtime.renderFilterEffect = cloneDeep(this.state.originalFilterEffect) as typeof item.runtime.renderFilterEffect
   }
 
   commit(item: UnifiedTimelineItemData<MediaType>) {
@@ -72,6 +77,7 @@ export class AnimationSession {
       isActive: false,
       originalConfig: null,
       originalAnimation: null,
+      originalFilterEffect: null,
       pendingPatches: {},
     }
   }

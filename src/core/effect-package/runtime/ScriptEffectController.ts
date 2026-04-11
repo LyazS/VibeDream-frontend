@@ -1,15 +1,18 @@
 import { normalizePackageResourcePath } from '@/core/effect-package/manifest'
+import { loadSampledResource } from '@/core/effect-package/runtime/sampledResourceLoader'
 import { DrawPass } from '@/core/effect-package/script/DrawPass'
 import { ScriptRenderPass } from '@/core/effect-package/runtime/ScriptRenderPass'
-import type { LoadedEffectPackage } from '@/core/effect-package/types'
+import type { EffectPackageLut3DResourceInfo, LoadedEffectPackage } from '@/core/effect-package/types'
 import { fileSystemService } from '@/core/managers/filesystem/fileSystemService'
 import type { RenderPassContext } from '@/core/webgl2/renderchain/RenderPassContext'
 
 interface ScriptEffectLifecycle {
   init(ctx: { params: Record<string, unknown> }): void
   update(ctx: {
+    // 当前 pass 的 effect 评估帧，不保证等于全局播放帧。
     frame: number
     params: Record<string, unknown>
+    // time 与 frame 保持一致，表示当前 pass 的 effect 评估时间。
     values: { progress: number; canvasSize: [number, number]; time: number }
   }): void
   dispose?(): void
@@ -19,7 +22,11 @@ interface ScriptCompileFactory {
   (
     gEffect: { addPass(pass: DrawPass): void; requestRebuild(reason?: string): void },
     gDrawPass: typeof DrawPass,
-    gResources: { text(path: string): string; texture(path: string): string },
+    gResources: {
+      text(path: string): string
+      texture(path: string): string
+      lut3d(path: string): EffectPackageLut3DResourceInfo
+    },
   ): () => ScriptEffectLifecycle
 }
 
@@ -35,6 +42,7 @@ class PendingEffectPackageResourceError extends Error {
 export interface ScriptEffectRenderState {
   params: Record<string, unknown>
   progress: number
+  // 当前 pass 的 effect 评估帧，不保证等于全局播放帧。
   frame: number
   finalOutputTextureId: string
   inputTextures: Record<string, string | null>
@@ -146,13 +154,41 @@ export class ScriptEffectController {
         },
         texture: (path) => {
           const normalized = normalizePackageResourcePath(path)
-          if (
-            !this.loadedPackage.textureResourcePaths.has(normalized) &&
-            !this.loadedPackage.textureResources.has(normalized)
-          ) {
+          const descriptor = this.loadedPackage.sampledResourceDescriptors.get(normalized)
+          const cached = this.loadedPackage.sampledResources.get(normalized)
+          if (!descriptor && !cached) {
             throw new Error(`effect package 纹理资源不存在: ${normalized}`)
           }
+
+          const dimension = descriptor?.dimension ?? (cached?.kind === 'lut-3d' ? '3d' : '2d')
+          if (dimension !== '2d') {
+            throw new Error(`effect package 纹理资源不是 2D 采样资源: ${normalized}`)
+          }
+
           return `resource:${normalized}`
+        },
+        lut3d: (path) => {
+          const normalized = normalizePackageResourcePath(path)
+          const cached = this.loadedPackage.sampledResources.get(normalized)
+          if (cached?.kind === 'lut-3d') {
+            return {
+              textureRef: `resource:${normalized}`,
+              size: cached.size,
+              domainMin: [...cached.domainMin] as [number, number, number],
+              domainMax: [...cached.domainMax] as [number, number, number],
+            }
+          }
+
+          const descriptor = this.loadedPackage.sampledResourceDescriptors.get(normalized)
+          if (!descriptor) {
+            throw new Error(`effect package 3D LUT 资源不存在: ${normalized}`)
+          }
+          if (descriptor.dimension !== '3d' || descriptor.resourceType !== 'lut-3d') {
+            throw new Error(`effect package 资源不是 3D LUT: ${normalized}`)
+          }
+
+          void this.loadLut3DResource(normalized)
+          throw new PendingEffectPackageResourceError(`effect package 3D LUT 资源加载中: ${normalized}`)
         },
       },
     )()
@@ -217,5 +253,46 @@ export class ScriptEffectController {
 
     this.loadedPackage.pendingTextLoads.set(resourcePath, pending)
     return pending.catch(() => null)
+  }
+
+  private async loadLut3DResource(resourcePath: string): Promise<EffectPackageLut3DResourceInfo | null> {
+    const cached = this.loadedPackage.sampledResources.get(resourcePath)
+    if (cached?.kind === 'lut-3d') {
+      return {
+        textureRef: `resource:${resourcePath}`,
+        size: cached.size,
+        domainMin: [...cached.domainMin] as [number, number, number],
+        domainMax: [...cached.domainMax] as [number, number, number],
+      }
+    }
+
+    const resource = await loadSampledResource(this.loadedPackage, resourcePath)
+      .then((loaded) => {
+        if (loaded?.kind === 'lut-3d') {
+          this.rebuildRequested = true
+          return loaded
+        }
+
+        if (loaded) {
+          throw new Error(`effect package 资源不是 3D LUT: ${resourcePath}`)
+        }
+
+        return null
+      })
+      .catch((error) => {
+        console.error(`[ScriptEffectController] 加载 3D LUT 资源失败: ${resourcePath}`, error)
+        return null
+      })
+
+    if (!resource) {
+      return null
+    }
+
+    return {
+      textureRef: `resource:${resourcePath}`,
+      size: resource.size,
+      domainMin: [...resource.domainMin] as [number, number, number],
+      domainMax: [...resource.domainMax] as [number, number, number],
+    }
   }
 }

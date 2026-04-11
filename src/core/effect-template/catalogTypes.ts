@@ -14,19 +14,26 @@ export interface TransitionCatalogVersionResponse {
   total: number
 }
 
-export interface TransitionTemplateSummary {
+export interface BaseTemplateSummary {
   id: string
   name: LocalizedText
   summary: LocalizedText
   tags: LocalizedTagList
   cover_url: string | null
-  duration_frames: number
   updated_at: string
 }
 
-export interface TransitionTemplatePackageManifest {
+export interface TransitionTemplateSummary extends BaseTemplateSummary {
+  duration_frames: number
+}
+
+export interface FilterTemplateSummary extends BaseTemplateSummary {
+  supported_media_types: Array<'video' | 'image'>
+}
+
+export interface EffectTemplatePackageManifestBase {
   apiVersion: '1.0'
-  effectType: 'transition'
+  effectType: 'transition' | 'filter'
   packageId: string
   version: string
   name: LocalizedText
@@ -34,17 +41,36 @@ export interface TransitionTemplatePackageManifest {
   tags: LocalizedTagList
   cover: string | null
   entry: string
-  host: {
-    transition: {
-      defaultDurationFrames: number
-    }
-  }
   parameters: Record<string, unknown>
   sort_order: number
   is_active: boolean
 }
 
-export interface TransitionTemplatePackageFile {
+export interface TransitionTemplatePackageManifest extends EffectTemplatePackageManifestBase {
+  effectType: 'transition'
+  host: {
+    transition: {
+      defaultDurationFrames: number
+    }
+    filter?: never
+  }
+}
+
+export interface FilterTemplatePackageManifest extends EffectTemplatePackageManifestBase {
+  effectType: 'filter'
+  host: {
+    transition?: never
+    filter: {
+      supportedMediaTypes: Array<'video' | 'image'>
+    }
+  }
+}
+
+export type EffectTemplatePackageManifest =
+  | TransitionTemplatePackageManifest
+  | FilterTemplatePackageManifest
+
+export interface EffectTemplatePackageFile {
   path: string
   content: string
   encoding: 'utf-8' | 'base64'
@@ -52,7 +78,12 @@ export interface TransitionTemplatePackageFile {
 
 export interface TransitionTemplateDownloadResponse extends TransitionTemplateSummary {
   package_manifest: TransitionTemplatePackageManifest
-  package_files: TransitionTemplatePackageFile[]
+  package_files: EffectTemplatePackageFile[]
+}
+
+export interface FilterTemplateDownloadResponse extends FilterTemplateSummary {
+  package_manifest: FilterTemplatePackageManifest
+  package_files: EffectTemplatePackageFile[]
 }
 
 export interface TransitionTemplateListResponse {
@@ -60,8 +91,19 @@ export interface TransitionTemplateListResponse {
   items: TransitionTemplateSummary[]
 }
 
+export interface FilterTemplateListResponse {
+  catalog_version: string
+  items: FilterTemplateSummary[]
+}
+
 export interface TransitionTemplateCatalogCache {
   version: string
   timestamp: number
   items: TransitionTemplateSummary[]
+}
+
+export interface FilterTemplateCatalogCache {
+  version: string
+  timestamp: number
+  items: FilterTemplateSummary[]
 }

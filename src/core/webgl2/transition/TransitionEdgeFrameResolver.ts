@@ -109,8 +109,8 @@ export class TransitionEdgeFrameResolver {
     const rightBoundaryFrames = resolveTransitionBoundaryFrames(rightItem)
 
     const [leftTail, rightHead] = await Promise.all([
-      this.createEdgeBitmap(leftItem, leftBoundaryFrames.clipTailFrame),
-      this.createEdgeBitmap(rightItem, rightBoundaryFrames.clipHeadFrame),
+      this.createEdgeFrameSource(leftItem, leftBoundaryFrames.clipTailFrame),
+      this.createEdgeFrameSource(rightItem, rightBoundaryFrames.clipHeadFrame),
     ])
 
     if (!leftTail || !rightHead) {
@@ -161,10 +161,10 @@ export class TransitionEdgeFrameResolver {
     ].join(':')
   }
 
-  private async createEdgeBitmap(
+  private async createEdgeFrameSource(
     item: UnifiedTimelineItemData<'video'> | UnifiedTimelineItemData<'image'>,
     clipFrame: number,
-  ): Promise<ImageBitmap | null> {
+  ): Promise<ImageBitmap | VideoFrame | null> {
     if (TimelineItemQueries.isImageTimelineItem(item)) {
       const mediaItem = this.getMediaItem(item.mediaItemId)
       const imageClip = mediaItem?.runtime.bunny?.imageClip
@@ -184,7 +184,7 @@ export class TransitionEdgeFrameResolver {
 
     const videoFrame = result.video.toVideoFrame()
     try {
-      return await createImageBitmap(videoFrame)
+      return videoFrame.clone()
     } finally {
       videoFrame.close()
       result.video.close()

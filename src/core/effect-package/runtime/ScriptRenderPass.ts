@@ -1,8 +1,9 @@
-import { fileToImageBitmap } from '@/core/bunnyUtils/ToBitmap'
+import { normalizePackageResourcePath } from '@/core/effect-package/manifest'
 import type { LoadedEffectPackage } from '@/core/effect-package/types'
+import { loadSampledResource } from '@/core/effect-package/runtime/sampledResourceLoader'
 import { DrawPass, type DrawPassBlend, type UniformType } from '@/core/effect-package/script/DrawPass'
-import { fileSystemService } from '@/core/managers/filesystem/fileSystemService'
 import type { RenderPassContext } from '@/core/webgl2/renderchain/RenderPassContext'
+import type { TextureResource } from '@/core/webgl2/types'
 
 export interface ScriptRenderPassIOContext {
   finalOutputTextureId: string
@@ -89,31 +90,38 @@ export class ScriptRenderPass {
     }
 
     let activeTextureIndex = 0
-    for (const [uniformName, textureRef] of this.drawPass.textures.entries()) {
-      const textureId = io.resolveInputTexture(textureRef)
+    let hasIncompleteTextureBinding = false
+    for (const [uniformName, binding] of this.drawPass.textures.entries()) {
+      const textureId = io.resolveInputTexture(binding.textureRef)
       if (!textureId) {
-        continue
+        hasIncompleteTextureBinding = true
+        break
       }
 
       let textureResource = ctx.textures.get(textureId)
-      if (!textureResource && textureRef.startsWith('resource:')) {
-        const normalizedPath = textureRef.slice('resource:'.length)
-        const bitmap = this.loadedPackage.textureResources.get(normalizedPath)
-        if (bitmap) {
-          textureResource = ctx.textures.uploadSource(textureId, bitmap, bitmap.width, bitmap.height)
-        } else {
-          void this.loadTextureResource(normalizedPath)
-        }
+      if (textureResource && !this.isDimensionCompatible(textureResource, binding.dimension)) {
+        ctx.textures.remove(textureId)
+        textureResource = null
+      }
+
+      if (!textureResource && binding.textureRef.startsWith('resource:')) {
+        const normalizedPath = normalizePackageResourcePath(binding.textureRef.slice('resource:'.length))
+        textureResource = this.resolvePackageTexture(ctx, textureId, normalizedPath, binding.dimension)
       }
 
       if (!textureResource) {
-        continue
+        hasIncompleteTextureBinding = true
+        break
       }
 
       gl.activeTexture(gl.TEXTURE0 + activeTextureIndex)
-      gl.bindTexture(gl.TEXTURE_2D, textureResource.texture)
+      gl.bindTexture(textureResource.target === '3d' ? gl.TEXTURE_3D : gl.TEXTURE_2D, textureResource.texture)
       gl.uniform1i(gl.getUniformLocation(program, uniformName), activeTextureIndex)
       activeTextureIndex += 1
+    }
+
+    if (hasIncompleteTextureBinding) {
+      return
     }
 
     for (const [uniformName, uniform] of this.drawPass.uniforms.entries()) {
@@ -160,39 +168,62 @@ export class ScriptRenderPass {
     }
   }
 
-  private async loadTextureResource(resourcePath: string): Promise<ImageBitmap | null> {
-    const cached = this.loadedPackage.textureResources.get(resourcePath)
-    if (cached) {
-      return cached
-    }
+  private resolvePackageTexture(
+    ctx: RenderPassContext,
+    textureId: string,
+    resourcePath: string,
+    dimension: '2d' | '3d',
+  ): TextureResource | null {
+    const resource = this.loadedPackage.sampledResources.get(resourcePath)
+    if (resource) {
+      if (dimension === '2d') {
+        if (resource.kind !== 'image-2d') {
+          throw new Error(`effect package 资源不是 2D 纹理: ${resourcePath}`)
+        }
 
-    const existing = this.loadedPackage.pendingTextureLoads.get(resourcePath)
-    if (existing) {
-      return existing.catch(() => null)
-    }
+        return ctx.textures.uploadSource(
+          textureId,
+          resource.bitmap,
+          resource.bitmap.width,
+          resource.bitmap.height,
+        )
+      }
 
-    const absolutePath = this.loadedPackage.textureResourcePaths.get(resourcePath)
-    if (!absolutePath) {
-      return null
-    }
+      if (resource.kind !== 'lut-3d') {
+        throw new Error(`effect package 资源不是 3D LUT: ${resourcePath}`)
+      }
 
-    const pending = (async () => {
-      const blob = await fileSystemService.readFileAsBlob(absolutePath)
-      const fileName = absolutePath.slice(absolutePath.lastIndexOf('/') + 1)
-      const bitmap = await fileToImageBitmap(
-        new File([blob], fileName, { type: blob.type || 'application/octet-stream' }),
+      return ctx.textures.uploadData3D(
+        textureId,
+        resource.data,
+        resource.size,
+        resource.size,
+        resource.size,
       )
-      this.loadedPackage.textureResources.set(resourcePath, bitmap)
-      this.loadedPackage.pendingTextureLoads.delete(resourcePath)
-      return bitmap
-    })().catch((error) => {
-      this.loadedPackage.pendingTextureLoads.delete(resourcePath)
-      console.error(`[ScriptRenderPass] 加载纹理资源失败: ${resourcePath}`, error)
-      throw error
-    })
+    }
 
-    this.loadedPackage.pendingTextureLoads.set(resourcePath, pending)
-    return pending.catch(() => null)
+    const descriptor = this.loadedPackage.sampledResourceDescriptors.get(resourcePath)
+    if (!descriptor) {
+      throw new Error(`effect package 纹理资源不存在: ${resourcePath}`)
+    }
+    if (descriptor.dimension !== dimension) {
+      throw new Error(`effect package 纹理维度不匹配: ${resourcePath}`)
+    }
+
+    void this.loadSampledPackageResource(resourcePath)
+    return null
+  }
+
+  private async loadSampledPackageResource(resourcePath: string) {
+    return loadSampledResource(this.loadedPackage, resourcePath)
+      .catch((error) => {
+        console.error(`[ScriptRenderPass] 加载纹理资源失败: ${resourcePath}`, error)
+        return null
+      })
+  }
+
+  private isDimensionCompatible(resource: TextureResource, dimension: '2d' | '3d'): boolean {
+    return resource.target === dimension
   }
 
   private resolveDrawMode(gl: WebGL2RenderingContext): number {

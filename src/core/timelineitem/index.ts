@@ -20,7 +20,9 @@ export type {
   ClipTransitionPlaybackState,
   ClipTransitionVisualTimelineItem,
 } from './transition'
+export type { ClipFilterVisualTimelineItem } from './filter'
 export type { ClipTransitionOutConfig } from '@/core/transition/types'
+export type { ClipFilterConfig } from '@/core/filter/types'
 export {
   createDefaultClipTransitionOutConfig,
   normalizeClipTransitionOutConfig,
@@ -35,7 +37,16 @@ export {
   resolveClipTransitionPlaybackState,
   doClipTransitionWindowsOverlap,
 } from './transition'
+export {
+  createDefaultClipFilterConfig,
+  normalizeClipFilterConfig,
+  areClipFilterConfigsEqual,
+  supportsClipFilter,
+  supportsClipFilterMediaType,
+  hasEnabledClipFilter,
+} from './filter'
 export { DEFAULT_CLIP_TRANSITION_DURATION_FRAMES } from '@/core/transition/types'
+export { DEFAULT_CLIP_FILTER_INTENSITY } from '@/core/filter/types'
 
 // 从 texttype.ts 导出文本相关类型
 export type { TextStyleConfig } from './texttype'

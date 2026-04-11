@@ -12,8 +12,10 @@ import type { VideoSample } from 'mediabunny'
 export interface TextureResource {
   id: string
   texture: WebGLTexture
+  target: '2d' | '3d'
   width: number
   height: number
+  depth?: number
 }
 
 /**

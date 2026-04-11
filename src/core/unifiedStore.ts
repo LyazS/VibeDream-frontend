@@ -135,6 +135,9 @@ export const useUnifiedStore = defineStore('unified', () => {
     updateTimelineItemTransformWithHistory:
       historyOperations.updateTimelineItemTransformWithHistory,
     updateTransitionOutWithHistory: historyOperations.updateTransitionOutWithHistory,
+    updateFilterEffectWithHistory: historyOperations.updateFilterEffectWithHistory,
+    commitFilterEffectWithHistory: historyOperations.commitFilterEffectWithHistory,
+    removeFilterEffectWithHistory: historyOperations.removeFilterEffectWithHistory,
     splitTimelineItemAtTimeWithHistory: historyOperations.splitTimelineItemAtTimeWithHistory,
     duplicateTimelineItemWithHistory: historyOperations.duplicateTimelineItemWithHistory,
     resizeTimelineItemWithHistory: historyOperations.resizeTimelineItemWithHistory,
@@ -176,6 +179,8 @@ export const useUnifiedStore = defineStore('unified', () => {
     updateAssetName: unifiedMediaModule.updateAssetName,
     createTransitionTemplatePlaceholder:
       unifiedMediaModule.createTransitionTemplatePlaceholder,
+    createFilterTemplatePlaceholder:
+      unifiedMediaModule.createFilterTemplatePlaceholder,
     startTemplateProcessing: unifiedMediaModule.startTemplateProcessing,
     retryTemplateProcessing: unifiedMediaModule.retryTemplateProcessing,
     cancelTemplateProcessing: unifiedMediaModule.cancelTemplateProcessing,
@@ -245,6 +250,8 @@ export const useUnifiedStore = defineStore('unified', () => {
     setTimelineItemTimeRangeForCmd: unifiedTimelineModule.setTimelineItemTimeRangeForCmd,
     setTimelineItemTransitionOutForCmd:
       unifiedTimelineModule.setTimelineItemTransitionOutForCmd,
+    setTimelineItemFilterEffectForCmd:
+      unifiedTimelineModule.setTimelineItemFilterEffectForCmd,
     refreshTransitionItems: unifiedTimelineModule.refreshTransitionItems,
     getTransitionOverlay: unifiedTimelineModule.getTransitionOverlay,
     getTransitionOverlaysByTrack: unifiedTimelineModule.getTransitionOverlaysByTrack,

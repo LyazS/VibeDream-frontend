@@ -6,6 +6,20 @@ import type { FrameData } from '@/core/webgl2/types'
 
 type UploadableSource = ImageBitmap | VideoFrame
 
+function getUploadableSourceSize(source: UploadableSource): { width: number; height: number } {
+  if (source instanceof VideoFrame) {
+    return {
+      width: source.displayWidth,
+      height: source.displayHeight,
+    }
+  }
+
+  return {
+    width: source.width,
+    height: source.height,
+  }
+}
+
 /**
  * source texture 的 CPU 侧缓存记录。
  *
@@ -69,12 +83,12 @@ export class SourceTextureUploader {
     return this.sourceTextureIds.get(itemId) || null
   }
 
-  ensureTextureForBitmap(
+  ensureTextureForSource(
     textureId: string,
-    bitmap?: ImageBitmap,
+    source?: UploadableSource,
     contentVersion?: number,
   ): string | null {
-    return this.uploadStaticTexture(textureId, bitmap, contentVersion)
+    return this.uploadStaticTexture(textureId, source, contentVersion)
   }
 
   removeTexture(textureId: string): void {
@@ -136,30 +150,32 @@ export class SourceTextureUploader {
    */
   private uploadStaticTexture(
     textureId: string,
-    source?: ImageBitmap,
+    source?: UploadableSource,
     contentVersion?: number,
   ): string | null {
     if (!source) {
       return null
     }
 
+    const { width, height } = getUploadableSourceSize(source)
+
     const cached = this.cache.get(textureId)
     if (
       cached?.objectRef === source &&
       cached.contentVersion === contentVersion &&
-      cached.width === source.width &&
-      cached.height === source.height
+      cached.width === width &&
+      cached.height === height
     ) {
       // 图片和文本位图通常是稳定对象，直接按对象引用命中缓存即可。
       return textureId
     }
 
-    this.runtime.textures.uploadSource(textureId, source, source.width, source.height)
+    this.runtime.textures.uploadSource(textureId, source, width, height)
     this.cache.set(textureId, {
       objectRef: source,
       contentVersion,
-      width: source.width,
-      height: source.height,
+      width,
+      height,
     })
     return textureId
   }

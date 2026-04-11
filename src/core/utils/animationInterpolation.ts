@@ -1,7 +1,9 @@
 import type { MediaType } from '@/core/mediaitem'
 import type { UnifiedTimelineItemData } from '@/core/timelineitem/type'
 import type { AnimationGroupId, GetConfigs } from '@/core/timelineitem/bunnytype'
+import type { ClipFilterConfig } from '@/core/filter/types'
 import { normalizeMaskConfig } from '@/core/timelineitem/mask'
+import { normalizeClipFilterConfig } from '@/core/timelineitem/filter'
 import { AnimationRegistry } from '@/core/animation/registry'
 import {
   getCurrentGroupValue,
@@ -19,6 +21,12 @@ export function createBaseRenderConfig(item: UnifiedTimelineItemData<MediaType>)
     )
   }
   return baseConfig
+}
+
+export function createBaseRenderFilterEffect(
+  item: UnifiedTimelineItemData<MediaType>,
+): ClipFilterConfig | undefined {
+  return item.filterEffect ? normalizeClipFilterConfig(item.filterEffect) : undefined
 }
 
 function getActiveAnimationGroups(item: UnifiedTimelineItemData<MediaType>): AnimationGroupId[] {
@@ -46,6 +54,9 @@ export function resolveRenderConfigAtFrame<T extends MediaType>(
   const mutableRenderConfig = renderConfig as unknown as Record<string, unknown>
   for (const groupId of getActiveAnimationGroups(item)) {
     const definition = AnimationRegistry.get(groupId)
+    if (definition.scope === 'filter') {
+      continue
+    }
     definition.applyValueToConfig(
       mutableRenderConfig,
       getCurrentGroupValue(item, currentAbsoluteFrame, groupId),
@@ -55,11 +66,41 @@ export function resolveRenderConfigAtFrame<T extends MediaType>(
   return renderConfig
 }
 
+export function resolveRenderFilterEffectAtFrame(
+  item: UnifiedTimelineItemData<MediaType>,
+  currentAbsoluteFrame: number,
+): ClipFilterConfig | undefined {
+  const renderFilterEffect = createBaseRenderFilterEffect(item)
+
+  if (
+    !renderFilterEffect ||
+    currentAbsoluteFrame < item.timeRange.timelineStartTime ||
+    currentAbsoluteFrame >= item.timeRange.timelineEndTime
+  ) {
+    return renderFilterEffect
+  }
+
+  const mutableFilterEffect = renderFilterEffect as unknown as Record<string, unknown>
+  for (const groupId of getActiveAnimationGroups(item)) {
+    const definition = AnimationRegistry.get(groupId)
+    if (definition.scope !== 'filter') {
+      continue
+    }
+    definition.applyValueToConfig(
+      mutableFilterEffect,
+      getCurrentGroupValue(item, currentAbsoluteFrame, groupId),
+    )
+  }
+
+  return normalizeClipFilterConfig(mutableFilterEffect as Partial<ClipFilterConfig>)
+}
+
 export function applyAnimationToConfig(
   item: UnifiedTimelineItemData<MediaType>,
   currentAbsoluteFrame: number,
 ): void {
   item.runtime.renderConfig = resolveRenderConfigAtFrame(item, currentAbsoluteFrame)
+  item.runtime.renderFilterEffect = resolveRenderFilterEffectAtFrame(item, currentAbsoluteFrame)
 }
 
 export function applyAnimationsToItems(

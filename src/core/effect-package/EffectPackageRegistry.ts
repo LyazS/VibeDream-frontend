@@ -1,17 +1,30 @@
 import {
   createEffectTemplateSourceDataFromTemplate,
+  createFilterTemplateAssetData,
   createTransitionTemplateAssetData,
   type EffectTemplateAssetData,
 } from '@/core/asset/types'
-import type { TransitionTemplatePackageFile } from '@/core/effect-template/catalogTypes'
+import type { EffectTemplatePackageFile } from '@/core/effect-template/catalogTypes'
 import { fileSystemService } from '@/core/managers/filesystem/fileSystemService'
 import { globalMetaFileManager } from '@/core/managers/media/globalMetaFileManager'
 import { SourceOrigin } from '@/core/datasource/core/BaseDataSource'
-import { buildTransitionPackagePayload, hashString, normalizeManifest, normalizePackageResourcePath } from '@/core/effect-package/manifest'
-import type { LoadedEffectPackage } from '@/core/effect-package/types'
+import {
+  buildFilterPackagePayload,
+  buildTransitionPackagePayload,
+  hashString,
+  normalizeManifest,
+  normalizePackageResourcePath,
+} from '@/core/effect-package/manifest'
+import type {
+  EffectPackageSampledResourceDescriptor,
+  LoadedEffectPackageSampledResource,
+  LoadedEffectPackage,
+} from '@/core/effect-package/types'
+import { disposeLoadedSampledResource } from '@/core/effect-package/runtime/sampledResourceLoader'
 
 const TEXT_EXTENSIONS = new Set(['.js', '.json', '.vert', '.frag', '.glsl', '.txt', '.wgsl'])
 const IMAGE_EXTENSIONS = new Set(['.png', '.jpg', '.jpeg', '.webp', '.gif', '.bmp', '.avif'])
+const LUT_3D_EXTENSIONS = new Set(['.cube'])
 
 function extname(path: string): string {
   const dot = path.lastIndexOf('.')
@@ -35,16 +48,16 @@ export class EffectPackageRegistry {
       return
     }
 
-    for (const bitmap of entry.textureResources.values()) {
-      bitmap.close()
+    for (const resource of entry.sampledResources.values()) {
+      disposeLoadedSampledResource(resource)
     }
     this.packages.delete(assetId)
   }
 
   clear(): void {
     for (const entry of this.packages.values()) {
-      for (const bitmap of entry.textureResources.values()) {
-        bitmap.close()
+      for (const resource of entry.sampledResources.values()) {
+        disposeLoadedSampledResource(resource)
       }
     }
     this.packages.clear()
@@ -94,7 +107,7 @@ export class EffectPackageRegistry {
   async installDownloadedPackage(
     projectId: string,
     assetId: string,
-    packageFiles: TransitionTemplatePackageFile[],
+    packageFiles: EffectTemplatePackageFile[],
   ): Promise<EffectTemplateAssetData> {
     const mediaDirPath = fileSystemService.paths.getMediaDirPath(projectId)
     const mediaDirExists = await fileSystemService.directoryExists(mediaDirPath)
@@ -157,7 +170,7 @@ export class EffectPackageRegistry {
       const files = await this.collectFiles(directoryPath)
       const textResourcePaths = new Map<string, string>()
       const textResources = new Map<string, string>([[manifest.entry, entrySource]])
-      const textureResourcePaths = new Map<string, string>()
+      const sampledResourceDescriptors = new Map<string, EffectPackageSampledResourceDescriptor>()
 
       for (const filePath of files) {
         const normalized = normalizePackageResourcePath(stripLeading(filePath, `${directoryPath}/`))
@@ -168,19 +181,47 @@ export class EffectPackageRegistry {
         }
 
         if (IMAGE_EXTENSIONS.has(extension)) {
-          textureResourcePaths.set(normalized, filePath)
+          sampledResourceDescriptors.set(normalized, {
+            absolutePath: filePath,
+            dimension: '2d',
+            resourceType: 'image-2d',
+          })
+          continue
+        }
+
+        if (LUT_3D_EXTENSIONS.has(extension)) {
+          sampledResourceDescriptors.set(normalized, {
+            absolutePath: filePath,
+            dimension: '3d',
+            resourceType: 'lut-3d',
+          })
         }
       }
+
       const scriptHash = hashString(entrySource)
-      const payload = buildTransitionPackagePayload(directoryPath, manifest, scriptHash)
-      const asset = createTransitionTemplateAssetData(assetId, manifest.name.zh || manifest.name.en, payload, {
-        source: createEffectTemplateSourceDataFromTemplate(
-          manifest.packageId,
-          undefined,
-          SourceOrigin.PROJECT_LOAD,
-        ),
-        templateStatus: 'ready',
-      })
+      let payload
+      let asset: EffectTemplateAssetData
+      if (manifest.effectType === 'transition') {
+        payload = buildTransitionPackagePayload(directoryPath, manifest, scriptHash)
+        asset = createTransitionTemplateAssetData(assetId, manifest.name.zh || manifest.name.en, payload, {
+          source: createEffectTemplateSourceDataFromTemplate(
+            manifest.packageId,
+            undefined,
+            SourceOrigin.PROJECT_LOAD,
+          ),
+          templateStatus: 'ready',
+        })
+      } else {
+        payload = buildFilterPackagePayload(directoryPath, manifest, scriptHash)
+        asset = createFilterTemplateAssetData(assetId, manifest.name.zh || manifest.name.en, payload, {
+          source: createEffectTemplateSourceDataFromTemplate(
+            manifest.packageId,
+            undefined,
+            SourceOrigin.PROJECT_LOAD,
+          ),
+          templateStatus: 'ready',
+        })
+      }
 
       return {
         asset,
@@ -192,9 +233,9 @@ export class EffectPackageRegistry {
           textResourcePaths,
           textResources,
           pendingTextLoads: new Map<string, Promise<string>>(),
-          textureResourcePaths,
-          textureResources: new Map<string, ImageBitmap>(),
-          pendingTextureLoads: new Map<string, Promise<ImageBitmap>>(),
+          sampledResourceDescriptors,
+          sampledResources: new Map<string, LoadedEffectPackageSampledResource>(),
+          pendingSampledResourceLoads: new Map<string, Promise<LoadedEffectPackageSampledResource>>(),
           payload,
         },
       }

@@ -15,7 +15,9 @@ import {
   normalizeClipTransitionOutConfig,
   refreshClipTransitionsForItems,
 } from '@/core/timelineitem/transition'
+import { normalizeClipFilterConfig } from '@/core/timelineitem/filter'
 import type { ClipTransitionOutConfig } from '@/core/transition/types'
+import type { ClipFilterConfig } from '@/core/filter/types'
 import {
   createTimelineTransitionOverlay,
   type TimelineTransitionOverlayViewModel,
@@ -163,6 +165,26 @@ export function createUnifiedTimelineModule(registry: ModuleRegistry) {
     refreshTransitionItems()
   }
 
+  function setTimelineItemFilterEffectForCmd(
+    timelineItemId: string,
+    filterEffect?: ClipFilterConfig,
+  ) {
+    const item = getTimelineItem(timelineItemId)
+    if (!item) return
+
+    item.filterEffect = filterEffect
+      ? normalizeClipFilterConfig({
+          assetId: filterEffect.assetId,
+          intensity: filterEffect.intensity,
+          params: filterEffect.params,
+          packagePayload: filterEffect.packagePayload,
+        })
+      : undefined
+    item.runtime.renderFilterEffect = item.filterEffect
+      ? normalizeClipFilterConfig(item.filterEffect)
+      : undefined
+  }
+
   function getTransitionOverlay(sourceItemId: string): TimelineTransitionOverlayViewModel | null {
     const item = getTimelineItem(sourceItemId)
     if (!item) {
@@ -289,6 +311,7 @@ export function createUnifiedTimelineModule(registry: ModuleRegistry) {
     updateTimelineItemPlaybackRate,
     setTimelineItemTimeRangeForCmd,
     setTimelineItemTransitionOutForCmd,
+    setTimelineItemFilterEffectForCmd,
     refreshTransitionItems,
     getTransitionOverlay,
     getTransitionOverlaysByTrack,

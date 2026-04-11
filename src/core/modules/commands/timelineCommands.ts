@@ -26,6 +26,7 @@ export { ResizeTimelineItemCommand } from './ResizeTimelineItemCommand' // ok
 export { SelectTimelineSelectionsCommand } from './SelectTimelineItemsCommand' // ok
 export { UpdateTextCommand } from './UpdateTextCommand' // ok
 export { UpdateTransitionOutCommand } from './UpdateTransitionOutCommand'
+export { UpdateFilterEffectCommand } from './UpdateFilterEffectCommand'
 
 // 导出类型定义
 export type { SimpleCommand } from './types'

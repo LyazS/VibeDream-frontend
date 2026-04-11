@@ -13,6 +13,7 @@ import { ASRSourceFactory } from '@/core/datasource/providers/asr/ASRSource'
 import type { UnifiedLibraryAssetData } from '@/core/asset/types'
 import {
   createEffectTemplateSourceDataFromTemplate,
+  createFilterTemplateAssetData,
   createTransitionTemplateAssetData,
 } from '@/core/asset/types'
 import { effectPackageRegistry } from '@/core/effect-package/EffectPackageRegistry'
@@ -96,7 +97,7 @@ export class MediaItemLoader {
    */
   private async rebuildMediaItemFromMeta(metaData: MediaMetaFile): Promise<UnifiedLibraryAssetData> {
     if (metaData.assetKind === 'effect-template') {
-      if (metaData.effectType !== 'transition') {
+      if (metaData.effectType !== 'transition' && metaData.effectType !== 'filter') {
         throw new Error(`不支持的效果模板类型: ${metaData.effectType}`)
       }
 
@@ -108,7 +109,19 @@ export class MediaItemLoader {
 
       const installedPackage = effectPackageRegistry.getPackage(metaData.id)
       if (installedPackage) {
-        return createTransitionTemplateAssetData(metaData.id, metaData.name, installedPackage.payload, {
+        if (installedPackage.payload.effectType === 'transition') {
+          return createTransitionTemplateAssetData(metaData.id, metaData.name, installedPackage.payload, {
+            createdAt: metaData.createdAt,
+            source: createEffectTemplateSourceDataFromTemplate(
+              templateId || installedPackage.payload.packageId,
+              metaData.source.catalogVersion,
+              SourceOrigin.PROJECT_LOAD,
+            ),
+            templateStatus: 'ready',
+          })
+        }
+
+        return createFilterTemplateAssetData(metaData.id, metaData.name, installedPackage.payload, {
           createdAt: metaData.createdAt,
           source: createEffectTemplateSourceDataFromTemplate(
             templateId || installedPackage.payload.packageId,
@@ -123,7 +136,23 @@ export class MediaItemLoader {
         ? metaData.templateStatus
         : 'pending'
 
-      return createTransitionTemplateAssetData(metaData.id, metaData.name, null, {
+      if (metaData.effectType === 'transition') {
+        return createTransitionTemplateAssetData(metaData.id, metaData.name, null, {
+          createdAt: metaData.createdAt,
+          source: createEffectTemplateSourceDataFromTemplate(
+            templateId,
+            metaData.source.catalogVersion,
+            SourceOrigin.PROJECT_LOAD,
+          ),
+          templateStatus: restoredStatus,
+          templatePayload:
+            metaData.templatePayload && typeof metaData.templatePayload === 'object'
+              ? metaData.templatePayload as Record<string, unknown>
+              : null,
+        })
+      }
+
+      return createFilterTemplateAssetData(metaData.id, metaData.name, null, {
         createdAt: metaData.createdAt,
         source: createEffectTemplateSourceDataFromTemplate(
           templateId,

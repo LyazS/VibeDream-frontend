@@ -25,6 +25,13 @@ export interface DrawPassUniform {
   value: unknown
 }
 
+export type DrawPassTextureDimension = '2d' | '3d'
+
+export interface DrawPassTextureBinding {
+  textureRef: string
+  dimension: DrawPassTextureDimension
+}
+
 export interface DrawPassBlend {
   enabled: boolean
   srcRGB?: string
@@ -57,7 +64,7 @@ export class DrawPass {
   blend: DrawPassBlend = { enabled: false }
   readonly attributes = new Map<string, DrawPassAttribute>()
   indices: { data: Uint16Array | Uint32Array; version: number } | null = null
-  readonly textures = new Map<string, string>()
+  readonly textures = new Map<string, DrawPassTextureBinding>()
   readonly uniforms = new Map<string, DrawPassUniform>()
 
   private phase: 'init' | 'update' = 'init'
@@ -140,18 +147,33 @@ export class DrawPass {
     this.indices.version += 1
   }
 
-  addTexture(uniformName: string, textureRef: string): void {
+  addTexture(
+    uniformName: string,
+    textureRef: string,
+    config?: { dimension?: DrawPassTextureDimension },
+  ): void {
     this.assertInitOnly('addTexture')
-    this.textures.set(uniformName, textureRef)
+    this.textures.set(uniformName, {
+      textureRef,
+      dimension: config?.dimension ?? '2d',
+    })
   }
 
-  setTexture(uniformName: string, textureRef: string): void {
+  setTexture(
+    uniformName: string,
+    textureRef: string,
+    config?: { dimension?: DrawPassTextureDimension },
+  ): void {
     this.assertDynamicMutationAllowed()
-    if (!this.textures.has(uniformName)) {
+    const existing = this.textures.get(uniformName)
+    if (!existing) {
       throw new Error(`DrawPass texture uniform 不存在: ${uniformName}`)
     }
 
-    this.textures.set(uniformName, textureRef)
+    this.textures.set(uniformName, {
+      textureRef,
+      dimension: config?.dimension ?? existing.dimension,
+    })
   }
 
   addUniform(uniformName: string, type: UniformType, value: unknown): void {

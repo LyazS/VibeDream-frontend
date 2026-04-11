@@ -71,12 +71,17 @@ export interface AudioAnimatableProps {
   volume: number
 }
 
+export interface FilterIntensityValue {
+  intensity: number
+}
+
 export type AnimationGroupValueMap = {
   'transform.position': PositionAnimatableProps
   'transform.size': SizeAnimatableProps
   'transform.rotation': RotationAnimatableProps
   'transform.opacity': OpacityAnimatableProps
   'audio.volume': AudioAnimatableProps
+  'filter.intensity': FilterIntensityValue
   'mask.center': MaskCenterValue
   'mask.rotation': MaskRotationValue
   'mask.feather': MaskFeatherValue
@@ -129,6 +134,7 @@ export type MediaAnimationGroupMap = {
     'transform.rotation': RotationAnimatableProps
     'transform.opacity': OpacityAnimatableProps
     'audio.volume': AudioAnimatableProps
+    'filter.intensity': FilterIntensityValue
     'mask.center': MaskCenterValue
     'mask.rotation': MaskRotationValue
     'mask.feather': MaskFeatherValue
@@ -144,6 +150,7 @@ export type MediaAnimationGroupMap = {
     'transform.size': SizeAnimatableProps
     'transform.rotation': RotationAnimatableProps
     'transform.opacity': OpacityAnimatableProps
+    'filter.intensity': FilterIntensityValue
     'mask.center': MaskCenterValue
     'mask.rotation': MaskRotationValue
     'mask.feather': MaskFeatherValue
@@ -219,6 +226,7 @@ export const ALL_ANIMATION_GROUPS = [
   'transform.rotation',
   'transform.opacity',
   'audio.volume',
+  'filter.intensity',
   'mask.center',
   'mask.rotation',
   'mask.feather',
@@ -238,6 +246,7 @@ export const PROPERTY_TO_GROUP_MAP = {
   rotation: 'transform.rotation',
   opacity: 'transform.opacity',
   volume: 'audio.volume',
+  'filter.intensity': 'filter.intensity',
   'mask.centerX': 'mask.center',
   'mask.centerY': 'mask.center',
   'mask.rotation': 'mask.rotation',

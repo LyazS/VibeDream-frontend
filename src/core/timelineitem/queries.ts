@@ -9,9 +9,11 @@ import type {
   TimelineItemStatus,
   GetConfigs,
 } from '@/core/timelineitem/type'
+import type { ClipFilterConfig } from '@/core/filter/types'
 import { TimelineStatusDisplayUtils } from '@/core/timelineitem/statusdisplayutils'
 import { useUnifiedStore } from '@/core/unifiedStore'
 import { supportsClipTransitionOut as itemSupportsClipTransitionOut } from '@/core/timelineitem/transition'
+import { supportsClipFilter as itemSupportsClipFilter } from '@/core/timelineitem/filter'
 
 // ==================== 类型守卫函数 ====================
 
@@ -67,6 +69,12 @@ export function supportsClipTransitionOut(
   item: UnifiedTimelineItemData<MediaType>,
 ): item is UnifiedTimelineItemData<'video'> | UnifiedTimelineItemData<'image'> {
   return itemSupportsClipTransitionOut(item)
+}
+
+export function supportsClipFilter(
+  item: UnifiedTimelineItemData<MediaType>,
+): item is UnifiedTimelineItemData<'video'> | UnifiedTimelineItemData<'image'> {
+  return itemSupportsClipFilter(item)
 }
 
 // ==================== 状态查询函数 ====================
@@ -175,6 +183,16 @@ export function getRenderConfig<T extends MediaType>(
   return item.runtime.renderConfig || item.config
 }
 
+export function getRenderFilterEffect(
+  item: UnifiedTimelineItemData<MediaType>,
+): ClipFilterConfig | undefined {
+  if (!supportsClipFilter(item) || !item.filterEffect) {
+    return undefined
+  }
+
+  return item.runtime.renderFilterEffect || item.filterEffect
+}
+
 // ==================== 导出查询工具集合 ====================
 
 export const TimelineItemQueries = {
@@ -186,6 +204,7 @@ export const TimelineItemQueries = {
   hasVisualProperties,
   hasAudioProperties,
   supportsClipTransitionOut,
+  supportsClipFilter,
 
   // 状态查询
   isReady,
@@ -198,4 +217,5 @@ export const TimelineItemQueries = {
   
   // 配置访问
   getRenderConfig,
+  getRenderFilterEffect,
 }

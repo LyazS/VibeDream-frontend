@@ -240,6 +240,13 @@
         @close="showTransitionTemplatePickerModal = false"
       />
 
+      <FilterTemplatePickerModal
+        :show="showFilterTemplatePickerModal"
+        :directory-id="currentDir?.id || null"
+        @update:show="showFilterTemplatePickerModal = $event"
+        @close="showFilterTemplatePickerModal = false"
+      />
+
       <!-- 隐藏的文件输入 -->
       <input
         ref="fileInput"
@@ -292,6 +299,7 @@ import RenameModal from '@/components/modals/RenameModal.vue'
 import MediaItemThumbnail from '@/components/panels/MediaItemThumbnail.vue'
 import MediaPreviewModal from '@/components/modals/MediaPreviewModal.vue'
 import TransitionTemplatePickerModal from '@/components/modals/TransitionTemplatePickerModal.vue'
+import FilterTemplatePickerModal from '@/components/modals/FilterTemplatePickerModal.vue'
 import FolderIcon from '@/components/utils/FolderIcon.vue'
 import type { TaskSubmitResponse } from '@/types/taskApi'
 import { TaskSubmitErrorCode } from '@/types/taskApi'
@@ -336,6 +344,7 @@ const renameTarget = ref<DisplayItem | null>(null)
 const showMediaPreviewModal = ref(false)
 const previewMediaItemId = ref<string>('')
 const showTransitionTemplatePickerModal = ref(false)
+const showFilterTemplatePickerModal = ref(false)
 
 // 文件夹拖拽状态（每个文件夹独立状态）
 const folderDragState = ref<Record<string, { isDragOver: boolean; canDrop: boolean }>>({})
@@ -527,6 +536,14 @@ const currentMenuItems = computed((): MenuItem[] => {
             icon: IconComponents.SPARKLING,
             onClick: () => {
               openTransitionTemplatePicker()
+              showContextMenu.value = false
+            },
+          },
+          {
+            label: t('media.createFilterAsset'),
+            icon: IconComponents.MAGIC,
+            onClick: () => {
+              openFilterTemplatePicker()
               showContextMenu.value = false
             },
           },
@@ -789,10 +806,15 @@ function getAssetTypeLabel(assetId: string): string {
   if (!asset) return t('media.unknown')
 
   if (isEffectTemplateAsset(asset)) {
+    const effectLabel = asset.effectType === 'transition'
+      ? t('media.effectTypeTransition')
+      : asset.effectType === 'filter'
+        ? t('media.effectTypeFilter')
+        : asset.effectType
     if (asset.templateStatus !== 'ready') {
-      return `${asset.effectType === 'transition' ? '转场' : asset.effectType} / ${getEffectTemplateStatusLabel(assetId)}`
+      return `${effectLabel} / ${getEffectTemplateStatusLabel(assetId)}`
     }
-    return asset.effectType === 'transition' ? '转场' : asset.effectType
+    return effectLabel
   }
 
   switch (asset.mediaType) {
@@ -1403,6 +1425,14 @@ function openTransitionTemplatePicker(): void {
     return
   }
   showTransitionTemplatePickerModal.value = true
+}
+
+function openFilterTemplatePicker(): void {
+  if (!currentDir.value) {
+    unifiedStore.messageError(t('media.selectDirectoryFirst'))
+    return
+  }
+  showFilterTemplatePickerModal.value = true
 }
 
 // 提交AI生成任务到后端

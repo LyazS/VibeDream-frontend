@@ -12,7 +12,7 @@ export class EffectPackageTransitionPass implements RenderPass {
     id: string,
     loadedPackage: LoadedEffectPackage,
     private readonly finalOutputTextureId: string,
-    private readonly getFrame: () => number,
+    private readonly getEvaluationFrame: () => number,
     private readonly getProgress: () => number,
     private readonly getParams: () => Record<string, unknown>,
     private readonly resolveInputTextures: () => Record<string, string | null>,
@@ -27,7 +27,7 @@ export class EffectPackageTransitionPass implements RenderPass {
     this.controller.render(ctx, {
       params: this.getParams(),
       progress: this.getProgress(),
-      frame: this.getFrame(),
+      frame: this.getEvaluationFrame(),
       finalOutputTextureId: this.finalOutputTextureId,
       inputTextures: this.resolveInputTextures(),
       passOutputTextureId: this.getPassTextureId,

@@ -26,8 +26,9 @@ import {
   getMaskRotationValue,
   normalizeMaskConfig,
 } from '@/core/timelineitem/mask'
+import { normalizeClipFilterConfig } from '@/core/timelineitem/filter'
 
-export type AnimationScope = 'transform' | 'audio' | 'mask'
+export type AnimationScope = 'transform' | 'audio' | 'mask' | 'filter'
 
 export interface AnimationGroupDefinition<G extends AnimationGroupId = AnimationGroupId> {
   id: G
@@ -76,6 +77,10 @@ function interpolateNumericRecord<T>(from: T, to: T, t: number): T {
 
 function getVisualConfigRecord(item: UnifiedTimelineItemData<MediaType>): Record<string, any> {
   return TimelineItemQueries.getRenderConfig(item) as unknown as Record<string, any>
+}
+
+function getFilterConfigRecord(item: UnifiedTimelineItemData<MediaType>) {
+  return TimelineItemQueries.getRenderFilterEffect(item)
 }
 
 function getMaskTextureSizeFromConfig(config: Record<string, unknown>) {
@@ -183,6 +188,34 @@ const animationGroupDefinitions: {
     interpolate: interpolateNumericRecord,
     uiMeta: { order: 50, allowDeferred: true, allowNavigation: true },
     historyMeta: { description: '修改音量关键帧' },
+  },
+  'filter.intensity': {
+    id: 'filter.intensity',
+    scope: 'filter',
+    supports: (item) => TimelineItemQueries.supportsClipFilter(item),
+    isEnabled: (item) => TimelineItemQueries.supportsClipFilter(item) && Boolean(item.filterEffect),
+    getBaseValue: (item) => ({
+      intensity: normalizeClipFilterConfig(getFilterConfigRecord(item)).intensity,
+    }),
+    applyValue: (item, value) => {
+      if (!TimelineItemQueries.supportsClipFilter(item) || !item.filterEffect) return
+      const nextFilterEffect = normalizeClipFilterConfig({
+        ...item.filterEffect,
+        intensity: value.intensity ?? item.filterEffect.intensity,
+      })
+      item.filterEffect = nextFilterEffect
+      item.runtime.renderFilterEffect = nextFilterEffect
+    },
+    applyValueToConfig: (config, value) => {
+      const nextFilterEffect = normalizeClipFilterConfig({
+        ...(config as Record<string, unknown>),
+        intensity: value.intensity,
+      })
+      Object.assign(config, nextFilterEffect)
+    },
+    interpolate: interpolateNumericRecord,
+    uiMeta: { order: 55, allowDeferred: true, allowNavigation: true },
+    historyMeta: { description: '修改滤镜强度关键帧' },
   },
   'mask.center': {
     id: 'mask.center',

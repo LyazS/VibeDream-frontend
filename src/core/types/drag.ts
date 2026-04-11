@@ -5,7 +5,7 @@
 
 import type { FileInputConfig, MultiFileData } from '@/core/datasource/providers/ai-generation/types'
 import type { AssetKind, EffectType } from '@/core/asset/types'
-import type { TransitionPackagePayload } from '@/core/effect-package/types'
+import type { AnyEffectPackagePayload } from '@/core/effect-package/types'
 import type { MediaTypeOrUnknown } from '@/core/mediaitem/types'
 
 // ==================== 拖拽源类型 ====================
@@ -57,6 +57,7 @@ export enum DropTargetType {
   TAB = 'tab', // 垂直标签页
   TIMELINE_TRACK = 'timeline-track', // 时间轴轨道
   AI_GENERATION_PANEL = 'ai-generation-panel', // AI生成面板
+  CLIP_FILTER_DROPZONE = 'clip-filter-dropzone', // 片段滤镜专用投放区
 }
 
 // ==================== 拖拽数据类型 ====================
@@ -82,7 +83,7 @@ export interface AssetDragData extends BaseDragData {
   duration?: number
   mediaType?: MediaTypeOrUnknown
   effectType?: EffectType
-  templatePayload?: TransitionPackagePayload | unknown
+  templatePayload?: AnyEffectPackagePayload | unknown
   type?: 'media-item' // 兼容旧代码
 }
 
@@ -156,6 +157,12 @@ export interface AIGenerationPanelDropTargetInfo {
   position?: never
 }
 
+export interface ClipFilterDropTargetInfo {
+  targetType: DropTargetType.CLIP_FILTER_DROPZONE
+  timelineItemId: string
+  position?: never
+}
+
 /**
  * 拖拽目标信息联合类型
  */
@@ -163,6 +170,7 @@ export type DropTargetInfo =
   | TimelineTrackDropTargetInfo
   | FolderOrTabDropTargetInfo
   | AIGenerationPanelDropTargetInfo
+  | ClipFilterDropTargetInfo
 
 // ==================== 拖拽预览数据（保留现有定义） ====================
 

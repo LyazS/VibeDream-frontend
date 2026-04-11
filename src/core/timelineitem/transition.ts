@@ -12,9 +12,11 @@ export type ClipTransitionBindingState =
   | 'invalid-overlap'
   | 'waiting-edge'
 
+export type ClipTransitionEdgeSource = ImageBitmap | VideoFrame
+
 export interface ClipTransitionEdgeFrames {
-  leftTail?: ImageBitmap
-  rightHead?: ImageBitmap
+  leftTail?: ClipTransitionEdgeSource
+  rightHead?: ClipTransitionEdgeSource
 }
 
 export interface ClipTransitionRuntime {
@@ -402,6 +404,14 @@ export function refreshClipTransitionsForItems(
         closeClipTransitionEdgeFrames(existingRuntime.edgeFrames)
       }
       item.runtime.transition = undefined
+      continue
+    }
+
+    if (!hasEnabledClipTransitionOut(item)) {
+      if (existingRuntime?.edgeFrames) {
+        closeClipTransitionEdgeFrames(existingRuntime.edgeFrames)
+      }
+      item.runtime.transition = createEmptyClipTransitionRuntime()
       continue
     }
 

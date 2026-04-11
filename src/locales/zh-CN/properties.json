@@ -55,6 +55,12 @@
       "sourceClip": "源片段",
       "placeholder": "这里先保留转场属性占位，后续会接入独立编辑能力。"
     },
+    "filter": {
+      "title": "滤镜",
+      "dropHint": "拖拽滤镜素材到这里",
+      "intensity": "强度",
+      "ready": "已就绪"
+    },
     "mask": {
       "enabled": "启用",
       "type": "类型",

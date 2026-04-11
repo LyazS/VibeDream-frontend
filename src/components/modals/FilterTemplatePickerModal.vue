@@ -1,7 +1,7 @@
 <template>
   <UniversalModal
     :show="show"
-    :title="t('media.transitionTemplatePickerTitle')"
+    :title="t('media.filterTemplatePickerTitle')"
     :show-footer="false"
     :show-confirm="false"
     :show-cancel="false"
@@ -18,7 +18,7 @@
 
       <div v-if="isLoading" class="transition-template-picker__state">
         <component :is="IconComponents.LOADING" size="22px" class="transition-template-picker__spin" />
-        <span>{{ t('media.transitionTemplateLoading') }}</span>
+        <span>{{ t('media.filterTemplateLoading') }}</span>
       </div>
 
       <div v-else-if="loadError" class="transition-template-picker__state transition-template-picker__state--error">
@@ -31,7 +31,7 @@
 
       <div v-else-if="items.length === 0" class="transition-template-picker__state">
         <component :is="IconComponents.EMPTY" size="22px" />
-        <span>{{ t('media.transitionTemplateEmpty') }}</span>
+        <span>{{ t('media.filterTemplateEmpty') }}</span>
       </div>
 
       <div v-else class="transition-template-picker__grid">
@@ -70,6 +70,9 @@
             <p class="transition-template-picker__summary">
               {{ resolveLocalizedText(item.summary) || t('media.transitionTemplateNoSummary') }}
             </p>
+            <div class="transition-template-picker__meta">
+              {{ item.supported_media_types.join(' / ') }}
+            </div>
             <div v-if="resolveLocalizedTags(item.tags).length > 0" class="transition-template-picker__tags">
               <span
                 v-for="tag in resolveLocalizedTags(item.tags)"
@@ -94,12 +97,12 @@ import { IconComponents } from '@/constants/iconComponents'
 import { useAppI18n } from '@/core/composables/useI18n'
 import { useUnifiedStore } from '@/core/unifiedStore'
 import type {
+  FilterTemplateSummary,
   LocalizedTagList,
   LocalizedText,
-  TransitionTemplateSummary,
 } from '@/core/effect-template/catalogTypes'
-import { TransitionTemplateCatalogCacheManager } from '@/core/effect-template/TransitionTemplateCatalogCacheManager'
-import { transitionTemplateCatalogService } from '@/core/effect-template/TransitionTemplateCatalogService'
+import { FilterTemplateCatalogCacheManager } from '@/core/effect-template/FilterTemplateCatalogCacheManager'
+import { filterTemplateCatalogService } from '@/core/effect-template/FilterTemplateCatalogService'
 
 interface Props {
   show: boolean
@@ -116,12 +119,11 @@ const emit = defineEmits<{
 const unifiedStore = useUnifiedStore()
 const { t, locale } = useAppI18n()
 
-const items = ref<TransitionTemplateSummary[]>([])
+const items = ref<FilterTemplateSummary[]>([])
 const catalogVersion = ref('')
 const isLoading = ref(false)
 const loadError = ref('')
 const cacheNotice = ref('')
-const loadedFromCache = ref(false)
 const creatingTemplateId = ref<string | null>(null)
 
 watch(
@@ -140,35 +142,31 @@ async function loadCatalog(forceRefresh: boolean = false): Promise<void> {
   loadError.value = ''
   cacheNotice.value = ''
 
-  const cachedCatalog = TransitionTemplateCatalogCacheManager.loadCatalog()
+  const cachedCatalog = FilterTemplateCatalogCacheManager.loadCatalog()
 
   try {
-    const versionData = await transitionTemplateCatalogService.getCatalogVersion()
+    const versionData = await filterTemplateCatalogService.getCatalogVersion()
     if (!forceRefresh && cachedCatalog && cachedCatalog.version === versionData.catalog_version) {
       items.value = cachedCatalog.items
       catalogVersion.value = cachedCatalog.version
-      loadedFromCache.value = true
       return
     }
 
-    const catalogData = await transitionTemplateCatalogService.getTemplateSummaries()
+    const catalogData = await filterTemplateCatalogService.getTemplateSummaries()
     items.value = catalogData.items
     catalogVersion.value = catalogData.catalog_version
-    loadedFromCache.value = false
-    TransitionTemplateCatalogCacheManager.saveCatalog(catalogData.catalog_version, catalogData.items)
+    FilterTemplateCatalogCacheManager.saveCatalog(catalogData.catalog_version, catalogData.items)
   } catch (error) {
     if (cachedCatalog) {
       items.value = cachedCatalog.items
       catalogVersion.value = cachedCatalog.version
-      loadedFromCache.value = true
-      cacheNotice.value = t('media.transitionTemplateCacheFallback')
+      cacheNotice.value = t('media.filterTemplateCacheFallback')
       return
     }
 
     items.value = []
     catalogVersion.value = ''
-    loadedFromCache.value = false
-    loadError.value = t('media.transitionTemplateLoadFailed', {
+    loadError.value = t('media.filterTemplateLoadFailed', {
       error: error instanceof Error ? error.message : String(error),
     })
   } finally {
@@ -189,7 +187,7 @@ async function handleTemplateSelect(templateId: string): Promise<void> {
       throw new Error('模板不存在')
     }
 
-    const asset = unifiedStore.createTransitionTemplatePlaceholder({
+    const asset = unifiedStore.createFilterTemplatePlaceholder({
       templateId,
       name: resolveLocalizedText(template.name),
       catalogVersion: catalogVersion.value || undefined,
@@ -198,7 +196,7 @@ async function handleTemplateSelect(templateId: string): Promise<void> {
     unifiedStore.addAssetToDirectory(asset.id, props.directoryId)
     void unifiedStore.startTemplateProcessing(asset.id)
     unifiedStore.messageSuccess(
-      t('media.transitionTemplateCreated', {
+      t('media.filterTemplateCreated', {
         name: asset.name,
       }),
     )
@@ -206,7 +204,7 @@ async function handleTemplateSelect(templateId: string): Promise<void> {
     emit('close')
   } catch (error) {
     unifiedStore.messageError(
-      t('media.transitionTemplateCreateFailed', {
+      t('media.filterTemplateCreateFailed', {
         error: error instanceof Error ? error.message : String(error),
       }),
     )

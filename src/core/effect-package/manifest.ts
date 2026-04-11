@@ -1,6 +1,8 @@
 import type {
   EffectPackageManifest,
   EffectPackageParameterDefinition,
+  FilterEffectPackageHost,
+  FilterPackagePayload,
   TransitionEffectPackageHost,
   TransitionPackagePayload,
 } from '@/core/effect-package/types'
@@ -96,6 +98,32 @@ function normalizeTransitionHost(value: unknown): TransitionEffectPackageHost {
   }
 }
 
+function normalizeFilterHost(value: unknown): FilterEffectPackageHost {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    throw new Error('filter effect package 缺少 host.filter.supportedMediaTypes')
+  }
+
+  const hostPayload = value as Record<string, unknown>
+  if (typeof hostPayload.filter !== 'object' || hostPayload.filter === null || Array.isArray(hostPayload.filter)) {
+    throw new Error('filter effect package 缺少 host.filter.supportedMediaTypes')
+  }
+
+  const filterPayload = hostPayload.filter as Record<string, unknown>
+  const supportedMediaTypes = Array.isArray(filterPayload.supportedMediaTypes)
+    ? filterPayload.supportedMediaTypes.map((item) => String(item).trim()).filter(Boolean)
+    : []
+
+  if (supportedMediaTypes.length === 0 || supportedMediaTypes.some((item) => item !== 'video' && item !== 'image')) {
+    throw new Error('filter effect package 的 host.filter.supportedMediaTypes 仅允许 video/image')
+  }
+
+  return {
+    filter: {
+      supportedMediaTypes: supportedMediaTypes as Array<'video' | 'image'>,
+    },
+  }
+}
+
 export function normalizeManifest(raw: unknown): EffectPackageManifest {
   if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) {
     throw new Error('effect package manifest 必须是对象')
@@ -111,8 +139,8 @@ export function normalizeManifest(raw: unknown): EffectPackageManifest {
   if (apiVersion !== '1.0') {
     throw new Error(`不支持的 effect package apiVersion: ${apiVersion || '(empty)'}`)
   }
-  if (effectType !== 'transition') {
-    throw new Error(`第一阶段仅支持 transition effect package: ${effectType || '(empty)'}`)
+  if (effectType !== 'transition' && effectType !== 'filter') {
+    throw new Error(`不支持的 effect package effectType: ${effectType || '(empty)'}`)
   }
   if (!packageId) {
     throw new Error('effect package 缺少 packageId')
@@ -150,9 +178,8 @@ export function normalizeManifest(raw: unknown): EffectPackageManifest {
     }
   }
 
-  return {
-    apiVersion: '1.0',
-    effectType: 'transition',
+  const base = {
+    apiVersion: '1.0' as const,
     packageId,
     version,
     name: normalizeLocalizedText(payload.name, packageId),
@@ -160,10 +187,23 @@ export function normalizeManifest(raw: unknown): EffectPackageManifest {
     tags: normalizeLocalizedTags(payload.tags),
     cover: payload.cover ? normalizePath(String(payload.cover)) : null,
     entry,
-    host: normalizeTransitionHost(payload.host),
     parameters,
     sort_order: Math.round(Number(payload.sort_order ?? 0) || 0),
     is_active: payload.is_active === undefined ? true : Boolean(payload.is_active),
+  }
+
+  if (effectType === 'transition') {
+    return {
+      ...base,
+      effectType: 'transition',
+      host: normalizeTransitionHost(payload.host),
+    }
+  }
+
+  return {
+    ...base,
+    effectType: 'filter',
+    host: normalizeFilterHost(payload.host),
   }
 }
 
@@ -195,10 +235,11 @@ export function resolveDefaultParams(
 
 export function buildTransitionPackagePayload(
   packageDir: string,
-  manifest: EffectPackageManifest,
+  manifest: Extract<EffectPackageManifest, { effectType: 'transition' }>,
   scriptHash: string,
 ): TransitionPackagePayload {
   return {
+    effectType: 'transition',
     packageDir: normalizePath(packageDir),
     packageId: manifest.packageId,
     version: manifest.version,
@@ -206,6 +247,34 @@ export function buildTransitionPackagePayload(
     host: {
       transition: {
         defaultDurationFrames: manifest.host.transition.defaultDurationFrames,
+      },
+    },
+    parameterSchema: manifest.parameters,
+    defaultParams: resolveDefaultParams(manifest.parameters),
+    manifestSnapshot: {
+      name: manifest.name,
+      summary: manifest.summary,
+      tags: manifest.tags,
+      cover: manifest.cover ?? null,
+    },
+    scriptHash,
+  }
+}
+
+export function buildFilterPackagePayload(
+  packageDir: string,
+  manifest: Extract<EffectPackageManifest, { effectType: 'filter' }>,
+  scriptHash: string,
+): FilterPackagePayload {
+  return {
+    effectType: 'filter',
+    packageDir: normalizePath(packageDir),
+    packageId: manifest.packageId,
+    version: manifest.version,
+    entryFile: manifest.entry,
+    host: {
+      filter: {
+        supportedMediaTypes: [...manifest.host.filter.supportedMediaTypes],
       },
     },
     parameterSchema: manifest.parameters,

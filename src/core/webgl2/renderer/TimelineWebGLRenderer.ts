@@ -66,6 +66,8 @@ export class TimelineWebGLRenderer {
       targets: this.runtime.targets,
       getSourceTextureId: (itemId) => this.sourceUploader.getTextureIdForItem(itemId),
       getMediaItem: options.getMediaItem,
+      getAsset: options.getAsset,
+      getCurrentFrame: () => this.currentRenderFrame,
     })
     this.chainAdapter = new TimelineRenderChainAdapter(this.chainBuilder)
     this.transitionChainBuilder = new TransitionChainBuilder({
@@ -249,14 +251,14 @@ export class TimelineWebGLRenderer {
     }
 
     if (edgeFrames.leftTail) {
-      this.sourceUploader.ensureTextureForBitmap(
+      this.sourceUploader.ensureTextureForSource(
         `transition-edge:${transitionItem.id}:leftTail`,
         edgeFrames.leftTail,
       )
     }
 
     if (edgeFrames.rightHead) {
-      this.sourceUploader.ensureTextureForBitmap(
+      this.sourceUploader.ensureTextureForSource(
         `transition-edge:${transitionItem.id}:rightHead`,
         edgeFrames.rightHead,
       )

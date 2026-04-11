@@ -1,7 +1,11 @@
 import { reactive } from 'vue'
 import type { DataSourceRuntimeState } from '@/core/datasource/core/BaseDataSource'
 import { RuntimeStateFactory, SourceOrigin } from '@/core/datasource/core/BaseDataSource'
-import type { TransitionPackagePayload } from '@/core/effect-package/types'
+import type {
+  AnyEffectPackagePayload,
+  FilterPackagePayload,
+  TransitionPackagePayload,
+} from '@/core/effect-package/types'
 import type { MediaStatus, UnifiedMediaItemData } from '@/core/mediaitem/types'
 
 export type AssetKind = 'media' | 'effect-template'
@@ -30,7 +34,7 @@ export interface EffectTemplateAssetData {
   effectType: EffectType
   source: EffectTemplateSourceData
   templateStatus: EffectTemplateStatus
-  templatePayload: TransitionPackagePayload | Record<string, unknown> | null
+  templatePayload: AnyEffectPackagePayload | Record<string, unknown> | null
   runtime: EffectTemplateAssetRuntime
 }
 
@@ -89,10 +93,11 @@ export function isReadyEffectTemplateAsset(
   return asset?.assetKind === 'effect-template' && asset.templateStatus === 'ready'
 }
 
-export function createTransitionTemplateAssetData(
+function createEffectTemplateAssetData(
   id: string,
   name: string,
-  payload: TransitionPackagePayload | null,
+  effectType: 'transition' | 'filter',
+  payload: TransitionPackagePayload | FilterPackagePayload | null,
   options?: Partial<EffectTemplateAssetData>,
 ): EffectTemplateAssetData {
   return {
@@ -100,7 +105,7 @@ export function createTransitionTemplateAssetData(
     name,
     createdAt: new Date().toISOString(),
     assetKind: 'effect-template',
-    effectType: 'transition',
+    effectType,
     source: createEffectTemplateSourceDataFromTemplate(
       payload?.packageId ?? options?.source?.templateId ?? id,
       options?.source?.catalogVersion,
@@ -111,4 +116,22 @@ export function createTransitionTemplateAssetData(
     runtime: {},
     ...options,
   }
+}
+
+export function createTransitionTemplateAssetData(
+  id: string,
+  name: string,
+  payload: TransitionPackagePayload | null,
+  options?: Partial<EffectTemplateAssetData>,
+): EffectTemplateAssetData {
+  return createEffectTemplateAssetData(id, name, 'transition', payload, options)
+}
+
+export function createFilterTemplateAssetData(
+  id: string,
+  name: string,
+  payload: FilterPackagePayload | null,
+  options?: Partial<EffectTemplateAssetData>,
+): EffectTemplateAssetData {
+  return createEffectTemplateAssetData(id, name, 'filter', payload, options)
 }

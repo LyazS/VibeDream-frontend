@@ -1,12 +1,23 @@
 import type { LocalizedTagList, LocalizedText } from '@/core/effect-template/catalogTypes'
 
 export type EffectPackageParameterType = 'number' | 'boolean' | 'color' | 'vec2'
+export type FilterSupportedMediaType = 'video' | 'image'
+export type EffectTextureDimension = '2d' | '3d'
+export type EffectResourceVector3 = [number, number, number]
 
 export interface TransitionEffectPackageHost {
   transition: {
     defaultDurationFrames: number
   }
 }
+
+export interface FilterEffectPackageHost {
+  filter: {
+    supportedMediaTypes: FilterSupportedMediaType[]
+  }
+}
+
+export type EffectPackageHost = TransitionEffectPackageHost | FilterEffectPackageHost
 
 export interface EffectPackageParameterDefinition {
   type: EffectPackageParameterType
@@ -23,9 +34,8 @@ export interface EffectPackageManifestSnapshot {
   cover?: string | null
 }
 
-export interface EffectPackageManifest {
+interface EffectPackageManifestBase {
   apiVersion: '1.0'
-  effectType: 'transition'
   packageId: string
   version: string
   name: LocalizedText
@@ -33,22 +43,76 @@ export interface EffectPackageManifest {
   tags: LocalizedTagList
   cover?: string | null
   entry: string
-  host: TransitionEffectPackageHost
   parameters: Record<string, EffectPackageParameterDefinition>
   sort_order: number
   is_active: boolean
 }
 
-export interface TransitionPackagePayload {
+export interface TransitionEffectPackageManifest extends EffectPackageManifestBase {
+  effectType: 'transition'
+  host: TransitionEffectPackageHost
+}
+
+export interface FilterEffectPackageManifest extends EffectPackageManifestBase {
+  effectType: 'filter'
+  host: FilterEffectPackageHost
+}
+
+export type EffectPackageManifest =
+  | TransitionEffectPackageManifest
+  | FilterEffectPackageManifest
+
+interface EffectPackagePayloadBase {
   packageDir: string
   packageId: string
   version: string
   entryFile: string
-  host: TransitionEffectPackageHost
   parameterSchema: Record<string, EffectPackageParameterDefinition>
   defaultParams: Record<string, unknown>
   manifestSnapshot: EffectPackageManifestSnapshot
   scriptHash: string
+}
+
+export interface TransitionPackagePayload extends EffectPackagePayloadBase {
+  effectType: 'transition'
+  host: TransitionEffectPackageHost
+}
+
+export interface FilterPackagePayload extends EffectPackagePayloadBase {
+  effectType: 'filter'
+  host: FilterEffectPackageHost
+}
+
+export type AnyEffectPackagePayload = TransitionPackagePayload | FilterPackagePayload
+
+export interface LoadedEffectImageResource {
+  kind: 'image-2d'
+  bitmap: ImageBitmap
+}
+
+export interface LoadedEffectLut3DResource {
+  kind: 'lut-3d'
+  size: number
+  domainMin: EffectResourceVector3
+  domainMax: EffectResourceVector3
+  data: Uint8Array
+}
+
+export type LoadedEffectPackageSampledResource =
+  | LoadedEffectImageResource
+  | LoadedEffectLut3DResource
+
+export interface EffectPackageSampledResourceDescriptor {
+  absolutePath: string
+  dimension: EffectTextureDimension
+  resourceType: LoadedEffectPackageSampledResource['kind']
+}
+
+export interface EffectPackageLut3DResourceInfo {
+  textureRef: string
+  size: number
+  domainMin: EffectResourceVector3
+  domainMax: EffectResourceVector3
 }
 
 export interface LoadedEffectPackage {
@@ -59,10 +123,10 @@ export interface LoadedEffectPackage {
   textResourcePaths: Map<string, string>
   textResources: Map<string, string>
   pendingTextLoads: Map<string, Promise<string>>
-  textureResourcePaths: Map<string, string>
-  textureResources: Map<string, ImageBitmap>
-  pendingTextureLoads: Map<string, Promise<ImageBitmap>>
-  payload: TransitionPackagePayload
+  sampledResourceDescriptors: Map<string, EffectPackageSampledResourceDescriptor>
+  sampledResources: Map<string, LoadedEffectPackageSampledResource>
+  pendingSampledResourceLoads: Map<string, Promise<LoadedEffectPackageSampledResource>>
+  payload: AnyEffectPackagePayload
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -80,16 +144,44 @@ export function isTransitionEffectPackageHost(value: unknown): value is Transiti
     && defaultDurationFrames >= 2
 }
 
+export function isFilterEffectPackageHost(value: unknown): value is FilterEffectPackageHost {
+  if (!isRecord(value) || !isRecord(value.filter)) {
+    return false
+  }
+
+  const supportedMediaTypes = value.filter.supportedMediaTypes
+  return Array.isArray(supportedMediaTypes)
+    && supportedMediaTypes.every((item) => item === 'video' || item === 'image')
+}
+
 export function isTransitionPackagePayload(value: unknown): value is TransitionPackagePayload {
   if (!isRecord(value)) {
     return false
   }
 
-  return typeof value.packageDir === 'string'
+  return value.effectType === 'transition'
+    && typeof value.packageDir === 'string'
     && typeof value.packageId === 'string'
     && typeof value.version === 'string'
     && typeof value.entryFile === 'string'
     && isTransitionEffectPackageHost(value.host)
+    && isRecord(value.parameterSchema)
+    && isRecord(value.defaultParams)
+    && isRecord(value.manifestSnapshot)
+    && typeof value.scriptHash === 'string'
+}
+
+export function isFilterPackagePayload(value: unknown): value is FilterPackagePayload {
+  if (!isRecord(value)) {
+    return false
+  }
+
+  return value.effectType === 'filter'
+    && typeof value.packageDir === 'string'
+    && typeof value.packageId === 'string'
+    && typeof value.version === 'string'
+    && typeof value.entryFile === 'string'
+    && isFilterEffectPackageHost(value.host)
     && isRecord(value.parameterSchema)
     && isRecord(value.defaultParams)
     && isRecord(value.manifestSnapshot)

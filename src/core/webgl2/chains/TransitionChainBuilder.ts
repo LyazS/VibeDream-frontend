@@ -1,5 +1,6 @@
 import { isEffectTemplateAsset, type UnifiedLibraryAssetData } from '@/core/asset/types'
 import { effectPackageRegistry } from '@/core/effect-package/EffectPackageRegistry'
+import { EffectPackageFilterPass } from '@/core/effect-package/runtime/EffectPackageFilterPass'
 import { EffectPackageTransitionPass } from '@/core/effect-package/runtime/EffectPackageTransitionPass'
 import { degreesToRadians } from '@/core/utils/rotationTransform'
 import type { UnifiedMediaItemData } from '@/core/mediaitem/types'
@@ -10,7 +11,7 @@ import {
   resolveTransitionBoundaryFrames,
 } from '@/core/timelineitem/transition'
 import type { UnifiedTimelineItemData } from '@/core/timelineitem/type'
-import { resolveRenderConfigAtFrame } from '@/core/utils/animationInterpolation'
+import { resolveRenderConfigAtFrame, resolveRenderFilterEffectAtFrame } from '@/core/utils/animationInterpolation'
 import { CompositeToMainPass } from '@/core/webgl2/passes/CompositeToMainPass'
 import { CompositeToRenderTargetPass } from '@/core/webgl2/passes/CompositeToRenderTargetPass'
 import { ItemLocalRasterPass } from '@/core/webgl2/passes/ItemLocalRasterPass'
@@ -37,6 +38,24 @@ interface TransitionChainBuilderParams {
 export class TransitionChainBuilder {
   constructor(private readonly params: TransitionChainBuilderParams) {}
 
+  private resolveLoadedTransitionPackage(transitionItem: TransitionItem) {
+    const assetId = transitionItem.transitionOut?.assetId
+    const packageAsset = assetId ? this.params.getAsset(assetId) : undefined
+    return assetId && isEffectTemplateAsset(packageAsset)
+      ? effectPackageRegistry.getPackage(assetId)
+      : null
+  }
+
+  private resolveLoadedFilterPackage(item: TransitionItem) {
+    const filterEffect = TimelineItemQueries.getRenderFilterEffect(item)
+    const filterAsset = filterEffect?.assetId ? this.params.getAsset(filterEffect.assetId) : undefined
+    return filterEffect?.assetId
+      && isEffectTemplateAsset(filterAsset)
+      && filterAsset.effectType === 'filter'
+      ? effectPackageRegistry.getPackage(filterEffect.assetId)
+      : null
+  }
+
   build(transitionItem: TransitionItem, rightItem: TransitionItem): RenderChain {
     const leftCurrentOutput = `transition-left-current:${transitionItem.id}:projected`
     const leftEdgeOutput = `transition-left-edge:${transitionItem.id}:projected`
@@ -44,13 +63,7 @@ export class TransitionChainBuilder {
     const rightEdgeOutput = `transition-right-edge:${transitionItem.id}:projected`
     const mixedOutput = `transition-mixed:${transitionItem.id}`
 
-    const transitionOut = transitionItem.transitionOut
-    const assetId = transitionOut?.assetId
-    const packageAsset = assetId ? this.params.getAsset(assetId) : undefined
-    const loadedPackage =
-      assetId && isEffectTemplateAsset(packageAsset)
-        ? effectPackageRegistry.getPackage(assetId)
-        : null
+    const loadedPackage = this.resolveLoadedTransitionPackage(transitionItem)
     if (!loadedPackage) {
       throw new Error(`转场片段缺少已安装的 effect package: ${transitionItem.id}`)
     }
@@ -61,6 +74,8 @@ export class TransitionChainBuilder {
         item: transitionItem,
         getSourceTextureId: () => this.params.getSourceTextureId(transitionItem.id),
         getRenderConfig: () => TimelineItemQueries.getRenderConfig(transitionItem),
+        getRenderFilterEffect: () => TimelineItemQueries.getRenderFilterEffect(transitionItem),
+        getEffectEvaluationFrame: () => this.params.getCurrentFrame(),
       }),
       ...this.buildBranchPasses({
         prefix: `transition-left-edge:${transitionItem.id}`,
@@ -71,12 +86,20 @@ export class TransitionChainBuilder {
             transitionItem,
             resolveTransitionBoundaryFrames(transitionItem).timelineTailFrame,
           ),
+        getRenderFilterEffect: () =>
+          resolveRenderFilterEffectAtFrame(
+            transitionItem,
+            resolveTransitionBoundaryFrames(transitionItem).timelineTailFrame,
+          ),
+        getEffectEvaluationFrame: () => resolveTransitionBoundaryFrames(transitionItem).timelineTailFrame,
       }),
       ...this.buildBranchPasses({
         prefix: `transition-right-current:${transitionItem.id}`,
         item: rightItem,
         getSourceTextureId: () => this.params.getSourceTextureId(rightItem.id),
         getRenderConfig: () => TimelineItemQueries.getRenderConfig(rightItem),
+        getRenderFilterEffect: () => TimelineItemQueries.getRenderFilterEffect(rightItem),
+        getEffectEvaluationFrame: () => this.params.getCurrentFrame(),
       }),
       ...this.buildBranchPasses({
         prefix: `transition-right-edge:${transitionItem.id}`,
@@ -87,6 +110,12 @@ export class TransitionChainBuilder {
             rightItem,
             resolveTransitionBoundaryFrames(rightItem).timelineHeadFrame,
           ),
+        getRenderFilterEffect: () =>
+          resolveRenderFilterEffectAtFrame(
+            rightItem,
+            resolveTransitionBoundaryFrames(rightItem).timelineHeadFrame,
+          ),
+        getEffectEvaluationFrame: () => resolveTransitionBoundaryFrames(rightItem).timelineHeadFrame,
       }),
       new EffectPackageTransitionPass(
         `transition-package:${transitionItem.id}`,
@@ -96,7 +125,7 @@ export class TransitionChainBuilder {
         () => this.getTransitionProgress(transitionItem),
         () => ({
           ...loadedPackage.payload.defaultParams,
-          ...(transitionOut?.params ?? {}),
+          ...(transitionItem.transitionOut?.params ?? {}),
         }),
         () => {
           const playbackState = resolveClipTransitionPlaybackState(
@@ -136,12 +165,14 @@ export class TransitionChainBuilder {
   }
 
   getSignature(transitionItem: TransitionItem, rightItem: TransitionItem): string {
+    const loadedTransitionPackage = this.resolveLoadedTransitionPackage(transitionItem)
     return [
       `left:${this.getBranchSignature(transitionItem)}`,
       `right:${this.getBranchSignature(rightItem)}`,
       transitionItem.transitionOut?.assetId ?? '',
-      transitionItem.transitionOut?.packagePayload?.version ?? '',
-      transitionItem.transitionOut?.packagePayload?.scriptHash ?? '',
+      `transition-installed:${loadedTransitionPackage ? 'ready' : 'missing'}`,
+      loadedTransitionPackage?.payload.version ?? transitionItem.transitionOut?.packagePayload?.version ?? '',
+      loadedTransitionPackage?.payload.scriptHash ?? transitionItem.transitionOut?.packagePayload?.scriptHash ?? '',
     ].join('|')
   }
 
@@ -166,11 +197,16 @@ export class TransitionChainBuilder {
     item: TransitionItem
     getSourceTextureId: () => string | null
     getRenderConfig: () => any
+    getRenderFilterEffect: () => ReturnType<typeof TimelineItemQueries.getRenderFilterEffect>
+    getEffectEvaluationFrame: () => number
   }) {
     const rotatedTextureId = `${params.prefix}:rotated`
     const itemLocalTextureId = `${params.prefix}:item-local`
     const maskedTextureId = `${params.prefix}:masked`
+    const filteredTextureId = `${params.prefix}:filtered`
     const projectedTextureId = `${params.prefix}:projected`
+    const loadedFilterPackage = this.resolveLoadedFilterPackage(params.item)
+    const hasFilter = Boolean(params.getRenderFilterEffect() && loadedFilterPackage)
 
     return [
       new RotateSourcePass(
@@ -203,12 +239,31 @@ export class TransitionChainBuilder {
         this.params.targets,
         () => (params.getRenderConfig() as { mask?: unknown }).mask as never,
       ),
+      ...(hasFilter && loadedFilterPackage
+        ? [new EffectPackageFilterPass(
+            this.params.programs,
+            this.params.targets,
+            `${params.prefix}:filter`,
+            loadedFilterPackage,
+            filteredTextureId,
+            params.getEffectEvaluationFrame,
+            () => params.getRenderFilterEffect()?.intensity ?? 1,
+            () => ({
+              ...loadedFilterPackage.payload.defaultParams,
+              ...(params.getRenderFilterEffect()?.params ?? {}),
+            }),
+            () => (params.getRenderConfig().mask?.enabled ? maskedTextureId : itemLocalTextureId),
+            (name) => `${params.prefix}:filter:${name}`,
+          )]
+        : []),
       new CompositeToRenderTargetPass(
         this.params.programs,
         this.params.textures,
         this.params.targets,
         `${params.prefix}:project`,
-        params.getRenderConfig().mask?.enabled ? maskedTextureId : itemLocalTextureId,
+        hasFilter
+          ? filteredTextureId
+          : (params.getRenderConfig().mask?.enabled ? maskedTextureId : itemLocalTextureId),
         projectedTextureId,
         params.item.config.blendMode ?? DEFAULT_BLEND_MODE,
         () => {
@@ -243,6 +298,14 @@ export class TransitionChainBuilder {
 
   private getBranchSignature(item: TransitionItem): string {
     const mask = item.config.mask
-    return `blend:${item.config.blendMode ?? DEFAULT_BLEND_MODE}:mask:${mask?.enabled ? 'on' : 'off'}:${mask?.type ?? 'rectangle'}`
+    const loadedFilterPackage = this.resolveLoadedFilterPackage(item)
+    return [
+      `blend:${item.config.blendMode ?? DEFAULT_BLEND_MODE}`,
+      `mask:${mask?.enabled ? 'on' : 'off'}:${mask?.type ?? 'rectangle'}`,
+      `filter:${TimelineItemQueries.getRenderFilterEffect(item)?.assetId ?? ''}`,
+      `filter-installed:${loadedFilterPackage ? 'ready' : 'missing'}`,
+      `filter-version:${loadedFilterPackage?.payload.version ?? TimelineItemQueries.getRenderFilterEffect(item)?.packagePayload?.version ?? ''}`,
+      `filter-script:${loadedFilterPackage?.payload.scriptHash ?? TimelineItemQueries.getRenderFilterEffect(item)?.packagePayload?.scriptHash ?? ''}`,
+    ].join(':')
   }
 }

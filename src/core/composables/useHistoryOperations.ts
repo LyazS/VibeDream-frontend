@@ -21,6 +21,7 @@ import {
   MoveTimelineItemCommand,
   UpdateTransformCommand,
   UpdateTransitionOutCommand,
+  UpdateFilterEffectCommand,
   SplitTimelineItemCommand,
   ResizeTimelineItemCommand,
   AddTrackCommand,
@@ -61,6 +62,11 @@ import {
   areClipTransitionOutConfigsEqual,
   normalizeClipTransitionOutConfig,
 } from '@/core/timelineitem/transition'
+import type { ClipFilterConfig } from '@/core/filter/types'
+import {
+  areClipFilterConfigsEqual,
+  normalizeClipFilterConfig,
+} from '@/core/timelineitem/filter'
 
 // 变换属性类型定义
 interface TransformProperties {
@@ -382,6 +388,119 @@ export function useHistoryOperations(
       unifiedMediaModule,
     )
     await unifiedHistoryModule.executeCommand(command)
+  }
+
+  async function updateFilterEffectWithHistory(
+    timelineItemId: string,
+    nextFilterEffect?: ClipFilterConfig,
+  ) {
+    const timelineItem = unifiedTimelineModule.getTimelineItem(timelineItemId)
+    if (!timelineItem) {
+      console.warn(`⚠️ 时间轴项目不存在，无法更新滤镜: ${timelineItemId}`)
+      return
+    }
+
+    const currentFilterEffect = timelineItem.filterEffect
+      ? normalizeClipFilterConfig(timelineItem.filterEffect)
+      : undefined
+    const normalizedNextFilterEffect = nextFilterEffect
+      ? normalizeClipFilterConfig(nextFilterEffect)
+      : undefined
+
+    const hasSameValue = areClipFilterConfigsEqual(
+      currentFilterEffect,
+      normalizedNextFilterEffect,
+    )
+
+    if (hasSameValue) {
+      return
+    }
+
+    await commitFilterEffectWithHistory(
+      timelineItemId,
+      currentFilterEffect,
+      normalizedNextFilterEffect,
+    )
+  }
+
+  async function commitFilterEffectWithHistory(
+    timelineItemId: string,
+    previousFilterEffect?: ClipFilterConfig,
+    nextFilterEffect?: ClipFilterConfig,
+  ) {
+    const normalizedPreviousFilterEffect = previousFilterEffect
+      ? normalizeClipFilterConfig(previousFilterEffect)
+      : undefined
+    const normalizedNextFilterEffect = nextFilterEffect
+      ? normalizeClipFilterConfig(nextFilterEffect)
+      : undefined
+
+    const hasSameValue = areClipFilterConfigsEqual(
+      normalizedPreviousFilterEffect,
+      normalizedNextFilterEffect,
+    )
+
+    if (hasSameValue) {
+      return
+    }
+
+    const command = new UpdateFilterEffectCommand(
+      timelineItemId,
+      normalizedPreviousFilterEffect,
+      normalizedNextFilterEffect,
+      unifiedTimelineModule,
+      unifiedMediaModule,
+    )
+    await unifiedHistoryModule.executeCommand(command)
+  }
+
+  async function removeFilterEffectWithHistory(timelineItemId: string) {
+    const timelineItem = unifiedTimelineModule.getTimelineItem(timelineItemId)
+    if (!timelineItem) {
+      console.warn(`⚠️ 时间轴项目不存在，无法移除滤镜: ${timelineItemId}`)
+      return
+    }
+
+    const currentFilterEffect = timelineItem.filterEffect
+      ? normalizeClipFilterConfig(timelineItem.filterEffect)
+      : undefined
+    const filterIntensityTrack = (timelineItem.animation?.groups as
+      | Record<string, { keyframes?: unknown[] }>
+      | undefined)?.['filter.intensity']
+    const hasFilterIntensityKeyframes = Boolean(
+      filterIntensityTrack?.keyframes?.length,
+    )
+
+    if (!currentFilterEffect && !hasFilterIntensityKeyframes) {
+      return
+    }
+
+    const batch = unifiedHistoryModule.startBatch('移除片段滤镜')
+
+    if (currentFilterEffect) {
+      batch.addCommand(new UpdateFilterEffectCommand(
+        timelineItemId,
+        currentFilterEffect,
+        undefined,
+        unifiedTimelineModule,
+        unifiedMediaModule,
+      ))
+    }
+
+    if (hasFilterIntensityKeyframes) {
+      batch.addCommand(new ClearAllKeyframesCommand(
+        timelineItemId,
+        'filter.intensity',
+        unifiedTimelineModule,
+        {
+          seekTo: (nextFrame: number) => {
+            console.log('🔍 滤镜关键帧清除播放头控制:', nextFrame)
+          },
+        },
+      ))
+    }
+
+    await unifiedHistoryModule.executeBatchCommand(batch.build())
   }
 
   /**
@@ -969,6 +1088,8 @@ export function useHistoryOperations(
     if (groupId && typeof value === 'number') {
       const patchKey = property.startsWith('mask.')
         ? property.replace('mask.', '')
+        : property.startsWith('filter.')
+          ? property.replace('filter.', '')
         : property
       await updateAnimationGroupValueWithHistory(
         timelineItemId,
@@ -1122,6 +1243,9 @@ export function useHistoryOperations(
     moveTimelineItemWithHistory,
     updateTimelineItemTransformWithHistory,
     updateTransitionOutWithHistory,
+    updateFilterEffectWithHistory,
+    commitFilterEffectWithHistory,
+    removeFilterEffectWithHistory,
     splitTimelineItemAtTimeWithHistory,
     duplicateTimelineItemWithHistory,
     resizeTimelineItemWithHistory,

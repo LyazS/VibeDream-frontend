@@ -4,10 +4,12 @@ import type { UnifiedConfigModule } from '@/core/modules/UnifiedConfigModule'
 import type { EffectTemplateAssetData } from '@/core/asset/types'
 import {
   createEffectTemplateSourceDataFromTemplate,
+  createFilterTemplateAssetData,
   createTransitionTemplateAssetData,
   isEffectTemplateAsset,
 } from '@/core/asset/types'
 import type { LocalizedText } from '@/core/effect-template/catalogTypes'
+import { filterTemplateCatalogService } from '@/core/effect-template/FilterTemplateCatalogService'
 import { transitionTemplateCatalogService } from '@/core/effect-template/TransitionTemplateCatalogService'
 import { effectPackageRegistry } from '@/core/effect-package/EffectPackageRegistry'
 import { globalMetaFileManager } from '@/core/managers/media/globalMetaFileManager'
@@ -19,7 +21,7 @@ interface EffectTemplateDownloadTask {
   abortController: AbortController
 }
 
-interface CreateTransitionTemplatePlaceholderParams {
+interface CreateTemplatePlaceholderParams {
   templateId: string
   name: string
   catalogVersion?: string
@@ -35,9 +37,27 @@ export class EffectTemplateManager {
   ) {}
 
   createTransitionTemplatePlaceholder(
-    params: CreateTransitionTemplatePlaceholderParams,
+    params: CreateTemplatePlaceholderParams,
   ): EffectTemplateAssetData {
     return createTransitionTemplateAssetData(
+      generateAssetId('effect'),
+      params.name,
+      null,
+      {
+        source: createEffectTemplateSourceDataFromTemplate(
+          params.templateId,
+          params.catalogVersion,
+          SourceOrigin.USER_CREATE,
+        ),
+        templateStatus: 'pending',
+      },
+    )
+  }
+
+  createFilterTemplatePlaceholder(
+    params: CreateTemplatePlaceholderParams,
+  ): EffectTemplateAssetData {
+    return createFilterTemplateAssetData(
       generateAssetId('effect'),
       params.name,
       null,
@@ -75,10 +95,15 @@ export class EffectTemplateManager {
       asset.source.errorMessage = undefined
       await globalMetaFileManager.saveMetaFile(asset)
 
-      const download = await transitionTemplateCatalogService.downloadTemplatePackage(
-        asset.source.templateId,
-        { signal: task.abortController.signal },
-      )
+      const download = asset.effectType === 'filter'
+        ? await filterTemplateCatalogService.downloadTemplatePackage(
+            asset.source.templateId,
+            { signal: task.abortController.signal },
+          )
+        : await transitionTemplateCatalogService.downloadTemplatePackage(
+            asset.source.templateId,
+            { signal: task.abortController.signal },
+          )
 
       if (!this.isTaskCurrent(assetId, task.token)) {
         return

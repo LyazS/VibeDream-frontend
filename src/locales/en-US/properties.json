@@ -55,6 +55,12 @@
       "sourceClip": "Source Clip",
       "placeholder": "This panel is reserved for transition properties. Editing controls will be added later."
     },
+    "filter": {
+      "title": "Filter",
+      "dropHint": "Drag a filter asset here",
+      "intensity": "Intensity",
+      "ready": "Ready"
+    },
     "mask": {
       "enabled": "Enabled",
       "type": "Type",

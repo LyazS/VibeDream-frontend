@@ -26,6 +26,7 @@ import {
   isMediaAsset,
 } from '@/core/asset/types'
 import { EffectTemplateManager } from '@/core/effect-template/EffectTemplateManager'
+import { clearChannelKeyframes } from '@/core/utils/unifiedKeyframeUtils'
 
 // ==================== 统一媒体项目调试工具 ====================
 
@@ -210,7 +211,7 @@ export function createUnifiedMediaModule(registry: ModuleRegistry) {
     await effectTemplateManager.cleanupTemplateProcessing(assetId)
     const autoSaveModule = registry.get<UnifiedAutoSaveModule>(MODULE_NAMES.AUTOSAVE)
     autoSaveModule.cleanupMediaItemWatcher(assetId)
-    await cleanupRelatedTransitionTemplateReferences(assetId)
+    await cleanupRelatedEffectTemplateReferences(assetId)
     await globalMetaFileManager.deleteAssetFiles(asset)
     effectTemplateAssets.value.splice(index, 1)
   }
@@ -488,6 +489,14 @@ export function createUnifiedMediaModule(registry: ModuleRegistry) {
     return effectTemplateManager.createTransitionTemplatePlaceholder(params)
   }
 
+  function createFilterTemplatePlaceholder(params: {
+    templateId: string
+    name: string
+    catalogVersion?: string
+  }): EffectTemplateAssetData {
+    return effectTemplateManager.createFilterTemplatePlaceholder(params)
+  }
+
   async function startTemplateProcessing(assetId: string): Promise<void> {
     await effectTemplateManager.startTemplateProcessing(assetId)
   }
@@ -597,30 +606,39 @@ export function createUnifiedMediaModule(registry: ModuleRegistry) {
     }
   }
 
-  async function cleanupRelatedTransitionTemplateReferences(assetId: string): Promise<void> {
+  async function cleanupRelatedEffectTemplateReferences(assetId: string): Promise<void> {
     try {
       const timelineModule = registry.get<UnifiedTimelineModule>(MODULE_NAMES.TIMELINE)
 
       if (!timelineModule) {
-        console.warn('⚠️ 时间轴模块未初始化，跳过转场模板引用清理')
+        console.warn('⚠️ 时间轴模块未初始化，跳过效果模板引用清理')
         return
       }
 
-      const relatedTimelineItems = timelineModule.timelineItems.value.filter(
+      const relatedTransitionItems = timelineModule.timelineItems.value.filter(
         (item: UnifiedTimelineItemData) => item.transitionOut?.assetId === assetId,
       )
 
-      for (const timelineItem of relatedTimelineItems) {
+      for (const timelineItem of relatedTransitionItems) {
         timelineModule.setTimelineItemTransitionOutForCmd(timelineItem.id, undefined)
       }
 
-      if (relatedTimelineItems.length > 0) {
+      const relatedFilterItems = timelineModule.timelineItems.value.filter(
+        (item: UnifiedTimelineItemData) => item.filterEffect?.assetId === assetId,
+      )
+
+      for (const timelineItem of relatedFilterItems) {
+        clearChannelKeyframes(timelineItem, 'filter.intensity')
+        timelineModule.setTimelineItemFilterEffectForCmd(timelineItem.id, undefined)
+      }
+
+      if (relatedTransitionItems.length > 0 || relatedFilterItems.length > 0) {
         console.log(
-          `🧹 已清理 ${relatedTimelineItems.length} 个引用效果素材 ${assetId} 的时间轴转场`,
+          `🧹 已清理效果素材引用: 转场 ${relatedTransitionItems.length} 个, 滤镜 ${relatedFilterItems.length} 个`,
         )
       }
     } catch (error) {
-      console.error(`❌ 清理效果素材转场引用失败: ${assetId}`, error)
+      console.error(`❌ 清理效果素材引用失败: ${assetId}`, error)
     }
   }
 
@@ -645,6 +663,7 @@ export function createUnifiedMediaModule(registry: ModuleRegistry) {
     getAllAssets,
     updateAssetName,
     createTransitionTemplatePlaceholder,
+    createFilterTemplatePlaceholder,
     startTemplateProcessing,
     retryTemplateProcessing,
     cancelTemplateProcessing,
@@ -671,7 +690,7 @@ export function createUnifiedMediaModule(registry: ModuleRegistry) {
 
     // 清理方法
     cleanupRelatedTimelineItems,
-    cleanupRelatedTransitionTemplateReferences,
+    cleanupRelatedEffectTemplateReferences,
 
     // 工厂函数和查询函数
     createUnifiedMediaItemData,

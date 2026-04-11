@@ -3,9 +3,9 @@ import type { TextureResource } from '@/core/webgl2/types'
 type UploadSource = TexImageSource
 
 /**
- * 统一管理所有“可被 shader 读取”的 2D texture。
+ * 统一管理所有“可被 shader 读取”的 texture。
  *
- * 这个类不关心 texture 是视频帧、图片、文本位图还是离屏结果，
+ * 这个类不关心 texture 是视频帧、图片、文本位图、3D LUT 还是离屏结果，
  * 它只负责：
  * - 以字符串 ID 建立查找关系
  * - 保证 texture 尺寸与上传源一致
@@ -23,21 +23,67 @@ export class TextureManager {
    * 这样上层不必自己维护 “这张 texture 当前是几乘几” 的额外状态。
    */
   ensureTexture(id: string, width: number, height: number): TextureResource {
+    return this.ensureTexture2D(id, width, height)
+  }
+
+  ensureTexture3D(id: string, width: number, height: number, depth: number): TextureResource {
     const existing = this.textures.get(id)
-    if (existing && existing.width === width && existing.height === height) {
+    if (
+      existing
+      && existing.target === '3d'
+      && existing.width === width
+      && existing.height === height
+      && existing.depth === depth
+    ) {
       return existing
     }
 
-    if (existing) {
-      this.gl.deleteTexture(existing.texture)
-      this.textures.delete(id)
+    this.disposeTexture(id)
+    const texture = this.createTexture(id)
+    this.gl.bindTexture(this.gl.TEXTURE_3D, texture)
+    this.gl.texParameteri(this.gl.TEXTURE_3D, this.gl.TEXTURE_MIN_FILTER, this.gl.LINEAR)
+    this.gl.texParameteri(this.gl.TEXTURE_3D, this.gl.TEXTURE_MAG_FILTER, this.gl.LINEAR)
+    this.gl.texParameteri(this.gl.TEXTURE_3D, this.gl.TEXTURE_WRAP_S, this.gl.CLAMP_TO_EDGE)
+    this.gl.texParameteri(this.gl.TEXTURE_3D, this.gl.TEXTURE_WRAP_T, this.gl.CLAMP_TO_EDGE)
+    this.gl.texParameteri(this.gl.TEXTURE_3D, this.gl.TEXTURE_WRAP_R, this.gl.CLAMP_TO_EDGE)
+    this.gl.texImage3D(
+      this.gl.TEXTURE_3D,
+      0,
+      this.gl.RGBA8,
+      width,
+      height,
+      depth,
+      0,
+      this.gl.RGBA,
+      this.gl.UNSIGNED_BYTE,
+      null,
+    )
+
+    const resource: TextureResource = {
+      id,
+      texture,
+      target: '3d',
+      width,
+      height,
+      depth,
+    }
+    this.textures.set(id, resource)
+    return resource
+  }
+
+  private ensureTexture2D(id: string, width: number, height: number): TextureResource {
+    const existing = this.textures.get(id)
+    if (
+      existing
+      && existing.target === '2d'
+      && existing.width === width
+      && existing.height === height
+    ) {
+      return existing
     }
 
-    const texture = this.gl.createTexture()
-    if (!texture) {
-      throw new Error(`Failed to create texture for ${id}`)
-    }
-
+    this.disposeTexture(id)
+    const texture = this.createTexture(id)
     this.gl.bindTexture(this.gl.TEXTURE_2D, texture)
     this.gl.texParameteri(this.gl.TEXTURE_2D, this.gl.TEXTURE_MIN_FILTER, this.gl.LINEAR)
     this.gl.texParameteri(this.gl.TEXTURE_2D, this.gl.TEXTURE_MAG_FILTER, this.gl.LINEAR)
@@ -55,7 +101,7 @@ export class TextureManager {
       null,
     )
 
-    const resource: TextureResource = { id, texture, width, height }
+    const resource: TextureResource = { id, texture, target: '2d', width, height }
     this.textures.set(id, resource)
     return resource
   }
@@ -69,7 +115,7 @@ export class TextureManager {
    * 后续如果要进一步优化视频上传，可以在这里改成尺寸稳定时走 `texSubImage2D`。
    */
   uploadSource(id: string, source: UploadSource, width: number, height: number): TextureResource {
-    const resource = this.ensureTexture(id, width, height)
+    const resource = this.ensureTexture2D(id, width, height)
 
     this.gl.bindTexture(this.gl.TEXTURE_2D, resource.texture)
     this.gl.texImage2D(
@@ -86,6 +132,35 @@ export class TextureManager {
     return resource
   }
 
+  uploadData3D(
+    id: string,
+    data: Uint8Array,
+    width: number,
+    height: number,
+    depth: number,
+  ): TextureResource {
+    const resource = this.ensureTexture3D(id, width, height, depth)
+
+    this.gl.bindTexture(this.gl.TEXTURE_3D, resource.texture)
+    this.gl.texImage3D(
+      this.gl.TEXTURE_3D,
+      0,
+      this.gl.RGBA8,
+      width,
+      height,
+      depth,
+      0,
+      this.gl.RGBA,
+      this.gl.UNSIGNED_BYTE,
+      data,
+    )
+
+    resource.width = width
+    resource.height = height
+    resource.depth = depth
+    return resource
+  }
+
   /**
    * 通过逻辑 ID 查回 texture；找不到返回 null，避免上层直接接触 Map。
    */
@@ -97,20 +172,33 @@ export class TextureManager {
    * 释放单个 texture。
    */
   remove(id: string): void {
-    const resource = this.textures.get(id)
-    if (!resource) return
-
-    this.gl.deleteTexture(resource.texture)
-    this.textures.delete(id)
+    this.disposeTexture(id)
   }
 
   /**
    * 释放当前管理的全部 texture。
    */
   clear(): void {
-    for (const resource of this.textures.values()) {
-      this.gl.deleteTexture(resource.texture)
+    for (const id of Array.from(this.textures.keys())) {
+      this.disposeTexture(id)
     }
-    this.textures.clear()
+  }
+
+  private createTexture(id: string): WebGLTexture {
+    const texture = this.gl.createTexture()
+    if (!texture) {
+      throw new Error(`Failed to create texture for ${id}`)
+    }
+    return texture
+  }
+
+  private disposeTexture(id: string): void {
+    const resource = this.textures.get(id)
+    if (!resource) {
+      return
+    }
+
+    this.gl.deleteTexture(resource.texture)
+    this.textures.delete(id)
   }
 }

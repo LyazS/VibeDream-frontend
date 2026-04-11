@@ -115,6 +115,12 @@
               :current-frame="currentFrame"
             />
 
+            <FilterPropertiesGroup
+              v-else-if="activePropertyTab === 'filter' && selectedTimelineItem && supportsClipFilter(selectedTimelineItem)"
+              :selected-timeline-item="selectedTimelineItem"
+              :current-frame="currentFrame"
+            />
+
             <!-- 预留标签占位 -->
             <div v-else class="tab-placeholder-state">
               <component :is="IconComponents.CHECKBOX_BLANK" size="32px" />
@@ -165,6 +171,7 @@ import type { UnifiedTimelineItemData } from '@/core/timelineitem/type'
 import { getStatusText } from '@/core/timelineitem/queries'
 import { hasVisualProperties } from '@/core/timelineitem/queries'
 import { supportsClipTransitionOut } from '@/core/timelineitem/queries'
+import { supportsClipFilter } from '@/core/timelineitem/queries'
 import { IconComponents } from '@/constants/iconComponents'
 import type { PropertyTabKey } from '@/core/modules/UnifiedUIModule'
 
@@ -172,6 +179,7 @@ import UnifiedClipProperties from '@/components/properties/unified/UnifiedClipPr
 import MediaItemProperties from '@/components/properties/MediaItemProperties.vue'
 import MaskPropertiesGroup from '@/components/properties/groups/MaskPropertiesGroup.vue'
 import TransitionPropertiesGroup from '@/components/properties/groups/TransitionPropertiesGroup.vue'
+import FilterPropertiesGroup from '@/components/properties/groups/FilterPropertiesGroup.vue'
 import { parseTimelineSelectionId } from '@/core/types/timelineSelection'
 import {
   isEffectTemplateAsset,
@@ -202,6 +210,9 @@ const propertyTabs = computed(() => {
   return basePropertyTabs.filter((tab) => {
     if (tab.key === 'mask') {
       return hasVisualProperties(selectedTimelineItem.value!)
+    }
+    if (tab.key === 'filter') {
+      return supportsClipFilter(selectedTimelineItem.value!)
     }
     return true
   })

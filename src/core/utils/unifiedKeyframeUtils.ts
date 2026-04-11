@@ -29,6 +29,7 @@ import {
 } from '@/core/animation/engine'
 import { TimelineItemQueries } from '@/core/timelineitem/queries'
 import { setMaskPropertyValue } from '@/core/timelineitem/mask'
+import { normalizeClipFilterConfig } from '@/core/timelineitem/filter'
 import type { KeyframeButtonState, KeyframeUIState } from '@/core/timelineitem/animationtypes'
 
 export type ActionResult = 'no-animation' | 'updated-keyframe' | 'created-keyframe'
@@ -178,6 +179,20 @@ function setConfigProperty(
     })
     return
   }
+  if (
+    property === 'filter.intensity' &&
+    typeof value === 'number' &&
+    TimelineItemQueries.supportsClipFilter(item) &&
+    item.filterEffect
+  ) {
+    const nextFilterEffect = normalizeClipFilterConfig({
+      ...item.filterEffect,
+      intensity: value,
+    })
+    item.filterEffect = nextFilterEffect
+    item.runtime.renderFilterEffect = normalizeClipFilterConfig(nextFilterEffect)
+    return
+  }
   const config = item.config as unknown as Record<string, unknown>
   if (!(property in config)) return
   config[property] = value
@@ -197,6 +212,8 @@ export async function handlePropertyChange(
 
   const patchKey = property.startsWith('mask.')
     ? property.replace('mask.', '')
+    : property.startsWith('filter.')
+      ? property.replace('filter.', '')
     : property
 
   const next = setGroupValue(
