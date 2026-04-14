@@ -1,22 +1,23 @@
-// 聊天API相关的类型定义
-import type { ChatMessageUser } from '@/aipanel/agent/types'
+import type { SessionSnapshot, StartRunRequest, ToolResultRequest } from '@/aipanel/agent/types'
 
-// API端点配置
 export const API_ENDPOINTS = {
-  createSession: '/api/agent/create-session',
-  sendMessage: '/api/agent/send-message',
+  createSession: '/api/agent/sessions',
+  sessionSnapshot: (sessionId: string) => `/api/agent/sessions/${sessionId}`,
+  startRun: (sessionId: string) => `/api/agent/sessions/${sessionId}/runs`,
+  submitToolResult: (sessionId: string, runId: string) =>
+    `/api/agent/sessions/${sessionId}/runs/${runId}/tool-results`,
 } as const
 
-// API响应类型定义
 export interface CreateSessionResponse {
   session_id: string
   created_at: string
 }
 
-export interface SendMessageRequest {
-  session_id: string
-  message: ChatMessageUser // 使用 ChatMessageUser 类型
-}
+export type SessionSnapshotResponse = SessionSnapshot
+
+export type StartRunPayload = StartRunRequest
+
+export type SubmitToolResultPayload = ToolResultRequest
 
 export interface ApiError {
   detail: string

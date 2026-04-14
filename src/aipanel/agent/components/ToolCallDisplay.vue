@@ -1,67 +1,57 @@
 <template>
   <div class="tool-call-display">
-    <div class="tool-header" @click="isFrontendTool && toggleExpand()">
+    <div class="tool-header" @click="toggleExpand()">
       <div class="status-dot"></div>
       <component :is="IconComponents.TOOLS_FILL" size="16px" class="tool-icon" />
       <span class="tool-title">{{ displayName }}</span>
-      <!-- 仅前端工具显示箭头 -->
-      <component v-if="isFrontendTool"
-                 :is="isExpanded ? IconComponents.DROPDOWN : IconComponents.NEXT_KEYFRAME"
-                 size="14px"
-                 class="expand-icon" />
+      <component
+        :is="isExpanded ? IconComponents.DROPDOWN : IconComponents.NEXT_KEYFRAME"
+        size="14px"
+        class="expand-icon"
+      />
     </div>
-    <!-- 展开的参数区域 -->
-    <div v-if="isFrontendTool && isExpanded" class="tool-params-expanded">
-      <!-- edit_sdk 工具使用 markdown 渲染代码块 -->
-      <div v-if="isEditSdkTool && editSdkScript" class="markdown-body" v-html="renderMarkdown('```javascript\n' + editSdkScript + '\n```')"></div>
-      <!-- 其他工具显示原始 JSON -->
+    <div v-if="isExpanded" class="tool-params-expanded">
+      <div
+        v-if="isEditSdkTool && editSdkScript"
+        class="markdown-body"
+        v-html="renderMarkdown('```javascript\n' + editSdkScript + '\n```')"
+      ></div>
       <pre v-else>{{ formattedArgs }}</pre>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, inject } from 'vue'
+import { computed, inject, ref } from 'vue'
+import 'github-markdown-css'
 import { useAppI18n } from '@/core/composables/useI18n'
 import { IconComponents } from '@/constants/iconComponents'
-import type { ChatMessageAssistantContent } from '../types'
-import 'github-markdown-css'
+import type { ToolCallPart } from '../types'
 
 const props = defineProps<{
-  item: ChatMessageAssistantContent
+  item: ToolCallPart
 }>()
 
 const { t } = useAppI18n()
 const isExpanded = ref(false)
 
-// 注入 markdown 渲染函数
-const renderMarkdown = inject<(content: string) => string>('renderMarkdown', (content: string) => content)
+const renderMarkdown = inject<(content: string) => string>(
+  'renderMarkdown',
+  (content: string) => content,
+)
 
-const isFrontendTool = computed(() => props.item.isFrontendTool ?? false)
+const isEditSdkTool = computed(() => props.item.tool_name === 'edit_sdk')
+const formattedArgs = computed(() => JSON.stringify(props.item.args || {}, null, 2))
 
-// 检测是否是 edit_sdk 工具
-const isEditSdkTool = computed(() => props.item.toolName === 'edit_sdk')
-
-// 解析 edit_sdk 工具的 script 字段
 const editSdkScript = computed(() => {
   if (!isEditSdkTool.value) return ''
-  try {
-    const args = JSON.parse(props.item.toolArgs || '{}')
-    return args.script || ''
-  } catch {
-    return ''
-  }
+  const args = props.item.args as Record<string, unknown>
+  return typeof args.script === 'string' ? args.script : ''
 })
 
 const displayName = computed(() => {
-  const toolName = props.item.toolName
-  if (!toolName) return t('aiPanel.tools.unknown', '未知工具')
-  const key = `aiPanel.tools.${toolName}`
-  return t(key, toolName)
-})
-
-const formattedArgs = computed(() => {
-  return props.item.toolArgs || '{}'
+  const key = `aiPanel.tools.${props.item.tool_name}`
+  return t(key, props.item.tool_name)
 })
 
 const toggleExpand = () => {

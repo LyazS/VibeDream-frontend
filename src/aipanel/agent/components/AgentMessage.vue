@@ -5,25 +5,32 @@
         <component :is="IconComponents.ROBOT" size="20px" class="agent-icon" />
         <span class="agent-label">Agent</span>
       </div>
-      <div class="message-content">
-        <template v-for="(item, index) in message.content" :key="index">
+      <div v-if="isTaskComplete" class="task-complete-component">
+        <div class="task-complete-header">
+          <component :is="IconComponents.SUCCESS" size="18px" class="check-icon" />
+          <span class="task-complete-title">{{ t('aiPanel.taskComplete') }}</span>
+        </div>
+        <div class="task-complete-content">
+          <template v-for="(item, index) in message.parts" :key="index">
+            <div
+              v-if="item.type === MessagePartType.TEXT"
+              class="markdown-body"
+              v-html="renderMarkdown(item.text)"
+            ></div>
+          </template>
+        </div>
+      </div>
+      <div v-else class="message-content">
+        <template v-for="(item, index) in message.parts" :key="index">
           <div
-            v-if="item.type === ChatMessageAssistantContentType.TEXT"
+            v-if="item.type === MessagePartType.TEXT"
             class="markdown-body"
-            v-html="renderMarkdown(item.content)"
+            v-html="renderMarkdown(item.text)"
           ></div>
           <ToolCallDisplay
-            v-else-if="item.type === ChatMessageAssistantContentType.TOOL_USE"
+            v-else-if="item.type === MessagePartType.TOOL_CALL && item.tool_name !== 'task_complete'"
             :item="item"
           />
-          <!-- 任务完成UI -->
-          <div v-else-if="item.type === ChatMessageAssistantContentType.TASK_COMPLETE" class="task-complete-component">
-            <div class="task-complete-header">
-              <component :is="IconComponents.SUCCESS" size="18px" class="check-icon" />
-              <span class="task-complete-title">{{ t('aiPanel.taskComplete') }}</span>
-            </div>
-            <div class="task-complete-content markdown-body" v-html="renderMarkdown(item.content)"></div>
-          </div>
         </template>
       </div>
     </div>
@@ -33,8 +40,8 @@
 <script setup lang="ts">
 import { inject } from 'vue'
 import 'github-markdown-css'
-import type { ChatMessageAssistant } from '../types'
-import { ChatMessageAssistantContentType } from '../types'
+import type { AgentMessage } from '../types'
+import { MessagePartType } from '../types'
 import { IconComponents } from '@/constants/iconComponents'
 import ToolCallDisplay from './ToolCallDisplay.vue'
 import { useAppI18n } from '@/core/composables/useI18n'
@@ -43,12 +50,12 @@ const { t } = useAppI18n()
 
 // 注入markdown渲染函数
 const renderMarkdown = inject<(content: string) => string>('renderMarkdown', (content: string) => {
-  // 如果没有注入，返回原始内容（降级处理）
   return content
 })
 
 const props = defineProps<{
-  message: ChatMessageAssistant
+  message: AgentMessage
+  isTaskComplete?: boolean
 }>()
 </script>
 
@@ -114,7 +121,6 @@ const props = defineProps<{
   margin-bottom: 0;
 }
 
-/* 任务完成组件样式 */
 .task-complete-component {
   margin: 12px 0;
   padding: 12px 16px;
@@ -146,7 +152,4 @@ const props = defineProps<{
   color: var(--color-text-primary);
 }
 
-.task-complete-content.markdown-body {
-  background: transparent;
-}
 </style>

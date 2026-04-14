@@ -38,7 +38,7 @@ import { useAppI18n } from '@/core/composables/useI18n'
 
 const { t } = useAppI18n()
 
-// ChatInput 现在完全自主，不需要发射任何事件
+// AgentInput 现在完全自主，不需要发射任何事件
 
 const inputMessage = ref('')
 const isComposing = ref(false) // 跟踪输入法 composition 状态

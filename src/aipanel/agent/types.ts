@@ -1,96 +1,176 @@
-// 与后端类型定义完全一致的消息类型
-export enum ChatMessageType {
+export enum AgentMessageRole {
+  SYSTEM = 'system',
   USER = 'user',
-  ASSISTANT = 'assistant', // 直接对应后端的 ASSISTANT
-  TOOL = 'tool', // 工具结果消息
+  ASSISTANT = 'assistant',
+  TOOL = 'tool',
 }
 
-// 用户消息内容类型
-export enum ChatMessageUserContentType {
+export enum MessagePartType {
   TEXT = 'text',
   IMAGE = 'image',
-  PASSIVE = 'passive', // 被动注入的上下文信息（如项目信息、环境信息），前端UI隐藏，后端处理时转换为TEXT
+  TOOL_CALL = 'tool_call',
+  TOOL_RESULT = 'tool_result',
 }
 
-// 助手消息内容类型
-export enum ChatMessageAssistantContentType {
-  TEXT = 'text',
-  TOOL_USE = 'tool_use',
-  TASK_COMPLETE = 'task_complete', // 任务完成类型
+export enum ToolCallStatus {
+  REQUESTED = 'requested',
+  COMPLETED = 'completed',
+  FAILED = 'failed',
 }
 
-// 用户消息内容（对应后端的 ChatMessageUserContent）
-export interface ChatMessageUserContent {
-  type: ChatMessageUserContentType
-  content: string
+export interface TextPart {
+  type: MessagePartType.TEXT
+  text: string
 }
 
-// 助手消息内容（对应后端的 ChatMessageAssistantContent）
-export interface ChatMessageAssistantContent {
-  type: ChatMessageAssistantContentType
-  content: string
-  // 工具调用专用字段
-  toolName?: string        // 工具名称
-  toolArgs?: string        // 序列化后的参数
-  isFrontendTool?: boolean // 是否为前端工具
+export interface ImagePart {
+  type: MessagePartType.IMAGE
+  url: string
 }
 
-// 用户消息（对应后端的 ChatMessageUser）
-export interface ChatMessageUser {
+export interface ToolCallPart {
+  type: MessagePartType.TOOL_CALL
+  tool_call_id: string
+  tool_name: string
+  args: Record<string, unknown>
+  status: ToolCallStatus
+}
+
+export interface ToolResultPart {
+  type: MessagePartType.TOOL_RESULT
+  tool_call_id: string
+  output: string
+  is_error: boolean
+}
+
+export type AgentMessagePart = TextPart | ImagePart | ToolCallPart | ToolResultPart
+
+export interface AgentMessage {
   id: string
-  type: ChatMessageType.USER
-  content: ChatMessageUserContent[] // 用户消息内容数组
-  timestamp: string // ISO格式时间字符串
+  role: AgentMessageRole
+  parts: AgentMessagePart[]
+  created_at: string
 }
 
-// 助手消息（对应后端的 ChatMessageAssistant）
-export interface ChatMessageAssistant {
-  id: string
-  type: ChatMessageType.ASSISTANT
-  content: ChatMessageAssistantContent[] // 助手消息内容数组
-  timestamp: string // ISO格式时间字符串
+export interface FrontendToolInterrupt {
+  type: 'frontend_tool'
+  tool_call_id: string
+  tool_name: string
+  args: Record<string, unknown>
 }
 
-// 工具结果消息（对应后端的 ChatMessageTool）
-export interface ChatMessageTool {
-  id: string
-  type: ChatMessageType.TOOL
-  tool_call_id: string // 对应的工具调用 ID
-  content: string // 工具执行结果
-  timestamp: string // ISO格式时间字符串
+export enum RunStatus {
+  RUNNING = 'running',
+  PAUSED = 'paused',
+  COMPLETED = 'completed',
+  FAILED = 'failed',
 }
 
-// 统一的消息类型（联合类型，对应后端的 ChatMessage）
-export type ChatMessage = ChatMessageUser | ChatMessageAssistant | ChatMessageTool
-
-// 类型保护函数：判断消息是否为用户消息
-export function isUserMessage(message: ChatMessage): message is ChatMessageUser {
-  return message.type === ChatMessageType.USER
+export interface PendingRun {
+  run_id: string
+  status: RunStatus
+  interrupt?: FrontendToolInterrupt | null
 }
 
-// 类型保护函数：判断消息是否为助手消息
-export function isAssistantMessage(message: ChatMessage): message is ChatMessageAssistant {
-  return message.type === ChatMessageType.ASSISTANT
-}
-
-// 类型保护函数：判断消息是否为工具结果消息
-export function isToolMessage(message: ChatMessage): message is ChatMessageTool {
-  return message.type === ChatMessageType.TOOL
-}
-
-// 会话历史接口（与后端返回格式一致）
-export interface ChatHistory {
-  id: string
-  messages: ChatMessage[]
-  createdAt: string
-  updatedAt: string
-}
-
-// 与后端SessionSummary对应的前端类型
 export interface SessionSummary {
   session_id: string
   created_at: string
   updated_at: string
   message_count: number
   preview_text: string
+}
+
+export interface SessionHistory {
+  id: string
+  messages: AgentMessage[]
+  createdAt: string
+  updatedAt: string
+}
+
+export interface RunInput {
+  parts: Array<TextPart | ImagePart>
+}
+
+export interface StartRunRequest {
+  input: RunInput
+}
+
+export interface ToolResultRequest {
+  tool_call_id: string
+  output: string
+  is_error: boolean
+}
+
+export interface SessionSnapshot {
+  session: {
+    session_id: string
+    created_at: string
+    updated_at: string
+  }
+  messages: AgentMessage[]
+  pending_run: PendingRun | null
+}
+
+export interface RunStartedEvent {
+  type: 'run.started'
+  run_id: string
+  session_id: string
+}
+
+export interface MessageDeltaEvent {
+  type: 'message.delta'
+  run_id: string
+  message_id: string
+  part_index: number
+  delta: string
+}
+
+export interface MessageCompletedEvent {
+  type: 'message.completed'
+  run_id: string
+  message: AgentMessage
+}
+
+export interface RunPausedEvent {
+  type: 'run.paused'
+  run_id: string
+  reason: 'frontend_tool'
+  tool_call_id: string
+  tool_name: string
+  args: Record<string, unknown>
+}
+
+export interface RunCompletedEvent {
+  type: 'run.completed'
+  run_id: string
+  message_id?: string | null
+  output_text: string
+}
+
+export interface RunFailedEvent {
+  type: 'run.failed'
+  run_id: string
+  error_code: string
+  detail: string
+  retryable: boolean
+}
+
+export type AgentStreamEvent =
+  | RunStartedEvent
+  | MessageDeltaEvent
+  | MessageCompletedEvent
+  | RunPausedEvent
+  | RunCompletedEvent
+  | RunFailedEvent
+
+export function isUserMessage(message: AgentMessage): boolean {
+  return message.role === AgentMessageRole.USER
+}
+
+export function isAssistantLikeMessage(message: AgentMessage): boolean {
+  return message.role === AgentMessageRole.ASSISTANT || message.role === AgentMessageRole.TOOL
+}
+
+export function getMessageTextParts(message: AgentMessage): TextPart[] {
+  return message.parts.filter((part): part is TextPart => part.type === MessagePartType.TEXT)
 }

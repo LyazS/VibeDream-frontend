@@ -90,7 +90,7 @@ import { IconComponents } from '@/constants/iconComponents'
 import HoverButton from '@/components/base/HoverButton.vue'
 import { useAppI18n } from '@/core/composables/useI18n'
 import { SESSION_MANAGER } from '@/aipanel/agent/services'
-import type { ChatHistory, ChatMessage, SessionSummary } from '@/aipanel/agent/types'
+import type { SessionSummary } from '@/aipanel/agent/types'
 
 const { t } = useAppI18n()
 
@@ -164,8 +164,7 @@ const formatTime = (dateString: string): string => {
 // 加载历史记录
 const loadHistory = async (sessionId: string) => {
   try {
-    // 内部处理加载的历史记录
-    SESSION_MANAGER.restoreSession(sessionId)
+    await SESSION_MANAGER.restoreSession(sessionId)
     emit('close')
   } catch (err) {
     error.value = err instanceof Error ? err.message : '加载会话失败'

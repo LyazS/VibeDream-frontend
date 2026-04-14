@@ -6,7 +6,9 @@ export type { ApiResponse, RequestConfig } from '@/utils/fetchClient'
 export { API_ENDPOINTS } from './apiTypes'
 export type {
   CreateSessionResponse,
-  SendMessageRequest,
+  SessionSnapshotResponse,
+  StartRunPayload,
+  SubmitToolResultPayload,
   ApiError,
 } from './apiTypes'
 

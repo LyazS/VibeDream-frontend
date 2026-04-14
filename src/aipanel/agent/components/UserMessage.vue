@@ -4,24 +4,22 @@
       <div class="message-content">
         {{ getMessageText() }}
       </div>
-      <div class="message-timestamp">{{ formatTimestamp(message.timestamp) }}</div>
+      <div class="message-timestamp">{{ formatTimestamp(message.created_at) }}</div>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import type { ChatMessageUser } from '@/aipanel/agent/types'
-import { ChatMessageUserContentType } from '@/aipanel/agent/types'
+import type { AgentMessage } from '@/aipanel/agent/types'
+import { getMessageTextParts } from '@/aipanel/agent/types'
 
 const props = defineProps<{
-  message: ChatMessageUser
+  message: AgentMessage
 }>()
 
-// 获取消息的文本内容（用户消息只包含文本）
 const getMessageText = () => {
-  return props.message.content
-    .filter((item) => item.type === ChatMessageUserContentType.TEXT)
-    .map((item) => item.content)
+  return getMessageTextParts(props.message)
+    .map((item) => item.text)
     .join('')
 }
 

@@ -1,11 +1,14 @@
 <template>
   <div class="chat-messages-container" ref="messagesContainer">
-    <AIChatMessage :message="welcomeMessage" />
+    <AgentMessage :message="welcomeMessage" />
     <template v-for="message in messages" :key="message.id">
-      <UserChatMessage v-if="isUserMessage(message)" :message="message" />
-      <AIChatMessage v-else-if="isAssistantMessage(message)" :message="message" />
+      <UserMessage v-if="isUserMessage(message)" :message="message" />
+      <AgentMessage
+        v-else
+        :message="message"
+        :is-task-complete="SESSION_MANAGER.isTaskCompleteMessage(message.id)"
+      />
     </template>
-    <!-- AI 正在思考指示器 -->
     <ThinkingIndicator v-if="isSending" />
   </div>
 </template>
@@ -13,12 +16,12 @@
 <script setup lang="ts">
 import { ref, nextTick, watch, provide, computed } from 'vue'
 import MarkdownIt from 'markdown-it'
-import UserChatMessage from './UserChatMessage.vue'
-import AIChatMessage from './AIChatMessage.vue'
+import UserMessage from './UserMessage.vue'
+import AgentMessage from './AgentMessage.vue'
 import ThinkingIndicator from './ThinkingIndicator.vue'
 import { SESSION_MANAGER } from '@/aipanel/agent/services'
-import { ChatMessageType, ChatMessageAssistantContentType, isUserMessage, isAssistantMessage } from '@/aipanel/agent/types'
-import type { ChatMessageAssistant } from '@/aipanel/agent/types'
+import { AgentMessageRole, MessagePartType, isUserMessage } from '@/aipanel/agent/types'
+import type { AgentMessage as AgentMessageModel } from '@/aipanel/agent/types'
 import { useAppI18n } from '@/core/composables/useI18n'
 
 // AI 发送状态
@@ -31,39 +34,32 @@ const md = new MarkdownIt({
   typographer: true,
 })
 
-// 提供markdown渲染函数给子组件
 const renderMarkdown = (content: string) => {
   return md.render(content)
 }
 
 provide('renderMarkdown', renderMarkdown)
 
-// 直接从 SessionManager 获取消息列表，过滤掉 TOOL 类型消息（内部使用）
 const messages = computed(() =>
-  SESSION_MANAGER.messages.value.filter(
-    (msg) => msg.type !== ChatMessageType.TOOL
-  )
+  SESSION_MANAGER.messages.value.filter((message) => message.role !== AgentMessageRole.TOOL),
 )
 
-// 使用国际化
 const { t } = useAppI18n()
 
-// 默认欢迎消息
-const welcomeMessage = computed<ChatMessageAssistant>(() => ({
+const welcomeMessage = computed<AgentMessageModel>(() => ({
   id: 'welcome-1',
-  type: ChatMessageType.ASSISTANT,
-  content: [
+  role: AgentMessageRole.ASSISTANT,
+  parts: [
     {
-      type: ChatMessageAssistantContentType.TEXT,
-      content: t('common.chat.welcomeMessage'),
+      type: MessagePartType.TEXT,
+      text: t('common.chat.welcomeMessage'),
     },
   ],
-  timestamp: new Date().toISOString(),
+  created_at: new Date().toISOString(),
 }))
 
 const messagesContainer = ref<HTMLElement>()
 
-// 滚动到最新消息
 const scrollToBottom = async () => {
   await nextTick()
   if (messagesContainer.value) {
@@ -71,7 +67,6 @@ const scrollToBottom = async () => {
   }
 }
 
-// 监听消息变化，自动滚动到底部
 watch(
   messages,
   () => {
@@ -80,7 +75,6 @@ watch(
   { deep: true },
 )
 
-// 初始化时滚动到底部
 scrollToBottom()
 </script>
 

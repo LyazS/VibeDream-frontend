@@ -164,11 +164,11 @@ export function generateTabId(): string {
 }
 
 /**
- * 生成聊天消息ID
+ * 生成 Agent 消息 ID
  * 使用时间戳确保按时间排序
  * @param type 消息类型前缀
- * @returns 聊天消息ID字符串
+ * @returns Agent 消息 ID 字符串
  */
-export function generateChatMessageId(type: string): string {
+export function generateAgentMessageId(type: string): string {
   return `${type}-${Date.now()}`
 }
