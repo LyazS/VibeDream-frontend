@@ -4,7 +4,7 @@
     <template v-for="message in messages" :key="message.id">
       <UserMessage v-if="isUserMessage(message)" :message="message" />
       <AgentMessage
-        v-else
+        v-else-if="isAssistantMessage(message)"
         :message="message"
         :is-task-complete="SESSION_MANAGER.isTaskCompleteMessage(message.id)"
       />
@@ -20,7 +20,13 @@ import UserMessage from './UserMessage.vue'
 import AgentMessage from './AgentMessage.vue'
 import ThinkingIndicator from './ThinkingIndicator.vue'
 import { SESSION_MANAGER } from '@/aipanel/agent/services'
-import { AgentMessageRole, MessagePartType, isUserMessage } from '@/aipanel/agent/types'
+import {
+  AgentMessageRole,
+  MessagePartType,
+  isAssistantMessage,
+  isPublicMessage,
+  isUserMessage,
+} from '@/aipanel/agent/types'
 import type { AgentMessage as AgentMessageModel } from '@/aipanel/agent/types'
 import { useAppI18n } from '@/core/composables/useI18n'
 
@@ -40,9 +46,7 @@ const renderMarkdown = (content: string) => {
 
 provide('renderMarkdown', renderMarkdown)
 
-const messages = computed(() =>
-  SESSION_MANAGER.messages.value.filter((message) => message.role !== AgentMessageRole.TOOL),
-)
+const messages = computed(() => SESSION_MANAGER.messages.value.filter(isPublicMessage))
 
 const { t } = useAppI18n()
 

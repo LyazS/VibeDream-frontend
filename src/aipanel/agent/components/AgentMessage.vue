@@ -39,7 +39,7 @@
 
 <script setup lang="ts">
 import { inject } from 'vue'
-import 'github-markdown-css'
+import 'github-markdown-css/github-markdown.css'
 import type { AgentMessage } from '../types'
 import { MessagePartType } from '../types'
 import { IconComponents } from '@/constants/iconComponents'

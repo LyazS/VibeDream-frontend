@@ -1,5 +1,4 @@
 export enum AgentMessageRole {
-  SYSTEM = 'system',
   USER = 'user',
   ASSISTANT = 'assistant',
   TOOL = 'tool',
@@ -167,8 +166,12 @@ export function isUserMessage(message: AgentMessage): boolean {
   return message.role === AgentMessageRole.USER
 }
 
-export function isAssistantLikeMessage(message: AgentMessage): boolean {
-  return message.role === AgentMessageRole.ASSISTANT || message.role === AgentMessageRole.TOOL
+export function isAssistantMessage(message: AgentMessage): boolean {
+  return message.role === AgentMessageRole.ASSISTANT
+}
+
+export function isPublicMessage(message: AgentMessage): boolean {
+  return isUserMessage(message) || isAssistantMessage(message)
 }
 
 export function getMessageTextParts(message: AgentMessage): TextPart[] {
