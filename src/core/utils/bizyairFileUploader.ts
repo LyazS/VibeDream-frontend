@@ -10,6 +10,7 @@ import type { FileData } from '@/core/datasource/providers/ai-generation/types'
 import type { UnifiedMediaItemData } from '@/core/mediaitem/types'
 import type { UnifiedTimelineItemData } from '@/core/timelineitem'
 import type { MediaType } from '@/core/mediaitem'
+import type { ExportMediaItemOptions } from './projectExporter'
 import { cloneDeep } from 'lodash'
 import { useUnifiedStore } from '@/core/unifiedStore'
 
@@ -73,6 +74,12 @@ interface UploadResult {
   url?: string
   object_key?: string
   error?: string
+}
+
+export interface UploadFileExportOptions {
+  outputWidth?: ExportMediaItemOptions['outputWidth']
+  outputHeight?: ExportMediaItemOptions['outputHeight']
+  frameRate?: ExportMediaItemOptions['frameRate']
 }
 
 // ==================== 策略接口 ====================
@@ -309,13 +316,19 @@ export class BizyairFileUploader {
     fileData: FileData,
     getMediaItem: (id: string | null) => UnifiedMediaItemData | undefined,
     getTimelineItem: (id: string) => UnifiedTimelineItemData<MediaType> | undefined,
+    exportOptions?: UploadFileExportOptions,
   ): Promise<Blob> {
     if (fileData.source === 'media-item') {
       const mediaItem = getMediaItem(fileData.mediaItemId!)
       if (!mediaItem) {
         throw new Error(`找不到媒体项: ${fileData.mediaItemId}`)
       }
-      return await exportMediaItem({ mediaItem })
+      return await exportMediaItem({
+        mediaItem,
+        outputWidth: exportOptions?.outputWidth,
+        outputHeight: exportOptions?.outputHeight,
+        frameRate: exportOptions?.frameRate,
+      })
     } else {
       const timelineItem = getTimelineItem(fileData.timelineItemId!)
       if (!timelineItem) {
@@ -336,6 +349,7 @@ export class BizyairFileUploader {
     getMediaItem: (id: string | null) => UnifiedMediaItemData | undefined,
     getTimelineItem: (id: string) => UnifiedTimelineItemData<MediaType> | undefined,
     onProgress?: (stage: string, progress: number) => void,
+    exportOptions?: UploadFileExportOptions,
   ): Promise<UploadResult> {
     try {
       // 1. 获取用户 API Key（每次调用时从 unifiedStore 获取最新值）
@@ -347,7 +361,12 @@ export class BizyairFileUploader {
       
       // 3. 导出文件
       onProgress?.('导出文件', 0)
-      const blob = await this.exportFileDataToBlob(fileData, getMediaItem, getTimelineItem)
+      const blob = await this.exportFileDataToBlob(
+        fileData,
+        getMediaItem,
+        getTimelineItem,
+        exportOptions,
+      )
 
       // 4. 获取上传凭证（传入 API Key）
       onProgress?.('获取凭证', 20)

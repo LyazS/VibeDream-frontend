@@ -75,8 +75,15 @@ export interface UnifiedMediaItemData {
  * 统一媒体项目元数据接口
  */
 export interface UnifiedMediaItemMetadata {
+  /** 视觉分析结果 */
+  visual?: UnifiedMediaVisualMetadata
   /** AI 生成的描述 */
   aiDescription?: string
+}
+
+export interface UnifiedMediaVisualMetadata {
+  /** 素材级视觉摘要 */
+  summary?: string
 }
 
 // ==================== 专门的状态类型定义 ====================

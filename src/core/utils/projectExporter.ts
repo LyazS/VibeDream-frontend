@@ -95,6 +95,10 @@ export interface ExportMediaItemOptions {
   onProgress?: (progress: number) => void
   /** 导出帧率（可选，默认 30fps，仅视频有效） */
   frameRate?: number
+  /** 自定义导出宽度（可选） */
+  outputWidth?: number
+  /** 自定义导出高度（可选） */
+  outputHeight?: number
 }
 
 /**
@@ -121,6 +125,49 @@ export class ExportCancelledError extends Error {
   constructor() {
     super('导出已取消')
     this.name = 'ExportCancelledError'
+  }
+}
+
+function normalizeExportDimension(value?: number): number | undefined {
+  if (value === undefined || value === null || !Number.isFinite(value) || value <= 0) {
+    return undefined
+  }
+
+  return Math.max(1, Math.round(value))
+}
+
+function resolveExportSize(
+  sourceWidth: number,
+  sourceHeight: number,
+  options?: Pick<ExportMediaItemOptions, 'outputWidth' | 'outputHeight'>,
+): { width: number; height: number } {
+  const normalizedOutputWidth = normalizeExportDimension(options?.outputWidth)
+  const normalizedOutputHeight = normalizeExportDimension(options?.outputHeight)
+
+  if (normalizedOutputWidth && normalizedOutputHeight) {
+    return {
+      width: normalizedOutputWidth,
+      height: normalizedOutputHeight,
+    }
+  }
+
+  if (normalizedOutputWidth) {
+    return {
+      width: normalizedOutputWidth,
+      height: Math.max(1, Math.round(sourceHeight * (normalizedOutputWidth / sourceWidth))),
+    }
+  }
+
+  if (normalizedOutputHeight) {
+    return {
+      width: Math.max(1, Math.round(sourceWidth * (normalizedOutputHeight / sourceHeight))),
+      height: normalizedOutputHeight,
+    }
+  }
+
+  return {
+    width: sourceWidth,
+    height: sourceHeight,
   }
 }
 
@@ -727,6 +774,7 @@ export function exportProjectWithCancel(
 async function exportImageMediaItem(
   mediaItem: UnifiedMediaItemData,
   onProgress?: (progress: number) => void,
+  sizeOptions?: Pick<ExportMediaItemOptions, 'outputWidth' | 'outputHeight'>,
 ): Promise<Blob> {
   // 1. 验证 imageClip 存在
   const imageClip = mediaItem.runtime.bunny?.imageClip
@@ -738,12 +786,13 @@ async function exportImageMediaItem(
 
   // 2. 创建临时 Canvas（仅用于格式转换）
   const canvas = document.createElement('canvas')
-  canvas.width = imageClip.width
-  canvas.height = imageClip.height
+  const outputSize = resolveExportSize(imageClip.width, imageClip.height, sizeOptions)
+  canvas.width = outputSize.width
+  canvas.height = outputSize.height
   const ctx = canvas.getContext('2d')!
 
   // 3. 绘制图片（无任何变换，保持原样）
-  ctx.drawImage(imageClip, 0, 0)
+  ctx.drawImage(imageClip, 0, 0, canvas.width, canvas.height)
 
   onProgress?.(60)
 
@@ -770,6 +819,7 @@ async function exportVideoMediaItem(
   mediaItem: UnifiedMediaItemData,
   onProgress?: (progress: number) => void,
   frameRate?: number,
+  sizeOptions?: Pick<ExportMediaItemOptions, 'outputWidth' | 'outputHeight'>,
 ): Promise<Blob> {
   // 1. 验证媒体项目状态
   if (mediaItem.mediaStatus !== 'ready') {
@@ -781,6 +831,7 @@ async function exportVideoMediaItem(
     throw new Error('媒体项目未就绪：bunnyMedia 不存在')
   }
   await bunnyMedia.ready
+  const outputSize = resolveExportSize(bunnyMedia.width, bunnyMedia.height, sizeOptions)
 
   // 2. 创建临时时间轴项目（覆盖整个媒体时长）
   const durationInFrames = Number(bunnyMedia.durationN)
@@ -800,15 +851,15 @@ async function exportVideoMediaItem(
       // VideoMediaConfig = VisualProps & AudioProps
       x: 0,
       y: 0,
-      width: bunnyMedia.width,
-      height: bunnyMedia.height,
+      width: outputSize.width,
+      height: outputSize.height,
       rotation: 0,
       opacity: 1,
       blendMode: DEFAULT_BLEND_MODE,
       proportionalScale: true,
       mask: createDefaultMaskConfig('rectangle', {
-        width: bunnyMedia.width,
-        height: bunnyMedia.height,
+        width: outputSize.width,
+        height: outputSize.height,
       }),
       volume: 1,
       isMuted: false,
@@ -821,8 +872,8 @@ async function exportVideoMediaItem(
   // 3. 构造 ExportProjectOptions
   const exportOptions: ExportProjectOptions = {
     exportType: 'video',
-    videoWidth: bunnyMedia.width,
-    videoHeight: bunnyMedia.height,
+    videoWidth: outputSize.width,
+    videoHeight: outputSize.height,
     projectName: 'temp-export',
     timelineItems: [tempTimelineItem],
     tracks: [{ id: 'temp-track', isVisible: true, isMuted: false }],
@@ -868,15 +919,16 @@ async function exportAudioMediaItem(
  * 导出单个媒体项目为 Blob（使用原始尺寸）
  */
 export async function exportMediaItem(options: ExportMediaItemOptions): Promise<Blob> {
-  const { mediaItem, onProgress, frameRate } = options
+  const { mediaItem, onProgress, frameRate, outputWidth, outputHeight } = options
+  const sizeOptions = { outputWidth, outputHeight }
 
   // 1. 类型检查
   if (mediaItem.mediaType === 'image') {
-    return await exportImageMediaItem(mediaItem, onProgress)
+    return await exportImageMediaItem(mediaItem, onProgress, sizeOptions)
   }
 
   if (mediaItem.mediaType === 'video') {
-    return await exportVideoMediaItem(mediaItem, onProgress, frameRate)
+    return await exportVideoMediaItem(mediaItem, onProgress, frameRate, sizeOptions)
   }
 
   if (mediaItem.mediaType === 'audio') {

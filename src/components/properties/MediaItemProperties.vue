@@ -74,6 +74,13 @@
       </div>
     </div>
 
+    <div v-if="visualSummary" class="properties-section">
+      <h3 class="section-title">{{ t('properties.mediaItem.visualSummary') }}</h3>
+      <div class="summary-card">
+        {{ visualSummary }}
+      </div>
+    </div>
+
     <!-- AI 任务信息区 -->
     <div v-if="canCreateCharacter" class="properties-section">
       <div class="info-row">
@@ -217,6 +224,14 @@ const filePath = computed(() => {
     return source.selectedFile.name
   }
   return null
+})
+
+const visualSummary = computed(() => {
+  if (props.mediaItem.mediaType !== 'video' && props.mediaItem.mediaType !== 'image') {
+    return ''
+  }
+
+  return props.mediaItem.metadata?.visual?.summary?.trim() || ''
 })
 
 // 是否显示操作区
@@ -517,5 +532,15 @@ async function handleCancel(): Promise<void> {
 .actions-section .n-button {
   width: 100%;
   justify-content: center;
+}
+
+.summary-card {
+  white-space: pre-wrap;
+  line-height: 1.6;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-primary);
+  background: var(--color-bg-quaternary);
+  border-radius: var(--border-radius-small);
+  padding: var(--spacing-sm);
 }
 </style>

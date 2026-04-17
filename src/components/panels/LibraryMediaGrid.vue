@@ -301,6 +301,7 @@ import MediaPreviewModal from '@/components/modals/MediaPreviewModal.vue'
 import TransitionTemplatePickerModal from '@/components/modals/TransitionTemplatePickerModal.vue'
 import FilterTemplatePickerModal from '@/components/modals/FilterTemplatePickerModal.vue'
 import FolderIcon from '@/components/utils/FolderIcon.vue'
+import { mediaVisualSummaryService } from '@/core/mediaitem'
 import type { TaskSubmitResponse } from '@/types/taskApi'
 import { TaskSubmitErrorCode } from '@/types/taskApi'
 import {
@@ -742,6 +743,16 @@ const currentMenuItems = computed((): MenuItem[] => {
           showContextMenu.value = false
         },
       },
+      ...(canGenerateVisualSummary(target)
+        ? ([
+            { type: 'separator' as const },
+            {
+              label: t('media.generateSummary'),
+              icon: IconComponents.SPARKLING,
+              onClick: handleGenerateSummary,
+            },
+          ] satisfies MenuItem[])
+        : []),
       ...(isMediaAsset(getAsset(target.id)) || isEffectTemplateAsset(getAsset(target.id))
         ? ([
             { type: 'separator' as const },
@@ -837,6 +848,15 @@ function getAssetSortKey(assetId: string): string {
 
 function isEffectTemplateAssetItem(assetId: string): boolean {
   return isEffectTemplateAsset(getAsset(assetId))
+}
+
+function canGenerateVisualSummary(item: DisplayItem): boolean {
+  if (item.type !== 'asset') return false
+
+  const asset = getAsset(item.id)
+  if (!asset || !isMediaAsset(asset)) return false
+
+  return asset.mediaType === 'video' || asset.mediaType === 'image'
 }
 
 function getEffectTemplateItemIcon(assetId: string) {
@@ -1618,6 +1638,41 @@ async function handleRetry(): Promise<void> {
     unifiedStore.messageError(
       t('media.retryFailed', {
         error: error instanceof Error ? error.message : '未知错误',
+      }),
+    )
+  }
+}
+
+async function handleGenerateSummary(): Promise<void> {
+  if (!contextMenuTarget.value || contextMenuTarget.value.type !== 'asset') return
+
+  const mediaItem = getMediaItem(contextMenuTarget.value.id)
+  if (!mediaItem || (mediaItem.mediaType !== 'video' && mediaItem.mediaType !== 'image')) {
+    return
+  }
+
+  showContextMenu.value = false
+  unifiedStore.messageSuccess(t('media.generateSummaryStarted', { name: mediaItem.name }))
+
+  try {
+    const result = await mediaVisualSummaryService.summarizeMediaVisual(mediaItem)
+
+    if (!result.success) {
+      throw new Error(result.error || t('media.unknown'))
+    }
+
+    unifiedStore.messageSuccess(
+      t(
+        result.cached ? 'media.generateSummaryAlreadyExists' : 'media.generateSummarySuccess',
+        { name: mediaItem.name },
+      ),
+    )
+  } catch (error) {
+    console.error('生成素材总结失败:', error)
+    unifiedStore.messageError(
+      t('media.generateSummaryFailed', {
+        name: mediaItem.name,
+        error: error instanceof Error ? error.message : t('media.unknown'),
       }),
     )
   }

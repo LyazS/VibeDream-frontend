@@ -58,6 +58,16 @@ function isOptionalString(value: unknown): value is string | undefined {
   return value === undefined || typeof value === 'string'
 }
 
+function isUnifiedMediaVisualMetadata(
+  value: unknown,
+): value is NonNullable<UnifiedMediaItemMetadata['visual']> {
+  if (!isRecord(value)) {
+    return false
+  }
+
+  return isOptionalString(value.summary)
+}
+
 function isOptionalNumber(value: unknown): value is number | undefined {
   return value === undefined || typeof value === 'number'
 }
@@ -81,6 +91,7 @@ function isUnifiedMediaItemMetadata(value: unknown): value is UnifiedMediaItemMe
   }
 
   return isOptionalString(value.aiDescription)
+    && (value.visual === undefined || isUnifiedMediaVisualMetadata(value.visual))
 }
 
 function isBaseEffectTemplateSourceData(value: unknown): value is BaseEffectTemplateSourceData {

@@ -258,6 +258,7 @@
       "createdAt": "Created At",
       "statusInfo": "Status Information",
       "techInfo": "Technical Information",
+      "visualSummary": "Visual Summary",
       "duration": "Duration",
       "resolution": "Resolution",
       "fileSize": "File Size",
