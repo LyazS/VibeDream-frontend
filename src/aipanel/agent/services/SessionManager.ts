@@ -9,6 +9,7 @@ import type {
 import type {
   AgentMessage,
   AgentStreamEvent,
+  AskUserToolArgs,
   FrontendToolInterrupt,
   MessageDeltaEvent,
   SessionSummary,
@@ -45,6 +46,8 @@ export class SessionManager {
   public isLoading = ref(false)
   public sessionError = ref<string | null>(null)
   public isSending = ref(false)
+  public pendingInterrupt = ref<FrontendToolInterrupt | null>(null)
+  public pendingRunId = ref<string | null>(null)
 
   private currentAbortController: AbortController | null = null
   private pendingUserMessage: AgentMessage | null = null
@@ -66,6 +69,7 @@ export class SessionManager {
     this.currentAbortController = null
     this.pendingUserMessage = null
     this.sessionError.value = null
+    this.clearPendingInterrupt()
   }
 
   async deleteSession(sessionId: string): Promise<void> {
@@ -94,24 +98,28 @@ export class SessionManager {
     this.sessionError.value = null
 
     try {
-      this.pendingUserMessage = this.createLocalUserMessage(message)
+      if (this.hasPendingAskUserInterrupt()) {
+        this.pendingUserMessage = null
+        await this.resumePendingAskUser(sessionId, message)
+      } else {
+        this.pendingUserMessage = this.createLocalUserMessage(message)
+        const runRequest: StartRunRequest = {
+          input: {
+            parts: [
+              {
+                type: MessagePartType.TEXT,
+                text: message,
+              },
+            ],
+          },
+        }
 
-      const runRequest: StartRunRequest = {
-        input: {
-          parts: [
-            {
-              type: MessagePartType.TEXT,
-              text: message,
-            },
-          ],
-        },
+        await this.consumeStream(
+          API_ENDPOINTS.startRun(sessionId),
+          runRequest,
+          sessionId,
+        )
       }
-
-      await this.consumeStream(
-        API_ENDPOINTS.startRun(sessionId),
-        runRequest,
-        sessionId,
-      )
 
       await this.saveSessionToDB()
     } catch (error) {
@@ -282,6 +290,11 @@ export class SessionManager {
     runId: string,
     tool: FrontendToolInterrupt,
   ): Promise<void> {
+    if (tool.tool_name === 'ask_user') {
+      this.setPendingInterrupt(runId, tool)
+      return
+    }
+
     if (!this.editSDK.hasTool(tool.tool_name)) {
       throw new Error(`前端工具不存在: ${tool.tool_name}`)
     }
@@ -303,6 +316,115 @@ export class SessionManager {
   private applySnapshot(snapshot: SessionSnapshotResponse): void {
     this.currentSessionId.value = snapshot.session.session_id
     this.messages.value = snapshot.messages
+    if (snapshot.pending_run?.interrupt) {
+      this.setPendingInterrupt(snapshot.pending_run.run_id, snapshot.pending_run.interrupt)
+      return
+    }
+    this.clearPendingInterrupt()
+  }
+
+  private async resumePendingAskUser(sessionId: string, message: string): Promise<void> {
+    const interrupt = this.pendingInterrupt.value
+    const runId = this.pendingRunId.value
+    if (!interrupt || interrupt.tool_name !== 'ask_user' || !runId) {
+      throw new Error('当前没有待回答的提问工具')
+    }
+
+    const previousInterrupt = interrupt
+    const previousRunId = runId
+    this.clearPendingInterrupt()
+
+    const payload: ToolResultRequest = {
+      tool_call_id: interrupt.tool_call_id,
+      output: message,
+      is_error: false,
+    }
+
+    try {
+      await this.consumeStream(
+        API_ENDPOINTS.submitToolResult(sessionId, runId),
+        payload,
+        sessionId,
+      )
+    } catch (error) {
+      this.setPendingInterrupt(previousRunId, previousInterrupt)
+      throw error
+    }
+  }
+
+  private hasPendingAskUserInterrupt(): boolean {
+    return this.pendingInterrupt.value?.tool_name === 'ask_user' && !!this.pendingRunId.value
+  }
+
+  private setPendingInterrupt(runId: string, tool: FrontendToolInterrupt): void {
+    this.pendingRunId.value = runId
+    this.pendingInterrupt.value = tool
+  }
+
+  private clearPendingInterrupt(): void {
+    this.pendingRunId.value = null
+    this.pendingInterrupt.value = null
+  }
+
+  public getPendingAskUserArgs(): AskUserToolArgs | null {
+    if (this.pendingInterrupt.value?.tool_name !== 'ask_user') {
+      return null
+    }
+    const args = this.pendingInterrupt.value.args
+    const question = typeof args.question === 'string' ? args.question.trim() : ''
+    if (!question) {
+      return null
+    }
+
+    return {
+      question,
+      context: typeof args.context === 'string' ? args.context : undefined,
+      answer_format: typeof args.answer_format === 'string' ? args.answer_format : undefined,
+      suggested_options: Array.isArray(args.suggested_options)
+        ? args.suggested_options.filter(
+            (option): option is string => typeof option === 'string' && option.trim().length > 0,
+          )
+        : undefined,
+      placeholder: typeof args.placeholder === 'string' ? args.placeholder : undefined,
+    }
+  }
+
+  public isPendingAskUserToolCall(toolCallId: string): boolean {
+    return (
+      this.pendingInterrupt.value?.tool_name === 'ask_user' &&
+      this.pendingInterrupt.value.tool_call_id === toolCallId
+    )
+  }
+
+  public async submitPendingAskUserOption(option: string): Promise<void> {
+    const answer = option.trim()
+    if (!answer) return
+    await this.submitPendingAskUserResponse(answer)
+  }
+
+  public async submitPendingAskUserResponse(response: string): Promise<void> {
+    const answer = response.trim()
+    if (!answer) return
+    await this.handleSendMessage(answer)
+  }
+
+  public getAskUserResponse(toolCallId: string): string | null {
+    for (let index = this.messages.value.length - 1; index >= 0; index -= 1) {
+      const message = this.messages.value[index]
+      if (message.role !== AgentMessageRole.TOOL) {
+        continue
+      }
+
+      const toolResult = message.parts.find(
+        (part) =>
+          part.type === MessagePartType.TOOL_RESULT && part.tool_call_id === toolCallId,
+      )
+      if (toolResult && toolResult.type === MessagePartType.TOOL_RESULT) {
+        return toolResult.output.trim() || null
+      }
+    }
+
+    return null
   }
 
   private async saveSessionToDB(): Promise<void> {

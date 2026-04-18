@@ -1,9 +1,9 @@
 <template>
-  <div class="chat-input-wrapper">
+  <div v-if="!pendingAskUserArgs" class="chat-input-wrapper">
     <textarea
       v-model="inputMessage"
       class="chat-textarea"
-      :placeholder="t('common.chat.inputPlaceholder')"
+      :placeholder="inputPlaceholder"
       :style="textareaStyle"
       autocomplete="off"
       @input="adjustTextareaHeight"
@@ -27,6 +27,11 @@
       </HoverButton>
     </div>
   </div>
+  <div v-else class="chat-input-wrapper chat-input-wrapper--paused">
+    <div class="paused-note">
+      请在上方问题卡片中选择一个选项，或使用第 4 个输入框填写自定义回复。
+    </div>
+  </div>
 </template>
 
 <script setup lang="ts">
@@ -34,6 +39,7 @@ import { ref, computed, nextTick } from 'vue'
 import { IconComponents } from '@/constants/iconComponents'
 import HoverButton from '@/components/base/HoverButton.vue'
 import { SESSION_MANAGER } from '@/aipanel/agent/services'
+import type { AskUserToolArgs } from '@/aipanel/agent/types'
 import { useAppI18n } from '@/core/composables/useI18n'
 
 const { t } = useAppI18n()
@@ -46,6 +52,7 @@ const textareaHeight = ref(72) // 初始高度 72px (3行 × 24px)
 
 // 检查是否有进行中的消息（使用响应式计算属性）
 const hasProcessingMessage = computed(() => SESSION_MANAGER.isSending.value)
+const pendingAskUserArgs = computed<AskUserToolArgs | null>(() => SESSION_MANAGER.getPendingAskUserArgs())
 
 // 基础行高（字体大小 + 行间距）
 const LINE_HEIGHT = 24 // px
@@ -60,6 +67,14 @@ const textareaStyle = computed(() => ({
   minHeight: `${MIN_LINES * LINE_HEIGHT}px`,
   maxHeight: `${MAX_LINES * LINE_HEIGHT}px`,
 }))
+
+const inputPlaceholder = computed(() => {
+  const placeholder = pendingAskUserArgs.value?.placeholder
+  if (typeof placeholder === 'string' && placeholder.trim()) {
+    return placeholder
+  }
+  return pendingAskUserArgs.value?.question || t('common.chat.inputPlaceholder')
+})
 
 const adjustTextareaHeight = () => {
   // 简单计算行数：根据换行符数量 + 1
@@ -129,6 +144,18 @@ const handleStop = () => {
 
 .chat-input-wrapper:focus-within {
   border-color: #3b82f6;
+}
+
+.chat-input-wrapper--paused {
+  align-items: stretch;
+}
+
+.paused-note {
+  width: 100%;
+  color: var(--color-text-secondary);
+  font-size: 12px;
+  line-height: 1.5;
+  padding: 2px 4px;
 }
 
 .chat-textarea {

@@ -58,6 +58,14 @@ export interface FrontendToolInterrupt {
   args: Record<string, unknown>
 }
 
+export interface AskUserToolArgs {
+  question: string
+  context?: string
+  answer_format?: string
+  suggested_options?: string[]
+  placeholder?: string
+}
+
 export enum RunStatus {
   RUNNING = 'running',
   PAUSED = 'paused',

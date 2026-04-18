@@ -1,15 +1,19 @@
 <template>
-  <div class="tool-call-display">
-    <div class="tool-header" @click="toggleExpand()">
+  <AskUserToolDisplay v-if="isAskUserTool" :item="item" />
+  <div v-else class="tool-call-display">
+    <div class="tool-header tool-header--interactive" @click="toggleExpand">
       <div class="status-dot"></div>
       <component :is="IconComponents.TOOLS_FILL" size="16px" class="tool-icon" />
-      <span class="tool-title">{{ displayName }}</span>
+      <div class="tool-title-group">
+        <span class="tool-title">{{ displayName }}</span>
+      </div>
       <component
         :is="isExpanded ? IconComponents.DROPDOWN : IconComponents.NEXT_KEYFRAME"
         size="14px"
         class="expand-icon"
       />
     </div>
+
     <div v-if="isExpanded" class="tool-params-expanded">
       <div
         v-if="isEditSdkTool && editSdkScript"
@@ -23,9 +27,10 @@
 
 <script setup lang="ts">
 import { computed, inject, ref } from 'vue'
-import 'github-markdown-css'
+import 'github-markdown-css/github-markdown.css'
 import { useAppI18n } from '@/core/composables/useI18n'
 import { IconComponents } from '@/constants/iconComponents'
+import AskUserToolDisplay from './AskUserToolDisplay.vue'
 import type { ToolCallPart } from '../types'
 
 const props = defineProps<{
@@ -41,6 +46,7 @@ const renderMarkdown = inject<(content: string) => string>(
 )
 
 const isEditSdkTool = computed(() => props.item.tool_name === 'edit_sdk')
+const isAskUserTool = computed(() => props.item.tool_name === 'ask_user')
 const formattedArgs = computed(() => JSON.stringify(props.item.args || {}, null, 2))
 
 const editSdkScript = computed(() => {
@@ -73,12 +79,15 @@ const toggleExpand = () => {
   display: flex;
   align-items: center;
   gap: 6px;
-  height: 20px;
-  cursor: pointer;
+  min-height: 20px;
   user-select: none;
 }
 
-.tool-header:hover {
+.tool-header--interactive {
+  cursor: pointer;
+}
+
+.tool-header--interactive:hover {
   opacity: 0.9;
 }
 
@@ -99,7 +108,12 @@ const toggleExpand = () => {
   font-weight: 600;
   font-size: 13px;
   color: #cbd0d6;
+}
+
+.tool-title-group {
+  display: flex;
   flex: 1;
+  min-width: 0;
 }
 
 .expand-icon {
