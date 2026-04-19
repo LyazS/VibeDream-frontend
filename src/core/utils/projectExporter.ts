@@ -136,6 +136,15 @@ function normalizeExportDimension(value?: number): number | undefined {
   return Math.max(1, Math.round(value))
 }
 
+function normalizeEvenExportDimension(value?: number): number | undefined {
+  const normalized = normalizeExportDimension(value)
+  if (normalized === undefined) {
+    return undefined
+  }
+
+  return normalized % 2 === 0 ? normalized : normalized + 1
+}
+
 function resolveExportSize(
   sourceWidth: number,
   sourceHeight: number,
@@ -920,7 +929,13 @@ async function exportAudioMediaItem(
  */
 export async function exportMediaItem(options: ExportMediaItemOptions): Promise<Blob> {
   const { mediaItem, onProgress, frameRate, outputWidth, outputHeight } = options
-  const sizeOptions = { outputWidth, outputHeight }
+  const sizeOptions =
+    mediaItem.mediaType === 'video'
+      ? {
+          outputWidth: normalizeEvenExportDimension(outputWidth),
+          outputHeight: normalizeEvenExportDimension(outputHeight),
+        }
+      : { outputWidth, outputHeight }
 
   // 1. 类型检查
   if (mediaItem.mediaType === 'image') {
