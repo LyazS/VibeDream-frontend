@@ -5,9 +5,6 @@
       <component :is="IconComponents.TOOLS_FILL" size="16px" class="tool-icon" />
       <div class="tool-title-group">
         <span class="tool-title">ask_user</span>
-        <span v-if="askUserArgs?.question" class="tool-subtitle">
-          {{ askUserArgs.question }}
-        </span>
       </div>
     </div>
 
@@ -91,7 +88,7 @@ const askUserArgs = computed<AskUserToolArgs | null>(() => {
   }
 })
 
-const displayOptions = computed(() => (askUserArgs.value?.suggested_options || []).slice(0, 3))
+const displayOptions = computed(() => askUserArgs.value?.suggested_options || [])
 
 const customInputPlaceholder = computed(
   () => askUserArgs.value?.placeholder || '其他，请输入你的自定义回复',
@@ -191,6 +188,9 @@ const submitCustomAnswer = async () => {
   flex-direction: column;
   align-items: stretch;
   gap: 8px;
+  max-height: 220px;
+  overflow-y: auto;
+  padding-right: 2px;
 }
 
 .ask-user-option-chip {
