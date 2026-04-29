@@ -1,100 +1,13 @@
 /**
  * read_media 工具实现
- * 获取素材详情，包括AI生成的描述
+ * 获取素材详情，包括视觉摘要
  */
 
 import { useUnifiedStore } from '@/core/unifiedStore'
-import { BizyairFileUploader } from '@/core/utils/bizyairFileUploader'
-import { fetchClient } from '@/utils/fetchClient'
+import { mediaVisualSummaryService } from '@/core/mediaitem'
 import { framesToTimecode } from '@/core/utils/timeUtils'
 import type { ToolDefinition } from '../core/toolTypes'
 import type { UnifiedMediaItemData } from '@/core/mediaitem/types'
-import type { FileData } from '@/core/datasource/providers/ai-generation/types'
-
-// ==================== AI 分析工具函数 ====================
-
-/**
- * 上传素材到 BizyAir 用于分析
- *
- * @param mediaItem - 媒体素材
- * @param getMediaItem - 获取媒体素材的函数
- * @param getTimelineItem - 获取时间轴项目的函数
- * @returns 上传结果，包含 success、url 和 error 字段
- */
-async function uploadMediaForAnalysis(
-  mediaItem: UnifiedMediaItemData,
-  getMediaItem: (id: string | null) => UnifiedMediaItemData | undefined,
-  getTimelineItem: (id: string) => any
-): Promise<{
-  success: boolean
-  url?: string
-  error?: string
-}> {
-  try {
-    // 确保媒体类型是视频或图片
-    if (mediaItem.mediaType !== 'video' && mediaItem.mediaType !== 'image') {
-      throw new Error('只支持视频和图片类型的素材分析')
-    }
-
-    // 构建文件数据
-    const fileData: FileData = {
-      name: mediaItem.name,
-      mediaItemId: mediaItem.id,
-      source: 'media-item',
-      mediaType: mediaItem.mediaType as 'video' | 'image',
-      __type__: 'FileData',
-    }
-
-    // 使用 BizyAir 上传器
-    const result = await BizyairFileUploader.uploadFile(
-      fileData,
-      getMediaItem,
-      getTimelineItem,
-      undefined // 无需进度回调
-    )
-
-    return result
-  } catch (error) {
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : '上传失败',
-    }
-  }
-}
-
-/**
- * 调用后端 API 分析媒体内容
- *
- * @param url - 媒体文件 URL
- * @param mediaType - 媒体类型（video 或 image）
- * @returns 分析结果，包含 success、description 和 error 字段
- */
-async function analyzeMediaContent(
-  url: string,
-  mediaType: 'video' | 'image'
-): Promise<{
-  success: boolean
-  description?: string
-  error?: string
-}> {
-  try {
-    const response = await fetchClient.post<{
-      success: boolean
-      description?: string
-      error?: string
-    }>('/api/media/analyze', {
-      url,
-      media_type: mediaType,
-    })
-
-    return response.data
-  } catch (error) {
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : '分析请求失败',
-    }
-  }
-}
 
 // ==================== read_media 工具 ====================
 
@@ -104,7 +17,8 @@ interface MediaDetail {
   id: string
   name: string
   mediaType: 'video' | 'image' | 'audio'
-  duration?: string  // HH:MM:SS+FF 格式
+  duration?: string // HH:MM:SS+FF 格式
+  title?: string
   description: string
 }
 
@@ -113,8 +27,8 @@ interface MediaDetail {
 /**
  * read_media 工具执行函数
  *
- * 获取指定素材的详细信息，包括 AI 生成的描述。
- * 如果描述不存在，会自动触发 AI 生成流程并等待完成。
+ * 获取指定素材的详细信息，包括视觉摘要。
+ * 如果摘要不存在，会自动触发视觉摘要生成流程并等待完成。
  *
  * @param args - 工具参数
  * @param args.mediaIds - 素材ID数组（1-10个）
@@ -137,7 +51,7 @@ export async function executeReadMedia(args: Record<string, any>): Promise<strin
 
   // 2. 遍历处理每个素材
   for (const mediaId of mediaIds) {
-    let mediaItem = unifiedStore.getMediaItem(mediaId)
+    const mediaItem = unifiedStore.getMediaItem(mediaId)
 
     if (!mediaItem) {
       // 素材不存在，尝试模糊匹配
@@ -180,22 +94,22 @@ export async function executeReadMedia(args: Record<string, any>): Promise<strin
       continue
     }
 
-    // 3. 检查已有描述
-    if (mediaItem.metadata?.aiDescription) {
+    // 3. 检查已有完整视觉元数据
+    if (mediaItem.metadata?.visual?.title?.trim() && mediaItem.metadata.visual.summary?.trim()) {
       results.push(formatMediaDetail(mediaItem))
       continue
     }
 
     // 4. 根据类型处理
     if (mediaItem.mediaType === 'video' || mediaItem.mediaType === 'image') {
-      // 触发 AI 生成（使用提取的工具函数）
-      const result = await generateAIDescription(mediaItem, unifiedStore)
+      // 触发视觉摘要生成
+      const result = await generateVisualSummary(mediaItem)
       results.push(result)
     } else if (mediaItem.mediaType === 'audio') {
       // 音频特殊处理
       results.push({
         ...formatMediaDetail(mediaItem),
-        description: '[音频素材暂不支持 AI 描述]'
+        description: '[音频素材暂不支持视觉摘要]',
       })
     } else {
       // 其他类型
@@ -207,70 +121,29 @@ export async function executeReadMedia(args: Record<string, any>): Promise<strin
   return formatResults(results)
 }
 
-// ==================== AI 生成函数 ====================
+// ==================== 视觉摘要生成函数 ====================
 
 /**
- * 生成 AI 描述
- * 使用提取的工具函数进行上传和分析
+ * 生成视觉摘要
  */
-async function generateAIDescription(
-  mediaItem: UnifiedMediaItemData,
-  unifiedStore: ReturnType<typeof useUnifiedStore>
-): Promise<MediaDetail> {
+async function generateVisualSummary(mediaItem: UnifiedMediaItemData): Promise<MediaDetail> {
   try {
-    // 0. 检查并等待媒体就绪（如果处于 pending 状态）
-    if (mediaItem.mediaStatus === 'pending') {
-      console.log(`[read_media] 媒体 ${mediaItem.name} 处于 pending 状态，启动处理流程`)
+    const result = await mediaVisualSummaryService.summarizeMediaVisual(mediaItem)
 
-      // 启动媒体处理
-      unifiedStore.startMediaProcessing(mediaItem)
-
-      // 等待媒体就绪
-      try {
-        await unifiedStore.waitForMediaItemReady(mediaItem.id)
-        console.log(`[read_media] 媒体 ${mediaItem.name} 已就绪`)
-      } catch (error) {
-        throw new Error(`媒体处理失败: ${error instanceof Error ? error.message : String(error)}`)
-      }
+    if (!result.success) {
+      throw new Error(result.error || 'Visual summary failed')
     }
 
-    // 1. 上传到 BizyAir（使用提取的工具函数）
-    const uploadResult = await uploadMediaForAnalysis(
-      mediaItem,
-      unifiedStore.getMediaItem,
-      unifiedStore.getTimelineItem
-    )
-
-    if (!uploadResult.success) {
-      throw new Error(uploadResult.error || 'Upload failed')
-    }
-
-    // 2. 调用分析 API（使用提取的工具函数）
-    const analysisResult = await analyzeMediaContent(
-      uploadResult.url!,
-      mediaItem.mediaType as 'video' | 'image'
-    )
-
-    if (!analysisResult.success) {
-      throw new Error(analysisResult.error || 'Analysis failed')
-    }
-
-    // 3. 保存描述到元数据
-    unifiedStore.updateMediaItemMetadata(mediaItem.id, {
-      aiDescription: analysisResult.description,
-    })
-
-    // 4. 返回成功结果
     return {
       id: mediaItem.id,
       name: mediaItem.name,
       mediaType: mediaItem.mediaType as 'video' | 'image',
       duration: formatDuration(mediaItem.duration),
-      description: analysisResult.description || '',
+      title: result.visual?.title || '',
+      description: result.visual?.summary || '',
     }
   } catch (error) {
-    // 5. 错误处理
-    console.error(`AI generation failed for ${mediaItem.id}:`, error)
+    console.error(`Visual summary generation failed for ${mediaItem.id}:`, error)
     return {
       id: mediaItem.id,
       name: mediaItem.name,
@@ -286,15 +159,14 @@ async function generateAIDescription(
 /**
  * 格式化媒体详情
  */
-function formatMediaDetail(
-  mediaItem: UnifiedMediaItemData
-): MediaDetail {
+function formatMediaDetail(mediaItem: UnifiedMediaItemData): MediaDetail {
   return {
     id: mediaItem.id,
     name: mediaItem.name,
     mediaType: mediaItem.mediaType as 'video' | 'image' | 'audio',
     duration: formatDuration(mediaItem.duration),
-    description: mediaItem.metadata?.aiDescription || '',
+    title: mediaItem.metadata?.visual?.title?.trim() || '',
+    description: mediaItem.metadata?.visual?.summary?.trim() || '',
   }
 }
 
@@ -321,7 +193,11 @@ function formatResults(details: MediaDetail[]): string {
 
   for (const detail of details) {
     // 判断是否成功读取description
-    if (detail.description && !detail.description.startsWith('⚠️') && !detail.description.startsWith('[音频素材')) {
+    if (
+      detail.description
+      && !detail.description.startsWith('⚠️')
+      && !detail.description.startsWith('[音频素材')
+    ) {
       successGroup.push(detail)
     } else {
       failedGroup.push(detail)
@@ -339,6 +215,10 @@ function formatResults(details: MediaDetail[]): string {
 
       if (detail.duration) {
         lines.push(`  时长: '${detail.duration}'`)
+      }
+
+      if (detail.title) {
+        lines.push(`  标题: ${detail.title}`)
       }
 
       lines.push(`  描述: ${detail.description}`)

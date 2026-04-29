@@ -65,7 +65,7 @@ function isUnifiedMediaVisualMetadata(
     return false
   }
 
-  return isOptionalString(value.summary)
+  return isOptionalString(value.title) && isOptionalString(value.summary)
 }
 
 function isOptionalNumber(value: unknown): value is number | undefined {
@@ -90,8 +90,7 @@ function isUnifiedMediaItemMetadata(value: unknown): value is UnifiedMediaItemMe
     return false
   }
 
-  return isOptionalString(value.aiDescription)
-    && (value.visual === undefined || isUnifiedMediaVisualMetadata(value.visual))
+  return value.visual === undefined || isUnifiedMediaVisualMetadata(value.visual)
 }
 
 function isBaseEffectTemplateSourceData(value: unknown): value is BaseEffectTemplateSourceData {

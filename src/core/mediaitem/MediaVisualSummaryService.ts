@@ -9,16 +9,21 @@ export interface SummarizeMediaVisualOptions {
   onProgress?: (stage: string, progress: number) => void
 }
 
+export interface MediaVisualMetadata {
+  title: string
+  summary: string
+}
+
 export interface SummarizeMediaVisualResult {
   success: boolean
-  summary?: string
+  visual?: MediaVisualMetadata
   cached: boolean
   error?: string
 }
 
 interface MediaVisualSummaryApiResponse {
   success: boolean
-  summary?: string
+  visual?: MediaVisualMetadata
   error?: string
 }
 
@@ -35,11 +40,15 @@ export class MediaVisualSummaryService {
     mediaItem: UnifiedMediaItemData,
     options: SummarizeMediaVisualOptions = {},
   ): Promise<SummarizeMediaVisualResult> {
+    const existingTitle = mediaItem.metadata?.visual?.title?.trim()
     const existingSummary = mediaItem.metadata?.visual?.summary?.trim()
-    if (existingSummary && !options.force) {
+    if (existingTitle && existingSummary && !options.force) {
       return {
         success: true,
-        summary: existingSummary,
+        visual: {
+          title: existingTitle,
+          summary: existingSummary,
+        },
         cached: true,
       }
     }
@@ -76,7 +85,7 @@ export class MediaVisualSummaryService {
       }
 
       options.onProgress?.('生成视觉摘要', 90)
-      const summary = await this.requestVisualSummary(
+      const visual = await this.requestVisualSummary(
         uploadResult.url,
         readyMediaItem.mediaType,
       )
@@ -84,14 +93,15 @@ export class MediaVisualSummaryService {
       unifiedStore.updateMediaItemMetadata(readyMediaItem.id, {
         visual: {
           ...readyMediaItem.metadata?.visual,
-          summary,
+          title: visual.title,
+          summary: visual.summary,
         },
       })
 
       options.onProgress?.('完成', 100)
       return {
         success: true,
-        summary,
+        visual,
         cached: false,
       }
     } catch (error) {
@@ -197,7 +207,7 @@ export class MediaVisualSummaryService {
   private async requestVisualSummary(
     url: string,
     mediaType: 'video' | 'image',
-  ): Promise<string> {
+  ): Promise<MediaVisualMetadata> {
     const response = await fetchClient.post<MediaVisualSummaryApiResponse>(
       '/api/media/visual-summary',
       {
@@ -206,11 +216,15 @@ export class MediaVisualSummaryService {
       },
     )
 
-    if (!response.data.success || !response.data.summary) {
+    const visual = response.data.visual
+    if (!response.data.success || !visual?.title?.trim() || !visual.summary?.trim()) {
       throw new Error(response.data.error || '视觉摘要生成失败')
     }
 
-    return response.data.summary
+    return {
+      title: visual.title.trim(),
+      summary: visual.summary.trim(),
+    }
   }
 }
 

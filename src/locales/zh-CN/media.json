@@ -67,7 +67,6 @@
     "generateSummarySuccess": "素材总结已生成：{name}",
     "generateSummaryAlreadyExists": "素材总结已就绪：{name}",
     "generateSummaryFailed": "生成素材总结失败：{name}，{error}",
-    "aiDescription": "AI分析",
     "folderNameLabel": "文件夹名称：",
     "folderNamePlaceholder": "请输入文件夹名称",
     "newNameLabel": "新名称：",

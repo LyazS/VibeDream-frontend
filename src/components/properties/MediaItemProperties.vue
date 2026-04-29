@@ -77,6 +77,8 @@
     <div v-if="visualSummary" class="properties-section">
       <h3 class="section-title">{{ t('properties.mediaItem.visualSummary') }}</h3>
       <div class="summary-card">
+        <div v-if="visualTitle" class="summary-title">{{ visualTitle }}</div>
+        <div v-if="visualTitle" class="summary-divider"></div>
         {{ visualSummary }}
       </div>
     </div>
@@ -232,6 +234,14 @@ const visualSummary = computed(() => {
   }
 
   return props.mediaItem.metadata?.visual?.summary?.trim() || ''
+})
+
+const visualTitle = computed(() => {
+  if (props.mediaItem.mediaType !== 'video' && props.mediaItem.mediaType !== 'image') {
+    return ''
+  }
+
+  return props.mediaItem.metadata?.visual?.title?.trim() || ''
 })
 
 // 是否显示操作区
@@ -542,5 +552,16 @@ async function handleCancel(): Promise<void> {
   background: var(--color-bg-quaternary);
   border-radius: var(--border-radius-small);
   padding: var(--spacing-sm);
+}
+
+.summary-title {
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.summary-divider {
+  height: 1px;
+  margin: var(--spacing-xs) 0;
+  background: var(--color-border-hover);
 }
 </style>

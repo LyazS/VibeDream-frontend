@@ -77,11 +77,11 @@ export interface UnifiedMediaItemData {
 export interface UnifiedMediaItemMetadata {
   /** 视觉分析结果 */
   visual?: UnifiedMediaVisualMetadata
-  /** AI 生成的描述 */
-  aiDescription?: string
 }
 
 export interface UnifiedMediaVisualMetadata {
+  /** 素材级视觉标题 */
+  title?: string
   /** 素材级视觉摘要 */
   summary?: string
 }
