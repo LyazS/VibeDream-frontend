@@ -14,6 +14,7 @@ import { LayoutConstants } from '@/constants/LayoutConstants'
 import { detectScene } from '@/core/utils/scene-detector'
 import { detectSceneAdv } from '@/core/utils/scene-detector-adv'
 import { detectSceneContent } from '@/core/utils/scene-detector-content'
+import { detectSceneTransNetV2 } from '@/core/utils/scene-detector-transnetv2'
 import { exportTimelineItem } from '@/core/utils/projectExporter'
 import { BizyairFileUploader } from '@/core/utils/bizyairFileUploader'
 import { ASRSourceFactory, ASRTypeGuards, ASRTaskStatus } from '@/core/datasource/providers/asr'
@@ -466,31 +467,51 @@ export function useTimelineContextMenu(
       onCancel: () => {
         abortController.abort()
         console.log('⚠️ 用户取消场景检测')
-      }
+      },
     })
 
     try {
-      // 调用 detectSceneAdv，传入进度回调和取消信号
-      const boundaries = await detectSceneAdv(timelineItem, {
-        peakDetection: {
-          minProminence: 0.03,
-          minHeight: 0.08,
-          minDistance: 15,
-        },
-        maxSize: 600,
-        signal: abortController.signal,
-        onProgress: (current, total, message) => {
-          // 计算进度百分比
-          const progress = total > 0 ? (current / total) * 100 : 0
-          
-          // 更新 loading 状态
-          loading.update({
-            progress: Math.min(100, Math.round(progress)),
-            details: message
-          })
-        },
-        enableChart: false,
-      })
+      const updateDetectionProgress = (current: number, total: number, message: string) => {
+        const progress = total > 0 ? (current / total) * 100 : 0
+
+        loading.update({
+          progress: Math.min(100, Math.round(progress)),
+          details: message,
+        })
+      }
+
+      let boundaries: bigint[]
+
+      try {
+        boundaries = await detectSceneTransNetV2(timelineItem, {
+          threshold: 0.5,
+          minShotFrames: 15,
+          signal: abortController.signal,
+          onProgress: updateDetectionProgress,
+        })
+      } catch (error) {
+        if (error instanceof Error && error.name === 'AbortError') {
+          throw error
+        }
+
+        console.warn('⚠️ TransNetV2 智能分镜不可用，回退到快速检测:', error)
+        loading.update({
+          progress: 0,
+          details: t('timeline.sceneDetection.modelFallback'),
+        })
+
+        boundaries = await detectSceneAdv(timelineItem, {
+          peakDetection: {
+            minProminence: 0.03,
+            minHeight: 0.08,
+            minDistance: 15,
+          },
+          maxSize: 600,
+          signal: abortController.signal,
+          onProgress: updateDetectionProgress,
+          enableChart: false,
+        })
+      }
 
       // 检查是否被取消
       if (abortController.signal.aborted) {
@@ -502,18 +523,18 @@ export function useTimelineContextMenu(
       // 处理检测结果
       if (boundaries.length > 0) {
         console.log('✅ 检测完成，共发现', boundaries.length, '个分割点')
-        
+
         loading.update({
           progress: 100,
-          details: t('timeline.sceneDetection.splitting', { count: boundaries.length })
+          details: t('timeline.sceneDetection.splitting', { count: boundaries.length }),
         })
 
         const splitPoints = boundaries.map((frame) => Number(frame))
         await unifiedStore.splitTimelineItemAtTimeWithHistory(clipId, splitPoints)
-        
+
         loading.close()
         unifiedStore.messageSuccess(
-          t('timeline.sceneDetection.success', { count: boundaries.length })
+          t('timeline.sceneDetection.success', { count: boundaries.length }),
         )
         console.log('✅ 时间轴项目分割成功')
       } else {
@@ -523,7 +544,7 @@ export function useTimelineContextMenu(
       }
     } catch (error) {
       loading.close()
-      
+
       // 区分取消和错误
       if (error instanceof Error && error.name === 'AbortError') {
         unifiedStore.messageInfo(t('timeline.sceneDetection.cancelled'))
@@ -531,8 +552,8 @@ export function useTimelineContextMenu(
         console.error('❌ 智能分镜头检测失败:', error)
         unifiedStore.messageError(
           t('timeline.sceneDetection.error', {
-            message: error instanceof Error ? error.message : String(error)
-          })
+            message: error instanceof Error ? error.message : String(error),
+          }),
         )
       }
     }
@@ -662,7 +683,7 @@ export function useTimelineContextMenu(
       // 1. 提取音频
       loading.update({ progress: 10, details: t('timeline.speechRecognition.extractingAudio') })
       console.log('📦 [ASR] 正在提取音频...')
-      
+
       const audioBlob = await exportTimelineItem({
         timelineItem,
         getMediaItem: unifiedStore.getMediaItem,
@@ -673,7 +694,7 @@ export function useTimelineContextMenu(
       // 2. 上传到 Bizyair
       loading.update({ progress: 30, details: t('timeline.speechRecognition.uploading') })
       console.log('⬆️ [ASR] 正在上传音频到Bizyair...')
-      
+
       // 构造 FileData 对象
       const fileData: FileData = {
         __type__: 'FileData',
@@ -682,7 +703,7 @@ export function useTimelineContextMenu(
         timelineItemId: clipId,
         source: 'timeline-item',
       }
-      
+
       const uploadResult = await BizyairFileUploader.uploadFile(
         fileData,
         unifiedStore.getMediaItem,
@@ -700,7 +721,7 @@ export function useTimelineContextMenu(
 
       const asrProcessor = ASRProcessor.getInstance()
       const estimatedDuration = (timelineItem.timeRange.clipEndTime - timelineItem.timeRange.clipStartTime) / RENDERER_FPS // 使用RENDERER_FPS常量
-      
+
       const submitResult = await asrProcessor.submitASRTask({
         audio_url: uploadResult.url!,
         audio_format: 'mp3',
@@ -715,7 +736,7 @@ export function useTimelineContextMenu(
       // 4. 创建占位符时间轴item
       loading.update({ progress: 60, details: '创建占位符...' })
       console.log('📦 [ASR] 正在创建占位符item...')
-      
+
       const placeholderItem = await createPlaceholderTextItem(timelineItem, estimatedDuration)
       console.log('✅ [ASR] 占位符item创建完成:', placeholderItem.id)
 

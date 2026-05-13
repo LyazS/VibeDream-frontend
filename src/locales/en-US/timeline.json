@@ -66,6 +66,7 @@
     "sceneDetection": {
       "title": "Smart Scene Detection",
       "tip": "Analyzing video content, please wait...",
+      "modelFallback": "AI model unavailable, using fast detection...",
       "splitting": "Detection complete, splitting {count} scenes...",
       "success": "Successfully split into {count} scenes",
       "noScenes": "No obvious scene boundaries detected",
