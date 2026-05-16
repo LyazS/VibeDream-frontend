@@ -31,3 +31,5 @@ coverage
 package-lock.json
 .ace-tool/
 .omc
+public/model-chunks/
+src/generated/
