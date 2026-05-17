@@ -68,6 +68,23 @@ function isUnifiedMediaVisualMetadata(
   return isOptionalString(value.title) && isOptionalString(value.summary)
 }
 
+function isUnifiedMediaIndexingMetadata(
+  value: unknown,
+): value is NonNullable<UnifiedMediaItemMetadata['indexing']> {
+  if (!isRecord(value)) {
+    return false
+  }
+
+  // 索引 metadata 会随项目文件持久化，加载旧项目时需要宽松校验可选字段。
+  return (value.status === undefined || value.status === 'completed' || value.status === 'failed')
+    && isOptionalString(value.projectId)
+    && isOptionalString(value.collectionName)
+    && isOptionalString(value.indexedAt)
+    && isOptionalNumber(value.shotCount)
+    && isOptionalString(value.sourceMediaItemId)
+    && isOptionalString(value.error)
+}
+
 function isOptionalNumber(value: unknown): value is number | undefined {
   return value === undefined || typeof value === 'number'
 }
@@ -90,7 +107,8 @@ function isUnifiedMediaItemMetadata(value: unknown): value is UnifiedMediaItemMe
     return false
   }
 
-  return value.visual === undefined || isUnifiedMediaVisualMetadata(value.visual)
+  return (value.visual === undefined || isUnifiedMediaVisualMetadata(value.visual))
+    && (value.indexing === undefined || isUnifiedMediaIndexingMetadata(value.indexing))
 }
 
 function isBaseEffectTemplateSourceData(value: unknown): value is BaseEffectTemplateSourceData {

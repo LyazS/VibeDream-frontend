@@ -302,6 +302,7 @@ import TransitionTemplatePickerModal from '@/components/modals/TransitionTemplat
 import FilterTemplatePickerModal from '@/components/modals/FilterTemplatePickerModal.vue'
 import FolderIcon from '@/components/utils/FolderIcon.vue'
 import { mediaVisualSummaryService } from '@/core/mediaitem'
+import { mediaIndexingService } from '@/core/media-index'
 import type { TaskSubmitResponse } from '@/types/taskApi'
 import { TaskSubmitErrorCode } from '@/types/taskApi'
 import {
@@ -753,6 +754,16 @@ const currentMenuItems = computed((): MenuItem[] => {
             },
           ] satisfies MenuItem[])
         : []),
+      ...(canIndexMedia(target)
+        ? ([
+            { type: 'separator' as const },
+            {
+              label: t('media.indexMedia'),
+              icon: IconComponents.SEARCH,
+              onClick: handleIndexMedia,
+            },
+          ] satisfies MenuItem[])
+        : []),
       ...(isMediaAsset(getAsset(target.id)) || isEffectTemplateAsset(getAsset(target.id))
         ? ([
             { type: 'separator' as const },
@@ -857,6 +868,16 @@ function canGenerateVisualSummary(item: DisplayItem): boolean {
   if (!asset || !isMediaAsset(asset)) return false
 
   return asset.mediaType === 'video' || asset.mediaType === 'image'
+}
+
+function canIndexMedia(item: DisplayItem): boolean {
+  if (item.type !== 'asset') return false
+
+  const asset = getAsset(item.id)
+  if (!asset || !isMediaAsset(asset)) return false
+
+  // Shot 索引依赖本地视频解码和分镜检测，只对已就绪的视频素材开放入口。
+  return asset.mediaType === 'video' && asset.mediaStatus === 'ready'
 }
 
 function getEffectTemplateItemIcon(assetId: string) {
@@ -1671,6 +1692,42 @@ async function handleGenerateSummary(): Promise<void> {
     console.error('生成素材总结失败:', error)
     unifiedStore.messageError(
       t('media.generateSummaryFailed', {
+        name: mediaItem.name,
+        error: error instanceof Error ? error.message : t('media.unknown'),
+      }),
+    )
+  }
+}
+
+async function handleIndexMedia(): Promise<void> {
+  if (!contextMenuTarget.value || contextMenuTarget.value.type !== 'asset') return
+
+  const mediaItem = getMediaItem(contextMenuTarget.value.id)
+  if (!mediaItem || mediaItem.mediaType !== 'video') {
+    return
+  }
+
+  showContextMenu.value = false
+  unifiedStore.messageSuccess(t('media.indexMediaStarted', { name: mediaItem.name }))
+
+  try {
+    // 服务内部会跳过同项目已完成索引的素材；这里统一处理成功/失败消息。
+    const result = await mediaIndexingService.indexMedia(mediaItem)
+
+    if (!result.success) {
+      throw new Error(result.error || t('media.unknown'))
+    }
+
+    unifiedStore.messageSuccess(
+      t(result.cached ? 'media.indexMediaAlreadyExists' : 'media.indexMediaSuccess', {
+        name: mediaItem.name,
+        count: result.shotCount ?? 0,
+      }),
+    )
+  } catch (error) {
+    console.error('索引素材失败:', error)
+    unifiedStore.messageError(
+      t('media.indexMediaFailed', {
         name: mediaItem.name,
         error: error instanceof Error ? error.message : t('media.unknown'),
       }),

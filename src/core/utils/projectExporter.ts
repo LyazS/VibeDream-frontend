@@ -99,6 +99,10 @@ export interface ExportMediaItemOptions {
   outputWidth?: number
   /** 自定义导出高度（可选） */
   outputHeight?: number
+  /** 导出起始帧（可选，仅视频有效，默认 0，用于 Shot 索引裁切片段） */
+  startFrame?: number
+  /** 导出结束帧（可选，仅视频有效，默认媒体总帧数，用于 Shot 索引裁切片段） */
+  endFrame?: number
 }
 
 /**
@@ -828,7 +832,7 @@ async function exportVideoMediaItem(
   mediaItem: UnifiedMediaItemData,
   onProgress?: (progress: number) => void,
   frameRate?: number,
-  sizeOptions?: Pick<ExportMediaItemOptions, 'outputWidth' | 'outputHeight'>,
+  clipOptions?: Pick<ExportMediaItemOptions, 'outputWidth' | 'outputHeight' | 'startFrame' | 'endFrame'>,
 ): Promise<Blob> {
   // 1. 验证媒体项目状态
   if (mediaItem.mediaStatus !== 'ready') {
@@ -840,10 +844,21 @@ async function exportVideoMediaItem(
     throw new Error('媒体项目未就绪：bunnyMedia 不存在')
   }
   await bunnyMedia.ready
-  const outputSize = resolveExportSize(bunnyMedia.width, bunnyMedia.height, sizeOptions)
+  const outputSize = resolveExportSize(bunnyMedia.width, bunnyMedia.height, clipOptions)
 
-  // 2. 创建临时时间轴项目（覆盖整个媒体时长）
   const durationInFrames = Number(bunnyMedia.durationN)
+  const startFrame = clipOptions?.startFrame ?? 0
+  const endFrame = clipOptions?.endFrame ?? durationInFrames
+  // start/end 只改变素材截取范围，导出的临时时间线仍从 0 开始，便于复用 ExportManager。
+  if (!Number.isFinite(startFrame) || !Number.isFinite(endFrame) || endFrame <= startFrame) {
+    throw new Error('视频导出帧范围无效')
+  }
+  if (startFrame < 0 || endFrame > durationInFrames) {
+    throw new Error('视频导出帧范围超出媒体时长')
+  }
+  const exportDurationInFrames = endFrame - startFrame
+
+  // 2. 创建临时时间轴项目（覆盖目标导出片段）
   const tempTimelineItem: UnifiedTimelineItemData<'video'> = {
     id: 'temp-export-item',
     mediaType: 'video',
@@ -852,9 +867,9 @@ async function exportVideoMediaItem(
     timelineStatus: 'ready',
     timeRange: {
       timelineStartTime: 0,
-      timelineEndTime: durationInFrames,
-      clipStartTime: 0,
-      clipEndTime: durationInFrames,
+      timelineEndTime: exportDurationInFrames,
+      clipStartTime: startFrame,
+      clipEndTime: endFrame,
     },
     config: {
       // VideoMediaConfig = VisualProps & AudioProps
@@ -928,12 +943,15 @@ async function exportAudioMediaItem(
  * 导出单个媒体项目为 Blob（使用原始尺寸）
  */
 export async function exportMediaItem(options: ExportMediaItemOptions): Promise<Blob> {
-  const { mediaItem, onProgress, frameRate, outputWidth, outputHeight } = options
+  const { mediaItem, onProgress, frameRate, outputWidth, outputHeight, startFrame, endFrame } = options
+  // 视频导出要求偶数尺寸以兼容 MP4 编码；图片导出保持调用方传入的原始尺寸语义。
   const sizeOptions =
     mediaItem.mediaType === 'video'
       ? {
           outputWidth: normalizeEvenExportDimension(outputWidth),
           outputHeight: normalizeEvenExportDimension(outputHeight),
+          startFrame,
+          endFrame,
         }
       : { outputWidth, outputHeight }
 

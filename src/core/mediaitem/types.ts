@@ -77,6 +77,8 @@ export interface UnifiedMediaItemData {
 export interface UnifiedMediaItemMetadata {
   /** 视觉分析结果 */
   visual?: UnifiedMediaVisualMetadata
+  /** Shot 级索引状态 */
+  indexing?: UnifiedMediaIndexingMetadata
 }
 
 export interface UnifiedMediaVisualMetadata {
@@ -84,6 +86,23 @@ export interface UnifiedMediaVisualMetadata {
   title?: string
   /** 素材级视觉摘要 */
   summary?: string
+}
+
+export interface UnifiedMediaIndexingMetadata {
+  /** 最近一次索引任务状态 */
+  status?: 'completed' | 'failed'
+  /** 索引所属项目，避免同一素材在不同项目中误用 collection */
+  projectId?: string
+  /** 后端写入的 Qdrant collection 名称 */
+  collectionName?: string
+  /** 索引完成或失败的时间 */
+  indexedAt?: string
+  /** 成功入库的 Shot 数量 */
+  shotCount?: number
+  /** 原始媒体素材 ID，用于后续排查复制/派生素材 */
+  sourceMediaItemId?: string
+  /** 失败原因，仅 status 为 failed 时使用 */
+  error?: string
 }
 
 // ==================== 专门的状态类型定义 ====================
