@@ -7,6 +7,7 @@ import type {
 import type {
   MediaStatus,
   MediaTypeOrUnknown,
+  UnifiedMediaIndexedShotMetadata,
   UnifiedMediaItemMetadata,
 } from '@/core/mediaitem/types'
 
@@ -58,6 +59,13 @@ function isOptionalString(value: unknown): value is string | undefined {
   return value === undefined || typeof value === 'string'
 }
 
+function isOptionalArray<T>(
+  value: unknown,
+  itemGuard: (item: unknown) => item is T,
+): value is T[] | undefined {
+  return value === undefined || (Array.isArray(value) && value.every(itemGuard))
+}
+
 function isUnifiedMediaVisualMetadata(
   value: unknown,
 ): value is NonNullable<UnifiedMediaItemMetadata['visual']> {
@@ -76,17 +84,19 @@ function isUnifiedMediaIndexingMetadata(
   }
 
   // 索引 metadata 会随项目文件持久化，加载旧项目时需要宽松校验可选字段。
-  return (value.status === undefined || value.status === 'completed' || value.status === 'failed')
-    && isOptionalString(value.projectId)
+  return isOptionalString(value.projectId)
     && isOptionalString(value.collectionName)
-    && isOptionalString(value.indexedAt)
-    && isOptionalNumber(value.shotCount)
-    && isOptionalString(value.sourceMediaItemId)
-    && isOptionalString(value.error)
+    && isOptionalArray(value.shots, isUnifiedMediaIndexedShotMetadata)
 }
 
 function isOptionalNumber(value: unknown): value is number | undefined {
   return value === undefined || typeof value === 'number'
+}
+
+function isUnifiedMediaIndexedShotMetadata(
+  value: unknown,
+): value is UnifiedMediaIndexedShotMetadata {
+  return isRecord(value) && typeof value.pointId === 'string'
 }
 
 function isMediaTypeOrUnknown(value: unknown): value is MediaTypeOrUnknown {

@@ -1721,7 +1721,7 @@ async function handleIndexMedia(): Promise<void> {
     unifiedStore.messageSuccess(
       t(result.cached ? 'media.indexMediaAlreadyExists' : 'media.indexMediaSuccess', {
         name: mediaItem.name,
-        count: result.shotCount ?? 0,
+        count: result.shots?.length ?? 0,
       }),
     )
   } catch (error) {

@@ -9,6 +9,7 @@ import { setupTimelineItemBunny } from '@/core/bunnyUtils/timelineItemSetup'
 import { detectSceneTransNetV2 } from '@/core/utils/scene-detector-transnetv2'
 import type { TransNetV2ProgressEvent } from '@/core/utils/transnetv2/types'
 import { exportMediaItem } from '@/core/utils/projectExporter'
+import type { UnifiedMediaIndexedShotMetadata } from '@/core/mediaitem/types'
 
 const MEDIA_INDEX_LOG_PREFIX = '[MediaIndex]'
 
@@ -44,6 +45,9 @@ interface MediaIndexResponse {
   embedded_shots: number
   indexed_shots: number
   failed_shots: number
+  shots: Array<{
+    point_id: string
+  }>
   error?: string | null
 }
 
@@ -62,7 +66,7 @@ export interface IndexMediaResult {
   success: boolean
   cached: boolean
   collectionName?: string
-  shotCount?: number
+  shots?: UnifiedMediaIndexedShotMetadata[]
   error?: string
 }
 
@@ -118,23 +122,23 @@ export class MediaIndexingService {
       mediaStatus: mediaItem.mediaStatus,
       projectId,
       force: options.force === true,
-      existingStatus: existing?.status,
       existingProjectId: existing?.projectId,
+      existingCollectionName: existing?.collectionName,
     })
 
     // 同一个项目下已经完成索引时默认复用，避免右键重复触发昂贵的云端处理。
-    if (existing?.status === 'completed' && existing.projectId === projectId && !options.force) {
+    if (existing?.projectId === projectId && existing.collectionName && existing.shots?.length && !options.force) {
       logMediaIndex('命中已有索引，跳过重建', {
         mediaItemId: mediaItem.id,
         projectId,
         collectionName: existing.collectionName,
-        shotCount: existing.shotCount,
+        shotCount: existing.shots?.length,
       })
       return {
         success: true,
         cached: true,
         collectionName: existing.collectionName,
-        shotCount: existing.shotCount,
+        shots: existing.shots,
       }
     }
 
@@ -272,12 +276,11 @@ export class MediaIndexingService {
       // 索引结果写回 media metadata，项目再次打开时可以识别该素材已建索引。
       unifiedStore.updateMediaItemMetadata(readyMediaItem.id, {
         indexing: {
-          status: 'completed',
           projectId,
           collectionName: status.collection_name,
-          indexedAt: new Date().toISOString(),
-          shotCount: status.indexed_shots,
-          sourceMediaItemId: readyMediaItem.id,
+          shots: status.shots.map((shot) => ({
+            pointId: shot.point_id,
+          })),
         },
       })
       await unifiedStore.saveCurrentProject({ directoryChanged: true })
@@ -294,7 +297,9 @@ export class MediaIndexingService {
         success: true,
         cached: false,
         collectionName: status.collection_name,
-        shotCount: status.indexed_shots,
+        shots: status.shots.map((shot) => ({
+          pointId: shot.point_id,
+        })),
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : '索引素材失败'
@@ -304,16 +309,10 @@ export class MediaIndexingService {
         projectId,
         error: message,
       })
-      // 失败状态也写入 metadata，方便审核问题素材和后续决定是否强制重试。
       unifiedStore.updateMediaItemMetadata(mediaItem.id, {
-        indexing: {
-          status: 'failed',
-          projectId,
-          indexedAt: new Date().toISOString(),
-          sourceMediaItemId: mediaItem.id,
-          error: message,
-        },
+        indexing: undefined,
       })
+      await unifiedStore.saveCurrentProject({ directoryChanged: true })
       return {
         success: false,
         cached: false,
