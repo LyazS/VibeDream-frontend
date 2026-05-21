@@ -16,6 +16,15 @@ import type { UnifiedTimelineModule } from '@/core/modules/UnifiedTimelineModule
 import type { UnifiedAutoSaveModule } from '@/core/modules/UnifiedAutoSaveModule'
 import { getDataSourceRegistry } from '@/core/datasource/registry'
 import { SourceOrigin } from '@/core/datasource/core/BaseDataSource'
+import {
+  getResourceId,
+  JobLogger,
+  JobRuntime,
+  MediaDecodedResolver,
+  MediaFileAvailableResolver,
+  MediaReadyResolver,
+  type TaskViewItem,
+} from '@/core/jobs'
 import { globalMetaFileManager } from '@/core/managers/media/globalMetaFileManager'
 import type {
   EffectTemplateAssetData,
@@ -93,6 +102,8 @@ export function createUnifiedMediaModule(registry: ModuleRegistry) {
     registry,
     (assetId) => effectTemplateAssets.value.find((item) => item.id === assetId),
   )
+  const jobRuntime = new JobRuntime()
+  let mediaReadyResolverRegistered = false
 
   // ==================== 媒体项目管理方法 ====================
 
@@ -360,6 +371,104 @@ export function createUnifiedMediaModule(registry: ModuleRegistry) {
     return { width: -1, height: -1 }
   }
 
+  // ==================== 媒体 ready JobRuntime 兼容层 ====================
+
+  function getMediaReadyResourceId(mediaId: string): string {
+    return getResourceId('media-ready', mediaId)
+  }
+
+  function registerMediaReadyResolver() {
+    if (mediaReadyResolverRegistered) return
+
+    jobRuntime.registerResolver(
+      new MediaReadyResolver({
+        getMediaItem,
+        getProcessor(sourceType) {
+          return getDataSourceRegistry().getProcessor(sourceType)
+        },
+      }),
+    )
+    jobRuntime.registerResolver(new MediaFileAvailableResolver({ getMediaItem }))
+    jobRuntime.registerResolver(new MediaDecodedResolver({ getMediaItem }))
+    mediaReadyResolverRegistered = true
+  }
+
+  function ensureMediaReady(mediaId: string): Promise<UnifiedMediaItemData> {
+    registerMediaReadyResolver()
+
+    return jobRuntime.ensure<UnifiedMediaItemData>({
+      type: 'media-ready',
+      key: mediaId,
+      input: { mediaId },
+      bindings: [{ type: 'media-item', id: mediaId }],
+      policy: { queue: 'local-heavy' },
+    })
+  }
+
+  function getMediaReadyTaskView(): TaskViewItem[] {
+    return jobRuntime.getTaskView().filter((item) => item.type === 'media-ready')
+  }
+
+  function subscribeMediaReadyTaskView(listener: (items: TaskViewItem[]) => void): () => void {
+    return jobRuntime.subscribe(() => {
+      listener(getMediaReadyTaskView())
+    })
+  }
+
+  function getJobTaskView(): TaskViewItem[] {
+    return jobRuntime.getTaskView()
+  }
+
+  function subscribeJobTaskView(listener: (items: TaskViewItem[]) => void): () => void {
+    return jobRuntime.subscribe(() => {
+      listener(getJobTaskView())
+    })
+  }
+
+  async function cancelJobTask(resourceId: string): Promise<boolean> {
+    return jobRuntime.cancel(resourceId)
+  }
+
+  async function retryJobTask(resourceId: string): Promise<unknown> {
+    return jobRuntime.retry(resourceId)
+  }
+
+  function startMediaProcessingWithLegacyProcessor(mediaItem: UnifiedMediaItemData): boolean {
+    const dsRegistry = getDataSourceRegistry()
+    const processor = dsRegistry.getProcessor(mediaItem.source.type)
+
+    if (processor) {
+      processor.addTask(mediaItem)
+      console.log(`📋 [UnifiedMediaModule] 任务已加入旧 processor 队列`)
+      return true
+    }
+
+    console.error(`❌ [UnifiedMediaModule] 找不到对应的数据源处理器: ${mediaItem.source.type}`)
+    UnifiedMediaItemActions.transitionTo(mediaItem, 'error')
+    return false
+  }
+
+  async function cancelMediaProcessingWithLegacyProcessor(
+    mediaItem: UnifiedMediaItemData,
+  ): Promise<boolean> {
+    const dsRegistry = getDataSourceRegistry()
+    const processor = dsRegistry.getProcessor(mediaItem.source.type)
+
+    if (!processor) {
+      console.error(`❌ [UnifiedMediaModule] 找不到对应的数据源处理器: ${mediaItem.source.type}`)
+      return false
+    }
+
+    return processor.cancelTask(mediaItem.id)
+  }
+
+  async function saveProjectAfterMediaProcessingCancel() {
+    const projectModule = registry.get<UnifiedProjectModule>(MODULE_NAMES.PROJECT)
+    if (projectModule) {
+      await projectModule.saveCurrentProject({ contentChanged: true })
+    }
+  }
+
   // ==================== 异步等待方法 ====================
 
   /**
@@ -368,36 +477,25 @@ export function createUnifiedMediaModule(registry: ModuleRegistry) {
    * @param mediaItemId 媒体项目ID
    * @returns Promise<boolean> 解析成功返回true，解析失败抛出错误
    */
-  function waitForMediaItemReady(mediaItemId: string): Promise<boolean> {
+  async function waitForMediaItemReady(mediaItemId: string): Promise<boolean> {
     const mediaItem = getMediaItem(mediaItemId)
 
     if (!mediaItem) {
       return Promise.reject(new Error(`找不到媒体项目: ${mediaItemId}`))
     }
 
-    // 使用 Vue watch 监听状态变化，immediate: true 会立即检查当前状态
-    return new Promise((resolve, reject) => {
-      let unwatch: (() => void) | null = null
-
-      unwatch = watch(
-        () => mediaItem.mediaStatus,
-        (newStatus) => {
-          if (newStatus === 'ready') {
-            unwatch?.()
-            resolve(true)
-          } else if (
-            newStatus === 'error' ||
-            newStatus === 'cancelled' ||
-            newStatus === 'missing'
-          ) {
-            unwatch?.()
-            reject(new Error(`媒体项目解析失败: ${mediaItem.name}, 状态: ${newStatus}`))
-          }
-          // 如果是其他状态，继续等待
-        },
-        { immediate: true }, // 立即执行一次，检查当前状态
-      )
-    })
+    try {
+      await ensureMediaReady(mediaItemId)
+      return true
+    } catch (error) {
+      JobLogger.error('MediaReady', 'media-ready:wait-failed', {
+        resourceId: getMediaReadyResourceId(mediaItemId),
+        type: 'media-ready',
+        key: mediaItemId,
+        error,
+      })
+      throw error
+    }
   }
 
   // ==================== 数据源状态同步方法 ====================
@@ -414,24 +512,30 @@ export function createUnifiedMediaModule(registry: ModuleRegistry) {
     const autoSaveModule = registry.get<UnifiedAutoSaveModule>(MODULE_NAMES.AUTOSAVE)
     autoSaveModule.setupMediaItemWatcher(mediaItem)
 
-    // 直接使用数据源处理器注册中心（已在顶部静态导入）
-    const dsRegistry = getDataSourceRegistry()
-    const processor = dsRegistry.getProcessor(mediaItem.source.type)
+    try {
+      void ensureMediaReady(mediaItem.id).catch((error) => {
+        JobLogger.error('MediaReady', 'media-ready:start-failed', {
+          resourceId: getMediaReadyResourceId(mediaItem.id),
+          type: 'media-ready',
+          key: mediaItem.id,
+          error,
+        })
+      })
 
-    if (processor) {
-      // ✅ 正确：通过任务队列处理，有并发控制和重试
-      processor.addTask(mediaItem)
-
-      console.log(`📋 [UnifiedMediaModule] 任务已加入队列`)
-
-      // 注意：任务队列会自动处理，不需要手动 then/catch
-      // 状态更新会通过 mediaItem 的响应式属性自动反映
-      // 如果需要监听任务完成，可以通过 watch mediaItem.mediaStatus
-    } else {
-      console.error(
-        `❌ [UnifiedMediaModule] 找不到对应的数据源处理器: ${mediaItem.source.type}`,
-      )
-      UnifiedMediaItemActions.transitionTo(mediaItem, 'error')
+      JobLogger.info('MediaReady', 'media-ready:queued', {
+        resourceId: getMediaReadyResourceId(mediaItem.id),
+        type: 'media-ready',
+        key: mediaItem.id,
+        bindings: [{ type: 'media-item', id: mediaItem.id }],
+      })
+    } catch (error) {
+      JobLogger.error('MediaReady', 'media-ready:fallback-legacy-start', {
+        resourceId: getMediaReadyResourceId(mediaItem.id),
+        type: 'media-ready',
+        key: mediaItem.id,
+        error,
+      })
+      startMediaProcessingWithLegacyProcessor(mediaItem)
     }
   }
 
@@ -450,26 +554,22 @@ export function createUnifiedMediaModule(registry: ModuleRegistry) {
     console.log(`🛑 [UnifiedMediaModule] 尝试取消媒体处理: ${mediaItem.name}`)
 
     try {
-      // 导入数据源处理器注册中心
-      const ds_registry = getDataSourceRegistry()
-      const processor = ds_registry.getProcessor(mediaItem.source.type)
+      const resourceId = getMediaReadyResourceId(mediaId)
+      let success = await jobRuntime.cancel(resourceId)
 
-      if (!processor) {
-        console.error(`❌ [UnifiedMediaModule] 找不到对应的数据源处理器: ${mediaItem.source.type}`)
-        return false
+      if (!success) {
+        JobLogger.warn('MediaReady', 'media-ready:fallback-legacy-cancel', {
+          resourceId,
+          type: 'media-ready',
+          key: mediaId,
+          status: mediaItem.mediaStatus,
+        })
+        success = await cancelMediaProcessingWithLegacyProcessor(mediaItem)
       }
-
-      // 🌟 直接使用 mediaId 作为 taskId（BaseDataSourceProcessor.addTask 已改为使用 mediaItem.id）
-      const success = await processor.cancelTask(mediaId)
 
       if (success) {
         console.log(`✅ [UnifiedMediaModule] 任务取消成功: ${mediaItem.name}`)
-
-        // 保存项目配置（内容已变更）
-        const projectModule = registry.get<UnifiedProjectModule>(MODULE_NAMES.PROJECT)
-        if (projectModule) {
-          await projectModule.saveCurrentProject({ contentChanged: true })
-        }
+        await saveProjectAfterMediaProcessingCancel()
       } else {
         console.warn(`⚠️ [UnifiedMediaModule] 任务取消失败: ${mediaItem.name}`)
       }
@@ -675,6 +775,14 @@ export function createUnifiedMediaModule(registry: ModuleRegistry) {
 
     // 异步等待方法
     waitForMediaItemReady,
+    ensureMediaReady,
+    getMediaReadyResourceId,
+    getMediaReadyTaskView,
+    subscribeMediaReadyTaskView,
+    getJobTaskView,
+    subscribeJobTaskView,
+    cancelJobTask,
+    retryJobTask,
 
     // 数据源处理方法
     startMediaProcessing,

@@ -182,6 +182,9 @@ export {
   type UnifiedUserModule,
 } from './modules/UnifiedUserModule'
 
+// ==================== Resource-first 任务运行时 ====================
+export * from './jobs'
+
 // ==================== 统一工具函数 ====================
 export {
   // 时间范围工具

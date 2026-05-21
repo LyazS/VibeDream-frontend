@@ -200,6 +200,10 @@ export const useUnifiedStore = defineStore('unified', () => {
     // 数据源处理方法
     startMediaProcessing: unifiedMediaModule.startMediaProcessing,
     cancelMediaProcessing: unifiedMediaModule.cancelMediaProcessing,
+    getJobTaskView: unifiedMediaModule.getJobTaskView,
+    subscribeJobTaskView: unifiedMediaModule.subscribeJobTaskView,
+    cancelJobTask: unifiedMediaModule.cancelJobTask,
+    retryJobTask: unifiedMediaModule.retryJobTask,
 
     // 便捷查询方法
     getReadyMediaItems: unifiedMediaModule.getReadyMediaItems,

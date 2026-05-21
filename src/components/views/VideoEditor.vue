@@ -11,6 +11,8 @@
       <VideoPreviewEngine :isAIChatPanelVisible="unifiedStore.isChatPanelVisible" @update:isAIChatPanelVisible="unifiedStore.setChatPanelVisible" />
     </div>
 
+    <TaskCenterPanel />
+
     <!-- 加载进度覆盖层 -->
     <LoadingOverlay
       :visible="unifiedStore.showProjectLoadingProgress"
@@ -34,6 +36,7 @@ import { useRoute } from 'vue-router'
 import { useUnifiedStore } from '@/core/unifiedStore'
 import VideoPreviewEngine from '@/components/panels/VideoPreviewEngine.vue'
 import EditorTopBar from '@/components/panels/EditorTopBar.vue'
+import TaskCenterPanel from '@/components/panels/TaskCenterPanel.vue'
 import LoadingOverlay from '@/components/base/LoadingOverlay.vue'
 import { useAppI18n } from '@/core/composables/useI18n'
 
