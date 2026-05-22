@@ -16,6 +16,15 @@ import { createUnifiedUserModule } from '@/core/modules/UnifiedUserModule'
 import { createUnifiedDirectoryModule } from '@/core/modules/UnifiedDirectoryModule'
 import { createUnifiedMediaBunnyModule } from '@/core/modules/UnifiedMediaBunnyModule'
 import { createUnifiedUIModule } from '@/core/modules/UnifiedUIModule'
+import {
+  createJobRuntime,
+  createMediaDecodedResolver,
+  createMediaFileAvailableResolver,
+  createMediaReadyRequest,
+  createMediaReadyResolver,
+  createMediaSourceProcessedResolver,
+  useJobTaskCenter,
+} from '@/core/jobs'
 import { ModuleRegistry, MODULE_NAMES } from '@/core/modules/ModuleRegistry'
 import { useHistoryOperations } from '@/core/composables/useHistoryOperations'
 import { useUnifiedDrag } from '@/core/composables/useUnifiedDrag'
@@ -104,6 +113,19 @@ export const useUnifiedStore = defineStore('unified', () => {
   const unifiedUIModule = createUnifiedUIModule(registry)
   registry.register(MODULE_NAMES.UI, unifiedUIModule)
 
+  const jobRuntime = createJobRuntime()
+  jobRuntime.registerResolver(createMediaFileAvailableResolver(unifiedMediaModule))
+  jobRuntime.registerResolver(createMediaDecodedResolver(unifiedMediaModule))
+  jobRuntime.registerResolver(createMediaSourceProcessedResolver(unifiedMediaModule))
+  jobRuntime.registerResolver(createMediaReadyResolver(unifiedMediaModule))
+  const jobTaskCenter = useJobTaskCenter(jobRuntime)
+
+  function ensureMediaReady(mediaId: string) {
+    return jobRuntime.ensure(createMediaReadyRequest(mediaId))
+  }
+  unifiedProjectModule.setMediaReadyEnsurer(ensureMediaReady)
+  unifiedDirectoryModule.setMediaReadyEnsurer(ensureMediaReady)
+
   // 创建历史记录操作模块
   const historyOperations = useHistoryOperations(
     unifiedHistoryModule,
@@ -167,6 +189,11 @@ export const useUnifiedStore = defineStore('unified', () => {
 
     // 媒体项目状态
     mediaItems: unifiedMediaModule.mediaItems,
+    jobRuntime,
+    jobTaskViews: jobTaskCenter.taskViews,
+    cancelJobTask: jobTaskCenter.cancelTask,
+    retryJobTask: jobTaskCenter.retryTask,
+    ensureMediaReady,
 
     // 媒体项目管理方法
     addMediaItem: unifiedMediaModule.addMediaItem,

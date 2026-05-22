@@ -256,7 +256,6 @@
         style="display: none"
         @change="handleFileSelect"
       />
-
     </n-scrollbar>
   </div>
 </template>
@@ -310,10 +309,7 @@ import {
   isRetryableError,
 } from '@/utils/errorMessageBuilder'
 import type { UnifiedLibraryAssetData } from '@/core/asset/types'
-import {
-  isEffectTemplateAsset,
-  isMediaAsset,
-} from '@/core/asset/types'
+import { isEffectTemplateAsset, isMediaAsset } from '@/core/asset/types'
 
 const unifiedStore = useUnifiedStore()
 const { t } = useAppI18n()
@@ -817,11 +813,12 @@ function getAssetTypeLabel(assetId: string): string {
   if (!asset) return t('media.unknown')
 
   if (isEffectTemplateAsset(asset)) {
-    const effectLabel = asset.effectType === 'transition'
-      ? t('media.effectTypeTransition')
-      : asset.effectType === 'filter'
-        ? t('media.effectTypeFilter')
-        : asset.effectType
+    const effectLabel =
+      asset.effectType === 'transition'
+        ? t('media.effectTypeTransition')
+        : asset.effectType === 'filter'
+          ? t('media.effectTypeFilter')
+          : asset.effectType
     if (asset.templateStatus !== 'ready') {
       return `${effectLabel} / ${getEffectTemplateStatusLabel(assetId)}`
     }
@@ -965,12 +962,12 @@ function isItemSelected(item: DisplayItem): boolean {
 function onItemDoubleClick(item: DisplayItem): void {
   if (item.type === 'directory') {
     const dir = unifiedStore.getDirectory(item.id)
-    
+
     // 判断是否为角色文件夹
     if (dir && unifiedStore.isCharacterDirectory(dir)) {
-      unifiedStore.openCharacterEditor('edit', item.id)  // 打开角色编辑器
+      unifiedStore.openCharacterEditor('edit', item.id) // 打开角色编辑器
     } else {
-      unifiedStore.navigateToDir(item.id)  // 普通文件夹导航
+      unifiedStore.navigateToDir(item.id) // 普通文件夹导航
     }
   } else {
     const asset = getAsset(item.id)
@@ -1381,7 +1378,7 @@ async function handlePasteFromClipboard(): Promise<void> {
     // 遍历剪贴板项目
     for (const item of clipboardItems) {
       // 查找图片类型
-      const imageType = item.types.find(type => type.startsWith('image/'))
+      const imageType = item.types.find((type) => type.startsWith('image/'))
 
       if (imageType) {
         // 获取图片 Blob
@@ -1407,17 +1404,15 @@ async function handlePasteFromClipboard(): Promise<void> {
     // 处理图片文件
     await processFiles(imageFiles)
     unifiedStore.messageSuccess(t('media.pasteImportSuccess', { count: imageFiles.length }))
-
   } catch (error) {
     console.error('从剪贴板粘贴图片失败:', error)
     unifiedStore.messageError(
       t('media.pasteImportFailed', {
-        error: error instanceof Error ? error.message : '未知错误'
-      })
+        error: error instanceof Error ? error.message : '未知错误',
+      }),
     )
   }
 }
-
 
 // 添加媒体项
 async function addMediaItem(file: File): Promise<void> {
@@ -1444,8 +1439,11 @@ async function addMediaItem(file: File): Promise<void> {
     // 添加到当前目录
     unifiedStore.addAssetToDirectory(mediaId, currentDir.value.id)
 
-    // 启动媒体处理流程
-    unifiedStore.startMediaProcessing(mediaItem)
+    // 通过 Resource DAG 声明媒体资源需要 ready。
+    // 这里不 await，保持手动导入“加入后后台处理”的现有交互节奏。
+    void unifiedStore.ensureMediaReady(mediaId).catch((error) => {
+      console.error(t('media.fileProcessFailed', { name: file.name }), error)
+    })
 
     console.log(t('media.fileProcessStarted', { name: file.name }))
   } catch (error) {
@@ -1662,10 +1660,9 @@ async function handleGenerateSummary(): Promise<void> {
     }
 
     unifiedStore.messageSuccess(
-      t(
-        result.cached ? 'media.generateSummaryAlreadyExists' : 'media.generateSummarySuccess',
-        { name: mediaItem.name },
-      ),
+      t(result.cached ? 'media.generateSummaryAlreadyExists' : 'media.generateSummarySuccess', {
+        name: mediaItem.name,
+      }),
     )
   } catch (error) {
     console.error('生成素材总结失败:', error)
@@ -1708,8 +1705,11 @@ async function retryAIGeneration(mediaItem: UnifiedMediaItemData): Promise<void>
   // 4. 重置媒体状态
   mediaItem.mediaStatus = 'pending'
 
-  // 5. 重新启动处理流程
-  unifiedStore.startMediaProcessing(mediaItem)
+  // TODO(Resource DAG): 素材库 AI 重试仍在旧 Processor 入口上。
+  // 后续应走 retryJobTask 或 AI 生成资源图的 retry。
+  throw new Error(
+    '[Resource DAG TODO] 素材库 AI 重试链路需要迁移，禁止继续调用 startMediaProcessing',
+  )
 
   unifiedStore.messageSuccess(t('media.retryStarted', { name: mediaItem.name }))
 }
@@ -1845,7 +1845,7 @@ async function deleteFolder(folderId: string): Promise<void> {
 // 获取选中的显示项列表
 function getSelectedDisplayItems(): DisplayItem[] {
   const selectedIds = Array.from(unifiedStore.selectedLibraryAssetIds)
-  return displayItems.value.filter(item => selectedIds.includes(item.id))
+  return displayItems.value.filter((item) => selectedIds.includes(item.id))
 }
 
 // 剪切操作
@@ -1986,8 +1986,6 @@ async function handleBatchDelete(): Promise<void> {
 }
 
 // ==================== AI 描述分析功能 ====================
-
-
 </script>
 
 <style scoped>

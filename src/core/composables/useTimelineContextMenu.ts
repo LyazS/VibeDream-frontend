@@ -621,15 +621,15 @@ export function useTimelineContextMenu(
     sourceTrackId: string,
   ): Promise<string> {
     // 1. 获取所有text轨道
-    const textTracks = tracks.value.filter(t => t.type === 'text')
+    const textTracks = tracks.value.filter((t) => t.type === 'text')
 
     // 2. 查找源音视频轨道下方的第一个不冲突的text轨道
-    const sourceTrackIndex = tracks.value.findIndex(t => t.id === sourceTrackId)
+    const sourceTrackIndex = tracks.value.findIndex((t) => t.id === sourceTrackId)
 
     // 按轨道索引排序，优先查找源轨道附近的轨道
     const sortedTextTracks = [...textTracks].sort((a, b) => {
-      const indexA = tracks.value.findIndex(t => t.id === a.id)
-      const indexB = tracks.value.findIndex(t => t.id === b.id)
+      const indexA = tracks.value.findIndex((t) => t.id === a.id)
+      const indexB = tracks.value.findIndex((t) => t.id === b.id)
       return Math.abs(indexA - sourceTrackIndex) - Math.abs(indexB - sourceTrackIndex)
     })
 
@@ -644,7 +644,7 @@ export function useTimelineContextMenu(
 
       if (overlappingItems.length === 0) {
         console.log('✅ [ASR] 找到可用的text轨道:', track.id)
-        return track.id  // 找到不冲突的轨道
+        return track.id // 找到不冲突的轨道
       }
     }
 
@@ -680,7 +680,7 @@ export function useTimelineContextMenu(
 
     // 3. 创建占位符文本item
     const placeholderItem = await createTextTimelineItem(
-      '',  // 占位符不需要文本内容
+      '', // 占位符不需要文本内容
       {
         fontSize: 48,
         color: '#ffffff',
@@ -730,7 +730,7 @@ export function useTimelineContextMenu(
       // 1. 提取音频
       loading.update({ progress: 10, details: t('timeline.speechRecognition.extractingAudio') })
       console.log('📦 [ASR] 正在提取音频...')
-      
+
       const audioBlob = await exportTimelineItem({
         timelineItem,
         getMediaItem: unifiedStore.getMediaItem,
@@ -741,7 +741,7 @@ export function useTimelineContextMenu(
       // 2. 上传到 Bizyair
       loading.update({ progress: 30, details: t('timeline.speechRecognition.uploading') })
       console.log('⬆️ [ASR] 正在上传音频到Bizyair...')
-      
+
       // 构造 FileData 对象
       const fileData: FileData = {
         __type__: 'FileData',
@@ -750,7 +750,7 @@ export function useTimelineContextMenu(
         timelineItemId: clipId,
         source: 'timeline-item',
       }
-      
+
       const uploadResult = await BizyairFileUploader.uploadFile(
         fileData,
         unifiedStore.getMediaItem,
@@ -767,8 +767,9 @@ export function useTimelineContextMenu(
       console.log('🚀 [ASR] 提交ASR任务到后端...')
 
       const asrProcessor = ASRProcessor.getInstance()
-      const estimatedDuration = (timelineItem.timeRange.clipEndTime - timelineItem.timeRange.clipStartTime) / RENDERER_FPS // 使用RENDERER_FPS常量
-      
+      const estimatedDuration =
+        (timelineItem.timeRange.clipEndTime - timelineItem.timeRange.clipStartTime) / RENDERER_FPS // 使用RENDERER_FPS常量
+
       const submitResult = await asrProcessor.submitASRTask({
         audio_url: uploadResult.url!,
         audio_format: 'mp3',
@@ -783,7 +784,7 @@ export function useTimelineContextMenu(
       // 4. 创建占位符时间轴item
       loading.update({ progress: 60, details: '创建占位符...' })
       console.log('📦 [ASR] 正在创建占位符item...')
-      
+
       const placeholderItem = await createPlaceholderTextItem(timelineItem, estimatedDuration)
       console.log('✅ [ASR] 占位符item创建完成:', placeholderItem.id)
 
@@ -799,7 +800,7 @@ export function useTimelineContextMenu(
           },
           taskStatus: ASRTaskStatus.PENDING,
           sourceTimelineItemId: clipId,
-          placeholderTimelineItemId: placeholderItem.id,  // 🆕 记录占位符item ID
+          placeholderTimelineItemId: placeholderItem.id, // 🆕 记录占位符item ID
         },
         SourceOrigin.USER_CREATE,
       )
@@ -807,13 +808,11 @@ export function useTimelineContextMenu(
       // 6. 创建媒体项并添加到库
       const mediaId = generateMediaId('txt')
       const mediaName = `语音识别_${clipId.slice(0, 8)}`
-      
-      const mediaItem = unifiedStore.createUnifiedMediaItemData(
-        mediaId,
-        mediaName,
-        asrSource,
-        { mediaType: 'text', duration: estimatedDuration },
-      )
+
+      const mediaItem = unifiedStore.createUnifiedMediaItemData(mediaId, mediaName, asrSource, {
+        mediaType: 'text',
+        duration: estimatedDuration,
+      })
 
       // 添加到媒体库
       unifiedStore.addMediaItem(mediaItem)
@@ -823,22 +822,24 @@ export function useTimelineContextMenu(
         unifiedStore.addAssetToDirectory(mediaId, unifiedStore.currentDir.id)
       }
 
-      // 6. 启动媒体处理流程
-      unifiedStore.startMediaProcessing(mediaItem)
+      // TODO(Resource DAG): 时间轴 ASR 结果媒体仍在旧 Processor 入口上。
+      // 后续应实现 ASRSubtitles / ASR media ready 资源图。
+      throw new Error(
+        '[Resource DAG TODO] 时间轴 ASR 链路需要迁移，禁止继续调用 startMediaProcessing',
+      )
 
       loading.update({ progress: 100, details: t('timeline.speechRecognition.processing') })
       console.log('✅ [ASR] ASR流程启动完成')
 
       loading.close()
       unifiedStore.messageSuccess(t('timeline.speechRecognition.success'))
-
     } catch (error) {
       loading.close()
       console.error('❌ [ASR] 语音识别失败:', error)
       unifiedStore.messageError(
         t('timeline.speechRecognition.error', {
           message: error instanceof Error ? error.message : String(error),
-        })
+        }),
       )
     }
 

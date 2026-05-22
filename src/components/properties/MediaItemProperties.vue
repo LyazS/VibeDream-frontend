@@ -86,7 +86,9 @@
     <!-- AI 任务信息区 -->
     <div v-if="canCreateCharacter" class="properties-section">
       <div class="info-row">
-        <span class="info-value" style="color: var(--color-success);">{{ t('properties.mediaItem.canCreateCharacter') }}</span>
+        <span class="info-value" style="color: var(--color-success)">{{
+          t('properties.mediaItem.canCreateCharacter')
+        }}</span>
       </div>
     </div>
 
@@ -349,8 +351,11 @@ async function retryAIGeneration(mediaItem: UnifiedMediaItemData): Promise<void>
   // 4. 重置媒体状态
   mediaItem.mediaStatus = 'pending'
 
-  // 5. 重新启动处理流程
-  unifiedStore.startMediaProcessing(mediaItem)
+  // TODO(Resource DAG): 属性面板里的 AI 重试仍在旧 Processor 入口上。
+  // 后续应走 retryJobTask 或 AI 生成资源图的 retry。
+  throw new Error(
+    '[Resource DAG TODO] 属性面板 AI 重试链路需要迁移，禁止继续调用 startMediaProcessing',
+  )
 
   unifiedStore.messageSuccess(t('media.retryStarted', { name: mediaItem.name }))
 }

@@ -16,6 +16,7 @@ import type { UnifiedTimelineModule } from '@/core/modules/UnifiedTimelineModule
 import type { UnifiedAutoSaveModule } from '@/core/modules/UnifiedAutoSaveModule'
 import { getDataSourceRegistry } from '@/core/datasource/registry'
 import { SourceOrigin } from '@/core/datasource/core/BaseDataSource'
+import type { PreparedMediaFile } from '@/core/datasource/core/BaseDataSourceProcessor'
 import { globalMetaFileManager } from '@/core/managers/media/globalMetaFileManager'
 import type {
   EffectTemplateAssetData,
@@ -89,6 +90,7 @@ export function createUnifiedMediaModule(registry: ModuleRegistry) {
   // 统一媒体项目列表
   const mediaItems = ref<UnifiedMediaItemData[]>([])
   const effectTemplateAssets = ref<EffectTemplateAssetData[]>([])
+  const preparedMediaFiles = new Map<string, PreparedMediaFile>()
   const effectTemplateManager = new EffectTemplateManager(
     registry,
     (assetId) => effectTemplateAssets.value.find((item) => item.id === assetId),
@@ -406,6 +408,7 @@ export function createUnifiedMediaModule(registry: ModuleRegistry) {
   /**
    * 开始媒体项目处理流程
    * @param mediaItem 媒体项目
+   * @deprecated 新链路应通过 ensureMediaReady / Resource DAG 进入。
    */
   function startMediaProcessing(mediaItem: UnifiedMediaItemData) {
     console.log(`🚀 [UnifiedMediaModule] 开始处理媒体项目: ${mediaItem.name}`)
@@ -432,6 +435,77 @@ export function createUnifiedMediaModule(registry: ModuleRegistry) {
         `❌ [UnifiedMediaModule] 找不到对应的数据源处理器: ${mediaItem.source.type}`,
       )
       UnifiedMediaItemActions.transitionTo(mediaItem, 'error')
+    }
+  }
+
+  /**
+   * Resource DAG 使用的媒体数据源处理入口。
+   *
+   * 与 startMediaProcessing() 的关键区别：
+   * - 不再调用 processor.addTask()。
+   * - 不再走 DataSourceProcessor 自己的 p-limit 队列。
+   * - 调用方可以 await，失败会向 resolver 抛出。
+   */
+  async function processMediaSourceDirectly(mediaItem: UnifiedMediaItemData): Promise<void> {
+    console.log(`🚀 [UnifiedMediaModule] DAG处理媒体项目: ${mediaItem.name}`)
+
+    const autoSaveModule = registry.get<UnifiedAutoSaveModule>(MODULE_NAMES.AUTOSAVE)
+    autoSaveModule.setupMediaItemWatcher(mediaItem)
+
+    const dsRegistry = getDataSourceRegistry()
+    const processor = dsRegistry.getProcessor(mediaItem.source.type)
+
+    if (!processor) {
+      const error = new Error(`找不到对应的数据源处理器: ${mediaItem.source.type}`)
+      console.error(`❌ [UnifiedMediaModule] ${error.message}`)
+      UnifiedMediaItemActions.transitionTo(mediaItem, 'error')
+      throw error
+    }
+
+    await processor.processTaskDirectly(mediaItem)
+  }
+
+  async function prepareMediaFileDirectly(mediaItem: UnifiedMediaItemData): Promise<void> {
+    console.log(`📁 [UnifiedMediaModule] DAG准备媒体文件: ${mediaItem.name}`)
+
+    const dsRegistry = getDataSourceRegistry()
+    const processor = dsRegistry.getProcessor(mediaItem.source.type)
+
+    if (!processor) {
+      const error = new Error(`找不到对应的数据源处理器: ${mediaItem.source.type}`)
+      console.error(`❌ [UnifiedMediaModule] ${error.message}`)
+      UnifiedMediaItemActions.transitionTo(mediaItem, 'error')
+      throw error
+    }
+
+    const preparedFile = await processor.prepareMediaFileForDag(mediaItem)
+    preparedMediaFiles.set(mediaItem.id, preparedFile)
+  }
+
+  function hasPreparedMediaFile(mediaId: string): boolean {
+    return preparedMediaFiles.has(mediaId)
+  }
+
+  async function decodePreparedMediaFileDirectly(mediaItem: UnifiedMediaItemData): Promise<void> {
+    console.log(`🎞️ [UnifiedMediaModule] DAG解码媒体文件: ${mediaItem.name}`)
+
+    const dsRegistry = getDataSourceRegistry()
+    const processor = dsRegistry.getProcessor(mediaItem.source.type)
+
+    if (!processor) {
+      const error = new Error(`找不到对应的数据源处理器: ${mediaItem.source.type}`)
+      console.error(`❌ [UnifiedMediaModule] ${error.message}`)
+      UnifiedMediaItemActions.transitionTo(mediaItem, 'error')
+      throw error
+    }
+
+    const preparedFile =
+      preparedMediaFiles.get(mediaItem.id) ?? (await processor.prepareMediaFileForDag(mediaItem))
+
+    try {
+      await processor.decodePreparedMediaFileForDag(mediaItem, preparedFile)
+    } finally {
+      preparedMediaFiles.delete(mediaItem.id)
     }
   }
 
@@ -678,6 +752,10 @@ export function createUnifiedMediaModule(registry: ModuleRegistry) {
 
     // 数据源处理方法
     startMediaProcessing,
+    processMediaSourceDirectly,
+    prepareMediaFileDirectly,
+    hasPreparedMediaFile,
+    decodePreparedMediaFileDirectly,
     cancelMediaProcessing,
 
     // 便捷查询方法

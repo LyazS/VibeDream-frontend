@@ -216,14 +216,9 @@ export function useAIGeneration() {
     const mediaId = generateMediaId(extension)
     const mediaName = `${configData.name[currentLang.value]}_${Date.now()}`
 
-    const mediaItem = unifiedStore.createUnifiedMediaItemData(
-      mediaId,
-      mediaName,
-      source,
-      {
-        mediaType,
-      },
-    )
+    const mediaItem = unifiedStore.createUnifiedMediaItemData(mediaId, mediaName, source, {
+      mediaType,
+    })
 
     // 添加到媒体库
     unifiedStore.addMediaItem(mediaItem)
@@ -285,16 +280,14 @@ export function useAIGeneration() {
       console.log('📋 [useAIGeneration] BizyAir 应用配置:', appConfig)
 
       // 3. 构建 BizyAir API 请求数据
-      const bizyAirRequestData = BizyAirConfigManager.getRequestBuilder(
+      const bizyAirRequestData = BizyAirConfigManager.getRequestBuilder(requestParams.task_config)(
         requestParams.task_config,
-      )(requestParams.task_config, appConfig)
+        appConfig,
+      )
       console.log('📤 [useAIGeneration] BizyAir API 请求数据:', bizyAirRequestData)
 
       // 4. 提交任务到 BizyAir API
-      const bizyairTaskId = await BizyAirAPIClient.submitAsyncTask(
-        bizyAirRequestData,
-        apiKey,
-      )
+      const bizyairTaskId = await BizyAirAPIClient.submitAsyncTask(bizyAirRequestData, apiKey)
       console.log(`✅ [useAIGeneration] BizyAir 任务提交成功: ${bizyairTaskId}`)
 
       // 5. 创建 BizyAir 数据源
@@ -447,8 +440,9 @@ export function useAIGeneration() {
       // 6. 创建并添加媒体项
       const mediaItem = createAndAddMediaItem(result.source, configData)
 
-      // 7. 启动媒体处理流程
-      unifiedStore.startMediaProcessing(mediaItem)
+      // TODO(Resource DAG): AI 生成媒体仍在旧 Processor 入口上。
+      // 后续应实现 AIGeneratedMedia / RemoteTaskCompleted / MediaReady 资源图。
+      throw new Error('[Resource DAG TODO] AI 生成链路需要迁移，禁止继续调用 startMediaProcessing')
 
       // 8. 显示成功消息
       unifiedStore.messageSuccess(t('aiPanel.taskSubmitted'))

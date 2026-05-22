@@ -85,10 +85,7 @@ export class MediaVisualSummaryService {
       }
 
       options.onProgress?.('生成视觉摘要', 90)
-      const visual = await this.requestVisualSummary(
-        uploadResult.url,
-        readyMediaItem.mediaType,
-      )
+      const visual = await this.requestVisualSummary(uploadResult.url, readyMediaItem.mediaType)
 
       unifiedStore.updateMediaItemMetadata(readyMediaItem.id, {
         visual: {
@@ -117,7 +114,11 @@ export class MediaVisualSummaryService {
     const unifiedStore = useUnifiedStore()
 
     if (mediaItem.mediaStatus === 'pending') {
-      unifiedStore.startMediaProcessing(mediaItem)
+      // TODO(Resource DAG): 视觉摘要的媒体 ready 等待点仍在旧启动入口上。
+      // 后续应直接 await unifiedStore.ensureMediaReady(mediaItem.id)。
+      throw new Error(
+        '[Resource DAG TODO] 视觉摘要媒体 ready 等待点需要迁移，禁止继续调用 startMediaProcessing',
+      )
     }
 
     if (mediaItem.mediaStatus !== 'ready') {
@@ -173,9 +174,7 @@ export class MediaVisualSummaryService {
     }
   }
 
-  private getMediaDimensions(
-    mediaItem: VisualMediaItem,
-  ): { width: number; height: number } | null {
+  private getMediaDimensions(mediaItem: VisualMediaItem): { width: number; height: number } | null {
     const originalWidth = mediaItem.runtime.bunny?.originalWidth
     const originalHeight = mediaItem.runtime.bunny?.originalHeight
     if (originalWidth && originalHeight) {

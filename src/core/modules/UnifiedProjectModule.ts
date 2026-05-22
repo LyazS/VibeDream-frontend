@@ -60,6 +60,7 @@ export function createUnifiedProjectModule(registry: ModuleRegistry) {
   
   // 🌟 项目加载时的MediaSync实例数组（批量优化）
   const projectLoadMediaSyncs: MediaSync[] = []
+  let ensureMediaReadyForProjectLoad: ((mediaId: string) => Promise<unknown>) | null = null
 
   // ==================== 计算属性 ====================
   /**
@@ -99,6 +100,10 @@ export function createUnifiedProjectModule(registry: ModuleRegistry) {
     loadingProgress.value = Math.max(0, Math.min(100, progress))
     loadingDetails.value = details || ''
     console.log(`📊 加载进度: ${stage} (${progress}%)${details ? ` - ${details}` : ''}`)
+  }
+
+  function setMediaReadyEnsurer(ensurer: (mediaId: string) => Promise<unknown>): void {
+    ensureMediaReadyForProjectLoad = ensurer
   }
 
   /**
@@ -410,7 +415,18 @@ export function createUnifiedProjectModule(registry: ModuleRegistry) {
 
         if (immediateLoadIds.has(mediaItem.id)) {
           if (isMediaAsset(mediaItem) && mediaItem.mediaStatus === 'pending') {
-            mediaModule.startMediaProcessing(mediaItem)
+            if (ensureMediaReadyForProjectLoad) {
+              void ensureMediaReadyForProjectLoad(mediaItem.id).catch((error) => {
+                console.error(
+                  `❌ [rebuildMediaItems] 立即加载媒体失败，已跳过: ${mediaItem.name}`,
+                  error,
+                )
+              })
+            } else {
+              console.warn(
+                `⚠️ [rebuildMediaItems] ensureMediaReady 未初始化，跳过立即加载: ${mediaItem.name}`,
+              )
+            }
             immediateCount++
             continue
           }
@@ -689,6 +705,7 @@ export function createUnifiedProjectModule(registry: ModuleRegistry) {
     restoreTimelineItems,
 
     // 加载进度方法
+    setMediaReadyEnsurer,
     updateLoadingProgress,
     resetLoadingState,
 

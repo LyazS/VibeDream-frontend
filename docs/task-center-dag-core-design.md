@@ -204,6 +204,39 @@ export interface ResourcePolicy {
 }
 ```
 
+Policy 描述资源节点的运行策略。它不决定资源是什么，也不参与资源去重；资源身份仍然只由 `type + key` 决定。Policy 只告诉 Runtime 和 Scheduler：这个节点应该以什么优先级进入哪个队列，是否需要持久化，应用重启后如何恢复，以及失败后最多允许重试多少次。
+
+字段含义：
+
+- `priority`: 调度优先级。相同资源被多处请求时，后来的请求可以提高已有节点的优先级，但不应该降低已有优先级。
+- `queue`: 节点使用的并发队列。远程请求、重型本地计算、导出、后台任务应进入不同队列，避免互相阻塞。
+- `persist`: 是否持久化这个节点的可恢复信息。远程任务、导出任务通常需要持久化；纯运行态的临时节点可以不持久化。
+- `restore`: 应用重启或 Runtime 重建时的恢复策略：
+  - `resume`: 继续连接已有任务，例如重新轮询远程任务。
+  - `recompute`: 丢弃当前运行态，从依赖图重新计算。
+  - `mark-failed`: 无法安全恢复，直接标记失败，等待用户重试。
+  - `ignore`: 临时资源不恢复。
+- `maxRetries`: 最大重试次数，用于限制自动重试或用户重复重试带来的资源消耗。
+
+Policy 不应该保存业务对象关系，例如 clip、media item、project 的来源信息。这类关系如果后续 TaskCenter 需要定位来源，应放在 `bindings` 之类的业务绑定元数据里。
+
+示例：
+
+```ts
+const request: ResourceRequest = {
+  type: 'remote-task-completed',
+  key: 'bizyair:request_123',
+  input: { provider: 'bizyair', taskId: 'request_123' },
+  policy: {
+    queue: 'remote',
+    priority: 80,
+    persist: true,
+    restore: 'resume',
+    maxRetries: 3,
+  },
+}
+```
+
 ## Resolver
 
 Resolver 定义某类资源如何变成 ready。
@@ -226,6 +259,44 @@ export interface ResourceResolver<TInput = unknown, TResult = unknown> {
 }
 ```
 
+Resolver 是某一类资源的执行适配器。Runtime 只负责维护资源图、去重、依赖边、状态机、调度和事件；具体“这个资源怎样才算 ready”由对应的 Resolver 决定。
+
+Resolver 的职责：
+
+- 判断资源是否已经满足，避免重复执行。
+- 声明当前资源依赖哪些上游资源。
+- 在依赖完成后执行实际工作。
+- 把执行进度、阶段、领域事件回传给 Runtime。
+- 在取消、恢复、重试时提供资源类型相关的处理逻辑。
+
+Resolver 不应该负责全局调度、跨资源去重、TaskCenter UI 组织，也不应该直接保存长期业务事实。长期事实应写回业务域对象、缓存或项目数据；DAG 只保存本次执行需要的运行态。
+
+方法含义：
+
+- `type`: Resolver 支持的资源类型。Runtime 根据 `request.type` 找到对应 Resolver。
+- `getKey(input)`: 根据输入生成稳定 key。`type + key` 决定资源去重和恢复身份，所以 key 必须稳定、可复现，不能包含随机数、临时对象引用或会话态信息。
+- `isSatisfied(ctx)`: 可选的快速检查。资源已经 ready 时直接返回结果，Runtime 可以跳过依赖构建和执行。例如媒体文件已经存在、缩略图已经在缓存里。
+- `getDependencies(ctx)`: 可选的依赖声明。返回当前资源运行前必须先满足的资源请求。Runtime 会把这些请求加入 DAG，并在依赖全部成功后再调度当前节点。
+- `resolve(ctx)`: 当前资源真正的执行逻辑。它只应该假设依赖已经完成，然后把当前资源推进到 ready，并返回结果。
+- `cancel(ctx)`: 可选的取消逻辑。用于中断上传、导出、远程轮询、本地计算等资源类型相关工作。
+- `restore(node)`: 可选的恢复判断。应用重启后，Resolver 可以结合持久化节点和业务状态决定继续、重算、失败或忽略。
+
+Resolver 的典型调用顺序：
+
+```text
+ensure(request)
+  -> resolver.getKey(input)
+  -> Runtime 用 type + key 查找或创建 ResourceNode
+  -> resolver.isSatisfied(ctx)
+  -> resolver.getDependencies(ctx)
+  -> Runtime ensure(dependency requests)
+  -> Scheduler 等依赖成功
+  -> resolver.resolve(ctx)
+  -> Runtime 标记 succeeded / failed / cancelled
+```
+
+`resolve()` 内也可以调用 `ctx.ensure(...)` 动态创建更细的子资源，但优先使用 `getDependencies()` 声明静态依赖。这样 Runtime 更容易提前构建 DAG，TaskCenter 也能更早展示完整子步骤。
+
 ```ts
 export interface ResolveContext<TInput = unknown> {
   node: ResourceNode<TInput>
@@ -243,6 +314,15 @@ export interface ResolveContext<TInput = unknown> {
   emit(event: ResourceDomainEvent): void
 }
 ```
+
+`ResolveContext` 是 Runtime 暴露给 Resolver 的执行上下文：
+
+- `node`: 当前资源节点，可读取 id、状态、policy、已有错误等运行态。
+- `input`: 创建资源请求时的输入参数。
+- `signal`: 取消信号。Resolver 内部的异步工作应监听它，避免取消后继续写状态。
+- `ensure(request)`: 请求另一个资源 ready。适合动态依赖或 `resolve()` 内部需要复用其他资源结果的场景。
+- `update(patch)`: 更新当前节点进度、阶段和展示文案。
+- `emit(event)`: 发布领域事件，让 MediaModule、TimelineModule 等业务模块同步自己的状态。
 
 ## 示例资源图
 
@@ -301,6 +381,20 @@ ExportedProject(projectId)
 
 ## JobRuntime API
 
+JobRuntime 是业务模块访问 DAG 系统的唯一入口。业务模块不直接调用 Resolver，也不直接操作 Scheduler；它只向 JobRuntime 声明“我需要某个资源 ready”，再等待结果、取消、重试或查询状态。
+
+JobRuntime 和 Resolver 的分工：
+
+```text
+JobRuntime 负责“编排”：
+  接收资源请求、生成 resourceId、去重、创建节点、连接依赖边、维护状态机、调度、取消传播、重试、恢复、事件分发。
+
+Resolver 负责“实现”：
+  判断某类资源是否已满足、声明依赖、执行具体工作、处理该资源类型自己的取消和恢复逻辑。
+```
+
+换句话说，JobRuntime 不知道媒体怎么解码、远程任务怎么轮询、字幕怎么生成；Resolver 也不应该知道全局 DAG 里还有多少等待者、哪些节点共享、父子取消怎么传播。两者通过 `ResourceRequest`、`ResourceNode` 和 `ResolveContext` 协作。
+
 ```ts
 class JobRuntime {
   ensure<T>(request: ResourceRequest): Promise<T>
@@ -310,12 +404,45 @@ class JobRuntime {
 }
 ```
 
+方法含义：
+
+- `ensure(request)`: 业务方声明需要某个资源 ready。Runtime 会根据 `type + key` 去重，必要时创建节点，调用 Resolver 检查和声明依赖，把节点交给 Scheduler 执行，并在资源成功时返回结果。
+- `cancel(resourceId)`: 取消某个资源路径。Runtime 负责判断哪些子节点只被当前路径独占，只有独占子节点才会继续向下取消；共享子节点不能被误取消。
+- `retry(resourceId)`: 重试失败或取消的资源。Runtime 负责重置节点状态、检查重试次数、决定是否需要重算下游节点，并重新进入调度。
+- `getNode(resourceId)`: 查询当前运行态节点，供 TaskCenter 或调试面板展示状态、进度、错误和依赖关系。
+
+`ensure()` 的内部流程：
+
+```text
+business module
+  -> jobRuntime.ensure(request)
+  -> Runtime 计算 resourceId = type + key
+  -> Runtime 查找或创建 ResourceNode
+  -> Runtime 调用 Resolver.isSatisfied()
+  -> Runtime 调用 Resolver.getDependencies()
+  -> Runtime 递归 ensure 依赖节点并连接 DAG 边
+  -> Scheduler 在依赖成功后调度当前节点
+  -> Runtime 调用 Resolver.resolve()
+  -> Runtime 更新状态、唤醒等待者、发布事件、返回 result
+```
+
+JobRuntime 的 API 应保持资源语义，不暴露具体实现步骤。便捷方法可以存在，但它们只是构造标准 `ResourceRequest` 后调用 `ensure()`：
+
 便捷 API：
 
 ```ts
 await jobRuntime.ensureMediaReady(mediaId)
 await jobRuntime.ensureAIGeneratedMedia(input)
 ```
+
+等价于：
+
+```ts
+await jobRuntime.ensure(MediaReady(mediaId))
+await jobRuntime.ensure(AIGeneratedMedia(input))
+```
+
+因此，业务入口应该依赖 JobRuntime；资源类型的具体实现应该放在 Resolver；队列并发和节点状态推进应该放在 Scheduler / Runtime 内部。
 
 ## 调度规则
 
