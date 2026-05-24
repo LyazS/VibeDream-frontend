@@ -6,6 +6,7 @@
 
 import {
   DataSourceProcessor,
+  type PreparedMediaFile,
   type AcquisitionTask,
 } from '@/core/datasource/core/BaseDataSourceProcessor'
 import type { UserSelectedFileSourceData } from '@/core/datasource/providers/user-selected/UserSelectedFileSource'
@@ -54,7 +55,10 @@ export class UserSelectedFileProcessor extends DataSourceProcessor {
   // ==================== 实现抽象方法 ====================
 
   /**
-   * 执行具体的获取任务
+   * 执行具体的获取任务。
+   *
+   * @deprecated 仅保留给旧 Processor 队列主链。DAG 新链路优先使用
+   * prepareMediaFileForDag()/decodePreparedMediaFileForDag()。
    */
   protected async executeTask(task: AcquisitionTask): Promise<void> {
     const mediaItem = task.mediaItem
@@ -95,56 +99,17 @@ export class UserSelectedFileProcessor extends DataSourceProcessor {
 
   /**
    * 处理完整的媒体项目生命周期
+   *
+   * @deprecated 兼容旧 Processor 主链的聚合入口。当前实现已转调 DAG 拆分接口，
+   * 后续删除旧队列后可一并移除。
    * @param mediaItem 媒体项目
    */
   async processMediaItem(mediaItem: UnifiedMediaItemData): Promise<void> {
     try {
       console.log(`🚀 [UserSelectedFileProcessor] 开始处理媒体项目: ${mediaItem.name}`)
-      const source = mediaItem.source as UserSelectedFileSourceData
 
-      // 1. 执行文件验证和准备
-      const prepareResult = await this.prepareFileForMediaItem(mediaItem)
-      if (!prepareResult || !prepareResult.file) {
-        throw new Error('数据源未准备好')
-      }
-
-      // 2. 设置媒体类型（仅在 USER_CREATE 时需要）
-      const { file, mediaType } = prepareResult
-      if (mediaType !== null) {
-        mediaItem.mediaType = mediaType
-      }
-
-      // 3. 设置为解析状态
-      this.transitionMediaStatus(mediaItem, 'decoding')
-
-      // 4. 处理器负责具体处理
-      const bunnyResult = await this.bunnyProcessor.processMedia(mediaItem, file)
-      
-      // 5. 直接设置元数据
-      mediaItem.runtime.bunny = bunnyResult.bunnyObjects
-      mediaItem.duration = Number(bunnyResult.durationN)
-      console.log(`🔧 [UserSelectedFileProcessor] 元数据设置完成: ${mediaItem.name}`)
-
-      // 6. 🌟 使用统一的保存逻辑判断
-      if (DataSourceHelpers.isUserCreate(source)) {
-        try {
-          const saveResult = await globalMetaFileManager.saveMediaToProject(mediaItem, file)
-          if (saveResult.success) {
-            console.log(`💾 [USER_CREATE] 媒体和Meta文件保存成功: ${mediaItem.name}`)
-          } else {
-            throw new Error(saveResult.error || '保存失败')
-          }
-        } catch (saveError) {
-          console.error(`❌ 媒体文件保存失败: ${mediaItem.name}`, saveError)
-          console.warn(`媒体文件保存失败，但解析继续: ${mediaItem.name}`, saveError)
-        }
-      } else {
-        console.log(`⏭️ [PROJECT_LOAD] 跳过文件保存: ${mediaItem.name}`)
-      }
-
-      // 7. 设置为就绪状态
-      // await sleep(5 * 1000) // 测试延迟准备
-      this.transitionMediaStatus(mediaItem, 'ready')
+      const preparedFile = await this.prepareMediaFileForDag(mediaItem)
+      await this.decodePreparedMediaFileForDag(mediaItem, preparedFile)
 
       console.log(`✅ [UserSelectedFileProcessor] 媒体项目处理完成: ${mediaItem.name}`)
     } catch (error) {
@@ -157,9 +122,7 @@ export class UserSelectedFileProcessor extends DataSourceProcessor {
   /**
    * 为媒体项目准备文件（简化版）
    */
-  private async prepareFileForMediaItem(
-    mediaItem: UnifiedMediaItemData,
-  ): Promise<{ file: File; mediaType: MediaType | null }> {
+  async prepareMediaFileForDag(mediaItem: UnifiedMediaItemData): Promise<PreparedMediaFile> {
     const source = mediaItem.source as UserSelectedFileSourceData
 
     try {
@@ -201,6 +164,51 @@ export class UserSelectedFileProcessor extends DataSourceProcessor {
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : '文件处理失败'
       RuntimeStateActions.setError(source, errorMessage)
+      this.transitionMediaStatus(mediaItem, 'error')
+      throw error
+    }
+  }
+
+  async decodePreparedMediaFileForDag(
+    mediaItem: UnifiedMediaItemData,
+    preparedFile: PreparedMediaFile,
+  ): Promise<void> {
+    const source = mediaItem.source as UserSelectedFileSourceData
+
+    try {
+      const { file, mediaType } = preparedFile
+      if (mediaType !== null) {
+        mediaItem.mediaType = mediaType
+      }
+
+      this.transitionMediaStatus(mediaItem, 'decoding')
+
+      const bunnyResult = await this.bunnyProcessor.processMedia(mediaItem, file)
+
+      mediaItem.runtime.bunny = bunnyResult.bunnyObjects
+      mediaItem.duration = Number(bunnyResult.durationN)
+      console.log(`🔧 [UserSelectedFileProcessor] 元数据设置完成: ${mediaItem.name}`)
+
+      if (DataSourceHelpers.isUserCreate(source)) {
+        try {
+          const saveResult = await globalMetaFileManager.saveMediaToProject(mediaItem, file)
+          if (saveResult.success) {
+            console.log(`💾 [USER_CREATE] 媒体和Meta文件保存成功: ${mediaItem.name}`)
+          } else {
+            throw new Error(saveResult.error || '保存失败')
+          }
+        } catch (saveError) {
+          console.error(`❌ 媒体文件保存失败: ${mediaItem.name}`, saveError)
+          console.warn(`媒体文件保存失败，但解析继续: ${mediaItem.name}`, saveError)
+        }
+      } else {
+        console.log(`⏭️ [PROJECT_LOAD] 跳过文件保存: ${mediaItem.name}`)
+      }
+
+    } catch (error) {
+      console.error(`❌ [UserSelectedFileProcessor] 媒体项目解码失败: ${mediaItem.name}`, error)
+      this.transitionMediaStatus(mediaItem, 'error')
+      mediaItem.source.errorMessage = error instanceof Error ? error.message : '处理失败'
       throw error
     }
   }

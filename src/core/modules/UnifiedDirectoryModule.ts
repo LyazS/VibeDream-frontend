@@ -31,6 +31,7 @@ import { isEffectTemplateAsset } from '@/core/asset/types'
 export function createUnifiedDirectoryModule(registry: ModuleRegistry) {
   // 通过注册中心获取依赖模块
   const mediaModule = registry.get<UnifiedMediaModule>(MODULE_NAMES.MEDIA)
+  let ensureMediaReadyForLazyLoad: ((mediaId: string) => Promise<unknown>) | null = null
 
   // ==================== 状态定义 ====================
 
@@ -72,6 +73,16 @@ export function createUnifiedDirectoryModule(registry: ModuleRegistry) {
   })
 
   // ==================== 核心方法 ====================
+
+  /**
+   * 注入媒体 ready 资源确保器。
+   *
+   * 目录模块只负责“用户看到了某个目录，需要启动这个目录里的懒加载媒体”；
+   * 具体媒体文件准备、解码、保存和状态汇聚由 JobRuntime 的 media-ready DAG 负责。
+   */
+  function setMediaReadyEnsurer(ensurer: (mediaId: string) => Promise<unknown>): void {
+    ensureMediaReadyForLazyLoad = ensurer
+  }
 
   /**
    * 创建新目录
@@ -236,9 +247,7 @@ export function createUnifiedDirectoryModule(registry: ModuleRegistry) {
 
           // 如果引用计数降为0，记录日志
           if (asset.runtime.refCount === 0) {
-            console.warn(
-              `⚠️ [removeAssetFromDirectory] 素材引用计数为0: ${asset.name}，可以删除`,
-            )
+            console.warn(`⚠️ [removeAssetFromDirectory] 素材引用计数为0: ${asset.name}，可以删除`)
           } else {
             console.log(
               `📊 [removeAssetFromDirectory] 素材 ${asset.name} 引用计数: ${asset.runtime.refCount}`,
@@ -372,7 +381,18 @@ export function createUnifiedDirectoryModule(registry: ModuleRegistry) {
     const startAssetIfNeeded = (assetId: string) => {
       const mediaItem = mediaModule.getMediaItem(assetId)
       if (mediaItem?.assetKind === 'media' && mediaItem.mediaStatus === 'pending') {
-        mediaModule.startMediaProcessing(mediaItem)
+        if (ensureMediaReadyForLazyLoad) {
+          void ensureMediaReadyForLazyLoad(mediaItem.id).catch((error) => {
+            console.error(
+              `❌ [DirectoryModule] 懒加载媒体失败，已跳过: ${mediaItem.name}`,
+              error,
+            )
+          })
+        } else {
+          console.warn(
+            `⚠️ [DirectoryModule] ensureMediaReady 未初始化，跳过懒加载媒体: ${mediaItem.name}`,
+          )
+        }
         startedCount++
         return
       }
@@ -1111,6 +1131,7 @@ export function createUnifiedDirectoryModule(registry: ModuleRegistry) {
     getDirectory,
     getCharacterDirectory, // 🆕 新增获取角色文件夹方法
     isCharacterDirectory, // 🆕 新增类型守卫方法
+    setMediaReadyEnsurer,
     addAssetToDirectory,
     removeAssetFromDirectory,
     getDirectoryContent,

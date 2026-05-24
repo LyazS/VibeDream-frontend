@@ -153,7 +153,7 @@ export interface UnifiedTimelineItemData<T extends MediaType = MediaType> {
    * - false/undefined: 正常项目，需要正常的创建/恢复流程
    *
    * 占位符项目特点：
-   * 1. 不需要调用 rebuildForCmd（因为没有关联的媒体项目）
+   * 1. 不需要走 timeline item ready 构建流程（因为没有关联的媒体项目）
    * 2. 不需要调用 setupTimelineItemBunny（因为不需要渲染）
    * 3. 只需要克隆后直接添加到时间轴
    */

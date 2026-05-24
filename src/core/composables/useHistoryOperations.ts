@@ -94,6 +94,7 @@ export function useHistoryOperations(
   unifiedConfigModule: UnifiedConfigModule,
   unifiedTrackModule: UnifiedTrackModule,
   unifiedSelectionModule: UnifiedSelectionModule,
+  ensureTimelineItemReady: (timelineItemId: string) => Promise<unknown>,
 ) {
   // ==================== 辅助函数 ====================
 
@@ -181,6 +182,24 @@ export function useHistoryOperations(
     return false
   }
 
+  function getEditableTimelineItemOrWarn(
+    timelineItemId: string,
+    action: string,
+  ): UnifiedTimelineItemData<MediaType> | null {
+    const timelineItem = unifiedTimelineModule.getTimelineItem(timelineItemId)
+    if (!timelineItem) {
+      console.warn(`⚠️ 时间轴项目不存在，无法${action}: ${timelineItemId}`)
+      return null
+    }
+
+    if (TimelineItemQueries.isLoading(timelineItem)) {
+      console.warn(`⚠️ loading 状态的时间轴项目不允许${action}: ${timelineItemId}`)
+      return null
+    }
+
+    return timelineItem
+  }
+
   // ==================== 时间轴项目历史记录方法 ====================
 
   /**
@@ -193,7 +212,7 @@ export function useHistoryOperations(
       timelineItem,
       unifiedTimelineModule,
       unifiedMediaModule,
-      unifiedConfigModule,
+      ensureTimelineItemReady,
     )
     await unifiedHistoryModule.executeCommand(command)
   }
@@ -207,7 +226,7 @@ export function useHistoryOperations(
       timelineItemId,
       unifiedTimelineModule,
       unifiedMediaModule,
-      unifiedConfigModule,
+      ensureTimelineItemReady,
     )
     await unifiedHistoryModule.executeCommand(command)
   }
@@ -223,10 +242,8 @@ export function useHistoryOperations(
     newPositionFrames: number,
     newTrackId?: string,
   ) {
-    // 获取要移动的时间轴项目
-    const timelineItem = unifiedTimelineModule.getTimelineItem(timelineItemId)
+    const timelineItem = getEditableTimelineItemOrWarn(timelineItemId, '移动')
     if (!timelineItem) {
-      console.warn(`⚠️ 时间轴项目不存在，无法移动: ${timelineItemId}`)
       return
     }
 
@@ -265,10 +282,8 @@ export function useHistoryOperations(
     timelineItemId: string,
     newTransform: TransformProperties,
   ) {
-    // 获取要更新的时间轴项目
-    const timelineItem = unifiedTimelineModule.getTimelineItem(timelineItemId)
+    const timelineItem = getEditableTimelineItemOrWarn(timelineItemId, '更新变换属性')
     if (!timelineItem) {
-      console.warn(`⚠️ 时间轴项目不存在，无法更新变换属性: ${timelineItemId}`)
       return
     }
 
@@ -358,9 +373,8 @@ export function useHistoryOperations(
     timelineItemId: string,
     nextTransitionOut?: ClipTransitionOutConfig,
   ) {
-    const timelineItem = unifiedTimelineModule.getTimelineItem(timelineItemId)
+    const timelineItem = getEditableTimelineItemOrWarn(timelineItemId, '更新转场')
     if (!timelineItem) {
-      console.warn(`⚠️ 时间轴项目不存在，无法更新转场: ${timelineItemId}`)
       return
     }
 
@@ -394,9 +408,8 @@ export function useHistoryOperations(
     timelineItemId: string,
     nextFilterEffect?: ClipFilterConfig,
   ) {
-    const timelineItem = unifiedTimelineModule.getTimelineItem(timelineItemId)
+    const timelineItem = getEditableTimelineItemOrWarn(timelineItemId, '更新滤镜')
     if (!timelineItem) {
-      console.warn(`⚠️ 时间轴项目不存在，无法更新滤镜: ${timelineItemId}`)
       return
     }
 
@@ -428,6 +441,11 @@ export function useHistoryOperations(
     previousFilterEffect?: ClipFilterConfig,
     nextFilterEffect?: ClipFilterConfig,
   ) {
+    const timelineItem = getEditableTimelineItemOrWarn(timelineItemId, '提交滤镜')
+    if (!timelineItem) {
+      return
+    }
+
     const normalizedPreviousFilterEffect = previousFilterEffect
       ? normalizeClipFilterConfig(previousFilterEffect)
       : undefined
@@ -455,9 +473,8 @@ export function useHistoryOperations(
   }
 
   async function removeFilterEffectWithHistory(timelineItemId: string) {
-    const timelineItem = unifiedTimelineModule.getTimelineItem(timelineItemId)
+    const timelineItem = getEditableTimelineItemOrWarn(timelineItemId, '移除滤镜')
     if (!timelineItem) {
-      console.warn(`⚠️ 时间轴项目不存在，无法移除滤镜: ${timelineItemId}`)
       return
     }
 
@@ -512,10 +529,8 @@ export function useHistoryOperations(
     timelineItemId: string,
     splitTimeFrames: number[],
   ) {
-    // 获取要分割的时间轴项目
-    const timelineItem = unifiedTimelineModule.getTimelineItem(timelineItemId)
+    const timelineItem = getEditableTimelineItemOrWarn(timelineItemId, '分割')
     if (!timelineItem) {
-      console.warn(`⚠️ 时间轴项目不存在，无法分割: ${timelineItemId}`)
       return
     }
 
@@ -525,6 +540,7 @@ export function useHistoryOperations(
       splitTimeFrames,
       unifiedTimelineModule,
       unifiedMediaModule,
+      ensureTimelineItemReady,
     )
     await unifiedHistoryModule.executeCommand(command)
   }
@@ -540,10 +556,8 @@ export function useHistoryOperations(
     newPositionFrames?: number,
     newTrackId?: string,
   ) {
-    // 获取要复制的时间轴项目
-    const timelineItem = unifiedTimelineModule.getTimelineItem(timelineItemId)
+    const timelineItem = getEditableTimelineItemOrWarn(timelineItemId, '复制')
     if (!timelineItem) {
-      console.warn(`⚠️ 时间轴项目不存在，无法复制: ${timelineItemId}`)
       return
     }
 
@@ -564,7 +578,7 @@ export function useHistoryOperations(
       duplicatedItem,
       unifiedTimelineModule,
       unifiedMediaModule,
-      unifiedConfigModule,
+      ensureTimelineItemReady,
     )
     await unifiedHistoryModule.executeCommand(command)
   }
@@ -585,9 +599,8 @@ export function useHistoryOperations(
       })
 
       // 获取当前项目
-      const currentItem = unifiedTimelineModule.getTimelineItem(timelineItemId)
+      const currentItem = getEditableTimelineItemOrWarn(timelineItemId, '调整时间范围')
       if (!currentItem) {
-        console.error('❌ [UnifiedStore] 时间轴项目不存在:', timelineItemId)
         return false
       }
 
@@ -647,6 +660,7 @@ export function useHistoryOperations(
       unifiedTrackModule,
       unifiedTimelineModule,
       unifiedMediaModule,
+      ensureTimelineItemReady,
     )
     await unifiedHistoryModule.executeCommand(command)
   }
@@ -954,6 +968,10 @@ export function useHistoryOperations(
     frame: number,
     groupId: AnimationChannelKey = 'transform.position',
   ) {
+    if (!getEditableTimelineItemOrWarn(timelineItemId, '创建关键帧')) {
+      return
+    }
+
     try {
       console.log('🎬 [useHistoryOperations] 创建关键帧:', { timelineItemId, frame })
 
@@ -987,6 +1005,10 @@ export function useHistoryOperations(
    * @param frame 帧数
    */
   async function deleteKeyframeWithHistory(timelineItemId: string, frame: number) {
+    if (!getEditableTimelineItemOrWarn(timelineItemId, '删除关键帧')) {
+      return
+    }
+
     try {
       console.log('🎬 [useHistoryOperations] 删除关键帧:', { timelineItemId, frame })
 
@@ -1026,6 +1048,10 @@ export function useHistoryOperations(
     groupId: G,
     patch: Partial<AnimationGroupValueMap[G]>,
   ) {
+    if (!getEditableTimelineItemOrWarn(timelineItemId, '更新动画组')) {
+      return
+    }
+
     try {
       const command = new SetAnimationGroupValueCommand(
         timelineItemId,
@@ -1055,6 +1081,10 @@ export function useHistoryOperations(
       patch: Partial<AnimationGroupValueMap[AnimationGroupId]>
     }>,
   ) {
+    if (!getEditableTimelineItemOrWarn(timelineItemId, '批量更新动画组')) {
+      return
+    }
+
     try {
       const commands = updates.map((update) => new SetAnimationGroupValueCommand(
         timelineItemId,
@@ -1084,6 +1114,10 @@ export function useHistoryOperations(
     property: string,
     value: any,
   ) {
+    if (!getEditableTimelineItemOrWarn(timelineItemId, '更新关键帧属性')) {
+      return
+    }
+
     const groupId = getAnimationGroupForProperty(property)
     if (groupId && typeof value === 'number') {
       const patchKey = property.startsWith('mask.')
@@ -1137,6 +1171,10 @@ export function useHistoryOperations(
     frame: number,
     action: MaskUpdateAction,
   ) {
+    if (!getEditableTimelineItemOrWarn(timelineItemId, '更新蒙版')) {
+      return
+    }
+
     try {
       const command = new UpdateMaskCommand(
         timelineItemId,
@@ -1163,6 +1201,10 @@ export function useHistoryOperations(
    * @param timelineItemId 时间轴项目ID
    */
   async function clearAllKeyframesWithHistory(timelineItemId: string, channel?: any) {
+    if (!getEditableTimelineItemOrWarn(timelineItemId, '清除关键帧')) {
+      return
+    }
+
     try {
       console.log('🎬 [useHistoryOperations] 清除所有关键帧:', { timelineItemId })
 
@@ -1193,6 +1235,10 @@ export function useHistoryOperations(
     frame: number,
     channel: AnimationChannelKey = 'transform.position',
   ) {
+    if (!getEditableTimelineItemOrWarn(timelineItemId, '切换关键帧')) {
+      return
+    }
+
     try {
       const command = new ToggleAnimationGroupKeyframeCommand(
         timelineItemId,
@@ -1220,6 +1266,10 @@ export function useHistoryOperations(
    * @param frame 当前帧
    */
   async function toggleProportionalScaleWithHistory(timelineItemId: string, frame: number) {
+    if (!getEditableTimelineItemOrWarn(timelineItemId, '切换等比缩放')) {
+      return
+    }
+
     try {
       console.log('🎬 [useHistoryOperations] 切换等比缩放:', { timelineItemId, frame })
 

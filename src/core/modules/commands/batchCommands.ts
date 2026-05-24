@@ -9,8 +9,6 @@
  * 4. 使用统一的状态管理系统（3状态：ready|loading|error）
  * 5. 保持与原有命令相同的API接口，便于迁移
  */
-import type { Ref } from 'vue'
-import type { VideoResolution } from '@/core/types'
 import { BaseBatchCommand } from '@/core/modules/UnifiedHistoryModule'
 import type { SimpleCommand } from '@/core/modules/commands/types'
 import {
@@ -38,9 +36,7 @@ export class BatchDeleteCommand extends BaseBatchCommand {
     private mediaModule: {
       getMediaItem: (id: string | null) => UnifiedMediaItemData | undefined
     },
-    private configModule: {
-      videoResolution: Ref<VideoResolution>
-    },
+    private ensureTimelineItemReady: (timelineItemId: string) => Promise<unknown>,
   ) {
     super(`批量删除 ${timelineItemIds.length} 个时间轴项目`)
     this.buildDeleteCommands()
@@ -55,7 +51,7 @@ export class BatchDeleteCommand extends BaseBatchCommand {
         itemId,
         this.timelineModule,
         this.mediaModule,
-        this.configModule,
+        this.ensureTimelineItemReady,
       )
       this.addCommand(deleteCommand)
     }

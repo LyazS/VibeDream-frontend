@@ -385,14 +385,14 @@ async function handleGenerate() {
     // 3. 准备任务配置
     const taskConfig = {
       timestamps,
-      video_url: videoUrl,  // 使用上传的视频URL
+      video_url: videoUrl, // 使用上传的视频URL
       // 或者使用 from_task: refVideoFile.taskId（如果视频来自其他任务）
     }
 
     // 4. 准备请求参数
     const requestParams: MediaGenerationRequest = {
-      ai_task_type: AITaskType.BLTCY_CHARACTER,  // 角色创建任务类型
-      content_type: ContentType.IMAGE,            // 返回图片类型
+      ai_task_type: AITaskType.BLTCY_CHARACTER, // 角色创建任务类型
+      content_type: ContentType.IMAGE, // 返回图片类型
       task_config: taskConfig,
     }
 
@@ -458,7 +458,7 @@ async function handleGenerate() {
     )
 
     // 8. 创建媒体项目
-    const mediaId = generateMediaId('png')  // 角色头像为PNG格式
+    const mediaId = generateMediaId('png') // 角色头像为PNG格式
     const mediaName = `${characterName.value}_portrait`
 
     const mediaItem = unifiedStore.createUnifiedMediaItemData(mediaId, mediaName, aiSource, {
@@ -510,14 +510,16 @@ async function handleGenerate() {
       console.log('✅ [CharacterEditor] 已更新头像 MediaItem ID:', mediaItem.id)
     }
 
-    // 13. 启动媒体处理流程（进度监控和文件获取）
-    unifiedStore.startMediaProcessing(mediaItem)
+    // TODO(Resource DAG): 角色头像生成还在旧媒体处理入口边界上。
+    // 后续应改成 AI/远程生成资源图，并最终通过 ensureMediaReady(mediaItem.id) 汇聚。
+    throw new Error(
+      '[Resource DAG TODO] 角色头像生成链路需要迁移，禁止继续调用 startMediaProcessing',
+    )
 
     // 14. 显示成功消息
     unifiedStore.messageSuccess(tFunc('media.character.taskSubmitted'))
 
     console.log('✅ [CharacterEditor] 角色头像生成流程启动完成')
-
   } catch (error) {
     console.error('❌ [CharacterEditor] 任务提交失败:', error)
     unifiedStore.messageError(

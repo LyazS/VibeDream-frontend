@@ -61,6 +61,9 @@ export class DataSourceRegistry {
 
   /**
    * 获取用户选择文件处理器
+   *
+   * @deprecated 类型专用 getter 属于旧 Processor 访问方式。新链路优先通过
+   * getProcessor(source.type) 或 Resource DAG resolver 获取能力。
    */
   getUserSelectedFileProcessor(): UserSelectedFileProcessor | undefined {
     return this.processors.get('user-selected') as UserSelectedFileProcessor | undefined
@@ -68,6 +71,9 @@ export class DataSourceRegistry {
 
   /**
    * 获取AI生成处理器
+   *
+   * @deprecated 类型专用 getter 属于旧 Processor 访问方式。AI 生成新链路应
+   * 通过 ai-generated-media / remote-task-* resolver 进入。
    */
   getAIGenerationProcessor(): AIGenerationProcessor | undefined {
     return this.processors.get('ai-generation') as AIGenerationProcessor | undefined
@@ -75,6 +81,9 @@ export class DataSourceRegistry {
 
   /**
    * 获取BizyAir处理器
+   *
+   * @deprecated 类型专用 getter 属于旧 Processor 访问方式。BizyAir 新链路应
+   * 通过 ai-generated-media / remote-task-* resolver 进入。
    */
   getBizyAirProcessor(): BizyAirProcessor | undefined {
     return this.processors.get('bizyair') as BizyAirProcessor | undefined

@@ -33,7 +33,10 @@ import type { UnifiedTrackType } from '@/core/track/TrackTypes'
 import type { UnifiedTimeRange } from '@/core/types/timeRange'
 import { DEFAULT_BLEND_MODE } from '@/core/timelineitem'
 
-type OperationParams<T extends OperationConfig['type']> = Extract<OperationConfig, { type: T }>['params']
+type OperationParams<T extends OperationConfig['type']> = Extract<
+  OperationConfig,
+  { type: T }
+>['params']
 
 /**
  * 命令工厂类
@@ -83,7 +86,9 @@ export class CommandFactory {
   /**
    * 创建添加时间轴项目命令
    */
-  private async createAddTimelineItemCommand(params: OperationParams<'addMediaToTimeline'>): Promise<SimpleCommand> {
+  private async createAddTimelineItemCommand(
+    params: OperationParams<'addMediaToTimeline'>,
+  ): Promise<SimpleCommand> {
     const unifiedStore = useUnifiedStore()
 
     // 获取素材
@@ -94,22 +99,16 @@ export class CommandFactory {
 
     // 检查并等待媒体就绪（如果处于 pending 状态）
     if (mediaItem.mediaStatus === 'pending') {
-      // 启动媒体处理
-      unifiedStore.startMediaProcessing(mediaItem)
-
-      // 等待媒体就绪
-      try {
-        await unifiedStore.waitForMediaItemReady(mediaItem.id)
-      } catch (error) {
-        throw new Error(`媒体处理失败: ${error instanceof Error ? error.message : String(error)}`)
-      }
+      // TODO(Resource DAG): Agent 添加素材到时间轴仍在旧等待/启动边界上。
+      // 后续应直接 await unifiedStore.ensureMediaReady(mediaItem.id)。
+      throw new Error(
+        '[Resource DAG TODO] Agent 添加时间轴素材链路需要迁移，禁止继续调用 startMediaProcessing',
+      )
     }
 
     // 获取模块引用
     const timelineModule = this.getTimelineModule()
     const mediaModule = this.getMediaModule()
-    const configModule = this.getConfigModule()
-
     // 构建时间轴项目数据
     const timelineItem = this.buildTimelineItemFromParams(params)
 
@@ -118,14 +117,16 @@ export class CommandFactory {
       timelineItem,
       timelineModule,
       mediaModule,
-      configModule,
+      unifiedStore.ensureTimelineItemReady,
     )
   }
 
   /**
    * 创建添加文本时间轴项目命令
    */
-  private async createAddTextItemCommand(params: OperationParams<'addTextToTimeline'>): Promise<SimpleCommand> {
+  private async createAddTextItemCommand(
+    params: OperationParams<'addTextToTimeline'>,
+  ): Promise<SimpleCommand> {
     const unifiedStore = useUnifiedStore()
 
     // 验证轨道存在且为文本类型
@@ -136,7 +137,7 @@ export class CommandFactory {
 
     if (targetTrack.type !== 'text') {
       throw new Error(
-        `轨道类型不匹配：addTextItem 只能添加到文本轨道，当前轨道类型为 ${targetTrack.type}`
+        `轨道类型不匹配：addTextItem 只能添加到文本轨道，当前轨道类型为 ${targetTrack.type}`,
       )
     }
 
@@ -165,14 +166,12 @@ export class CommandFactory {
     // 获取模块引用
     const timelineModule = this.getTimelineModule()
     const mediaModule = this.getMediaModule()
-    const configModule = this.getConfigModule()
-
     // 创建命令
     return new AddTimelineItemCommand(
       timelineItem,
       timelineModule,
       mediaModule,
-      configModule,
+      unifiedStore.ensureTimelineItemReady,
     )
   }
 
@@ -191,10 +190,13 @@ export class CommandFactory {
     // 获取模块引用
     const timelineModule = this.getTimelineModule()
     const mediaModule = this.getMediaModule()
-    const configModule = this.getConfigModule()
-
     // 创建命令
-    return new RemoveTimelineItemCommand(params.itemId, timelineModule, mediaModule, configModule)
+    return new RemoveTimelineItemCommand(
+      params.itemId,
+      timelineModule,
+      mediaModule,
+      unifiedStore.ensureTimelineItemReady,
+    )
   }
 
   /**
@@ -254,12 +256,16 @@ export class CommandFactory {
   /**
    * 创建调整时间轴项目大小命令
    */
-  private createResizeTimelineItemCommand(params: OperationParams<'resizeTimelineItem'>): SimpleCommand {
+  private createResizeTimelineItemCommand(
+    params: OperationParams<'resizeTimelineItem'>,
+  ): SimpleCommand {
     const unifiedStore = useUnifiedStore()
 
     // 验证必需参数
     if (!params.timelineStart || !params.timelineEnd || !params.clipStart || !params.clipEnd) {
-      throw new Error('resizeTimelineItem 必须提供所有 4 个参数: timelineStart, timelineEnd, clipStart, clipEnd')
+      throw new Error(
+        'resizeTimelineItem 必须提供所有 4 个参数: timelineStart, timelineEnd, clipStart, clipEnd',
+      )
     }
 
     // 验证片段存在
@@ -293,14 +299,19 @@ export class CommandFactory {
     // 获取模块引用
     const timelineModule = {
       getTimelineItem: (id: string) => unifiedStore.getTimelineItem(id),
-      setTimelineItemTimeRangeForCmd: unifiedStore.setTimelineItemTimeRangeForCmd.bind(
-        unifiedStore,
-      ),
+      setTimelineItemTimeRangeForCmd:
+        unifiedStore.setTimelineItemTimeRangeForCmd.bind(unifiedStore),
     }
     const mediaModule = this.getMediaModule()
 
     // 创建命令
-    return new ResizeTimelineItemCommand(params.itemId, originalTimeRange, newTimeRange, timelineModule, mediaModule)
+    return new ResizeTimelineItemCommand(
+      params.itemId,
+      originalTimeRange,
+      newTimeRange,
+      timelineModule,
+      mediaModule,
+    )
   }
 
   // === 辅助方法 ===
@@ -323,7 +334,8 @@ export class CommandFactory {
   private getMediaModule() {
     const unifiedStore = useUnifiedStore()
     return {
-      getMediaItem: (id: string | null) => (id ? unifiedStore.mediaItems.find(item => item.id === id) : undefined),
+      getMediaItem: (id: string | null) =>
+        id ? unifiedStore.mediaItems.find((item) => item.id === id) : undefined,
     }
   }
 
@@ -349,7 +361,10 @@ export class CommandFactory {
   private timecodeToFrames(timecode: string): number {
     const parts = timecode.split(':')
 
-    let hours = 0, minutes: number, seconds: number, frames: number
+    let hours = 0,
+      minutes: number,
+      seconds: number,
+      frames: number
 
     if (parts.length === 3) {
       // 完整格式 HH:MM:SS+FF
@@ -377,7 +392,9 @@ export class CommandFactory {
    *
    * @param params 操作参数
    */
-  private buildTimelineItemFromParams(params: OperationParams<'addMediaToTimeline'>): UnifiedTimelineItemData<MediaType> {
+  private buildTimelineItemFromParams(
+    params: OperationParams<'addMediaToTimeline'>,
+  ): UnifiedTimelineItemData<MediaType> {
     const unifiedStore = useUnifiedStore()
 
     // 获取素材
@@ -522,11 +539,15 @@ export class CommandFactory {
     const trackModule = {
       addTrack: unifiedStore.addTrack.bind(unifiedStore),
       removeTrack: unifiedStore.removeTrack.bind(unifiedStore),
-      getTrack: (trackId: string) => unifiedStore.tracks.find(track => track.id === trackId),
+      getTrack: (trackId: string) => unifiedStore.tracks.find((track) => track.id === trackId),
     }
 
     // 创建命令
-    return new AddTrackCommand(params.trackType as UnifiedTrackType, params.position ?? undefined, trackModule)
+    return new AddTrackCommand(
+      params.trackType as UnifiedTrackType,
+      params.position ?? undefined,
+      trackModule,
+    )
   }
 
   /**
@@ -550,7 +571,7 @@ export class CommandFactory {
     const trackModule = {
       addTrack: unifiedStore.addTrack.bind(unifiedStore),
       removeTrack: unifiedStore.removeTrack.bind(unifiedStore),
-      getTrack: (trackId: string) => unifiedStore.tracks.find(track => track.id === trackId),
+      getTrack: (trackId: string) => unifiedStore.tracks.find((track) => track.id === trackId),
       tracks: { value: unifiedStore.tracks },
     }
 
@@ -564,7 +585,13 @@ export class CommandFactory {
     const mediaModule = this.getMediaModule()
 
     // 创建命令
-    return new RemoveTrackCommand(params.trackId, trackModule, timelineModule, mediaModule)
+    return new RemoveTrackCommand(
+      params.trackId,
+      trackModule,
+      timelineModule,
+      mediaModule,
+      unifiedStore.ensureTimelineItemReady,
+    )
   }
 
   /**
@@ -587,7 +614,7 @@ export class CommandFactory {
     // 获取模块引用
     const trackModule = {
       renameTrack: unifiedStore.renameTrack.bind(unifiedStore),
-      getTrack: (trackId: string) => unifiedStore.tracks.find(track => track.id === trackId),
+      getTrack: (trackId: string) => unifiedStore.tracks.find((track) => track.id === trackId),
     }
 
     // 创建命令
@@ -607,7 +634,7 @@ export class CommandFactory {
     }
 
     // 从 tracks 数组中获取当前轨道位置
-    const currentPosition = unifiedStore.tracks.findIndex(t => t.id === params.trackId)
+    const currentPosition = unifiedStore.tracks.findIndex((t) => t.id === params.trackId)
     if (currentPosition === -1) {
       throw new Error(`无法获取轨道位置: ${params.trackId}`)
     }
@@ -620,7 +647,7 @@ export class CommandFactory {
     // 获取模块引用
     const trackModule = {
       moveTrack: unifiedStore.moveTrack.bind(unifiedStore),
-      getTrack: (trackId: string) => unifiedStore.tracks.find(track => track.id === trackId),
+      getTrack: (trackId: string) => unifiedStore.tracks.find((track) => track.id === trackId),
     }
 
     // 创建命令
@@ -641,22 +668,20 @@ export class CommandFactory {
 
     // 获取模块引用
     const trackModule = {
-      getTrack: (trackId: string) => unifiedStore.tracks.find(track => track.id === trackId),
+      getTrack: (trackId: string) => unifiedStore.tracks.find((track) => track.id === trackId),
       toggleTrackMute: unifiedStore.toggleTrackMute.bind(unifiedStore),
     }
 
     // 创建命令
-    return new ToggleTrackMuteCommand(
-      params.trackId,
-      trackModule,
-      params.targetMuteState,
-    )
+    return new ToggleTrackMuteCommand(params.trackId, trackModule, params.targetMuteState)
   }
 
   /**
    * 创建切换轨道可见性命令
    */
-  private createToggleTrackVisibilityCommand(params: OperationParams<'toggleTrackVisibility'>): SimpleCommand {
+  private createToggleTrackVisibilityCommand(
+    params: OperationParams<'toggleTrackVisibility'>,
+  ): SimpleCommand {
     const unifiedStore = useUnifiedStore()
 
     // 验证轨道存在
@@ -667,22 +692,20 @@ export class CommandFactory {
 
     // 获取模块引用
     const trackModule = {
-      getTrack: (trackId: string) => unifiedStore.tracks.find(track => track.id === trackId),
+      getTrack: (trackId: string) => unifiedStore.tracks.find((track) => track.id === trackId),
       toggleTrackVisibility: unifiedStore.toggleTrackVisibility.bind(unifiedStore),
     }
 
     // 创建命令
-    return new ToggleTrackVisibilityCommand(
-      params.trackId,
-      trackModule,
-      params.targetVisible,
-    )
+    return new ToggleTrackVisibilityCommand(params.trackId, trackModule, params.targetVisible)
   }
 
   /**
    * 创建切换等比缩放命令
    */
-  private createToggleProportionalScaleCommand(params: OperationParams<'toggleProportionalScale'>): SimpleCommand {
+  private createToggleProportionalScaleCommand(
+    params: OperationParams<'toggleProportionalScale'>,
+  ): SimpleCommand {
     const unifiedStore = useUnifiedStore()
 
     // 验证项目存在
@@ -704,20 +727,18 @@ export class CommandFactory {
     }
 
     // 创建命令
-    return new ToggleProportionalScaleCommand(
-      params.itemId,
-      currentFrame,
-      {
-        ...timelineModule,
-        ...mediaModule,
-      },
-    )
+    return new ToggleProportionalScaleCommand(params.itemId, currentFrame, {
+      ...timelineModule,
+      ...mediaModule,
+    })
   }
 
   /**
    * 创建更新时间轴项目属性命令
    */
-  private createUpdateTimelineItemCommand(params: OperationParams<'updateTimelineItem'>): SimpleCommand {
+  private createUpdateTimelineItemCommand(
+    params: OperationParams<'updateTimelineItem'>,
+  ): SimpleCommand {
     const unifiedStore = useUnifiedStore()
 
     // 验证片段存在
@@ -803,25 +824,31 @@ export class CommandFactory {
     // 获取模块引用
     const timelineModule = {
       updateTimelineItemTransform: unifiedStore.updateTimelineItemTransform.bind(unifiedStore),
-      updateTimelineItemPlaybackRate: unifiedStore.updateTimelineItemPlaybackRate.bind(
-        unifiedStore,
-      ),
+      updateTimelineItemPlaybackRate:
+        unifiedStore.updateTimelineItemPlaybackRate.bind(unifiedStore),
       getTimelineItem: (id: string) => unifiedStore.getTimelineItem(id),
-      setTimelineItemTimeRangeForCmd: unifiedStore.setTimelineItemTimeRangeForCmd.bind(
-        unifiedStore,
-      ),
+      setTimelineItemTimeRangeForCmd:
+        unifiedStore.setTimelineItemTimeRangeForCmd.bind(unifiedStore),
     }
 
     const mediaModule = this.getMediaModule()
 
     // 创建命令
-    return new UpdateTransformCommand(params.itemId, oldValues, newValues, timelineModule, mediaModule)
+    return new UpdateTransformCommand(
+      params.itemId,
+      oldValues,
+      newValues,
+      timelineModule,
+      mediaModule,
+    )
   }
 
   /**
    * 创建分割时间轴项目命令
    */
-  private createSplitTimelineItemCommand(params: OperationParams<'splitTimelineItem'>): SimpleCommand {
+  private createSplitTimelineItemCommand(
+    params: OperationParams<'splitTimelineItem'>,
+  ): SimpleCommand {
     const unifiedStore = useUnifiedStore()
 
     // 验证片段存在
@@ -837,7 +864,9 @@ export class CommandFactory {
     const { timelineStartTime, timelineEndTime } = timelineItem.timeRange
     for (const frames of splitTimeFrames) {
       if (frames <= timelineStartTime || frames >= timelineEndTime) {
-        throw new Error(`分割点 ${frames} 必须在片段时间范围内 (${timelineStartTime}, ${timelineEndTime})`)
+        throw new Error(
+          `分割点 ${frames} 必须在片段时间范围内 (${timelineStartTime}, ${timelineEndTime})`,
+        )
       }
     }
 
@@ -855,7 +884,8 @@ export class CommandFactory {
       timelineItem,
       splitTimeFrames,
       timelineModule,
-      mediaModule
+      mediaModule,
+      unifiedStore.ensureTimelineItemReady.bind(unifiedStore),
     )
   }
 }
