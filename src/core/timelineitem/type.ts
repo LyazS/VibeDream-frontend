@@ -55,6 +55,18 @@ export type TimelineItemStatus =
   | 'loading' // 正在处理中，包含下载、解析、等待
   | 'error' // 不可用状态，包含错误、缺失、取消
 
+export interface PlaceholderTaskState {
+  kind: 'asr-subtitles'
+  requestId: string
+  remoteTaskId?: string
+  status: 'processing'
+  sourceTimelineItemId: string
+}
+
+export interface TimelineItemProvenance {
+  asrRequestId?: string
+}
+
 // ==================== 配置类型映射 ====================
 
 /**
@@ -153,9 +165,11 @@ export interface UnifiedTimelineItemData<T extends MediaType = MediaType> {
    * - false/undefined: 正常项目，需要正常的创建/恢复流程
    *
    * 占位符项目特点：
-   * 1. 不需要调用 rebuildForCmd（因为没有关联的媒体项目）
+   * 1. 不需要走 timeline item ready 构建流程（因为没有关联的媒体项目）
    * 2. 不需要调用 setupTimelineItemBunny（因为不需要渲染）
    * 3. 只需要克隆后直接添加到时间轴
    */
   isPlaceholder?: boolean
+  task?: PlaceholderTaskState
+  provenance?: TimelineItemProvenance
 }

@@ -86,7 +86,9 @@
     <!-- AI 任务信息区 -->
     <div v-if="canCreateCharacter" class="properties-section">
       <div class="info-row">
-        <span class="info-value" style="color: var(--color-success);">{{ t('properties.mediaItem.canCreateCharacter') }}</span>
+        <span class="info-value" style="color: var(--color-success)">{{
+          t('properties.mediaItem.canCreateCharacter')
+        }}</span>
       </div>
     </div>
 
@@ -126,16 +128,8 @@ import { useAppI18n } from '@/core/composables/useI18n'
 import { framesToTimecode } from '@/core/utils/timeUtils'
 import { IconComponents } from '@/constants/iconComponents'
 import type { UnifiedMediaItemData } from '@/core/mediaitem/types'
-import {
-  AIGenerationSourceFactory,
-  TaskStatus,
-  type MediaGenerationRequest,
-  type AIGenerationSourceData,
-} from '@/core/datasource/providers/ai-generation/AIGenerationSource'
-import { fetchClient } from '@/utils/fetchClient'
-import type { TaskSubmitResponse } from '@/types/taskApi'
-import { TaskSubmitErrorCode } from '@/types/taskApi'
-import { buildTaskErrorMessage } from '@/utils/errorMessageBuilder'
+import { globalMetaFileManager } from '@/core/managers/media/globalMetaFileManager'
+import { resetAIGeneratedMediaForRetry } from '@/core/jobs'
 
 interface Props {
   mediaItem: UnifiedMediaItemData
@@ -253,7 +247,8 @@ const showActions = computed(() => {
 // 是否可以重试（仅 AI 生成类型）
 const canRetry = computed(() => {
   const status = props.mediaItem.mediaStatus
-  const isAIType = props.mediaItem.source.type === 'ai-generation'
+  const isAIType =
+    props.mediaItem.source.type === 'ai-generation' || props.mediaItem.source.type === 'bizyair'
   return (status === 'error' || status === 'cancelled') && isAIType
 })
 
@@ -294,63 +289,23 @@ function getMediaTypeLabel(mediaType: string): string {
   }
 }
 
-// 提交AI生成任务到后端
-async function submitAIGenerationTask(
-  requestParams: MediaGenerationRequest,
-): Promise<TaskSubmitResponse> {
-  try {
-    const response = await fetchClient.post<TaskSubmitResponse>(
-      '/api/media/generate',
-      requestParams,
-    )
-
-    if (response.status !== 200) {
-      throw new Error(`提交任务失败: ${response.statusText}`)
-    }
-
-    return response.data
-  } catch (error) {
-    // 网络错误时返回失败响应
-    return {
-      success: false,
-      error_code: TaskSubmitErrorCode.UNKNOWN_ERROR,
-      error_details: {
-        error: error instanceof Error ? error.message : '网络请求失败',
-      },
-    }
-  }
-}
-
 // 重试AI生成素材
 async function retryAIGeneration(mediaItem: UnifiedMediaItemData): Promise<void> {
-  const aiSource = mediaItem.source as AIGenerationSourceData
+  resetAIGeneratedMediaForRetry(mediaItem)
 
-  // 1. 重新提交任务到后端
-  const submitResult = await submitAIGenerationTask(aiSource.requestParams)
-
-  if (!submitResult.success) {
-    const errorMessage = buildTaskErrorMessage(
-      submitResult.error_code,
-      submitResult.error_details,
-      t,
-    )
-    throw new Error(errorMessage)
+  const saved = await globalMetaFileManager.saveMetaFile(mediaItem)
+  if (!saved) {
+    throw new Error(`保存重试状态失败: ${mediaItem.name}`)
   }
 
-  // 2. 更新任务ID和状态
-  aiSource.aiTaskId = submitResult.task_id
-  aiSource.taskStatus = TaskStatus.PENDING
-  aiSource.resultData = undefined
-
-  // 3. 重置数据源状态
-  aiSource.progress = 0
-  aiSource.errorMessage = undefined
-
-  // 4. 重置媒体状态
-  mediaItem.mediaStatus = 'pending'
-
-  // 5. 重新启动处理流程
-  unifiedStore.startMediaProcessing(mediaItem)
+  void unifiedStore.ensureAIGeneratedMedia(mediaItem.id).catch((error) => {
+    console.error('重试 AI 生成素材失败:', error)
+    unifiedStore.messageError(
+      t('media.retryFailed', {
+        error: error instanceof Error ? error.message : '未知错误',
+      }),
+    )
+  })
 
   unifiedStore.messageSuccess(t('media.retryStarted', { name: mediaItem.name }))
 }
@@ -362,7 +317,7 @@ async function handleRetry(): Promise<void> {
 
   try {
     // 🌟 只支持 AI 生成类型的重试
-    if (mediaItem.source.type === 'ai-generation') {
+    if (mediaItem.source.type === 'ai-generation' || mediaItem.source.type === 'bizyair') {
       await retryAIGeneration(mediaItem)
     } else {
       // 其他类型不支持重试

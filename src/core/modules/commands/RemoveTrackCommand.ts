@@ -7,7 +7,6 @@ import type { UnifiedTimelineItemData } from '@/core/timelineitem/type'
 import type { UnifiedMediaItemData, MediaType } from '@/core/mediaitem/types'
 import type { UnifiedTrackData, UnifiedTrackType } from '@/core/track/TrackTypes'
 import { TimelineItemFactory } from '@/core/timelineitem'
-import { MediaSync } from '@/core/managers/sync'
 import { TimelineItemQueries } from '@/core/timelineitem/queries'
 
 /**
@@ -22,7 +21,6 @@ export class RemoveTrackCommand implements SimpleCommand {
   private trackIndex: number // 保存被删除的轨道在tracks数组中的原始索引位置
   private affectedTimelineItems: UnifiedTimelineItemData<MediaType>[] = [] // 保存被删除的时间轴项目的重建元数据
   private _isDisposed = false
-  private mediaSyncs: MediaSync[] = [] // 持有MediaSync引用数组（批量优化）
 
   constructor(
     private trackId: string,
@@ -41,6 +39,7 @@ export class RemoveTrackCommand implements SimpleCommand {
     private mediaModule: {
       getMediaItem: (id: string | null) => UnifiedMediaItemData | undefined
     },
+    private ensureTimelineItemResolved: (timelineItemId: string) => Promise<unknown>,
   ) {
     this.id = generateCommandId()
 
@@ -93,34 +92,6 @@ export class RemoveTrackCommand implements SimpleCommand {
         return
       }
 
-      // 🌟 性能优化：按媒体项目分组loading状态的时间轴项目
-      const loadingItemsByMedia = new Map<string, string[]>()
-
-      for (const item of this.affectedTimelineItems) {
-        if (TimelineItemQueries.isLoading(item) && item.mediaItemId !== null) {
-          const timelineIds = loadingItemsByMedia.get(item.mediaItemId) || []
-          timelineIds.push(item.id)
-          loadingItemsByMedia.set(item.mediaItemId, timelineIds)
-        }
-      }
-
-      // 🌟 为每个唯一的媒体项目创建一个MediaSync（避免重复watcher）
-      // 先清理旧的MediaSync实例（防止重复执行时创建多个同步）
-      this.mediaSyncs.forEach((sync) => sync.cleanup())
-      this.mediaSyncs = []
-
-      for (const [mediaItemId, timelineItemIds] of loadingItemsByMedia) {
-        const mediaSync = new MediaSync(mediaItemId, {
-          syncId: this.id, // 使用命令ID作为syncId
-          timelineItemIds: timelineItemIds, // 传递所有相关的时间轴项目ID数组
-          shouldUpdateCommand: true, // 需要更新命令数据（撤销用）
-          commandId: this.id,
-          description: `RemoveTrackCommand: ${this.id}`,
-        })
-        await mediaSync.setup()
-        this.mediaSyncs.push(mediaSync) // 保存引用
-      }
-
       // 删除轨道（这会自动删除轨道上的所有时间轴项目）
       await this.trackModule.removeTrack(this.trackId)
 
@@ -150,8 +121,7 @@ export class RemoveTrackCommand implements SimpleCommand {
       for (const itemData of this.affectedTimelineItems) {
         console.log(`🔄 执行撤销删除轨道操作：从源头重建时间轴项目...`)
 
-        // 从原始素材重新创建TimelineItem和sprite
-        const rebuildResult = await TimelineItemFactory.rebuildForCmd({
+        const rebuildResult = await TimelineItemFactory.buildForDag({
           originalTimelineItemData: itemData,
           getMediaItem: this.mediaModule.getMediaItem,
           logIdentifier: 'RemoveTrackCommand undo',
@@ -172,35 +142,19 @@ export class RemoveTrackCommand implements SimpleCommand {
         console.log(`✅ 轨道删除撤销已恢复时间轴项目: ${itemData.id}`)
       }
 
-      // 3. 🌟 性能优化：按媒体项目分组loading状态的时间轴项目
-      const loadingItemsByMedia = new Map<string, string[]>()
-
       for (const item of newTimelineItems) {
-        if (TimelineItemQueries.isLoading(item) && item.mediaItemId !== null) {
-          const timelineIds = loadingItemsByMedia.get(item.mediaItemId) || []
-          timelineIds.push(item.id)
-          loadingItemsByMedia.set(item.mediaItemId, timelineIds)
+        if (TimelineItemQueries.isLoading(item) || item.isPlaceholder) {
+          console.log('🔗 [RemoveTrackCommand] trigger timeline item resolve', {
+            timelineItemId: item.id,
+            mediaItemId: item.mediaItemId,
+            isPlaceholder: item.isPlaceholder,
+            isInitialized: item.runtime.isInitialized,
+            timelineStatus: item.timelineStatus,
+          })
+          void this.ensureTimelineItemResolved(item.id).catch((error) => {
+            console.error(`❌ timeline item resolve 启动失败: ${item.id}`, error)
+          })
         }
-      }
-
-      // 4. 🌟 为每个唯一的媒体项目创建一个MediaSync（避免重复watcher）
-      // 先清理旧的MediaSync实例（防止重复执行时创建多个同步）
-      this.mediaSyncs.forEach((sync) => sync.cleanup())
-      this.mediaSyncs = []
-
-      for (const [mediaItemId, timelineItemIds] of loadingItemsByMedia) {
-        // 获取第一个项目的 isInitialized 状态（同一批次的项目状态应该一致）
-        const firstItem = newTimelineItems.find((item) => item.id === timelineItemIds[0])
-
-        const mediaSync = new MediaSync(mediaItemId, {
-          syncId: this.id,
-          timelineItemIds: timelineItemIds, // 传递所有相关的时间轴项目ID数组
-          shouldUpdateCommand: true,
-          commandId: this.id,
-          description: `RemoveTrackCommand undo: ${this.id}`,
-        })
-        await mediaSync.setup()
-        this.mediaSyncs.push(mediaSync) // 保存引用
       }
 
       console.log(
@@ -209,56 +163,6 @@ export class RemoveTrackCommand implements SimpleCommand {
     } catch (error) {
       console.error(`❌ 撤销删除轨道失败: ${this.trackData.name}`, error)
       throw error
-    }
-  }
-
-  /**
-   * 更新媒体数据（由媒体同步调用）
-   * @param mediaData 最新的媒体数据
-   * @param timelineItemId 可选的时间轴项目ID，用于指定要更新哪个项目
-   */
-  updateMediaData(mediaData: UnifiedMediaItemData, timelineItemId?: string): void {
-    // 遍历所有受影响的时间轴项目
-    for (const timelineItem of this.affectedTimelineItems) {
-      // 如果指定了timelineItemId，则只更新匹配的项目
-      if (timelineItemId && timelineItem.id !== timelineItemId) continue
-      // 如果命令内部的timelineItem已经初始化，则跳过更新
-      if (timelineItem.runtime.isInitialized) continue
-
-      // 如果没有指定timelineItemId或者项目ID匹配，则更新该项目
-      // 从 bunny 对象中获取原始尺寸信息
-      if (
-        TimelineItemQueries.hasVisualProperties(timelineItem) &&
-        mediaData.runtime.bunny?.originalWidth !== undefined &&
-        mediaData.runtime.bunny?.originalHeight !== undefined
-      ) {
-        timelineItem.config.width = mediaData.runtime.bunny.originalWidth
-        timelineItem.config.height = mediaData.runtime.bunny.originalHeight
-      }
-
-      if (mediaData.duration !== undefined) {
-        // 更新timeRange的持续时间，而不是config.duration
-        const startTime = timelineItem.timeRange.timelineStartTime
-        const clipStartTime = timelineItem.timeRange.clipStartTime
-        timelineItem.timeRange = {
-          timelineStartTime: startTime,
-          timelineEndTime: startTime + mediaData.duration,
-          clipStartTime: clipStartTime,
-          clipEndTime: clipStartTime + mediaData.duration,
-        }
-      }
-      timelineItem.timelineStatus = 'ready'
-
-      console.log(`🔄 [RemoveTrackCommand] 已更新媒体数据: ${timelineItem.id}`, {
-        width: TimelineItemQueries.hasVisualProperties(timelineItem) ? timelineItem.config.width : undefined,
-        height: TimelineItemQueries.hasVisualProperties(timelineItem) ? timelineItem.config.height : undefined,
-        duration: mediaData.duration,
-      })
-
-      // 如果指定了timelineItemId且已找到并更新了对应项目，则退出循环
-      if (timelineItemId && timelineItem.id === timelineItemId) {
-        break
-      }
     }
   }
 
@@ -278,9 +182,6 @@ export class RemoveTrackCommand implements SimpleCommand {
     }
 
     this._isDisposed = true
-    // 清理所有MediaSync
-    this.mediaSyncs.forEach((sync) => sync.cleanup())
-    this.mediaSyncs = []
     console.log(`🗑️ [RemoveTrackCommand] 命令资源已清理: ${this.id}`)
   }
 }

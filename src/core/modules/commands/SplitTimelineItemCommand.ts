@@ -7,7 +7,6 @@
 import { generateCommandId, generateTimelineItemId } from '@/core/utils/idGenerator'
 import { framesToTimecode } from '@/core/utils/timeUtils'
 import type { SimpleCommand } from '@/core/modules/commands/types'
-import { setupTimelineItemBunny } from '@/core/bunnyUtils/timelineItemSetup'
 
 // ==================== 新架构类型导入 ====================
 import type { UnifiedTimelineItemData } from '@/core/timelineitem/type'
@@ -26,7 +25,7 @@ import { sliceKeyframesToSegment } from '@/core/utils/keyframePositionUtils'
 
 // ==================== 新架构工具导入 ====================
 
-import { TimelineItemFactory } from '@/core/timelineitem'
+import { TimelineItemFactory, TimelineItemQueries } from '@/core/timelineitem'
 
 type SplitKeyframe = AnimateKeyframe<any, AnimationGroupId>
 type SplitChannelEntry = AnimationGroupTrack<any, AnimationGroupId>
@@ -64,6 +63,7 @@ export class SplitTimelineItemCommand implements SimpleCommand {
     private mediaModule: {
       getMediaItem: (id: string | null) => UnifiedMediaItemData | undefined
     },
+    private ensureTimelineItemResolved: (timelineItemId: string) => Promise<unknown>,
   ) {
     this.id = generateCommandId()
 
@@ -91,7 +91,7 @@ export class SplitTimelineItemCommand implements SimpleCommand {
   }
 
   /**
-   * 从原始素材重建分割后的多个sprite和timelineItem
+   * 从原始素材重建分割后的多个 timeline item
    * 遵循"从源头重建"原则，每次都完全重新创建
    * n个分割点产生n+1个片段
    */
@@ -224,8 +224,7 @@ export class SplitTimelineItemCommand implements SimpleCommand {
         timeRange: fragmentTimeRange,
       })
 
-      // 使用 TimelineItemFactory.rebuildForCmd 创建片段
-      const rebuildResult = await TimelineItemFactory.rebuildForCmd({
+      const rebuildResult = await TimelineItemFactory.buildForDag({
         originalTimelineItemData: {
           ...this.originalTimelineItemData,
           id: this.splitItemIds[i],
@@ -242,24 +241,11 @@ export class SplitTimelineItemCommand implements SimpleCommand {
 
       const fragmentItem = rebuildResult.timelineItem
 
-      // 获取关联的媒体项目
-      const mediaItem = this.mediaModule.getMediaItem(fragmentItem.mediaItemId)
-      if (!mediaItem) {
-        throw new Error(`找不到关联的媒体项目: ${fragmentItem.mediaItemId}`)
-      }
-
-      // 使用 setupTimelineItemBunny 创建 bunny 对象
-      await setupTimelineItemBunny(fragmentItem, mediaItem)
-
-      // 修改状态为 ready
-      fragmentItem.timelineStatus = 'ready'
-      
-      // ✅ 分割命令：新创建的片段，已完成初始化
-      fragmentItem.runtime.isInitialized = true
-
-      console.log(
-        `✅ [SplitTimelineItemCommand] 片段 ${i + 1} bunny 对象创建完成，状态已设置为 ready`,
-      )
+      console.log(`✅ [SplitTimelineItemCommand] 片段 ${i + 1} 构建完成`, {
+        timelineItemId: fragmentItem.id,
+        timelineStatus: fragmentItem.timelineStatus,
+        isInitialized: fragmentItem.runtime.isInitialized,
+      })
 
       splitItems.push(fragmentItem)
     }
@@ -280,8 +266,7 @@ export class SplitTimelineItemCommand implements SimpleCommand {
   private async rebuildOriginalItem(): Promise<UnifiedTimelineItemData<MediaType>> {
     console.log('🔄 开始从源头重建原始时间轴项目...')
 
-    // 使用 TimelineItemFactory.rebuildForCmd 重建原始项目
-    const rebuildResult = await TimelineItemFactory.rebuildForCmd({
+    const rebuildResult = await TimelineItemFactory.buildForDag({
       originalTimelineItemData: this.originalTimelineItemData,
       getMediaItem: this.mediaModule.getMediaItem,
       logIdentifier: 'SplitTimelineItemCommand rebuildOriginalItem',
@@ -320,9 +305,21 @@ export class SplitTimelineItemCommand implements SimpleCommand {
       // 1. 删除原始项目
       await this.timelineModule.removeTimelineItem(this.originalTimelineItemId)
 
-      // 2. 添加分割后的所有项目（已经是 ready 状态，不需要 MediaSync）
+      // 2. 添加分割后的所有项目
       for (const item of splitItems) {
         await this.timelineModule.addTimelineItem(item)
+        if (TimelineItemQueries.isLoading(item) || item.isPlaceholder) {
+          console.log('🔗 [SplitTimelineItemCommand] trigger timeline item resolve', {
+            timelineItemId: item.id,
+            mediaItemId: item.mediaItemId,
+            isPlaceholder: item.isPlaceholder,
+            isInitialized: item.runtime.isInitialized,
+            timelineStatus: item.timelineStatus,
+          })
+          void this.ensureTimelineItemResolved(item.id).catch((error) => {
+            console.error(`❌ timeline item resolve 启动失败: ${item.id}`, error)
+          })
+        }
       }
 
       this.timelineModule.refreshTransitionItems?.()
@@ -350,31 +347,31 @@ export class SplitTimelineItemCommand implements SimpleCommand {
       // 1. 从原始素材重新创建原始项目
       const originalItem = await this.rebuildOriginalItem()
 
-      // 获取关联的媒体项目
-      const originalMediaItem = this.mediaModule.getMediaItem(originalItem.mediaItemId)
-      if (!originalMediaItem) {
-        throw new Error(`找不到关联的媒体项目: ${originalItem.mediaItemId}`)
-      }
-
-      // 使用 setupTimelineItemBunny 创建 bunny 对象
-      await setupTimelineItemBunny(originalItem, originalMediaItem)
-
-      // 修改状态为 ready
-      originalItem.timelineStatus = 'ready'
-      
-      // ✅ 分割命令的 undo：恢复原有的 isInitialized 标记
-      // 注意：isInitialized 是必选字段，originalTimelineItemData 中一定有值
-      originalItem.runtime.isInitialized = this.originalTimelineItemData.runtime.isInitialized
-
-      console.log(`✅ [SplitTimelineItemCommand] 原始项目 bunny 对象创建完成，状态已设置为 ready`)
+      console.log(`✅ [SplitTimelineItemCommand] 原始项目构建完成`, {
+        timelineItemId: originalItem.id,
+        timelineStatus: originalItem.timelineStatus,
+        isInitialized: originalItem.runtime.isInitialized,
+      })
 
       // 2. 删除分割后的所有项目
       for (const itemId of this.splitItemIds) {
         await this.timelineModule.removeTimelineItem(itemId)
       }
 
-      // 3. 添加原始项目到时间轴（已经是 ready 状态，不需要 MediaSync）
+      // 3. 添加原始项目到时间轴
       await this.timelineModule.addTimelineItem(originalItem)
+      if (TimelineItemQueries.isLoading(originalItem) || originalItem.isPlaceholder) {
+        console.log('🔗 [SplitTimelineItemCommand] trigger timeline item resolve', {
+          timelineItemId: originalItem.id,
+          mediaItemId: originalItem.mediaItemId,
+          isPlaceholder: originalItem.isPlaceholder,
+          isInitialized: originalItem.runtime.isInitialized,
+          timelineStatus: originalItem.timelineStatus,
+        })
+        void this.ensureTimelineItemResolved(originalItem.id).catch((error) => {
+          console.error(`❌ timeline item resolve 启动失败: ${originalItem.id}`, error)
+        })
+      }
 
       this.timelineModule.refreshTransitionItems?.()
 
@@ -403,7 +400,6 @@ export class SplitTimelineItemCommand implements SimpleCommand {
     }
 
     this._isDisposed = true
-    // 注意：SplitTimelineItemCommand 不使用 MediaSync，因为分割操作总是产生 ready 状态的项目
     console.log(`🗑️ [SplitTimelineItemCommand] 命令资源已清理: ${this.id}`)
   }
 }

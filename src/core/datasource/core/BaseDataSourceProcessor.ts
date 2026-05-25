@@ -5,7 +5,7 @@
  */
 
 import type { UnifiedDataSourceData } from '@/core/datasource/core/DataSourceTypes'
-import type { UnifiedMediaItemData, MediaStatus } from '@/core/mediaitem/types'
+import type { UnifiedMediaItemData, MediaStatus, MediaType } from '@/core/mediaitem/types'
 import { MediaStatusManager } from '@/core/datasource/services/MediaStatusService'
 import { BunnyProcessor } from '@/core/bunnyUtils/BunnyProcessor'
 import { DATA_SOURCE_CONCURRENCY } from '@/constants/ConcurrencyConstants'
@@ -22,6 +22,11 @@ export interface AcquisitionTask {
   id: string
   /** 关联的媒体项目数据 */
   mediaItem: UnifiedMediaItemData
+}
+
+export interface PreparedMediaFile {
+  file: File
+  mediaType: MediaType | null
 }
 
 // ==================== 数据源处理器基础抽象类 ====================
@@ -49,6 +54,10 @@ export abstract class DataSourceProcessor {
 
   /**
    * 添加任务到队列（通过媒体项目）
+   *
+   * @deprecated 旧 Processor 主链入口。新链路应通过 Resource DAG 进入：
+   * UnifiedMediaModule.processMediaSourceDirectly() / prepareMediaFileDirectly() /
+   * decodePreparedMediaFileDirectly()。
    * @param mediaItem 媒体项目
    * @returns 任务ID
    */
@@ -70,6 +79,49 @@ export abstract class DataSourceProcessor {
   }
 
   /**
+   * 由 Resource DAG 调用的直接执行入口。
+   *
+   * 这条路径不再经过 DataSourceProcessor 自己的 p-limit 队列；并发控制由
+   * DagScheduler 负责。这里仍然维护 tasks 映射，是为了兼容现有 cancelTask()
+   * 依赖 mediaItem.id 查找任务的实现。
+   */
+  async processTaskDirectly(mediaItem: UnifiedMediaItemData): Promise<void> {
+    const taskId = mediaItem.id
+    const task: AcquisitionTask = {
+      id: taskId,
+      mediaItem,
+    }
+
+    this.tasks.set(taskId, task)
+
+    try {
+      await this.executeTask(task)
+    } finally {
+      this.tasks.delete(taskId)
+    }
+  }
+
+  /**
+   * Resource DAG 拆分阶段使用：准备当前媒体对应的 File。
+   *
+   * 默认抛错，只有支持拆分执行的数据源处理器需要实现。当前第一批实现是
+   * user-selected；AI/ASR/BizyAir 后续会按各自资源图单独拆。
+   */
+  async prepareMediaFileForDag(_mediaItem: UnifiedMediaItemData): Promise<PreparedMediaFile> {
+    throw new Error(`${this.getProcessorType()} does not support media-file-available`)
+  }
+
+  /**
+   * Resource DAG 拆分阶段使用：用已准备好的 File 完成解码、元数据和 ready 状态。
+   */
+  async decodePreparedMediaFileForDag(
+    _mediaItem: UnifiedMediaItemData,
+    _preparedFile: PreparedMediaFile,
+  ): Promise<void> {
+    throw new Error(`${this.getProcessorType()} does not support media-decoded`)
+  }
+
+  /**
    * 设置最大并发任务数
    */
   setMaxConcurrentTasks(max: number): void {
@@ -87,7 +139,9 @@ export abstract class DataSourceProcessor {
   // ==================== 受保护的方法 ====================
 
   /**
-   * 使用 p-limit 执行任务
+   * 使用 p-limit 执行任务。
+   *
+   * @deprecated 仅服务旧 Processor 队列主链。DAG 新链路不经过这里。
    */
   private async executeTaskWithLimit(task: AcquisitionTask): Promise<void> {
     // p-limit 自动管理队列和并发
@@ -108,7 +162,10 @@ export abstract class DataSourceProcessor {
   // ==================== 抽象方法 ====================
 
   /**
-   * 执行具体的获取任务 - 子类必须实现
+   * 执行具体的获取任务 - 子类必须实现。
+   *
+   * @deprecated 这是旧 Processor 主链的抽象执行入口。后续清理旧链路时，
+   * 该入口会被 prepareMediaFileForDag()/decodePreparedMediaFileForDag() 替代。
    */
   protected abstract executeTask(task: AcquisitionTask): Promise<void>
 

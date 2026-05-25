@@ -14,6 +14,7 @@
 // 导出所有命令类
 export { AddTimelineItemCommand } from './AddTimelineItemCommand' // ok
 export { RemoveTimelineItemCommand } from './RemoveTimelineItemCommand' // ok
+export { RemoveASRRequestCommand } from './RemoveASRRequestCommand'
 export { MoveTimelineItemCommand } from './MoveTimelineItemCommand' // ok
 export { UpdateTransformCommand } from './UpdateTransformCommand' // -
 export { SplitTimelineItemCommand } from './SplitTimelineItemCommand' // ok

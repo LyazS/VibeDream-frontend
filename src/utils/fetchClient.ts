@@ -23,6 +23,22 @@ function isHTTPError(error: unknown): error is HTTPError {
   return error instanceof Error && 'status' in error
 }
 
+function extractErrorMessage(data: unknown, fallback: string): string {
+  if (!data || typeof data !== 'object') {
+    return fallback
+  }
+
+  if ('detail' in data && typeof data.detail === 'string' && data.detail.trim()) {
+    return data.detail
+  }
+
+  if ('message' in data && typeof data.message === 'string' && data.message.trim()) {
+    return data.message
+  }
+
+  return fallback
+}
+
 // 统一的fetch客户端
 export class FetchClient {
   private baseURL: string
@@ -421,6 +437,13 @@ export class FetchClient {
             data = (await response.text()) as T
           }
           break
+      }
+
+      if (!response.ok) {
+        const fallbackMessage = `HTTP错误: ${response.status} ${response.statusText}`
+        const error = new Error(extractErrorMessage(data, fallbackMessage)) as HTTPError
+        error.status = response.status
+        throw error
       }
 
       return {

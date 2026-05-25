@@ -12,11 +12,15 @@
 
 import type { MediaType, UnifiedMediaItemData } from '@/core/mediaitem/types'
 import type { UnifiedTimelineItemData } from '@/core/timelineitem/type'
-import type { TransitionOptions } from './types'
 import { MediaItemQueries } from '@/core/mediaitem'
 import { TimelineItemFactory, TimelineItemQueries } from '@/core/timelineitem'
 import { useUnifiedStore } from '@/core/unifiedStore'
 import { setupTimelineItemBunny } from '@/core/bunnyUtils/timelineItemSetup'
+
+export interface TransitionOptions {
+  commandId?: string
+  description?: string
+}
 /**
  * 时间轴项目状态转换器（不支持文本类型）
  */

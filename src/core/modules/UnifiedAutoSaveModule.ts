@@ -455,6 +455,9 @@ export function createUnifiedAutoSaveModule(
         trackId: item.trackId,
         timelineStatus: item.timelineStatus,
         mediaType: item.mediaType,
+        isPlaceholder: item.isPlaceholder,
+        task: item.task,
+        provenance: item.provenance,
         timeRange: item.timeRange,
         config: item.config,        // ✅ 监听
         animation: item.animation,  // ✅ 监听

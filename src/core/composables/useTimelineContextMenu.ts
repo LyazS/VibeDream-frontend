@@ -18,10 +18,7 @@ import { detectSceneTransNetV2 } from '@/core/utils/scene-detector-transnetv2'
 import type { TransNetV2ProgressEvent } from '@/core/utils/transnetv2/types'
 import { exportTimelineItem } from '@/core/utils/projectExporter'
 import { BizyairFileUploader } from '@/core/utils/bizyairFileUploader'
-import { ASRSourceFactory, ASRTypeGuards, ASRTaskStatus } from '@/core/datasource/providers/asr'
-import { ASRProcessor } from '@/core/datasource/providers/asr/ASRProcessor'
-import { SourceOrigin } from '@/core/datasource/core/BaseDataSource'
-import { generateMediaId } from '@/core/utils/idGenerator'
+import { submitASRTask } from '@/core/jobs'
 import type { FileData } from '@/core/datasource/providers/ai-generation/types'
 import { RENDERER_FPS } from '@/core/mediabunny/constant'
 import { createTextTimelineItem } from '@/core/utils/textTimelineUtils'
@@ -621,15 +618,15 @@ export function useTimelineContextMenu(
     sourceTrackId: string,
   ): Promise<string> {
     // 1. 获取所有text轨道
-    const textTracks = tracks.value.filter(t => t.type === 'text')
+    const textTracks = tracks.value.filter((t) => t.type === 'text')
 
     // 2. 查找源音视频轨道下方的第一个不冲突的text轨道
-    const sourceTrackIndex = tracks.value.findIndex(t => t.id === sourceTrackId)
+    const sourceTrackIndex = tracks.value.findIndex((t) => t.id === sourceTrackId)
 
     // 按轨道索引排序，优先查找源轨道附近的轨道
     const sortedTextTracks = [...textTracks].sort((a, b) => {
-      const indexA = tracks.value.findIndex(t => t.id === a.id)
-      const indexB = tracks.value.findIndex(t => t.id === b.id)
+      const indexA = tracks.value.findIndex((t) => t.id === a.id)
+      const indexB = tracks.value.findIndex((t) => t.id === b.id)
       return Math.abs(indexA - sourceTrackIndex) - Math.abs(indexB - sourceTrackIndex)
     })
 
@@ -644,7 +641,7 @@ export function useTimelineContextMenu(
 
       if (overlappingItems.length === 0) {
         console.log('✅ [ASR] 找到可用的text轨道:', track.id)
-        return track.id  // 找到不冲突的轨道
+        return track.id // 找到不冲突的轨道
       }
     }
 
@@ -666,6 +663,7 @@ export function useTimelineContextMenu(
   async function createPlaceholderTextItem(
     sourceTimelineItem: UnifiedTimelineItemData,
     estimatedDuration: number,
+    task: NonNullable<UnifiedTimelineItemData['task']>,
   ): Promise<UnifiedTimelineItemData<'text'>> {
     // 1. 计算时间范围（帧数）
     const startTimeFrames = sourceTimelineItem.timeRange.timelineStartTime
@@ -680,7 +678,7 @@ export function useTimelineContextMenu(
 
     // 3. 创建占位符文本item
     const placeholderItem = await createTextTimelineItem(
-      '',  // 占位符不需要文本内容
+      '', // 占位符不需要文本内容
       {
         fontSize: 48,
         color: '#ffffff',
@@ -694,6 +692,7 @@ export function useTimelineContextMenu(
     // 🆕 设置占位符标识
     placeholderItem.isPlaceholder = true
     placeholderItem.timelineStatus = 'loading'
+    placeholderItem.task = task
 
     // 🗑️ 移除不需要的 bunny 设置（占位符不需要渲染）
     // 不调用 setupTimelineItemBunny
@@ -707,7 +706,7 @@ export function useTimelineContextMenu(
 
   /**
    * 开始语音识别
-   * 流程：提取音频 -> 上传到bizyair -> 提交ASR任务 -> 创建占位符item -> 创建MediaItem
+   * 流程：提取音频 -> 上传到bizyair -> 提交ASR任务 -> 创建占位符item -> 启动 ASRSubtitles DAG
    */
   async function startSpeechRecognition() {
     const clipId = contextMenuTarget.value.clipId
@@ -715,6 +714,19 @@ export function useTimelineContextMenu(
 
     const timelineItem = unifiedStore.getTimelineItem(clipId)
     if (!timelineItem) return
+
+    const existingPlaceholder = unifiedStore.timelineItems.find((item) => {
+      return (
+        item.isPlaceholder &&
+        item.task?.kind === 'asr-subtitles' &&
+        item.task.sourceTimelineItemId === clipId
+      )
+    })
+    if (existingPlaceholder) {
+      unifiedStore.messageError('该片段已有进行中的字幕识别任务')
+      showContextMenu.value = false
+      return
+    }
 
     console.log('🎬 [ASR] 开始语音识别, clipId:', clipId)
 
@@ -730,7 +742,7 @@ export function useTimelineContextMenu(
       // 1. 提取音频
       loading.update({ progress: 10, details: t('timeline.speechRecognition.extractingAudio') })
       console.log('📦 [ASR] 正在提取音频...')
-      
+
       const audioBlob = await exportTimelineItem({
         timelineItem,
         getMediaItem: unifiedStore.getMediaItem,
@@ -741,7 +753,7 @@ export function useTimelineContextMenu(
       // 2. 上传到 Bizyair
       loading.update({ progress: 30, details: t('timeline.speechRecognition.uploading') })
       console.log('⬆️ [ASR] 正在上传音频到Bizyair...')
-      
+
       // 构造 FileData 对象
       const fileData: FileData = {
         __type__: 'FileData',
@@ -750,7 +762,7 @@ export function useTimelineContextMenu(
         timelineItemId: clipId,
         source: 'timeline-item',
       }
-      
+
       const uploadResult = await BizyairFileUploader.uploadFile(
         fileData,
         unifiedStore.getMediaItem,
@@ -766,10 +778,10 @@ export function useTimelineContextMenu(
       loading.update({ progress: 50, details: t('timeline.speechRecognition.creatingTask') })
       console.log('🚀 [ASR] 提交ASR任务到后端...')
 
-      const asrProcessor = ASRProcessor.getInstance()
-      const estimatedDuration = (timelineItem.timeRange.clipEndTime - timelineItem.timeRange.clipStartTime) / RENDERER_FPS // 使用RENDERER_FPS常量
-      
-      const submitResult = await asrProcessor.submitASRTask({
+      const estimatedDuration =
+        (timelineItem.timeRange.clipEndTime - timelineItem.timeRange.clipStartTime) / RENDERER_FPS // 使用RENDERER_FPS常量
+
+      const submitResult = await submitASRTask({
         audio_url: uploadResult.url!,
         audio_format: 'mp3',
         estimated_duration: estimatedDuration,
@@ -783,62 +795,35 @@ export function useTimelineContextMenu(
       // 4. 创建占位符时间轴item
       loading.update({ progress: 60, details: '创建占位符...' })
       console.log('📦 [ASR] 正在创建占位符item...')
-      
-      const placeholderItem = await createPlaceholderTextItem(timelineItem, estimatedDuration)
+
+      const requestId = crypto.randomUUID()
+      const placeholderItem = await createPlaceholderTextItem(timelineItem, estimatedDuration, {
+        kind: 'asr-subtitles',
+        requestId,
+        remoteTaskId: submitResult.task_id,
+        status: 'processing',
+        sourceTimelineItemId: clipId,
+      })
       console.log('✅ [ASR] 占位符item创建完成:', placeholderItem.id)
 
-      // 5. 创建 ASR 数据源（包含占位符item ID）
-      const asrSource = ASRSourceFactory.createASRSource(
-        {
-          type: 'asr',
-          asrTaskId: submitResult.task_id,
-          requestConfig: {
-            audio_url: uploadResult.url!,
-            audio_format: 'mp3',
-            estimated_duration: estimatedDuration,
-          },
-          taskStatus: ASRTaskStatus.PENDING,
-          sourceTimelineItemId: clipId,
-          placeholderTimelineItemId: placeholderItem.id,  // 🆕 记录占位符item ID
-        },
-        SourceOrigin.USER_CREATE,
-      )
-
-      // 6. 创建媒体项并添加到库
-      const mediaId = generateMediaId('txt')
-      const mediaName = `语音识别_${clipId.slice(0, 8)}`
-      
-      const mediaItem = unifiedStore.createUnifiedMediaItemData(
-        mediaId,
-        mediaName,
-        asrSource,
-        { mediaType: 'text', duration: estimatedDuration },
-      )
-
-      // 添加到媒体库
-      unifiedStore.addMediaItem(mediaItem)
-
-      // 添加到当前目录
-      if (unifiedStore.currentDir) {
-        unifiedStore.addAssetToDirectory(mediaId, unifiedStore.currentDir.id)
-      }
-
-      // 6. 启动媒体处理流程
-      unifiedStore.startMediaProcessing(mediaItem)
+      // 5. 直接启动 ASRSubtitles DAG，不再创建 ASR mediaItem
+      loading.update({ progress: 80, details: t('timeline.speechRecognition.processing') })
+      void unifiedStore.ensureASRSubtitles(placeholderItem.id).catch((error) => {
+        console.error(`❌ [ASR] 启动 ASRSubtitles DAG 失败: ${placeholderItem.id}`, error)
+      })
 
       loading.update({ progress: 100, details: t('timeline.speechRecognition.processing') })
       console.log('✅ [ASR] ASR流程启动完成')
 
       loading.close()
       unifiedStore.messageSuccess(t('timeline.speechRecognition.success'))
-
     } catch (error) {
       loading.close()
       console.error('❌ [ASR] 语音识别失败:', error)
       unifiedStore.messageError(
         t('timeline.speechRecognition.error', {
           message: error instanceof Error ? error.message : String(error),
-        })
+        }),
       )
     }
 

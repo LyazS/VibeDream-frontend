@@ -6,6 +6,7 @@
 import {
   DataSourceProcessor,
   type AcquisitionTask,
+  type PreparedMediaFile,
 } from '@/core/datasource/core/BaseDataSourceProcessor'
 import { RuntimeStateActions, SourceOrigin } from '@/core/datasource/core/BaseDataSource'
 import { DataSourceHelpers } from '@/core/datasource/core/DataSourceHelpers'
@@ -96,6 +97,10 @@ export class AIGenerationProcessor extends DataSourceProcessor {
 
   // 🌟 新增：存储每个任务的 AbortController
   private abortControllers: Map<string, AbortController> = new Map()
+  private dagPrepareState = new Map<
+    string,
+    { needSaveMeta: boolean; needSaveMedia: boolean }
+  >()
 
   /**
    * 获取单例实例
@@ -119,7 +124,10 @@ export class AIGenerationProcessor extends DataSourceProcessor {
   // ==================== 实现抽象方法 ====================
 
   /**
-   * 执行具体的获取任务
+   * 执行具体的获取任务。
+   *
+   * @deprecated 仅保留给旧 Processor 队列主链。AI 生成新链路优先通过
+   * AIGeneratedMediaResolver 和 DAG 拆分接口推进。
    */
   protected async executeTask(task: AcquisitionTask): Promise<void> {
     const mediaItem = task.mediaItem
@@ -522,6 +530,9 @@ export class AIGenerationProcessor extends DataSourceProcessor {
 
   /**
    * 处理完整的媒体项目生命周期
+   *
+   * @deprecated 兼容旧 Processor 主链的聚合入口。当前 DAG 仍复用其内部共享逻辑，
+   * 但新业务入口不应再直接依赖该方法。
    * @param mediaItem 媒体项目
    */
   async processMediaItem(mediaItem: UnifiedMediaItemData): Promise<void> {
@@ -615,6 +626,83 @@ export class AIGenerationProcessor extends DataSourceProcessor {
       // 🌟 保存失败状态的 meta 文件
       console.log(`💾 [异常处理] 保存失败状态的Meta文件: ${mediaItem.name}`)
       await globalMetaFileManager.saveMetaFile(mediaItem)
+    }
+  }
+
+  async prepareMediaFileForDag(mediaItem: UnifiedMediaItemData): Promise<PreparedMediaFile> {
+    const prepareResult = await this.prepareFileForMediaItem(mediaItem)
+
+    if (!prepareResult.success) {
+      const source = mediaItem.source as AIGenerationSourceData
+      this.transitionMediaStatus(mediaItem, 'error')
+      source.errorMessage = prepareResult.error
+
+      if (prepareResult.needSaveMeta) {
+        await globalMetaFileManager.saveMetaFile(mediaItem)
+      }
+
+      throw new Error(prepareResult.error)
+    }
+
+    this.dagPrepareState.set(mediaItem.id, {
+      needSaveMeta: prepareResult.needSaveMeta,
+      needSaveMedia: prepareResult.needSaveMedia,
+    })
+
+    return {
+      file: prepareResult.file,
+      mediaType: prepareResult.mediaType,
+    }
+  }
+
+  async decodePreparedMediaFileForDag(
+    mediaItem: UnifiedMediaItemData,
+    preparedFile: PreparedMediaFile,
+  ): Promise<void> {
+    const source = mediaItem.source as AIGenerationSourceData
+    const saveState = this.dagPrepareState.get(mediaItem.id) ?? {
+      needSaveMeta: false,
+      needSaveMedia: false,
+    }
+
+    try {
+      if (preparedFile.mediaType !== null) {
+        mediaItem.mediaType = preparedFile.mediaType
+      }
+
+      this.transitionMediaStatus(mediaItem, 'decoding')
+      const bunnyResult = await this.bunnyProcessor.processMedia(mediaItem, preparedFile.file)
+
+      mediaItem.runtime.bunny = bunnyResult.bunnyObjects
+      mediaItem.duration = Number(bunnyResult.durationN)
+      console.log(`🔧 [AIGenerationProcessor] DAG 元数据设置完成: ${mediaItem.name}`)
+
+      if (saveState.needSaveMedia) {
+        const saveMediaSuccess = await globalMetaFileManager.saveMediaFile(
+          preparedFile.file,
+          mediaItem.id,
+        )
+        if (!saveMediaSuccess) {
+          throw new Error('保存媒体文件失败')
+        }
+      }
+
+      if (saveState.needSaveMeta) {
+        const saveMetaSuccess = await globalMetaFileManager.saveMetaFile(mediaItem)
+        if (!saveMetaSuccess) {
+          console.warn(`⚠️ Meta文件保存失败，但媒体文件已保存: ${mediaItem.name}`)
+        }
+      }
+
+      source.errorMessage = undefined
+    } catch (error) {
+      console.error(`❌ [AIGenerationProcessor] DAG 解码失败: ${mediaItem.name}`, error)
+      this.transitionMediaStatus(mediaItem, 'error')
+      source.errorMessage = error instanceof Error ? error.message : '处理失败'
+      await globalMetaFileManager.saveMetaFile(mediaItem)
+      throw error
+    } finally {
+      this.dagPrepareState.delete(mediaItem.id)
     }
   }
 

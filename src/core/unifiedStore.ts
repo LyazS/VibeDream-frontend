@@ -16,6 +16,28 @@ import { createUnifiedUserModule } from '@/core/modules/UnifiedUserModule'
 import { createUnifiedDirectoryModule } from '@/core/modules/UnifiedDirectoryModule'
 import { createUnifiedMediaBunnyModule } from '@/core/modules/UnifiedMediaBunnyModule'
 import { createUnifiedUIModule } from '@/core/modules/UnifiedUIModule'
+import {
+  createAIGeneratedMediaRequest,
+  createAIGeneratedMediaResolver,
+  createAIInputPreparedResolver,
+  createAITaskSubmittedResolver,
+  createASRRemoteTaskCompletedResolver,
+  createASRSubtitlesRequest,
+  createASRSubtitlesResolver,
+  createEffectTemplateReadyRequest,
+  createEffectTemplateReadyResolver,
+  getResourceId,
+  createJobRuntime,
+  createMediaDecodedResolver,
+  createMediaFileAvailableResolver,
+  createMediaReadyRequest,
+  createMediaReadyResolver,
+  createMediaSourceProcessedResolver,
+  createRemoteTaskCompletedResolver,
+  createTimelineItemReadyRequest,
+  createTimelineItemReadyResolver,
+  useJobTaskCenter,
+} from '@/core/jobs'
 import { ModuleRegistry, MODULE_NAMES } from '@/core/modules/ModuleRegistry'
 import { useHistoryOperations } from '@/core/composables/useHistoryOperations'
 import { useUnifiedDrag } from '@/core/composables/useUnifiedDrag'
@@ -104,6 +126,123 @@ export const useUnifiedStore = defineStore('unified', () => {
   const unifiedUIModule = createUnifiedUIModule(registry)
   registry.register(MODULE_NAMES.UI, unifiedUIModule)
 
+  const jobRuntime = createJobRuntime()
+  jobRuntime.registerResolver(createMediaFileAvailableResolver(unifiedMediaModule))
+  jobRuntime.registerResolver(createMediaDecodedResolver(unifiedMediaModule))
+  jobRuntime.registerResolver(createMediaSourceProcessedResolver(unifiedMediaModule))
+  jobRuntime.registerResolver(createMediaReadyResolver(unifiedMediaModule))
+  jobRuntime.registerResolver(
+    createAIInputPreparedResolver({
+      getMediaItem: unifiedMediaModule.getMediaItem,
+      ensureMediaReady,
+      getBizyAirApiKey: async () => unifiedUserModule.getBizyAirApiKey(),
+    }),
+  )
+  jobRuntime.registerResolver(
+    createAITaskSubmittedResolver({
+      getMediaItem: unifiedMediaModule.getMediaItem,
+      ensureMediaReady,
+      getBizyAirApiKey: async () => unifiedUserModule.getBizyAirApiKey(),
+    }),
+  )
+  jobRuntime.registerResolver(
+    createRemoteTaskCompletedResolver({
+      getMediaItem: unifiedMediaModule.getMediaItem,
+      ensureMediaReady,
+      getBizyAirApiKey: async () => unifiedUserModule.getBizyAirApiKey(),
+    }),
+  )
+  jobRuntime.registerResolver(
+    createAIGeneratedMediaResolver({
+      getMediaItem: unifiedMediaModule.getMediaItem,
+      ensureMediaReady,
+      getBizyAirApiKey: async () => unifiedUserModule.getBizyAirApiKey(),
+    }),
+  )
+  jobRuntime.registerResolver(createASRRemoteTaskCompletedResolver())
+  jobRuntime.registerResolver(
+    createASRSubtitlesResolver({
+      getTimelineItem: unifiedTimelineModule.getTimelineItem,
+      getTimelineItems: () => unifiedTimelineModule.timelineItems.value,
+      addTimelineItem: unifiedTimelineModule.addTimelineItem,
+      removeTimelineItem: unifiedTimelineModule.removeTimelineItem,
+      getTrack: unifiedTrackModule.getTrack,
+    }),
+  )
+  jobRuntime.registerResolver(
+    createTimelineItemReadyResolver({
+      getTimelineItem: unifiedTimelineModule.getTimelineItem,
+      getMediaItem: unifiedMediaModule.getMediaItem,
+    }),
+  )
+  jobRuntime.registerResolver(
+    createEffectTemplateReadyResolver({
+      getAsset: (assetId) => {
+        const asset = unifiedMediaModule.getAsset(assetId)
+        return asset?.assetKind === 'effect-template' ? asset : undefined
+      },
+      getProjectId: () => {
+        const projectId = unifiedConfigModule.projectId.value
+        if (!projectId) {
+          throw new Error('当前项目未初始化')
+        }
+        return projectId
+      },
+    }),
+  )
+  const jobTaskCenter = useJobTaskCenter(jobRuntime)
+
+  function ensureMediaReady(mediaId: string) {
+    return jobRuntime.ensure(createMediaReadyRequest(mediaId))
+  }
+  function ensureAIGeneratedMedia(mediaId: string) {
+    return jobRuntime.ensure(createAIGeneratedMediaRequest(mediaId))
+  }
+  function ensureTimelineItemReady(timelineItemId: string) {
+    return jobRuntime.ensure(createTimelineItemReadyRequest(timelineItemId))
+  }
+  function ensureASRSubtitles(placeholderTimelineItemId: string) {
+    return jobRuntime.ensure(createASRSubtitlesRequest(placeholderTimelineItemId))
+  }
+  function ensureEffectTemplateReady(assetId: string) {
+    return jobRuntime.ensure(createEffectTemplateReadyRequest(assetId))
+  }
+  async function retryEffectTemplateReady(assetId: string) {
+    const request = createEffectTemplateReadyRequest(assetId)
+    const retried = await jobRuntime.retry(getResourceId(request.type, assetId))
+    if (retried) {
+      return
+    }
+
+    await jobRuntime.ensure(request)
+  }
+  function cancelEffectTemplateReady(assetId: string) {
+    const request = createEffectTemplateReadyRequest(assetId)
+    return jobRuntime.cancel(getResourceId(request.type, assetId))
+  }
+  function ensureTimelineItemResolved(timelineItemId: string) {
+    const timelineItem = unifiedTimelineModule.getTimelineItem(timelineItemId)
+    if (!timelineItem) {
+      return Promise.resolve(null)
+    }
+
+    if (timelineItem.isPlaceholder && timelineItem.task?.kind === 'asr-subtitles') {
+      return ensureASRSubtitles(timelineItem.id)
+    }
+
+    if (timelineItem.timelineStatus === 'loading') {
+      return ensureTimelineItemReady(timelineItem.id)
+    }
+
+    return Promise.resolve(null)
+  }
+  unifiedProjectModule.setMediaReadyEnsurer(ensureMediaReady)
+  unifiedProjectModule.setAIGeneratedMediaEnsurer(ensureAIGeneratedMedia)
+  unifiedProjectModule.setEffectTemplateReadyEnsurer(ensureEffectTemplateReady)
+  unifiedProjectModule.setTimelineItemResolvedEnsurer(ensureTimelineItemResolved)
+  unifiedDirectoryModule.setMediaReadyEnsurer(ensureMediaReady)
+  unifiedDirectoryModule.setEffectTemplateReadyEnsurer(ensureEffectTemplateReady)
+
   // 创建历史记录操作模块
   const historyOperations = useHistoryOperations(
     unifiedHistoryModule,
@@ -112,6 +251,7 @@ export const useUnifiedStore = defineStore('unified', () => {
     unifiedConfigModule,
     unifiedTrackModule,
     unifiedSelectionModule,
+    ensureTimelineItemResolved,
   )
 
   // 创建统一拖拽管理器（已自动注册所有处理器）
@@ -167,6 +307,15 @@ export const useUnifiedStore = defineStore('unified', () => {
 
     // 媒体项目状态
     mediaItems: unifiedMediaModule.mediaItems,
+    jobRuntime,
+    jobTaskViews: jobTaskCenter.taskViews,
+    cancelJobTask: jobTaskCenter.cancelTask,
+    retryJobTask: jobTaskCenter.retryTask,
+    ensureMediaReady,
+    ensureAIGeneratedMedia,
+    ensureTimelineItemReady,
+    ensureASRSubtitles,
+    ensureTimelineItemResolved,
 
     // 媒体项目管理方法
     addMediaItem: unifiedMediaModule.addMediaItem,
@@ -181,9 +330,10 @@ export const useUnifiedStore = defineStore('unified', () => {
       unifiedMediaModule.createTransitionTemplatePlaceholder,
     createFilterTemplatePlaceholder:
       unifiedMediaModule.createFilterTemplatePlaceholder,
-    startTemplateProcessing: unifiedMediaModule.startTemplateProcessing,
-    retryTemplateProcessing: unifiedMediaModule.retryTemplateProcessing,
-    cancelTemplateProcessing: unifiedMediaModule.cancelTemplateProcessing,
+    startTemplateProcessing: ensureEffectTemplateReady,
+    retryTemplateProcessing: retryEffectTemplateReady,
+    cancelTemplateProcessing: cancelEffectTemplateReady,
+    ensureEffectTemplateReady,
     getMediaItemBySourceId: unifiedMediaModule.getMediaItemBySourceId,
     updateMediaItemName: unifiedMediaModule.updateMediaItemName,
     updateMediaItem: unifiedMediaModule.updateMediaItem,

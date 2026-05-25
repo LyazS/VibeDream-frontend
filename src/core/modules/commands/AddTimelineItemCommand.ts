@@ -4,15 +4,11 @@
  * 采用统一重建逻辑：每次执行都从原始素材重新创建sprite（已知项目）或重建占位符（未知项目）
  */
 
-import type { Ref } from 'vue'
-// ==================== 新架构类型导入 ====================
 import type { SimpleCommand } from '@/core/modules/commands/types'
 import type { UnifiedTimelineItemData } from '@/core/timelineitem/type'
 import type { UnifiedMediaItemData, MediaType } from '@/core/mediaitem/types'
-import type { VideoResolution } from '@/core/types'
 
 // ==================== 新架构工具导入 ====================
-import { MediaSync } from '@/core/managers/sync'
 import { TimelineItemFactory } from '@/core/timelineitem'
 import { TimelineItemQueries } from '@/core/timelineitem/queries'
 // ==================== 旧架构类型工具导入 ====================
@@ -28,7 +24,6 @@ export class AddTimelineItemCommand implements SimpleCommand {
   public readonly description: string
   private originalTimelineItemData: UnifiedTimelineItemData<MediaType> | null = null // 保存原始项目的重建数据
   private _isDisposed = false
-  private mediaSync?: MediaSync // 持有MediaSync引用
 
   constructor(
     timelineItem: UnifiedTimelineItemData<MediaType>,
@@ -40,9 +35,7 @@ export class AddTimelineItemCommand implements SimpleCommand {
     private mediaModule: {
       getMediaItem: (id: string | null) => UnifiedMediaItemData | undefined
     },
-    private configModule: {
-      videoResolution: Ref<VideoResolution>
-    },
+    private ensureTimelineItemResolved: (timelineItemId: string) => Promise<unknown>,
   ) {
     this.id = generateCommandId()
 
@@ -64,7 +57,7 @@ export class AddTimelineItemCommand implements SimpleCommand {
     try {
       console.log(`🔄 执行添加操作：从源头重建时间轴项目...`)
 
-      const rebuildResult = await TimelineItemFactory.rebuildForCmd({
+      const rebuildResult = await TimelineItemFactory.buildForDag({
         originalTimelineItemData: this.originalTimelineItemData,
         getMediaItem: this.mediaModule.getMediaItem,
         logIdentifier: 'AddTimelineItemCommand execute',
@@ -79,27 +72,18 @@ export class AddTimelineItemCommand implements SimpleCommand {
       // 1. 添加到时间轴
       await this.timelineModule.addTimelineItem(newTimelineItem)
 
-      // 2. 针对loading状态的项目设置状态同步（确保时间轴项目已添加到store）
-      if (TimelineItemQueries.isLoading(newTimelineItem)) {
-        // 先清理旧的MediaSync实例（防止重复执行时创建多个同步）
-        if (this.mediaSync) {
-          this.mediaSync.cleanup()
-          this.mediaSync = undefined
-        }
-
-        // 确保 mediaItemId 不为 null（文本类型不会走到这里，因为文本类型不会是 loading 状态）
-        if (newTimelineItem.mediaItemId === null) {
-          throw new Error('mediaItemId 不能为 null')
-        }
-
-        this.mediaSync = new MediaSync(newTimelineItem.mediaItemId, {
-          syncId: this.id, // 使用命令ID作为syncId
-          timelineItemIds: [newTimelineItem.id], // 单个时间轴项目
-          shouldUpdateCommand: !newTimelineItem.runtime.isInitialized, // 需要更新命令数据
-          commandId: this.id,
-          description: `AddTimelineItemCommand: ${this.id}`,
+      // 2. 恢复后的项目统一交给 timeline item DAG dispatcher 推进
+      if (TimelineItemQueries.isLoading(newTimelineItem) || newTimelineItem.isPlaceholder) {
+        console.log('🔗 [AddTimelineItemCommand] trigger timeline item resolve', {
+          timelineItemId: newTimelineItem.id,
+          mediaItemId: newTimelineItem.mediaItemId,
+          isPlaceholder: newTimelineItem.isPlaceholder,
+          isInitialized: newTimelineItem.runtime.isInitialized,
+          timelineStatus: newTimelineItem.timelineStatus,
         })
-        await this.mediaSync.setup()
+        void this.ensureTimelineItemResolved(newTimelineItem.id).catch((error) => {
+          console.error(`❌ timeline item resolve 启动失败: ${newTimelineItem.id}`, error)
+        })
       }
       console.log(`✅ 已添加时间轴项目: ${this.originalTimelineItemData.id}`)
     } catch (error) {
@@ -123,56 +107,12 @@ export class AddTimelineItemCommand implements SimpleCommand {
         return
       }
 
-      // 移除时间轴项目（这会自动处理sprite的清理）
-      // 注意：undo时不需要设置MediaSync，因为是删除操作
+      // 移除时间轴项目（这会自动处理 sprite 的清理）
       await this.timelineModule.removeTimelineItem(this.originalTimelineItemData.id)
       console.log(`↩️ 已撤销添加时间轴项目: ${this.originalTimelineItemData.id}`)
     } catch (error) {
       console.error(`❌ 撤销添加时间轴项目失败: ${this.originalTimelineItemData.id}`, error)
       throw error
-    }
-  }
-
-  /**
-   * 更新媒体数据（由媒体同步调用）
-   * @param mediaData 最新的媒体数据
-   */
-  updateMediaData(mediaData: UnifiedMediaItemData): void {
-    if (this.originalTimelineItemData) {
-      // 从 bunny 对象中获取原始尺寸信息
-      if (
-        TimelineItemQueries.hasVisualProperties(this.originalTimelineItemData) &&
-        mediaData.runtime.bunny?.originalWidth !== undefined &&
-        mediaData.runtime.bunny?.originalHeight !== undefined
-      ) {
-        this.originalTimelineItemData.config.width = mediaData.runtime.bunny.originalWidth
-        this.originalTimelineItemData.config.height = mediaData.runtime.bunny.originalHeight
-      }
-
-      if (mediaData.duration !== undefined) {
-        // 更新timeRange的持续时间，而不是config.duration
-        const startTime = this.originalTimelineItemData.timeRange.timelineStartTime
-        const clipStartTime = this.originalTimelineItemData.timeRange.clipStartTime
-        this.originalTimelineItemData.timeRange = {
-          timelineStartTime: startTime,
-          timelineEndTime: startTime + mediaData.duration,
-          clipStartTime: clipStartTime,
-          clipEndTime: clipStartTime + mediaData.duration,
-        }
-      }
-      this.originalTimelineItemData.timelineStatus = 'ready'
-
-      console.log(`🔄 [AddTimelineItemCommand] 已更新媒体数据: ${this.id}`, {
-        width:
-          TimelineItemQueries.hasVisualProperties(this.originalTimelineItemData)
-            ? this.originalTimelineItemData.config.width
-            : undefined,
-        height:
-          TimelineItemQueries.hasVisualProperties(this.originalTimelineItemData)
-            ? this.originalTimelineItemData.config.height
-            : undefined,
-        duration: mediaData.duration,
-      })
     }
   }
 
@@ -192,11 +132,6 @@ export class AddTimelineItemCommand implements SimpleCommand {
     }
 
     this._isDisposed = true
-    // 清理MediaSync
-    if (this.mediaSync) {
-      this.mediaSync.cleanup()
-      this.mediaSync = undefined
-    }
     console.log(`🗑️ [AddTimelineItemCommand] 命令资源已清理: ${this.id}`)
   }
 }

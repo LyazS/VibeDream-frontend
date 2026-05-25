@@ -8,7 +8,6 @@ import type {
   AIConfigFlattened,
 } from '@/core/datasource/providers/ai-generation/types'
 import { useUnifiedStore } from '@/core/unifiedStore'
-import { fetchClient } from '@/utils/fetchClient'
 import { generateMediaId } from '@/core/utils/idGenerator'
 import { BizyairFileUploader } from '@/core/utils/bizyairFileUploader'
 import { BltcyFileUploader } from '@/core/utils/bltcyFileUploader'
@@ -21,23 +20,19 @@ import {
   type AIGenerationSourceData,
 } from '@/core/datasource/providers/ai-generation/AIGenerationSource'
 import { SourceOrigin } from '@/core/datasource/core/BaseDataSource'
-import type { TaskSubmitResponse } from '@/types/taskApi'
-import { TaskSubmitErrorCode } from '@/types/taskApi'
 import {
   BizyAirSourceFactory,
   BizyAirTaskStatus,
   type BizyAirSourceData,
 } from '@/core/datasource/providers/bizyair/BizyAirSource'
-import { BizyAirAPIClient } from '@/core/datasource/providers/bizyair/BizyAirAPIClient'
-import { BizyAirConfigManager } from '@/core/datasource/providers/bizyair/BizyAirConfigManager'
 import type { UnifiedMediaItemData } from '@/core/mediaitem/types'
-import {
-  buildTaskErrorMessage,
-  shouldShowRechargePrompt,
-  isRetryableError,
-} from '@/utils/errorMessageBuilder'
 import { flattenAiConfig } from '../utils/pathUtils'
 import { ConfigCacheManager } from '../utils/configCacheManager'
+import { globalMetaFileManager } from '@/core/managers/media/globalMetaFileManager'
+import { fetchClient } from '@/utils/fetchClient'
+import type { TaskSubmitResponse } from '@/types/taskApi'
+import { BizyAirAPIClient } from '@/core/datasource/providers/bizyair/BizyAirAPIClient'
+import { BizyAirConfigManager } from '@/core/datasource/providers/bizyair/BizyAirConfigManager'
 
 /**
  * AI 生成 Composable
@@ -121,39 +116,6 @@ export function useAIGeneration() {
     aiConfig.value = null
   }
 
-  // ==================== 任务提交 ====================
-
-  /**
-   * 提交AI生成任务到后端
-   * @param requestParams 请求参数
-   * @returns 任务提交响应
-   */
-  async function submitAIGenerationTask(
-    requestParams: MediaGenerationRequest,
-  ): Promise<TaskSubmitResponse> {
-    try {
-      const response = await fetchClient.post<TaskSubmitResponse>(
-        '/api/media/generate',
-        requestParams,
-      )
-
-      if (response.status !== 200) {
-        throw new Error(`提交任务失败: ${response.statusText}`)
-      }
-
-      return response.data
-    } catch (error) {
-      // 网络错误时返回失败响应
-      return {
-        success: false,
-        error_code: TaskSubmitErrorCode.UNKNOWN_ERROR,
-        error_details: {
-          error: error instanceof Error ? error.message : '网络请求失败',
-        },
-      }
-    }
-  }
-
   /**
    * 处理文件上传（统一逻辑）
    * @param config 扁平化后的配置
@@ -216,14 +178,9 @@ export function useAIGeneration() {
     const mediaId = generateMediaId(extension)
     const mediaName = `${configData.name[currentLang.value]}_${Date.now()}`
 
-    const mediaItem = unifiedStore.createUnifiedMediaItemData(
-      mediaId,
-      mediaName,
-      source,
-      {
-        mediaType,
-      },
-    )
+    const mediaItem = unifiedStore.createUnifiedMediaItemData(mediaId, mediaName, source, {
+      mediaType,
+    })
 
     // 添加到媒体库
     unifiedStore.addMediaItem(mediaItem)
@@ -262,56 +219,34 @@ export function useAIGeneration() {
     /**
      * 提交任务到 BizyAir API
      */
-    submit: async (requestParams: MediaGenerationRequest, configData: AIGenerateConfig) => {
-      console.log('🚀 [useAIGeneration] 准备提交 BizyAir 任务...', requestParams)
-
-      // 1. 获取 BizyAir API Key
-      const apiKey = await unifiedStore.getBizyAirApiKey()
-      if (!apiKey) {
-        unifiedStore.dialogWarning({
-          title: t('media.error.apiKeyMissing'),
-          content: '请先在设置中配置 BizyAir API Key',
-          positiveText: t('media.confirm'),
-          negativeText: t('media.cancel'),
-          onPositiveClick: () => {
-            console.log('跳转到设置页面')
-          },
-        })
-        throw new Error('BizyAir API Key 未配置')
-      }
-
-      // 2. 获取 BizyAir 应用配置
-      const appConfig = BizyAirConfigManager.getConfig(requestParams.task_config)
-      console.log('📋 [useAIGeneration] BizyAir 应用配置:', appConfig)
-
-      // 3. 构建 BizyAir API 请求数据
-      const bizyAirRequestData = BizyAirConfigManager.getRequestBuilder(
-        requestParams.task_config,
-      )(requestParams.task_config, appConfig)
-      console.log('📤 [useAIGeneration] BizyAir API 请求数据:', bizyAirRequestData)
-
-      // 4. 提交任务到 BizyAir API
-      const bizyairTaskId = await BizyAirAPIClient.submitAsyncTask(
-        bizyAirRequestData,
-        apiKey,
-      )
-      console.log(`✅ [useAIGeneration] BizyAir 任务提交成功: ${bizyairTaskId}`)
-
-      // 5. 创建 BizyAir 数据源
+    createSource: (
+      requestParams: MediaGenerationRequest,
+      taskId: string,
+      _configData: AIGenerateConfig,
+    ) => {
       const bizyAirSource = BizyAirSourceFactory.createBizyAirSource(
         {
           type: 'bizyair',
-          bizyairTaskId: bizyairTaskId,
+          bizyairTaskId: taskId,
           requestParams: requestParams,
           taskStatus: BizyAirTaskStatus.QUEUING,
         },
         SourceOrigin.USER_CREATE,
       )
 
-      return {
-        taskId: bizyairTaskId,
-        source: bizyAirSource,
+      return { source: bizyAirSource }
+    },
+    submitTask: async (requestParams: MediaGenerationRequest): Promise<string> => {
+      const apiKey = await unifiedStore.getBizyAirApiKey()
+      if (!apiKey) {
+        throw new Error('BizyAir API Key 未配置')
       }
+
+      const appConfig = BizyAirConfigManager.getConfig(requestParams.task_config)
+      const requestBuilder = BizyAirConfigManager.getRequestBuilder(requestParams.task_config)
+      const requestData = requestBuilder(requestParams.task_config, appConfig)
+
+      return BizyAirAPIClient.submitAsyncTask(requestData, apiKey)
     },
   }
 
@@ -327,72 +262,42 @@ export function useAIGeneration() {
     /**
      * 提交任务到后端 API
      */
-    submit: async (requestParams: MediaGenerationRequest, _configData: AIGenerateConfig) => {
-      console.log('🚀 [useAIGeneration] 提交AI生成任务到后端...', requestParams)
-
-      // 1. 提交任务到后端
-      const submitResult = await submitAIGenerationTask(requestParams)
-
-      // 2. 错误处理
-      if (!submitResult.success) {
-        const errorMessage = buildTaskErrorMessage(
-          submitResult.error_code,
-          submitResult.error_details,
-          t,
-        )
-
-        // 根据错误类型提供不同的用户体验
-        if (shouldShowRechargePrompt(submitResult.error_code)) {
-          // 余额不足：显示充值引导对话框
-          unifiedStore.dialogWarning({
-            title: t('media.error.insufficientBalance'),
-            content: errorMessage + '\n\n' + t('media.error.rechargePrompt'),
-            positiveText: t('media.confirm'),
-            negativeText: t('media.cancel'),
-            onPositiveClick: () => {
-              console.log('跳转到充值页面')
-            },
-          })
-        } else if (isRetryableError(submitResult.error_code)) {
-          // 可重试错误：显示重试选项
-          unifiedStore.dialogWarning({
-            title: t('media.generationFailed', { error: '' }),
-            content: errorMessage,
-            positiveText: t('media.retry'),
-            negativeText: t('media.cancel'),
-            onPositiveClick: () => {
-              // 重新提交任务
-              handleGenerate()
-            },
-          })
-        } else {
-          // 其他错误：直接显示错误消息
-          unifiedStore.messageError(errorMessage)
-        }
-
-        throw new Error(errorMessage)
-      }
-
-      console.log(
-        `✅ [useAIGeneration] 任务提交成功: ${submitResult.task_id}, 成本: ${submitResult.cost}`,
-      )
-
-      // 3. 创建AI生成数据源
+    createSource: (
+      requestParams: MediaGenerationRequest,
+      taskId: string,
+      _configData: AIGenerateConfig,
+    ) => {
       const aiSource = AIGenerationSourceFactory.createAIGenerationSource(
         {
           type: 'ai-generation',
-          aiTaskId: submitResult.task_id,
+          aiTaskId: taskId,
           requestParams: requestParams,
           taskStatus: TaskStatus.PENDING,
         },
         SourceOrigin.USER_CREATE,
       )
 
-      return {
-        taskId: submitResult.task_id,
-        cost: submitResult.cost,
-        source: aiSource,
+      return { source: aiSource }
+    },
+    submitTask: async (requestParams: MediaGenerationRequest): Promise<string> => {
+      const response = await fetchClient.post<TaskSubmitResponse>(
+        '/api/media/generate',
+        requestParams,
+      )
+
+      if (response.status !== 200) {
+        throw new Error(`提交任务失败: ${response.statusText}`)
       }
+
+      if (!response.data.success) {
+        const details = response.data.error_details
+        const message =
+          (details && typeof details.error === 'string' && details.error)
+          || `提交任务失败: ${response.data.error_code}`
+        throw new Error(message)
+      }
+
+      return response.data.task_id
     },
   }
 
@@ -441,14 +346,28 @@ export function useAIGeneration() {
         `🎯 [useAIGeneration] 使用策略: ${strategy === bizyAirSubmitStrategy ? 'BizyAir 直接调用' : '后端代理'}`,
       )
 
-      // 5. 提交任务
-      const result = await strategy.submit(requestParams, configData)
+      // 5. 先提交任务，拿到 taskId 后再创建 media item
+      const taskId = await strategy.submitTask(requestParams)
+      console.log('🆔 [useAIGeneration] 已获取远程任务 ID:', taskId)
 
-      // 6. 创建并添加媒体项
+      // 6. 创建带 taskId 的 source
+      const result = strategy.createSource(requestParams, taskId, configData)
+
+      // 7. 创建并添加媒体项
       const mediaItem = createAndAddMediaItem(result.source, configData)
+      const saved = await globalMetaFileManager.saveMetaFile(mediaItem)
+      if (!saved) {
+        throw new Error('保存 AI 生成素材元数据失败')
+      }
 
-      // 7. 启动媒体处理流程
-      unifiedStore.startMediaProcessing(mediaItem)
+      void unifiedStore.ensureAIGeneratedMedia(mediaItem.id).catch((error) => {
+        console.error('❌ [useAIGeneration] AI 生成任务执行失败:', error)
+        unifiedStore.messageError(
+          t('aiPanel.submitFailed', {
+            error: error instanceof Error ? error.message : '未知错误',
+          }),
+        )
+      })
 
       // 8. 显示成功消息
       unifiedStore.messageSuccess(t('aiPanel.taskSubmitted'))

@@ -6,11 +6,11 @@ import { TimelineItemFactory } from '@/core/timelineitem/factory'
 import type { UnifiedTimelineItemData } from '@/core/timelineitem/type'
 import type { UnifiedTrackData, UnifiedTrackType } from '@/core/track/TrackTypes'
 import { createUnifiedTrackData } from '@/core/track/TrackTypes'
+import type { UnifiedMediaItemData } from '@/core/mediaitem/types'
 import { globalMetaFileManager } from '@/core/managers/media/globalMetaFileManager'
 import { globalMediaItemLoader } from '@/core/managers/media/MediaItemLoader'
 import { isEffectTemplateAsset, isMediaAsset } from '@/core/asset/types'
 import { useProjectThumbnailService } from '@/core/composables/useProjectThumbnailService'
-import { MediaSync } from '@/core/managers/sync'
 import { framesToSeconds } from '@/core/utils/timeUtils'
 import { useAppI18n } from '@/core/composables/useI18n'
 import { i18n } from '@/locales'
@@ -58,8 +58,11 @@ export function createUnifiedProjectModule(registry: ModuleRegistry) {
   const loadingStage = ref('') // 当前加载阶段
   const loadingDetails = ref('') // 详细信息
   
-  // 🌟 项目加载时的MediaSync实例数组（批量优化）
-  const projectLoadMediaSyncs: MediaSync[] = []
+  let ensureMediaReadyForProjectLoad: ((mediaId: string) => Promise<unknown>) | null = null
+  let ensureAIGeneratedMediaForProjectLoad: ((mediaId: string) => Promise<unknown>) | null = null
+  let ensureEffectTemplateReadyForProjectLoad: ((assetId: string) => Promise<unknown>) | null = null
+  let ensureTimelineItemResolvedForProjectLoad: ((timelineItemId: string) => Promise<unknown>) | null =
+    null
 
   // ==================== 计算属性 ====================
   /**
@@ -99,6 +102,24 @@ export function createUnifiedProjectModule(registry: ModuleRegistry) {
     loadingProgress.value = Math.max(0, Math.min(100, progress))
     loadingDetails.value = details || ''
     console.log(`📊 加载进度: ${stage} (${progress}%)${details ? ` - ${details}` : ''}`)
+  }
+
+  function setMediaReadyEnsurer(ensurer: (mediaId: string) => Promise<unknown>): void {
+    ensureMediaReadyForProjectLoad = ensurer
+  }
+
+  function setAIGeneratedMediaEnsurer(ensurer: (mediaId: string) => Promise<unknown>): void {
+    ensureAIGeneratedMediaForProjectLoad = ensurer
+  }
+
+  function setEffectTemplateReadyEnsurer(ensurer: (assetId: string) => Promise<unknown>): void {
+    ensureEffectTemplateReadyForProjectLoad = ensurer
+  }
+
+  function setTimelineItemResolvedEnsurer(
+    ensurer: (timelineItemId: string) => Promise<unknown>,
+  ): void {
+    ensureTimelineItemResolvedForProjectLoad = ensurer
   }
 
   /**
@@ -408,9 +429,37 @@ export function createUnifiedProjectModule(registry: ModuleRegistry) {
       for (const mediaItem of metaMediaItems) {
         mediaModule.addAsset(mediaItem)
 
+        if (isMediaAsset(mediaItem) && isRecoverableAIGeneratedMedia(mediaItem)) {
+          if (ensureAIGeneratedMediaForProjectLoad) {
+            void ensureAIGeneratedMediaForProjectLoad(mediaItem.id).catch((error) => {
+              console.error(
+                `❌ [rebuildMediaItems] 恢复 AI 生成媒体失败，已跳过: ${mediaItem.name}`,
+                error,
+              )
+            })
+          } else {
+            console.warn(
+              `⚠️ [rebuildMediaItems] ensureAIGeneratedMedia 未初始化，跳过恢复: ${mediaItem.name}`,
+            )
+          }
+          immediateCount++
+          continue
+        }
+
         if (immediateLoadIds.has(mediaItem.id)) {
           if (isMediaAsset(mediaItem) && mediaItem.mediaStatus === 'pending') {
-            mediaModule.startMediaProcessing(mediaItem)
+            if (ensureMediaReadyForProjectLoad) {
+              void ensureMediaReadyForProjectLoad(mediaItem.id).catch((error) => {
+                console.error(
+                  `❌ [rebuildMediaItems] 立即加载媒体失败，已跳过: ${mediaItem.name}`,
+                  error,
+                )
+              })
+            } else {
+              console.warn(
+                `⚠️ [rebuildMediaItems] ensureMediaReady 未初始化，跳过立即加载: ${mediaItem.name}`,
+              )
+            }
             immediateCount++
             continue
           }
@@ -419,7 +468,18 @@ export function createUnifiedProjectModule(registry: ModuleRegistry) {
             isEffectTemplateAsset(mediaItem) &&
             ['pending', 'missing'].includes(mediaItem.templateStatus)
           ) {
-            void mediaModule.startTemplateProcessing(mediaItem.id)
+            if (ensureEffectTemplateReadyForProjectLoad) {
+              void ensureEffectTemplateReadyForProjectLoad(mediaItem.id).catch((error) => {
+                console.error(
+                  `❌ [rebuildMediaItems] 恢复效果模板失败，已跳过: ${mediaItem.name}`,
+                  error,
+                )
+              })
+            } else {
+              console.warn(
+                `⚠️ [rebuildMediaItems] ensureEffectTemplateReady 未初始化，跳过恢复: ${mediaItem.name}`,
+              )
+            }
             immediateCount++
             continue
           }
@@ -509,9 +569,6 @@ export function createUnifiedProjectModule(registry: ModuleRegistry) {
       // 清空现有时间轴项目
       timelineModule.timelineItems.value = []
 
-      // 收集所有成功重建的时间轴项目
-      const rebuiltTimelineItems: UnifiedTimelineItemData[] = []
-
       // 恢复时间轴项目数据
       if (savedTimelineItems && savedTimelineItems.length > 0) {
         for (const itemData of savedTimelineItems) {
@@ -538,8 +595,16 @@ export function createUnifiedProjectModule(registry: ModuleRegistry) {
               // 克隆项目数据（保持所有状态）
               const placeholderItem = TimelineItemFactory.clone(itemData)
 
-              // 直接添加到时间轴，不需要 rebuildForCmd 和 setupTimelineItemBunny
+              // 占位符项目直接添加到时间轴，不需要额外的 ready 构建或 bunny 初始化
               await timelineModule.addTimelineItem(placeholderItem)
+              if (ensureTimelineItemResolvedForProjectLoad) {
+                void ensureTimelineItemResolvedForProjectLoad(placeholderItem.id).catch((error) => {
+                  console.error(
+                    `❌ [restoreTimelineItems] timeline item resolve 启动失败: ${placeholderItem.id}`,
+                    error,
+                  )
+                })
+              }
               console.log(`✅ 占位符项目恢复完成: ${itemData.id}`)
               continue
             }
@@ -564,7 +629,7 @@ export function createUnifiedProjectModule(registry: ModuleRegistry) {
             console.log(`🔄 恢复时间轴项目：从源头重建 ${itemData.id}...`)
 
             // 从原始素材重新创建TimelineItem和sprite
-            const rebuildResult = await TimelineItemFactory.rebuildForCmd({
+            const rebuildResult = await TimelineItemFactory.buildForDag({
               originalTimelineItemData: itemData,
               getMediaItem: mediaModule.getMediaItem,
               logIdentifier: 'restoreTimelineItems',
@@ -579,9 +644,25 @@ export function createUnifiedProjectModule(registry: ModuleRegistry) {
 
             // 添加到时间轴
             await timelineModule.addTimelineItem(newTimelineItem)
-            
-            // 收集重建的项目
-            rebuiltTimelineItems.push(newTimelineItem)
+
+            if (
+              (newTimelineItem.timelineStatus === 'loading' || newTimelineItem.isPlaceholder) &&
+              ensureTimelineItemResolvedForProjectLoad
+            ) {
+              console.log('🔗 [restoreTimelineItems] trigger timeline item resolve', {
+                timelineItemId: newTimelineItem.id,
+                mediaItemId: newTimelineItem.mediaItemId,
+                isPlaceholder: newTimelineItem.isPlaceholder,
+                isInitialized: newTimelineItem.runtime.isInitialized,
+                timelineStatus: newTimelineItem.timelineStatus,
+              })
+              void ensureTimelineItemResolvedForProjectLoad(newTimelineItem.id).catch((error) => {
+                console.error(
+                  `❌ [restoreTimelineItems] timeline item resolve 启动失败: ${newTimelineItem.id}`,
+                  error,
+                )
+              })
+            }
 
             console.log(`✅ 已恢复时间轴项目: ${itemData.id} (${itemData.mediaType})`)
           } catch (error) {
@@ -591,39 +672,9 @@ export function createUnifiedProjectModule(registry: ModuleRegistry) {
         }
       }
 
-      // 🌟 性能优化：按媒体项目分组loading状态的时间轴项目
-      const loadingItemsByMedia = new Map<string, string[]>()
-      
-      for (const item of rebuiltTimelineItems) {
-        if (item.timelineStatus === 'loading' && item.mediaItemId !== null) {
-          const timelineIds = loadingItemsByMedia.get(item.mediaItemId) || []
-          timelineIds.push(item.id)
-          loadingItemsByMedia.set(item.mediaItemId, timelineIds)
-        }
-      }
-
-      // 🌟 为每个唯一的媒体项目创建一个MediaSync（避免重复watcher）
-      // 先清理旧的MediaSync实例
-      projectLoadMediaSyncs.forEach(sync => sync.cleanup())
-      projectLoadMediaSyncs.length = 0
-      
-      for (const [mediaItemId, timelineItemIds] of loadingItemsByMedia) {
-        const mediaSync = new MediaSync(mediaItemId, {
-          syncId: `project-load-${configModule.projectId.value}`,
-          timelineItemIds: timelineItemIds,         // 传递所有相关的时间轴项目ID数组
-          shouldUpdateCommand: false,                // 项目加载不需要更新命令
-          description: `Project Load: ${configModule.projectId.value}`,
-        })
-        await mediaSync.setup()
-        projectLoadMediaSyncs.push(mediaSync)  // 保存引用
-      }
-
       timelineModule.refreshTransitionItems?.()
 
       console.log(`✅ 时间轴项目恢复完成: ${timelineModule.timelineItems.value.length}个项目`)
-      if (loadingItemsByMedia.size > 0) {
-        console.log(`📊 创建了 ${projectLoadMediaSyncs.length} 个 MediaSync 实例，监听 ${loadingItemsByMedia.size} 个媒体项目`)
-      }
     } catch (error) {
       console.error('❌ 恢复时间轴项目失败:', error)
       throw error
@@ -639,15 +690,6 @@ export function createUnifiedProjectModule(registry: ModuleRegistry) {
     // 🌟 清理所有 mediaItem watchers
     const autoSaveModule = registry.get<UnifiedAutoSaveModule>(MODULE_NAMES.AUTOSAVE)
     autoSaveModule.cleanupAllMediaItemWatchers()
-  }
-
-  /**
-   * 清理项目加载时的媒体同步
-   */
-  function cleanupProjectMediaSync(): void {
-    console.log(`🗑️ 清理项目加载的 MediaSync 实例: ${projectLoadMediaSyncs.length} 个`)
-    projectLoadMediaSyncs.forEach(sync => sync.cleanup())
-    projectLoadMediaSyncs.length = 0
   }
 
   /**
@@ -689,13 +731,41 @@ export function createUnifiedProjectModule(registry: ModuleRegistry) {
     restoreTimelineItems,
 
     // 加载进度方法
+    setMediaReadyEnsurer,
+    setAIGeneratedMediaEnsurer,
+    setEffectTemplateReadyEnsurer,
+    setTimelineItemResolvedEnsurer,
     updateLoadingProgress,
     resetLoadingState,
 
-    // 清理方法
-    cleanupProjectMediaSync,
   }
 }
 
 // 导出类型定义
 export type UnifiedProjectModule = ReturnType<typeof createUnifiedProjectModule>
+
+function isRecoverableAIGeneratedMedia(mediaItem: UnifiedMediaItemData): boolean {
+  if (mediaItem.source.type === 'ai-generation') {
+    return mediaItem.mediaStatus !== 'error'
+      && mediaItem.mediaStatus !== 'cancelled'
+      && mediaItem.source.taskStatus !== 'FAILED'
+      && mediaItem.source.taskStatus !== 'CANCELLED'
+      && Boolean(
+        mediaItem.source.aiTaskId || mediaItem.source.resultData || mediaItem.source.requestParams,
+      )
+  }
+
+  if (mediaItem.source.type === 'bizyair') {
+    return mediaItem.mediaStatus !== 'error'
+      && mediaItem.mediaStatus !== 'cancelled'
+      && mediaItem.source.taskStatus !== 'Failed'
+      && mediaItem.source.taskStatus !== 'Canceled'
+      && Boolean(
+        mediaItem.source.bizyairTaskId ||
+          mediaItem.source.resultData ||
+          mediaItem.source.requestParams,
+      )
+  }
+
+  return false
+}
