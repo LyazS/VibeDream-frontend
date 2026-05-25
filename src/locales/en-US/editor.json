@@ -97,6 +97,23 @@
     },
     "preview": {
       "downloadCurrentFrame": "Download Current Frame"
+    },
+    "taskCenter": {
+      "indicatorTitle": "Current Tasks",
+      "currentTasks": "Current Tasks",
+      "titles": {
+        "mediaReady": "Preparing Media",
+        "timelineItemReady": "Preparing Timeline Media",
+        "aiGeneratedMedia": "Generating AI Media",
+        "asrSubtitles": "Transcribing Subtitles",
+        "effectTemplateReady": "Downloading Effect Template"
+      },
+      "statuses": {
+        "idle": "Waiting to start",
+        "queued": "Queued",
+        "running": "In progress",
+        "blocked": "Waiting for dependency"
+      }
     }
   }
 }

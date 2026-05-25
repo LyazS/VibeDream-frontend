@@ -97,6 +97,23 @@
     },
     "preview": {
       "downloadCurrentFrame": "下载当前帧"
+    },
+    "taskCenter": {
+      "indicatorTitle": "当前任务",
+      "currentTasks": "当前任务",
+      "titles": {
+        "mediaReady": "准备素材",
+        "timelineItemReady": "准备时间轴素材",
+        "aiGeneratedMedia": "生成 AI 素材",
+        "asrSubtitles": "识别字幕",
+        "effectTemplateReady": "下载效果素材"
+      },
+      "statuses": {
+        "idle": "等待启动",
+        "queued": "排队中",
+        "running": "处理中",
+        "blocked": "等待上游完成"
+      }
     }
   }
 }

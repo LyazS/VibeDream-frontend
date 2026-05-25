@@ -34,6 +34,8 @@
         <div class="status-right">
           <!-- 左侧按钮组 -->
           <div class="button-group-left">
+            <ActiveTaskIndicator />
+
             <LanguageSelector />
 
             <HoverButton
@@ -132,6 +134,7 @@ import LoginModal from '@/components/modals/LoginModal.vue'
 import UserInfoModal from '@/components/modals/UserInfoModal.vue'
 import ExportSettingsModal from '@/components/modals/ExportSettingsModal.vue'
 import ProviderConfigModal from '@/components/modals/ProviderConfigModal.vue'
+import ActiveTaskIndicator from '@/components/task-center/ActiveTaskIndicator.vue'
 import { useAppI18n } from '@/core/composables/useI18n'
 import type { Quality } from 'mediabunny'
 
