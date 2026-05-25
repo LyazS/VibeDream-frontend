@@ -19,6 +19,7 @@ import {
   AddTimelineItemCommand,
   RemoveTimelineItemCommand,
   RemoveASRRequestCommand,
+  StartASRRequestCommand,
   MoveTimelineItemCommand,
   UpdateTransformCommand,
   UpdateTransitionOutCommand,
@@ -68,6 +69,7 @@ import {
   areClipFilterConfigsEqual,
   normalizeClipFilterConfig,
 } from '@/core/timelineitem/filter'
+import { RENDERER_FPS } from '@/core/mediabunny/constant'
 
 // 变换属性类型定义
 interface TransformProperties {
@@ -258,7 +260,7 @@ export function useHistoryOperations(
       return timelineItem.task.requestId
     }
 
-    return timelineItem.provenance?.asrRequestId || null
+    return null
   }
 
   /**
@@ -670,6 +672,26 @@ export function useHistoryOperations(
    */
   async function addTrackWithHistory(type: UnifiedTrackType = 'video', position?: number) {
     const command = new AddTrackCommand(type, position, unifiedTrackModule)
+    await unifiedHistoryModule.executeCommand(command)
+  }
+
+  async function startASRRequestWithHistory(
+    sourceTimelineItem: UnifiedTimelineItemData<MediaType>,
+    estimatedDurationSeconds: number,
+    requestId: string,
+    remoteTaskId: string,
+  ) {
+    const durationFrames = Math.max(1, Math.round(estimatedDurationSeconds * RENDERER_FPS))
+    const command = new StartASRRequestCommand(
+      sourceTimelineItem,
+      durationFrames,
+      requestId,
+      remoteTaskId,
+      unifiedTimelineModule,
+      unifiedTrackModule,
+      unifiedMediaModule,
+      ensureTimelineItemResolved,
+    )
     await unifiedHistoryModule.executeCommand(command)
   }
 
@@ -1320,6 +1342,7 @@ export function useHistoryOperations(
   return {
     addTimelineItemWithHistory,
     removeTimelineItemWithHistory,
+    startASRRequestWithHistory,
     moveTimelineItemWithHistory,
     updateTimelineItemTransformWithHistory,
     updateTransitionOutWithHistory,

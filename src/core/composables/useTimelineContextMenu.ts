@@ -21,8 +21,6 @@ import { BizyairFileUploader } from '@/core/utils/bizyairFileUploader'
 import { submitASRTask } from '@/core/jobs'
 import type { FileData } from '@/core/datasource/providers/ai-generation/types'
 import { RENDERER_FPS } from '@/core/mediabunny/constant'
-import { createTextTimelineItem } from '@/core/utils/textTimelineUtils'
-import { findOverlappingTimelineItemsOnTrack } from '@/core/utils/timelineSearchUtils'
 import { buildClipSelectionId } from '@/core/types/timelineSelection'
 
 /**
@@ -612,98 +610,6 @@ export function useTimelineContextMenu(
    * @param sourceTrackId 源音视频所在轨道ID
    * @returns 可用的轨道ID
    */
-  async function findOrCreateAvailableTextTrack(
-    startTime: number,
-    endTime: number,
-    sourceTrackId: string,
-  ): Promise<string> {
-    // 1. 获取所有text轨道
-    const textTracks = tracks.value.filter((t) => t.type === 'text')
-
-    // 2. 查找源音视频轨道下方的第一个不冲突的text轨道
-    const sourceTrackIndex = tracks.value.findIndex((t) => t.id === sourceTrackId)
-
-    // 按轨道索引排序，优先查找源轨道附近的轨道
-    const sortedTextTracks = [...textTracks].sort((a, b) => {
-      const indexA = tracks.value.findIndex((t) => t.id === a.id)
-      const indexB = tracks.value.findIndex((t) => t.id === b.id)
-      return Math.abs(indexA - sourceTrackIndex) - Math.abs(indexB - sourceTrackIndex)
-    })
-
-    // 3. 检查每个轨道是否有冲突
-    for (const track of sortedTextTracks) {
-      const overlappingItems = findOverlappingTimelineItemsOnTrack(
-        track.id,
-        startTime,
-        endTime,
-        unifiedStore.timelineItems,
-      )
-
-      if (overlappingItems.length === 0) {
-        console.log('✅ [ASR] 找到可用的text轨道:', track.id)
-        return track.id // 找到不冲突的轨道
-      }
-    }
-
-    // 4. 所有轨道都有冲突，创建新的text轨道
-    console.log('📦 [ASR] 所有text轨道都有冲突，创建新轨道')
-    await unifiedStore.addTrackWithHistory('text')
-    const newTrackId = tracks.value[tracks.value.length - 1].id
-    console.log('✅ [ASR] 新建text轨道:', newTrackId)
-
-    return newTrackId
-  }
-
-  /**
-   * 创建ASR占位符文本item
-   * @param sourceTimelineItem 源音视频item
-   * @param estimatedDuration 预估时长（秒）
-   * @returns 创建的占位符item
-   */
-  async function createPlaceholderTextItem(
-    sourceTimelineItem: UnifiedTimelineItemData,
-    estimatedDuration: number,
-    task: NonNullable<UnifiedTimelineItemData['task']>,
-  ): Promise<UnifiedTimelineItemData<'text'>> {
-    // 1. 计算时间范围（帧数）
-    const startTimeFrames = sourceTimelineItem.timeRange.timelineStartTime
-    const durationFrames = Math.round(estimatedDuration * RENDERER_FPS)
-
-    // 2. 查找合适的text轨道
-    const targetTrackId = await findOrCreateAvailableTextTrack(
-      startTimeFrames,
-      startTimeFrames + durationFrames,
-      sourceTimelineItem.trackId,
-    )
-
-    // 3. 创建占位符文本item
-    const placeholderItem = await createTextTimelineItem(
-      '', // 占位符不需要文本内容
-      {
-        fontSize: 48,
-        color: '#ffffff',
-        backgroundColor: 'rgba(0, 0, 0, 0.5)',
-      },
-      startTimeFrames,
-      targetTrackId,
-      durationFrames,
-    )
-
-    // 🆕 设置占位符标识
-    placeholderItem.isPlaceholder = true
-    placeholderItem.timelineStatus = 'loading'
-    placeholderItem.task = task
-
-    // 🗑️ 移除不需要的 bunny 设置（占位符不需要渲染）
-    // 不调用 setupTimelineItemBunny
-
-    // 添加到时间轴
-    await unifiedStore.addTimelineItem(placeholderItem)
-    console.log('✅ [ASR] 占位符item创建完成:', placeholderItem.id)
-
-    return placeholderItem
-  }
-
   /**
    * 开始语音识别
    * 流程：提取音频 -> 上传到bizyair -> 提交ASR任务 -> 创建占位符item -> 启动 ASRSubtitles DAG
@@ -792,25 +698,15 @@ export function useTimelineContextMenu(
       }
       console.log('✅ [ASR] 任务提交成功, taskId:', submitResult.task_id)
 
-      // 4. 创建占位符时间轴item
-      loading.update({ progress: 60, details: '创建占位符...' })
-      console.log('📦 [ASR] 正在创建占位符item...')
-
       const requestId = crypto.randomUUID()
-      const placeholderItem = await createPlaceholderTextItem(timelineItem, estimatedDuration, {
-        kind: 'asr-subtitles',
+      loading.update({ progress: 60, details: '创建 ASR 请求投影...' })
+      await unifiedStore.startASRRequestWithHistory(
+        timelineItem,
+        estimatedDuration,
         requestId,
-        remoteTaskId: submitResult.task_id,
-        status: 'processing',
-        sourceTimelineItemId: clipId,
-      })
-      console.log('✅ [ASR] 占位符item创建完成:', placeholderItem.id)
-
-      // 5. 直接启动 ASRSubtitles DAG，不再创建 ASR mediaItem
+        submitResult.task_id,
+      )
       loading.update({ progress: 80, details: t('timeline.speechRecognition.processing') })
-      void unifiedStore.ensureASRSubtitles(placeholderItem.id).catch((error) => {
-        console.error(`❌ [ASR] 启动 ASRSubtitles DAG 失败: ${placeholderItem.id}`, error)
-      })
 
       loading.update({ progress: 100, details: t('timeline.speechRecognition.processing') })
       console.log('✅ [ASR] ASR流程启动完成')

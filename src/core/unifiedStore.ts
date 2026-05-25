@@ -271,6 +271,7 @@ export const useUnifiedStore = defineStore('unified', () => {
     // 时间轴项目历史记录方法
     addTimelineItemWithHistory: historyOperations.addTimelineItemWithHistory,
     removeTimelineItemWithHistory: historyOperations.removeTimelineItemWithHistory,
+    startASRRequestWithHistory: historyOperations.startASRRequestWithHistory,
     moveTimelineItemWithHistory: historyOperations.moveTimelineItemWithHistory,
     updateTimelineItemTransformWithHistory:
       historyOperations.updateTimelineItemTransformWithHistory,
