@@ -1,9 +1,4 @@
-import type {
-  ResourceDomainEvent,
-  ResourceNode,
-  ResourceRequest,
-  ResourceType,
-} from './ResourceTypes'
+import type { ResourceDomainEvent, ResourceNode, ResourceRequest, ResourceType } from './ResourceTypes'
 
 /**
  * isSatisfied() 使用的轻量上下文。
@@ -54,8 +49,6 @@ export interface ResourceResolver<TInput = unknown, TResult = unknown> {
   resolve(ctx: ResolveContext<TInput>): Promise<TResult>
   /** 可选取消逻辑，例如中断上传、轮询、导出。 */
   cancel?(ctx: ResolveContext<TInput>): Promise<void>
-  /** 预留给后续恢复。MVP 暂不由 Runtime 调用。 */
-  restore?(node: ResourceNode<TInput, TResult>): Promise<'resume' | 'recompute' | 'fail' | 'ignore'>
 }
 
 type AnyResourceResolver = ResourceResolver<any, any>

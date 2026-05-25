@@ -27,7 +27,6 @@
 
 当前仍未落地的部分：
 
-- `policy.restore` / resolver `restore?()` 的统一语义
 - TaskCenter `bindings` / `canRevealSource`
 - 视觉摘要、效果模板、场景检测、导出等更多资源接入
 
@@ -39,7 +38,7 @@
 同时要明确区分两层恢复：
 
 - 业务对象级持久化恢复：当前已经存在，例如 meta 文件重建 media item、项目加载后自动恢复 AI 媒体和 timeline placeholder。
-- DAG 重建语义：当前还没有彻底收敛，例如 `policy.restore` / resolver `restore?()` 还没有全面落到“基于业务事实重建 DAG”。
+- DAG 重建语义：当前主要依赖“业务对象恢复后重新走 ensure 链路”，而不是 Runtime 内置恢复策略。
 
 ## 核心思路
 
@@ -237,24 +236,16 @@ export interface ResourceNode<TInput = unknown, TResult = unknown> {
 export interface ResourcePolicy {
   priority?: number
   queue?: 'remote' | 'local-heavy' | 'export' | 'background'
-  persist?: boolean
-  restore?: 'resume' | 'recompute' | 'mark-failed' | 'ignore'
   maxRetries?: number
 }
 ```
 
-Policy 描述资源节点的运行策略。它不决定资源是什么，也不参与资源去重；资源身份仍然只由 `type + key` 决定。Policy 只告诉 Runtime 和 Scheduler：这个节点应该以什么优先级进入哪个队列，重建 DAG 时如何选择恢复策略，以及失败后最多允许重试多少次。
+Policy 描述资源节点的运行策略。它不决定资源是什么，也不参与资源去重；资源身份仍然只由 `type + key` 决定。Policy 只告诉 Runtime 和 Scheduler：这个节点应该以什么优先级进入哪个队列，以及失败后最多允许重试多少次。
 
 字段含义：
 
 - `priority`: 调度优先级。相同资源被多处请求时，后来的请求可以提高已有节点的优先级，但不应该降低已有优先级。
 - `queue`: 节点使用的并发队列。远程请求、重型本地计算、导出、后台任务应进入不同队列，避免互相阻塞。
-- `persist`: 预留字段。若保留，语义也应落在业务事实侧，而不是持久化 `ResourceNode` 本身。
-- `restore`: 应用重启或业务入口重建 DAG 时的恢复策略：
-  - `resume`: 基于已有业务事实继续，例如重新轮询远程任务。
-  - `recompute`: 放弃已有阶段判断，从依赖图重新计算。
-  - `mark-failed`: 无法安全重建时，直接标记失败，等待用户重试。
-  - `ignore`: 临时资源不参与恢复。
 - `maxRetries`: 最大重试次数，用于限制自动重试或用户重复重试带来的资源消耗。
 
 Policy 不应该保存业务对象关系，例如 clip、media item、project 的来源信息。这类关系如果后续 TaskCenter 需要定位来源，应放在 `bindings` 之类的业务绑定元数据里。
@@ -269,7 +260,6 @@ const request: ResourceRequest = {
   policy: {
     queue: 'remote',
     priority: 80,
-    restore: 'resume',
     maxRetries: 3,
   },
 }
@@ -292,8 +282,6 @@ export interface ResourceResolver<TInput = unknown, TResult = unknown> {
   resolve(ctx: ResolveContext<TInput>): Promise<TResult>
 
   cancel?(ctx: ResolveContext<TInput>): Promise<void>
-
-  restore?(node: ResourceNode<TInput, TResult>): Promise<'resume' | 'recompute' | 'fail' | 'ignore'>
 }
 ```
 
@@ -305,7 +293,7 @@ Resolver 的职责：
 - 声明当前资源依赖哪些上游资源。
 - 在依赖完成后执行实际工作。
 - 把执行进度、阶段、领域事件回传给 Runtime。
-- 在取消、恢复、重试时提供资源类型相关的处理逻辑。
+- 在取消、重试时提供资源类型相关的处理逻辑。
 
 Resolver 不应该负责全局调度、跨资源去重、TaskCenter UI 组织，也不应该直接保存长期业务事实。长期事实应写回业务域对象、缓存或项目数据；DAG 只保存本次执行需要的运行态。
 
@@ -317,7 +305,6 @@ Resolver 不应该负责全局调度、跨资源去重、TaskCenter UI 组织，
 - `getDependencies(ctx)`: 可选的依赖声明。返回当前资源运行前必须先满足的资源请求。Runtime 会把这些请求加入 DAG，并在依赖全部成功后再调度当前节点。
 - `resolve(ctx)`: 当前资源真正的执行逻辑。它只应该假设依赖已经完成，然后把当前资源推进到 ready，并返回结果。
 - `cancel(ctx)`: 可选的取消逻辑。用于中断上传、导出、远程轮询、本地计算等资源类型相关工作。
-- `restore(node)`: 可选的恢复判断。应用重启后，Resolver 可以结合业务事实和当前状态决定继续、重算、失败或忽略。
 
 Resolver 的典型调用顺序：
 
@@ -666,13 +653,6 @@ media-ready cancelled      -> mediaItem.mediaStatus = cancelled
 - Promise / scheduler queue
 - File、Blob、Bunny runtime object
 - API Key
-
-恢复策略：
-
-- `resume`: 基于已有业务事实继续，例如重新连接进度流或重新轮询远程任务。
-- `recompute`: 从资源依赖重新计算。
-- `mark-failed`: 本地导出、智能分镜等无法安全重建的运行中资源标记失败。
-- `ignore`: 临时资源不恢复。
 
 ## 后续扩展：业务绑定
 

@@ -477,13 +477,6 @@ export class JobRuntime {
       return
     }
 
-    if (node.policy.persist) {
-      console.log('[JobRuntime][release] keep node because persist', {
-        resourceId: node.id,
-      })
-      return
-    }
-
     if (node.status !== 'succeeded') {
       console.log('[JobRuntime][release] keep node because status not releasable', {
         resourceId: node.id,

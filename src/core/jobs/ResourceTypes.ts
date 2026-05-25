@@ -2,15 +2,14 @@
  * Resource-first 任务中心的核心类型定义。
  *
  * 这里的“资源”不是 UI 上的一条任务，而是业务真正想要的 ready 状态，
- * 例如 media-ready、asr-subtitles、exported-project。JobRuntime 根据这些
+ * 例如 media-ready、ai-generated-media、asr-subtitles。JobRuntime 根据这些
  * ResourceRequest 构建运行态 DAG，并把 DAG 投影成任务中心视图。
  */
 
 /**
- * 资源类型。前面列出的是当前设计里明确会用到的资源类型。
+ * 资源类型。这里列出的是当前代码里已经落地并注册使用的资源类型。
  *
- * 末尾保留 `string` 是为了 MVP 阶段允许业务先注册实验性 resolver，
- * 不需要每加一个资源就先改这个联合类型；等资源模型稳定后可以再收窄。
+ * 新增资源类型时，需要先显式补充这个联合类型，再注册对应 resolver。
  */
 export type ResourceType =
   | 'media-ready'
@@ -20,17 +19,11 @@ export type ResourceType =
   | 'timeline-item-ready'
   | 'ai-input-prepared'
   | 'ai-task-submitted'
-  | 'uploaded-resource'
-  | 'remote-task-submitted'
   | 'remote-task-completed'
   | 'ai-generated-media'
   | 'asr-subtitles'
   | 'asr-remote-task-completed'
-  | 'visual-summary'
   | 'effect-template-ready'
-  | 'scene-boundaries'
-  | 'exported-project'
-  | string
 
 /**
  * ResourceNode 的运行态状态。
@@ -65,10 +58,6 @@ export interface ResourcePolicy {
   priority?: number
   /** 使用哪个并发队列。未指定时 Scheduler 会放入 background。 */
   queue?: ResourceQueue
-  /** 预留给后续持久化恢复。MVP 只保留字段，不实现落盘。 */
-  persist?: boolean
-  /** 应用重启后如何恢复。MVP 只保留字段，不执行恢复策略。 */
-  restore?: 'resume' | 'recompute' | 'mark-failed' | 'ignore'
   /** retry() 允许的最大次数。未指定表示 Runtime 不限制。 */
   maxRetries?: number
 }

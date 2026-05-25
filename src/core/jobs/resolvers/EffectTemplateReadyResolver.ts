@@ -218,7 +218,6 @@ export function createEffectTemplateReadyRequest(
     },
     policy: {
       queue: 'background',
-      restore: 'recompute',
       ...policy,
     },
   }
