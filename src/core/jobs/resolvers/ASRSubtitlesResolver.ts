@@ -233,7 +233,7 @@ export function createASRSubtitlesRequest(
     key: placeholderTimelineItemId,
     input: { placeholderTimelineItemId },
     policy: {
-      queue: 'remote',
+      queue: 'asr',
       maxRetries: 1,
       ...policy,
     },
@@ -253,7 +253,7 @@ export function createASRRemoteTaskCompletedRequest(
       remoteTaskId,
     },
     policy: {
-      queue: 'remote',
+      queue: 'asr',
       maxRetries: 3,
       ...policy,
     },

@@ -25,7 +25,8 @@ export interface DagSchedulerOptions {
  * local-heavy/export 先保守设置为 1，避免解码、导出这类重任务互相抢资源。
  */
 const DEFAULT_CONCURRENCY: Record<ResourceQueue, number> = {
-  remote: 2,
+  'ai-remote': 2,
+  asr: 2,
   'local-heavy': 1,
   export: 1,
   background: 2,

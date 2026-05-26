@@ -46,7 +46,7 @@ export type ResourceStatus =
 /**
  * 调度队列。不同资源类型进入不同队列，避免重型本地计算、远程轮询和导出互相抢占。
  */
-export type ResourceQueue = 'remote' | 'local-heavy' | 'export' | 'background'
+export type ResourceQueue = 'ai-remote' | 'asr' | 'local-heavy' | 'export' | 'background'
 
 /**
  * 运行策略，不参与资源身份计算。

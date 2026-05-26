@@ -638,7 +638,7 @@ export function createAIGeneratedMediaRequest(
     key: mediaId,
     input: { mediaId },
     policy: {
-      queue: 'remote',
+      queue: 'ai-remote',
       maxRetries: 3,
       ...policy,
     },
@@ -672,7 +672,7 @@ export function createAITaskSubmittedRequest(
     key: `${provider}:${mediaId}`,
     input: { mediaId, provider },
     policy: {
-      queue: 'remote',
+      queue: 'ai-remote',
       maxRetries: 3,
       ...policy,
     },
@@ -690,7 +690,7 @@ export function createRemoteTaskCompletedRequest(
     key: `${provider}:${taskId}`,
     input: { mediaId, provider, taskId },
     policy: {
-      queue: 'remote',
+      queue: 'ai-remote',
       maxRetries: 3,
       ...policy,
     },
