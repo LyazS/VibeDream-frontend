@@ -1,6 +1,5 @@
 /**
- * BizyAir 数据源查询函数和工厂函数
- * 基于"核心数据与行为分离"的重构方案
+ * BizyAir datasource 类型定义、工厂和查询函数。
  */
 
 import type {
@@ -26,7 +25,7 @@ import type {
 // 注意：BaseBizyAirSourceData 已在 types.ts 中定义，此处不需要重复定义
 
 /**
- * BizyAir 数据源 - 继承基类型和运行时状态
+ * BizyAir datasource 运行时结构。
  */
 export interface BizyAirSourceData extends BaseBizyAirSourceData, DataSourceRuntimeState {}
 
@@ -37,13 +36,13 @@ export interface BizyAirSourceData extends BaseBizyAirSourceData, DataSourceRunt
  */
 export const BizyAirSourceFactory = {
   /**
-   * 创建 BizyAir 数据源
+   * 创建 BizyAir datasource
    * @param param 基础数据
-   * @param origin 数据源来源标识（必须明确传入）
+   * @param origin 数据源来源标识
    */
   createBizyAirSource(
     param: BaseBizyAirSourceData,
-    origin: SourceOrigin, // 必须明确传入来源
+    origin: SourceOrigin,
   ): BizyAirSourceData {
     return reactive({
       ...param,
@@ -63,10 +62,10 @@ export const BizyAirTypeGuards = {
   },
 }
 
-// ==================== BizyAir 特定查询函数 ====================
+// ==================== BizyAir 查询函数 ====================
 
 /**
- * BizyAir 特定查询函数
+ * BizyAir 查询函数。
  */
 export const BizyAirQueries = {
   /**
@@ -137,20 +136,11 @@ export const BizyAirQueries = {
  */
 export function extractBizyAirSourceData(source: BizyAirSourceData): BaseBizyAirSourceData {
   return {
-    // 基础字段
     type: source.type,
-
-    // 特定字段
     bizyairTaskId: source.bizyairTaskId,
     requestParams: source.requestParams,
-    resultData: source.resultData, // 保存结果数据
-    taskStatus: source.taskStatus, // 保存任务状态
-
-    // 不需要保存运行时状态和敏感信息
-    // progress: source.progress, // 运行时状态
-    // errorMessage: source.errorMessage, // 运行时状态
-    // sourceOrigin: source.sourceOrigin, // 运行时状态
-    // apiKey: source.apiKey, // API Key 从统一Store获取，不持久化
+    resultData: source.resultData,
+    taskStatus: source.taskStatus,
   }
 }
 

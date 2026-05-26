@@ -1,6 +1,5 @@
 /**
- * 数据源辅助函数
- * 提供常用的数据源操作辅助方法
+ * 数据源辅助函数。
  */
 
 import type { UnifiedDataSourceData } from './DataSourceTypes'

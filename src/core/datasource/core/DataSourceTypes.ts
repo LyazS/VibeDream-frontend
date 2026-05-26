@@ -1,6 +1,5 @@
 /**
- * 统一数据源类型定义
- * 提供联合类型、工厂函数和类型查询的核心功能
+ * 统一数据源联合类型、工厂和查询函数。
  */
 
 import type {
@@ -47,7 +46,7 @@ export type UnifiedDataSourceData =
   | ASRSourceData
 
 /**
- * 数据源基类型联合类型 - 用于持久化
+ * 可持久化的数据源联合类型。
  */
 export type BaseDataSourcePersistedData =
   | BaseUserSelectedFileSourceData
@@ -125,8 +124,7 @@ export function extractSourceData(source: UnifiedDataSourceData): BaseDataSource
 // ==================== 统一查询函数 ====================
 
 /**
- * 扩展的数据源查询函数
- * 包含基础查询和类型特定查询
+ * 数据源查询函数集合。
  */
 export const DataSourceQueries = {
   // 继承基础查询函数

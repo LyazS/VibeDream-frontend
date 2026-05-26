@@ -104,7 +104,6 @@
         {{ t('properties.mediaItem.retry') }}
       </n-button>
 
-      <!-- 取消按钮（pending 状态） -->
       <n-button
         v-if="mediaItem.mediaStatus === 'pending'"
         type="error"
@@ -116,6 +115,7 @@
         </template>
         {{ t('properties.mediaItem.cancel') }}
       </n-button>
+
     </div>
   </div>
 </template>
@@ -334,30 +334,13 @@ async function handleRetry(): Promise<void> {
   }
 }
 
-// 取消操作
 async function handleCancel(): Promise<void> {
   const mediaItem = props.mediaItem
   if (!mediaItem) return
 
-  try {
-    console.log(`🛑 [MediaItemProperties] 尝试取消任务: ${mediaItem.name}`)
-
-    const success = await unifiedStore.cancelMediaProcessing(mediaItem.id)
-
-    if (success) {
-      unifiedStore.messageSuccess(t('media.cancelSuccess', { name: mediaItem.name }))
-    } else {
-      unifiedStore.messageWarning(t('media.cancelFailed', { name: mediaItem.name }))
-    }
-  } catch (error) {
-    console.error('取消任务失败:', error)
-    unifiedStore.messageError(
-      t('media.cancelFailed', {
-        name: mediaItem.name,
-      }),
-    )
-  }
+  unifiedStore.messageWarning(`TODO: 媒体资源取消链路待统一接入 JobRuntime.cancel() (${mediaItem.name})`)
 }
+
 </script>
 
 <style scoped>

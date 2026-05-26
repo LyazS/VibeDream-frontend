@@ -1,6 +1,5 @@
 /**
- * 数据源基础类型设计（响应式重构版）
- * 基于"核心数据与行为分离"的重构方案
+ * 数据源基础类型与运行时状态定义。
  */
 
 import { reactive } from 'vue'
@@ -9,9 +8,9 @@ import { generateUUID4 } from '@/core/utils/idGenerator'
 // ==================== 核心数据结构 ====================
 
 /**
- * 基础数据源数据接口 - 只包含持久化数据
- * 🌟 阶段二彻底重构：移除 id 和 mediaReferenceId 字段
- * 所有标识和引用统一由 UnifiedMediaItemData.id 管理
+ * 基础数据源持久化数据。
+ *
+ * 数据源自身只描述来源和配置；统一标识由 `UnifiedMediaItemData.id` 承载。
  */
 export interface BaseDataSourceData {
   readonly type: string
@@ -37,8 +36,8 @@ export interface DataSourceRuntimeState {
   sourceOrigin: SourceOrigin // 运行时字段：标识数据源来源
 }
 
-// 注意：UnifiedDataSourceData 类型在 DataSourceTypes.ts 中定义
-// 这里只导出基础类型，避免循环依赖
+// `UnifiedDataSourceData` 在 `DataSourceTypes.ts` 中定义；这里仅保留基础类型，
+// 避免核心基础层反向依赖具体 provider 联合类型。
 
 // ==================== 运行时状态工厂函数 ====================
 
@@ -81,11 +80,12 @@ export const BaseDataSourceTypeGuards = {
   },
 }
 
-// ==================== 业务协调层（协调完整的业务操作） ====================
+// ==================== 运行时状态操作 ====================
 
 /**
- * 运行时状态操作函数 - 协调数据操作和状态转换，处理完整的业务流程
- * 基础数据操作已直接内联到业务协调函数中
+ * 运行时状态操作函数。
+ *
+ * 这些方法只处理 datasource 自身的运行时字段，不负责 JobRuntime 层的 DAG 状态。
  */
 export const RuntimeStateActions = {
   // 开始获取流程
@@ -118,7 +118,7 @@ export const RuntimeStateActions = {
     state.errorMessage = '文件缺失'
   },
 
-  // ==================== 基础数据操作函数（保留以供直接调用） ====================
+  // ==================== 基础字段写入 ====================
 
   // 进度管理
   setProgress(state: DataSourceRuntimeState, progress: number): void {

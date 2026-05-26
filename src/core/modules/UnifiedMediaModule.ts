@@ -246,18 +246,6 @@ export function createUnifiedMediaModule(registry: ModuleRegistry) {
   }
 
   /**
-   * 根据数据源ID查找对应的媒体项目
-   * @param sourceId 数据源ID
-   * @returns 媒体项目或undefined
-   */
-  function getMediaItemBySourceId(sourceId: string): UnifiedMediaItemData | undefined {
-    // 🌟 阶段二彻底重构：数据源不再有 id 字段
-    // 此方法已废弃，保留仅为向后兼容
-    console.warn('⚠️ getMediaItemBySourceId 已废弃，数据源不再有独立ID')
-    return undefined
-  }
-
-  /**
    * 获取所有媒体项目
    * @returns 所有媒体项目的数组
    */
@@ -406,45 +394,9 @@ export function createUnifiedMediaModule(registry: ModuleRegistry) {
   // 注意：handleSourceStatusChange方法已移除，现在由各个管理器直接处理媒体状态
 
   /**
-   * 开始媒体项目处理流程
-   * @param mediaItem 媒体项目
-   * @deprecated 新链路应通过 ensureMediaReady / Resource DAG 进入。
-   */
-  function startMediaProcessing(mediaItem: UnifiedMediaItemData) {
-    console.log(`🚀 [UnifiedMediaModule] 开始处理媒体项目: ${mediaItem.name}`)
-
-    // 🌟 为 mediaItem 设置 watch（监听 name 和 metadata 变化）
-    const autoSaveModule = registry.get<UnifiedAutoSaveModule>(MODULE_NAMES.AUTOSAVE)
-    autoSaveModule.setupMediaItemWatcher(mediaItem)
-
-    // 直接使用数据源处理器注册中心（已在顶部静态导入）
-    const dsRegistry = getDataSourceRegistry()
-    const processor = dsRegistry.getProcessor(mediaItem.source.type)
-
-    if (processor) {
-      // ✅ 正确：通过任务队列处理，有并发控制和重试
-      processor.addTask(mediaItem)
-
-      console.log(`📋 [UnifiedMediaModule] 任务已加入队列`)
-
-      // 注意：任务队列会自动处理，不需要手动 then/catch
-      // 状态更新会通过 mediaItem 的响应式属性自动反映
-      // 如果需要监听任务完成，可以通过 watch mediaItem.mediaStatus
-    } else {
-      console.error(
-        `❌ [UnifiedMediaModule] 找不到对应的数据源处理器: ${mediaItem.source.type}`,
-      )
-      UnifiedMediaItemActions.transitionTo(mediaItem, 'error')
-    }
-  }
-
-  /**
-   * Resource DAG 使用的媒体数据源处理入口。
+   * Resource DAG 使用的 datasource 直接执行入口。
    *
-   * 与 startMediaProcessing() 的关键区别：
-   * - 不再调用 processor.addTask()。
-   * - 不再走 DataSourceProcessor 自己的 p-limit 队列。
-   * - 调用方可以 await，失败会向 resolver 抛出。
+   * 调度由 JobRuntime / DagScheduler 负责，这里只负责把请求分发到具体 datasource 执行器。
    */
   async function processMediaSourceDirectly(mediaItem: UnifiedMediaItemData): Promise<void> {
     console.log(`🚀 [UnifiedMediaModule] DAG处理媒体项目: ${mediaItem.name}`)
@@ -506,52 +458,6 @@ export function createUnifiedMediaModule(registry: ModuleRegistry) {
       await processor.decodePreparedMediaFileForDag(mediaItem, preparedFile)
     } finally {
       preparedMediaFiles.delete(mediaItem.id)
-    }
-  }
-
-  /**
-   * 取消媒体处理任务
-   * @param mediaId 媒体项目ID
-   * @returns 是否成功取消
-   */
-  async function cancelMediaProcessing(mediaId: string): Promise<boolean> {
-    const mediaItem = getMediaItem(mediaId)
-    if (!mediaItem) {
-      console.warn(`⚠️ [UnifiedMediaModule] 媒体项目不存在: ${mediaId}`)
-      return false
-    }
-
-    console.log(`🛑 [UnifiedMediaModule] 尝试取消媒体处理: ${mediaItem.name}`)
-
-    try {
-      // 导入数据源处理器注册中心
-      const ds_registry = getDataSourceRegistry()
-      const processor = ds_registry.getProcessor(mediaItem.source.type)
-
-      if (!processor) {
-        console.error(`❌ [UnifiedMediaModule] 找不到对应的数据源处理器: ${mediaItem.source.type}`)
-        return false
-      }
-
-      // 🌟 直接使用 mediaId 作为 taskId（BaseDataSourceProcessor.addTask 已改为使用 mediaItem.id）
-      const success = await processor.cancelTask(mediaId)
-
-      if (success) {
-        console.log(`✅ [UnifiedMediaModule] 任务取消成功: ${mediaItem.name}`)
-
-        // 保存项目配置（内容已变更）
-        const projectModule = registry.get<UnifiedProjectModule>(MODULE_NAMES.PROJECT)
-        if (projectModule) {
-          await projectModule.saveCurrentProject({ contentChanged: true })
-        }
-      } else {
-        console.warn(`⚠️ [UnifiedMediaModule] 任务取消失败: ${mediaItem.name}`)
-      }
-
-      return success
-    } catch (error) {
-      console.error(`❌ [UnifiedMediaModule] 取消任务时出错: ${mediaItem.name}`, error)
-      return false
     }
   }
 
@@ -726,7 +632,6 @@ export function createUnifiedMediaModule(registry: ModuleRegistry) {
     addMediaItem,
     removeMediaItem,
     getMediaItem,
-    getMediaItemBySourceId,
     updateMediaItemName,
     updateMediaItem,
     updateMediaItemMetadata,
@@ -751,12 +656,10 @@ export function createUnifiedMediaModule(registry: ModuleRegistry) {
     waitForMediaItemReady,
 
     // 数据源处理方法
-    startMediaProcessing,
     processMediaSourceDirectly,
     prepareMediaFileDirectly,
     hasPreparedMediaFile,
     decodePreparedMediaFileDirectly,
-    cancelMediaProcessing,
 
     // 便捷查询方法
     getReadyMediaItems,

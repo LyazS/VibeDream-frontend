@@ -1507,25 +1507,7 @@ async function handleCancelTask(): Promise<void> {
   if (!mediaItem) return
 
   showContextMenu.value = false
-
-  try {
-    console.log(`🛑 [LibraryMediaGrid] 尝试取消任务: ${mediaItem.name}`)
-
-    const success = await unifiedStore.cancelMediaProcessing(mediaItem.id)
-
-    if (success) {
-      unifiedStore.messageSuccess(t('media.cancelSuccess', { name: mediaItem.name }))
-    } else {
-      unifiedStore.messageWarning(t('media.cancelFailed', { name: mediaItem.name }))
-    }
-  } catch (error) {
-    console.error('取消任务失败:', error)
-    unifiedStore.messageError(
-      t('media.cancelFailed', {
-        name: mediaItem.name,
-      }),
-    )
-  }
+  unifiedStore.messageWarning(`TODO: 媒体资源取消链路待统一接入 JobRuntime.cancel() (${mediaItem.name})`)
 }
 
 // ==================== 重试功能 ====================

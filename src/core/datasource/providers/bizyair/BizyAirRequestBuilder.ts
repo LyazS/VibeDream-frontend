@@ -116,7 +116,7 @@ export class BizyAirRequestBuilder {
           }
         }
       } else if (Array.isArray(mappingConfig)) {
-        // 兼容旧的数组格式：直接是 InputMappingItem[]
+        // 允许直接传入 InputMappingItem[] 形式的映射配置
         if (userValue !== undefined && Array.isArray(userValue)) {
           const processedArray = this.processArrayType(userValue, mappingConfig)
           if (processedArray !== null) {

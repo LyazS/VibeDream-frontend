@@ -335,7 +335,6 @@ export const useUnifiedStore = defineStore('unified', () => {
     retryTemplateProcessing: retryEffectTemplateReady,
     cancelTemplateProcessing: cancelEffectTemplateReady,
     ensureEffectTemplateReady,
-    getMediaItemBySourceId: unifiedMediaModule.getMediaItemBySourceId,
     updateMediaItemName: unifiedMediaModule.updateMediaItemName,
     updateMediaItem: unifiedMediaModule.updateMediaItem,
     updateMediaItemMetadata: unifiedMediaModule.updateMediaItemMetadata,
@@ -348,9 +347,7 @@ export const useUnifiedStore = defineStore('unified', () => {
     // 异步等待方法
     waitForMediaItemReady: unifiedMediaModule.waitForMediaItemReady,
 
-    // 数据源处理方法
-    startMediaProcessing: unifiedMediaModule.startMediaProcessing,
-    cancelMediaProcessing: unifiedMediaModule.cancelMediaProcessing,
+    // TODO(Resource DAG): 媒体资源取消链路后续统一到 JobRuntime.cancel()。
 
     // 便捷查询方法
     getReadyMediaItems: unifiedMediaModule.getReadyMediaItems,

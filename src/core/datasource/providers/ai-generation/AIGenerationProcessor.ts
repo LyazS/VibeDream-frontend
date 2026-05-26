@@ -1,11 +1,12 @@
 /**
- * AI生成处理器
- * 负责管理AI媒体生成任务，包括任务提交、进度监控、结果获取等
+ * AI 生成 datasource 执行器。
+ *
+ * 负责恢复远程结果、拉取媒体文件、解码并写回本地媒体状态。
+ * 远程任务提交由上层 UI / resolver 链路负责。
  */
 
 import {
   DataSourceProcessor,
-  type AcquisitionTask,
   type PreparedMediaFile,
 } from '@/core/datasource/core/BaseDataSourceProcessor'
 import { RuntimeStateActions, SourceOrigin } from '@/core/datasource/core/BaseDataSource'
@@ -13,7 +14,6 @@ import { DataSourceHelpers } from '@/core/datasource/core/DataSourceHelpers'
 import { fetchClient, sleepWithAbortSignal } from '@/utils/fetchClient'
 import type { UnifiedMediaItemData, MediaType } from '@/core/mediaitem/types'
 import { globalMetaFileManager } from '@/core/managers/media/globalMetaFileManager'
-import { DATA_SOURCE_CONCURRENCY } from '@/constants/ConcurrencyConstants'
 import { useUnifiedStore } from '@/core/unifiedStore'
 
 // 导入类型定义
@@ -87,15 +87,15 @@ function getExtensionFromMimeType(mimeType: string): string {
   return mimeToExt[normalizedMime] || 'bin'
 }
 
-// ==================== AI生成管理器 ====================
+// ==================== AI 生成 datasource 执行器 ====================
 
 /**
- * AI生成处理器 - 管理AI媒体生成任务
+ * AI 生成执行器。
  */
 export class AIGenerationProcessor extends DataSourceProcessor {
   private static instance: AIGenerationProcessor
 
-  // 🌟 新增：存储每个任务的 AbortController
+  // 以远程任务 ID 为 key 维护流式监听中断控制。
   private abortControllers: Map<string, AbortController> = new Map()
   private dagPrepareState = new Map<
     string,
@@ -117,49 +117,19 @@ export class AIGenerationProcessor extends DataSourceProcessor {
    */
   private constructor() {
     super()
-    // AI生成需要限制并发数
-    this.maxConcurrentTasks = DATA_SOURCE_CONCURRENCY.AI_GENERATION_MAX_CONCURRENT_TASKS
-  }
-
-  // ==================== 实现抽象方法 ====================
-
-  /**
-   * 执行具体的获取任务。
-   *
-   * @deprecated 仅保留给旧 Processor 队列主链。AI 生成新链路优先通过
-   * AIGeneratedMediaResolver 和 DAG 拆分接口推进。
-   */
-  protected async executeTask(task: AcquisitionTask): Promise<void> {
-    const mediaItem = task.mediaItem
-
-    console.log(`🎬 [AIGenerationProcessor] 开始执行任务: ${task.id} - ${mediaItem.name}`)
-
-    // executeTask 内部调用 processMediaItem
-    await this.processMediaItem(mediaItem)
-
-    // 检查执行结果 - 通过检查错误信息来判断状态
-    const source = task.mediaItem.source as AIGenerationSourceData
-    if (source.errorMessage) {
-      throw new Error(source.errorMessage)
-    }
-
-    console.log(`✅ [AIGenerationProcessor] 任务执行成功: ${task.id}`)
   }
 
   /**
-   * 获取处理器类型
+   * 获取执行器类型
    */
   getProcessorType(): string {
     return 'ai-generation'
   }
 
-  // ==================== AI生成特定行为方法 ====================
+  // ==================== AI 生成执行逻辑 ====================
 
   /**
-   * 进度流处理（使用fetchClient的stream方法）
-   * @param aiTaskId 任务ID
-   * @param mediaItem 媒体项目
-   * @returns 生成的文件对象
+   * 监听远程进度流并在完成后产出文件。
    */
   private async startProgressStream(
     aiTaskId: string,
@@ -171,7 +141,7 @@ export class AIGenerationProcessor extends DataSourceProcessor {
     this.abortControllers.set(aiTaskId, abortController)
 
     return new Promise(async (resolve, reject) => {
-      // 🌟 开始监听进度流时，设置任务状态为进行中
+      // 开始监听后，把 datasource 任务状态推进到 processing。
       console.log(`🔄 [AIGenerationProcessor] 开始监听进度流，设置状态为 PROCESSING`)
       let needReconnect = true
       let delayTime = 1
@@ -188,7 +158,7 @@ export class AIGenerationProcessor extends DataSourceProcessor {
                   console.log(`🎬 [AIGenerationProcessor] 任务进度更新:`, streamEvent)
                   const shouldTransition = this.handleProgressUpdate(source, streamEvent)
 
-                  // handleProgressUpdate 内部已判断是否需要转换（PENDING -> PROCESSING）
+                  // `handleProgressUpdate()` 已判断是否需要从 pending 推进到 processing。
                   if (shouldTransition) {
                     console.log(
                       `🔄 [AIGenerationProcessor] 任务状态从 PENDING 转换到 PROCESSING，设置媒体状态为 asyncprocessing`,
@@ -201,7 +171,7 @@ export class AIGenerationProcessor extends DataSourceProcessor {
                 else if (streamEvent.type === TaskStreamEventType.FINAL) {
                   console.log(`📋 [AIGenerationProcessor] FINAL 事件状态: ${streamEvent.status}`)
 
-                  // 如果是失败或取消状态，设置状态并拒绝
+                  // 远程任务在 FINAL 事件中失败或取消时，终止本地执行。
                   if (streamEvent.status === TaskStatus.FAILED) {
                     source.taskStatus = TaskStatus.FAILED
                     console.error(`❌ [AIGenerationProcessor] 任务失败，状态: FAILED`)
@@ -216,7 +186,7 @@ export class AIGenerationProcessor extends DataSourceProcessor {
                     return true
                   }
 
-                  // ✅ 直接从 FINAL 事件中获取 result_data（无需额外 API 调用）
+                  // 直接使用 FINAL 事件里的 `result_data`，不再额外查询结果接口。
                   if (!streamEvent.result_data) {
                     console.error(`❌ [AIGenerationProcessor] FINAL 事件中缺少 result_data`)
                     reject(new Error('FINAL 事件中缺少 result_data'))
@@ -230,7 +200,7 @@ export class AIGenerationProcessor extends DataSourceProcessor {
                   needReconnect = false
                   return true
                 } else if (streamEvent.type === TaskStreamEventType.HEARTBEAT) {
-                  // 心跳事件，保持连接活跃，无需处理
+                  // 心跳事件无需额外处理。
                   return false
                 } else if (streamEvent.type === TaskStreamEventType.NOT_FOUND) {
                   console.error(`❌ [AIGenerationProcessor] 进度流错误: ${streamEvent.message}`)
@@ -238,14 +208,12 @@ export class AIGenerationProcessor extends DataSourceProcessor {
                   needReconnect = false
                   return true
                 }
-                // 处理错误
                 else if (streamEvent.type === TaskStreamEventType.ERROR) {
-                  // 🌟 ERROR 事件表示进度流系统错误（如权限问题、流异常），不是任务失败，不修改 taskStatus
+                  // ERROR 表示流式通道异常，不直接等同于远程任务失败。
                   console.error(`❌ [AIGenerationProcessor] 进度流错误: ${streamEvent.message}`)
                   return true
                 }
 
-                // 默认继续读取流
                 return false
               },
               undefined,
@@ -441,16 +409,12 @@ export class AIGenerationProcessor extends DataSourceProcessor {
   }
 
   /**
-   * 为媒体项目准备文件
-   * 支持三种场景：
-   * - 场景A：任务已完成并下载到本地 -> 从 media/{id} 加载
-   * - 场景B：本地文件不存在但有 resultPath -> 直接从 resultPath 获取结果（无需进度流）
-   * - 场景C：有 aiTaskId，任务进行中 -> startProgressStream
+   * 为 AI 生成媒体准备本地文件。
    *
-   * 注意：场景D（提交新任务）已移至 UI 层处理
-   *
-   * @param mediaItem 媒体项目
-   * @returns 文件准备结果
+   * 当前覆盖三种恢复/执行场景：
+   * - 本地文件已存在，直接加载
+   * - 远程结果已完成，直接按 `resultData` 下载
+   * - 远程任务仍在进行中，继续监听进度流
    */
   private async prepareFileForMediaItem(
     mediaItem: UnifiedMediaItemData,
@@ -463,20 +427,20 @@ export class AIGenerationProcessor extends DataSourceProcessor {
       let needSaveMeta: boolean
       let needSaveMedia: boolean
 
-      // 🌟 场景判断：优先尝试从本地恢复
+      // 优先尝试从本地恢复，再决定是否回到远程阶段。
       const localFileExists = await globalMetaFileManager.verifyMediaFileExists(mediaItem.id)
 
       if (localFileExists) {
-        // 场景 A: 从本地加载已完成的文件
+        // 本地文件已存在，直接恢复。
         this.transitionMediaStatus(mediaItem, 'asyncprocessing')
-        console.log(`📂 [场景A] 从项目加载已完成的AI生成文件: ${mediaItem.id}`)
+        console.log(`📂 [AIGenerationProcessor] 从项目加载已完成的 AI 生成文件: ${mediaItem.id}`)
         file = await globalMetaFileManager.loadMediaFile(mediaItem.id)
         needSaveMeta = false // meta 文件已存在
         needSaveMedia = false // 媒体文件已存在
       } else if (source.resultData) {
-        // 场景 B: 远程任务已完成，重新获取文件
+        // 远程阶段已完成，但本地文件缺失，重新下载产物。
         this.transitionMediaStatus(mediaItem, 'asyncprocessing')
-        console.log(`🎯 [场景B] 远程任务已完成，直接从 resultData 获取:`, source.resultData)
+        console.log(`🎯 [AIGenerationProcessor] 远程任务已完成，直接从 resultData 获取:`, source.resultData)
         RuntimeStateActions.startAcquisition(source)
 
         file = await this.handleFinalResult(source.aiTaskId, source.resultData, source)
@@ -486,12 +450,12 @@ export class AIGenerationProcessor extends DataSourceProcessor {
         needSaveMeta = true // 需要更新 meta 文件
         needSaveMedia = true // 需要保存新获取的媒体文件
       } else {
-        // 场景 C: 监听进行中的任务
+        // 远程阶段仍在运行，继续监听进度流。
         if (!source.aiTaskId) {
-          throw new Error('AI任务ID不存在，任务应该在UI层提交')
+          throw new Error('AI 远程任务 ID 不存在，无法恢复执行')
         }
 
-        console.log(`🔄 [场景C] 监听进行中的AI任务: ${source.aiTaskId}`)
+        console.log(`🔄 [AIGenerationProcessor] 恢复进行中的 AI 任务: ${source.aiTaskId}`)
 
         if (source.taskStatus === TaskStatus.FAILED) {
           throw new Error('AI任务已失败，无法继续')
@@ -516,8 +480,7 @@ export class AIGenerationProcessor extends DataSourceProcessor {
       const errorMessage = error instanceof Error ? error.message : 'AI生成失败'
       RuntimeStateActions.setError(source, errorMessage)
 
-      // 🌟 关键改动：不再抛出错误，而是返回失败结果
-      // 失败时也要保存 meta，以持久化失败状态
+      // 失败时返回显式结果，让调用方决定后续持久化与错误传播。
       return {
         success: false,
         error: errorMessage,
@@ -526,16 +489,7 @@ export class AIGenerationProcessor extends DataSourceProcessor {
     }
   }
 
-  // ==================== 新增：实现统一媒体项目处理 ====================
-
-  /**
-   * 处理完整的媒体项目生命周期
-   *
-   * @deprecated 兼容旧 Processor 主链的聚合入口。当前 DAG 仍复用其内部共享逻辑，
-   * 但新业务入口不应再直接依赖该方法。
-   * @param mediaItem 媒体项目
-   */
-  async processMediaItem(mediaItem: UnifiedMediaItemData): Promise<void> {
+  async processTaskDirectly(mediaItem: UnifiedMediaItemData): Promise<void> {
     const source = mediaItem.source as AIGenerationSourceData
 
     try {
@@ -706,89 +660,4 @@ export class AIGenerationProcessor extends DataSourceProcessor {
     }
   }
 
-  // ==================== 任务取消功能 ====================
-
-  /**
-   * 取消任务
-   * 只能取消 pending 状态的任务
-   * @param taskId 任务ID
-   * @returns 是否成功取消
-   */
-  async cancelTask(taskId: string): Promise<boolean> {
-    const task = this.tasks.get(taskId)
-    if (!task) {
-      console.warn(`⚠️ [AIGenerationProcessor] 任务不存在: ${taskId}`)
-      return false
-    }
-
-    // 检查状态是否为 pending
-    if (task.mediaItem.mediaStatus !== 'pending') {
-      console.warn(
-        `⚠️ [AIGenerationProcessor] 只能取消 pending 状态的任务，当前状态: ${task.mediaItem.mediaStatus}`,
-      )
-      return false
-    }
-
-    const source = task.mediaItem.source as AIGenerationSourceData
-    const aiTaskId = source.aiTaskId
-
-    try {
-      // 1. 先调用后端 API 取消远程任务
-      if (aiTaskId) {
-        const cancelSuccess = await this.cancelRemoteTask(aiTaskId)
-        if (!cancelSuccess) {
-          console.warn(`⚠️ [AIGenerationProcessor] 后端任务取消失败，不更新本地状态: ${aiTaskId}`)
-          return false
-        }
-      }
-
-      // 2. 后端取消成功后，中断流式连接（如果存在）
-      const abortController = this.abortControllers.get(aiTaskId)
-      if (abortController) {
-        console.log(`🛑 [AIGenerationProcessor] 中断进度流: ${aiTaskId}`)
-        abortController.abort()
-        // 🌟 立即清理 AbortController，避免依赖异步 finally
-        this.abortControllers.delete(aiTaskId)
-      }
-
-      // 3. 设置为 cancelled 状态
-      this.transitionMediaStatus(task.mediaItem, 'cancelled')
-      source.taskStatus = TaskStatus.CANCELLED // 🌟 同时设置 source.taskStatus
-      source.errorMessage = '任务已取消'
-
-      // 4. 保存 cancelled 状态到 meta 文件
-      await globalMetaFileManager.saveMetaFile(task.mediaItem)
-      console.log(`💾 [AIGenerationProcessor] 已保存 cancelled 状态到 meta: ${task.mediaItem.name}`)
-
-      console.log(`✅ [AIGenerationProcessor] 任务取消成功: ${aiTaskId}`)
-      return true
-    } catch (error) {
-      console.error(`❌ [AIGenerationProcessor] 取消任务失败: ${aiTaskId}`, error)
-      return false
-    }
-  }
-
-  /**
-   * 调用后端 API 取消远程任务
-   * @param aiTaskId AI任务ID
-   * @returns 是否成功取消
-   */
-  private async cancelRemoteTask(aiTaskId: string): Promise<boolean> {
-    try {
-      console.log(`🌐 [AIGenerationProcessor] 调用后端 API 取消任务: ${aiTaskId}`)
-
-      const response = await fetchClient.delete(`/api/media/tasks/${aiTaskId}`)
-
-      if (response.status === 200) {
-        console.log(`✅ [AIGenerationProcessor] 后端任务取消成功: ${aiTaskId}`)
-        return true
-      } else {
-        console.warn(`⚠️ [AIGenerationProcessor] 后端任务取消失败: ${response.statusText}`)
-        return false
-      }
-    } catch (error) {
-      console.error(`❌ [AIGenerationProcessor] 调用后端 API 失败: ${aiTaskId}`, error)
-      return false
-    }
-  }
 }

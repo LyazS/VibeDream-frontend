@@ -1,6 +1,5 @@
 /**
- * 统一数据源系统导出文件
- * 基于"核心数据与行为分离"的响应式重构方案
+ * `@/core` 统一导出入口。
  */
 
 // ==================== 基础类型和接口 ====================
@@ -36,18 +35,15 @@ export {
   UserSelectedFileTypeGuards,
 } from './datasource/providers/user-selected/UserSelectedFileSource'
 
-// ==================== 处理器基础类 ====================
+// ==================== datasource 执行基类 ====================
 export {
-  // 接口
-  type AcquisitionTask,
-
-  // 基础处理器类
+  // 基础执行器类
   DataSourceProcessor,
 } from './datasource/core/BaseDataSourceProcessor'
 
-// ==================== 具体处理器实现 ====================
+// ==================== datasource 执行器实现 ====================
 export {
-  // 用户选择文件处理器
+  // 用户选择文件执行器
   UserSelectedFileProcessor,
 } from './datasource/providers/user-selected/UserSelectedFileProcessor'
 

@@ -1,6 +1,5 @@
 /**
- * ASR 数据源工厂函数
- * 基于"核心数据与行为分离"的重构方案
+ * ASR datasource 类型定义、工厂和提取函数。
  */
 
 import type {
@@ -19,7 +18,7 @@ import type { BaseASRSourceData } from './types'
 // ==================== 数据源接口定义 ====================
 
 /**
- * ASR 数据源 - 继承基类型和运行时状态
+ * ASR datasource 运行时结构。
  */
 export interface ASRSourceData extends BaseASRSourceData, DataSourceRuntimeState {}
 
@@ -30,9 +29,9 @@ export interface ASRSourceData extends BaseASRSourceData, DataSourceRuntimeState
  */
 export const ASRSourceFactory = {
   /**
-   * 创建 ASR 数据源
+   * 创建 ASR datasource
    * @param param 基础数据
-   * @param origin 数据源来源标识（必须明确传入）
+   * @param origin 数据源来源标识
    */
   createASRSource(
     param: BaseASRSourceData,
@@ -63,10 +62,7 @@ export const ASRTypeGuards = {
  */
 export function extractASRSourceData(source: ASRSourceData): BaseASRSourceData {
   return {
-    // 基础字段
     type: source.type,
-
-    // ASR 特定字段
     asrTaskId: source.asrTaskId,
     requestConfig: source.requestConfig,
     resultData: source.resultData,
@@ -74,9 +70,5 @@ export function extractASRSourceData(source: ASRSourceData): BaseASRSourceData {
     sourceTimelineItemId: source.sourceTimelineItemId,
     placeholderTimelineItemId: source.placeholderTimelineItemId,
 
-    // 不需要保存运行时状态
-    // progress: source.progress, // 重新加载时会重置
-    // errorMessage: source.errorMessage, // 重新加载时会重置
-    // sourceOrigin: source.sourceOrigin, // 重新加载时会重新设置
   }
 }

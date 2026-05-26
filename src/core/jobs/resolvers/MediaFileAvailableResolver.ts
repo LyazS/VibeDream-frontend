@@ -14,10 +14,7 @@ export interface MediaFileAvailableResult {
   mediaType: MediaType | 'unknown'
 }
 
-type MediaFileAvailableModule = Pick<
-  UnifiedMediaModule,
-  'getMediaItem' | 'prepareMediaFileDirectly' | 'cancelMediaProcessing'
->
+type MediaFileAvailableModule = Pick<UnifiedMediaModule, 'getMediaItem' | 'prepareMediaFileDirectly'>
 
 /**
  * 准备媒体文件资源。
@@ -74,10 +71,6 @@ export class MediaFileAvailableResolver
     })
 
     return toResult(preparedMediaItem)
-  }
-
-  async cancel(ctx: ResolveContext<MediaFileAvailableInput>): Promise<void> {
-    await this.mediaModule.cancelMediaProcessing(ctx.input.mediaId)
   }
 
   private getExistingMediaItem(mediaId: string): UnifiedMediaItemData {

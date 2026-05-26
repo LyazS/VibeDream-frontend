@@ -1,18 +1,16 @@
 /**
- * BizyAir 处理器
+ * BizyAir datasource 执行器。
  *
- * 负责管理 BizyAir 媒体生成任务，包括任务提交、进度监控、结果获取等
- * 前端直接调用 BizyAir API，不经过后端
+ * 负责恢复 BizyAir 远程结果、下载媒体文件、解码并写回本地媒体状态。
+ * 前端直接调用 BizyAir API，不经过后端代理。
  */
 
 import {
   DataSourceProcessor,
-  type AcquisitionTask,
   type PreparedMediaFile,
 } from '@/core/datasource/core/BaseDataSourceProcessor'
 import { RuntimeStateActions } from '@/core/datasource/core/BaseDataSource'
 import { globalMetaFileManager } from '@/core/managers/media/globalMetaFileManager'
-import { DATA_SOURCE_CONCURRENCY } from '@/constants/ConcurrencyConstants'
 import type { UnifiedMediaItemData, MediaType } from '@/core/mediaitem/types'
 import type { BizyAirSourceData } from './BizyAirSource'
 import { BizyAirTypeGuards } from './BizyAirSource'
@@ -37,15 +35,15 @@ function getExtensionFromUrl(url: string): string {
   return 'bin'
 }
 
-// ==================== BizyAir 处理器 ====================
+// ==================== BizyAir datasource 执行器 ====================
 
 /**
- * BizyAir 处理器 - 管理 BizyAir 媒体生成任务
+ * BizyAir 执行器。
  */
 export class BizyAirProcessor extends DataSourceProcessor {
   private static instance: BizyAirProcessor
 
-  // 存储 AbortController 用于取消任务
+  // 以 mediaId 为 key 维护远程轮询中断控制。
   private abortControllers: Map<string, AbortController> = new Map()
   private dagPrepareState = new Map<
     string,
@@ -67,9 +65,6 @@ export class BizyAirProcessor extends DataSourceProcessor {
    */
   private constructor() {
     super()
-    // BizyAir 需要限制并发数
-    this.maxConcurrentTasks = DATA_SOURCE_CONCURRENCY.AI_GENERATION_MAX_CONCURRENT_TASKS
-
     // 初始化 BizyAir 配置管理器
     BizyAirConfigManager.initialize()
       .then(() => {
@@ -80,53 +75,17 @@ export class BizyAirProcessor extends DataSourceProcessor {
       })
   }
 
-  // ==================== 实现抽象方法 ====================
-
   /**
-   * 执行具体的获取任务。
-   *
-   * @deprecated 仅保留给旧 Processor 队列主链。BizyAir 新链路优先通过
-   * AIGeneratedMediaResolver 和 DAG 拆分接口推进。
-   */
-  protected async executeTask(task: AcquisitionTask): Promise<void> {
-    const mediaItem = task.mediaItem
-
-    console.log(`🎬 [BizyAirProcessor] 开始执行任务: ${task.id} - ${mediaItem.name}`)
-
-    // executeTask 内部调用 processMediaItem
-    await this.processMediaItem(mediaItem)
-
-    // 检查执行结果 - 通过检查错误信息来判断状态
-    const source = mediaItem.source
-    if (!BizyAirTypeGuards.isBizyAirSource(source)) {
-      throw new Error('数据源类型错误，期望 BizyAirSourceData')
-    }
-    const bizyAirSource = source as BizyAirSourceData
-    if (bizyAirSource.errorMessage) {
-      throw new Error(bizyAirSource.errorMessage)
-    }
-
-    console.log(`✅ [BizyAirProcessor] 任务执行成功: ${task.id}`)
-  }
-
-  /**
-   * 获取处理器类型
+   * 获取执行器类型
    */
   getProcessorType(): string {
     return 'bizyair'
   }
 
-  // ==================== BizyAir 特定行为方法 ====================
+  // ==================== BizyAir 执行逻辑 ====================
 
   /**
-   * 轮询 BizyAir 任务（只轮询，不提交）
-   *
-   * 注意：提交任务应该在 UI 层处理
-   *
-   * @param source - BizyAir 数据源
-   * @param mediaItem - 媒体项目
-   * @param signal - AbortSignal 用于取消任务
-   * @returns 生成的文件对象
+   * 轮询 BizyAir 远程任务直到产出可下载文件。
    */
   private async pollBizyAirTask(
     source: BizyAirSourceData,
@@ -143,13 +102,13 @@ export class BizyAirProcessor extends DataSourceProcessor {
 
     const requestId = source.bizyairTaskId
     if (!requestId) {
-      throw new Error('BizyAir 任务ID不存在，任务应该在UI层提交')
+      throw new Error('BizyAir 远程任务 ID 不存在，无法恢复执行')
     }
 
     console.log(`🔄 [BizyAirProcessor] 轮询任务: ${requestId}`)
 
     this.transitionMediaStatus(mediaItem, 'asyncprocessing')
-    // 1. 轮询任务直到完成
+    // 1. 轮询远程状态直到完成
     const taskDetail = await BizyAirAPIClient.pollUntilComplete(
       requestId,
       apiKey,
@@ -161,11 +120,11 @@ export class BizyAirProcessor extends DataSourceProcessor {
       signal,
     )
 
-    // 2. 更新任务状态
+    // 2. 同步 datasource 中的远程状态
     source.taskStatus = taskDetail.status
     console.log(`📋 [BizyAirProcessor] 任务状态: ${taskDetail.status}`)
 
-    // 3. 检查任务是否失败或取消
+    // 3. 远程阶段失败或取消时直接终止本地执行
     if (taskDetail.status === BizyAirTaskStatus.FAILED) {
       const errorMessage = taskDetail.error?.message || '任务失败'
       throw new Error(errorMessage)
@@ -188,7 +147,7 @@ export class BizyAirProcessor extends DataSourceProcessor {
       bizyair_task_id: requestId,
     }
 
-    // 7. 发送系统通知（复用前面获取的 unifiedStore）
+    // 7. 发送系统通知
     await unifiedStore.notifySystem('BizyAir 生成完成', '您的媒体文件已成功生成')
 
     return file
@@ -233,17 +192,12 @@ export class BizyAirProcessor extends DataSourceProcessor {
   }
 
   /**
-   * 为媒体项目准备文件
+   * 为 BizyAir 生成媒体准备本地文件。
    *
-   * 支持三种场景：
-   * - 场景A：任务已完成并下载到本地 -> 从 media/{id} 加载
-   * - 场景B：本地文件不存在但有 resultData -> 直接从 resultData 获取结果（无需轮询）
-   * - 场景C：有 bizyairTaskId，任务进行中 -> pollBizyAirTask
-   *
-   * 注意：场景D（提交新任务）已移至 UI 层处理
-   *
-   * @param mediaItem 媒体项目
-   * @returns 文件准备结果
+   * 当前覆盖三种恢复/执行场景：
+   * - 本地文件已存在，直接加载
+   * - 远程结果已完成，直接按 `resultData` 下载
+   * - 远程任务仍在进行中，继续轮询
    */
   private async prepareFileForMediaItem(mediaItem: UnifiedMediaItemData): Promise<{
     success: boolean
@@ -275,13 +229,13 @@ export class BizyAirProcessor extends DataSourceProcessor {
       const abortController = new AbortController()
       this.abortControllers.set(mediaItem.id, abortController)
 
-      // 场景判断：优先尝试从本地恢复
+      // 优先尝试从本地恢复，再决定是否回到远程阶段。
       const localFileExists = await globalMetaFileManager.verifyMediaFileExists(mediaItem.id)
 
       if (localFileExists) {
-        // 场景 A: 从本地加载已完成的文件
+        // 本地文件已存在，直接恢复。
         this.transitionMediaStatus(mediaItem, 'asyncprocessing')
-        console.log(`📂 [场景A] 从项目加载已完成的 BizyAir 文件: ${mediaItem.id}`)
+        console.log(`📂 [BizyAirProcessor] 从项目加载已完成的 BizyAir 文件: ${mediaItem.id}`)
         file = await globalMetaFileManager.loadMediaFile(mediaItem.id)
         needSaveMeta = false // meta 文件已存在
         needSaveMedia = false // 媒体文件已存在
@@ -289,9 +243,9 @@ export class BizyAirProcessor extends DataSourceProcessor {
         bizyAirSource.resultData &&
         bizyAirSource.taskStatus === BizyAirTaskStatus.SUCCESS
       ) {
-        // 场景 B: 远程任务已完成，重新获取文件
+        // 远程阶段已完成，但本地文件缺失，重新下载产物。
         this.transitionMediaStatus(mediaItem, 'asyncprocessing')
-        console.log(`🎯 [场景B] 远程任务已完成，直接从 resultData 获取:`, bizyAirSource.resultData)
+        console.log(`🎯 [BizyAirProcessor] 远程任务已完成，直接从 resultData 获取:`, bizyAirSource.resultData)
         RuntimeStateActions.startAcquisition(bizyAirSource)
 
         file = await this.downloadFile(
@@ -305,8 +259,8 @@ export class BizyAirProcessor extends DataSourceProcessor {
         needSaveMeta = true // 需要更新 meta 文件
         needSaveMedia = true // 需要保存新获取的媒体文件
       } else {
-        // 场景 C & D: 执行或恢复 BizyAir 任务
-        console.log(`🔄 [场景C/D] 执行 BizyAir 任务: ${bizyAirSource.bizyairTaskId || '新任务'}`)
+        // 远程阶段仍在运行，继续轮询。
+        console.log(`🔄 [BizyAirProcessor] 恢复 BizyAir 任务: ${bizyAirSource.bizyairTaskId}`)
 
         if (bizyAirSource.taskStatus === BizyAirTaskStatus.FAILED) {
           throw new Error('BizyAir 任务已失败，无法继续')
@@ -347,17 +301,7 @@ export class BizyAirProcessor extends DataSourceProcessor {
     }
   }
 
-  // ==================== 实现统一媒体项目处理 ====================
-
-  /**
-   * 处理完整的媒体项目生命周期
-   *
-   * @deprecated 兼容旧 Processor 主链的聚合入口。当前 DAG 仍复用其内部共享逻辑，
-   * 但新业务入口不应再直接依赖该方法。
-   *
-   * @param mediaItem 媒体项目
-   */
-  async processMediaItem(mediaItem: UnifiedMediaItemData): Promise<void> {
+  async processTaskDirectly(mediaItem: UnifiedMediaItemData): Promise<void> {
     const source = mediaItem.source
     if (!BizyAirTypeGuards.isBizyAirSource(source)) {
       throw new Error('数据源类型错误，期望 BizyAirSourceData')
@@ -543,79 +487,4 @@ export class BizyAirProcessor extends DataSourceProcessor {
     }
   }
 
-  // ==================== 任务取消功能 ====================
-
-  /**
-   * 取消任务
-   *
-   * 只能取消 pending 状态的任务
-   *
-   * @param taskId 任务 ID
-   * @returns 是否成功取消
-   */
-  async cancelTask(taskId: string): Promise<boolean> {
-    const task = this.tasks.get(taskId)
-    if (!task) {
-      console.warn(`⚠️ [BizyAirProcessor] 任务不存在: ${taskId}`)
-      return false
-    }
-
-    // 检查状态是否为 pending
-    if (task.mediaItem.mediaStatus !== 'pending') {
-      console.warn(
-        `⚠️ [BizyAirProcessor] 只能取消 pending 状态的任务，当前状态: ${task.mediaItem.mediaStatus}`,
-      )
-      return false
-    }
-
-    const source = task.mediaItem.source
-    if (!BizyAirTypeGuards.isBizyAirSource(source)) {
-      console.warn(`⚠️ [BizyAirProcessor] 数据源类型错误`)
-      return false
-    }
-
-    const bizyAirSource = source as BizyAirSourceData
-    const bizyairTaskId = bizyAirSource.bizyairTaskId
-
-    // 从统一Store获取 API Key
-    const unifiedStore = useUnifiedStore()
-    const apiKey = await unifiedStore.getBizyAirApiKey()
-
-    try {
-      // 1. 先调用 BizyAir API 取消远程任务
-      if (bizyairTaskId && apiKey) {
-        const cancelSuccess = await BizyAirAPIClient.cancelTask(bizyairTaskId, apiKey)
-        if (!cancelSuccess) {
-          console.warn(
-            `⚠️ [BizyAirProcessor] BizyAir 任务取消失败，不更新本地状态: ${bizyairTaskId}`,
-          )
-          return false
-        }
-      }
-
-      // 2. 中断轮询连接（如果存在）
-      const abortController = this.abortControllers.get(taskId)
-      if (abortController) {
-        console.log(`🛑 [BizyAirProcessor] 中断任务执行: ${taskId}`)
-        abortController.abort()
-        // 立即清理 AbortController，避免依赖异步 finally
-        this.abortControllers.delete(taskId)
-      }
-
-      // 3. 设置为 cancelled 状态
-      this.transitionMediaStatus(task.mediaItem, 'cancelled')
-      bizyAirSource.taskStatus = BizyAirTaskStatus.CANCELED
-      bizyAirSource.errorMessage = '任务已取消'
-
-      // 4. 保存 cancelled 状态到 meta 文件
-      await globalMetaFileManager.saveMetaFile(task.mediaItem)
-      console.log(`💾 [BizyAirProcessor] 已保存 cancelled 状态到 meta: ${task.mediaItem.name}`)
-
-      console.log(`✅ [BizyAirProcessor] 任务取消成功: ${bizyairTaskId || taskId}`)
-      return true
-    } catch (error) {
-      console.error(`❌ [BizyAirProcessor] 取消任务失败: ${bizyairTaskId || taskId}`, error)
-      return false
-    }
-  }
 }

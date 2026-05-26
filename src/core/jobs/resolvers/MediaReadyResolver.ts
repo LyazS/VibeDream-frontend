@@ -15,10 +15,7 @@ export interface MediaReadyResult {
   status: 'ready'
 }
 
-type MediaReadyModule = Pick<
-  UnifiedMediaModule,
-  'getMediaItem' | 'cancelMediaProcessing'
->
+type MediaReadyModule = Pick<UnifiedMediaModule, 'getMediaItem'>
 
 /**
  * 第一版真实业务 resolver：让一个 media item 达到 ready。
@@ -112,9 +109,6 @@ export class MediaReadyResolver implements ResourceResolver<MediaReadyInput, Med
     return toResult(readyMediaItem)
   }
 
-  async cancel(ctx: ResolveContext<MediaReadyInput>): Promise<void> {
-    await this.mediaModule.cancelMediaProcessing(ctx.input.mediaId)
-  }
   private getExistingMediaItem(mediaId: string): UnifiedMediaItemData {
     const mediaItem = this.mediaModule.getMediaItem(mediaId)
 

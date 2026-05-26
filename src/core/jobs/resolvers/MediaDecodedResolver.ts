@@ -17,11 +17,7 @@ export interface MediaDecodedResult {
 
 type MediaDecodedModule = Pick<
   UnifiedMediaModule,
-  | 'getMediaItem'
-  | 'hasPreparedMediaFile'
-  | 'decodePreparedMediaFileDirectly'
-  | 'waitForMediaItemReady'
-  | 'cancelMediaProcessing'
+  'getMediaItem' | 'hasPreparedMediaFile' | 'decodePreparedMediaFileDirectly' | 'waitForMediaItemReady'
 >
 
 /**
@@ -93,10 +89,6 @@ export class MediaDecodedResolver
     })
 
     return toResult(decodedMediaItem)
-  }
-
-  async cancel(ctx: ResolveContext<MediaDecodedInput>): Promise<void> {
-    await this.mediaModule.cancelMediaProcessing(ctx.input.mediaId)
   }
 
   private async waitForReady(
