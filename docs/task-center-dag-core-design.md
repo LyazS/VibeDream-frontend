@@ -531,7 +531,6 @@ release(root)
 ```ts
 function canRelease(node: ResourceNode) {
   return isTerminal(node.status)
-    && node.externalRefCount === 0
     && node.waiterCount === 0
     && node.dependents.length === 0
 }

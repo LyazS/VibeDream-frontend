@@ -74,7 +74,7 @@ export class JobRuntime {
   /**
    * 业务入口：声明“我需要这个资源 ready”。
    *
-   * external=true 表示这是一个外部 root 请求，会增加 externalRefCount。
+   * external=true 表示这是一个外部 root 请求。
    * resolver 内部调用 ctx.ensure() 时 external=false，只作为 DAG 内部依赖。
    */
   async ensure<TResult>(request: ResourceRequest): Promise<TResult> {
@@ -194,15 +194,7 @@ export class JobRuntime {
       deps: node.deps,
       dependents: node.dependents,
       waiterCount: node.waiterCount,
-      externalRefCount: node.externalRefCount,
     })
-
-    // 外部 ensure 代表一个业务 root 请求。MVP 先维护计数，自动释放放到后续阶段。
-    if (external) {
-      node.externalRefCount += 1
-      this.touch(node)
-      this.emitResourceEvent({ type: 'resource:updated', node })
-    }
 
     // parent -> dependency 的边在这里建立。注意 deps 存在 parent 上。
     if (parentResourceId) {
@@ -230,30 +222,23 @@ export class JobRuntime {
     console.log('[JobRuntime][ensureNode] waiter +1', {
       resourceId: node.id,
       waiterCount: node.waiterCount,
-      externalRefCount: node.externalRefCount,
     })
 
     try {
       return (await entry.promise) as TResult
     } finally {
       const previousWaiterCount = node.waiterCount
-      const previousExternalRefCount = node.externalRefCount
 
       node.waiterCount = Math.max(0, node.waiterCount - 1)
-      if (external) {
-        node.externalRefCount = Math.max(0, node.externalRefCount - 1)
-      }
       this.touch(node)
       console.log('[JobRuntime][ensureNode] waiter -1', {
         resourceId: node.id,
         waiterCount: node.waiterCount,
-        externalRefCount: node.externalRefCount,
         status: node.status,
       })
 
       const hasVisibleReferenceChange =
-        (node.waiterCount !== previousWaiterCount && node.waiterCount > 0) ||
-        (node.externalRefCount !== previousExternalRefCount && node.externalRefCount > 0)
+        node.waiterCount !== previousWaiterCount && node.waiterCount > 0
 
       if (hasVisibleReferenceChange) {
         this.emitResourceEvent({ type: 'resource:updated', node })
@@ -485,10 +470,9 @@ export class JobRuntime {
       return
     }
 
-    if (node.externalRefCount > 0 || node.waiterCount > 0 || node.dependents.length > 0) {
+    if (node.waiterCount > 0 || node.dependents.length > 0) {
       console.log('[JobRuntime][release] keep node because still referenced', {
         resourceId: node.id,
-        externalRefCount: node.externalRefCount,
         waiterCount: node.waiterCount,
         dependents: node.dependents,
       })

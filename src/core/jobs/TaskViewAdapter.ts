@@ -51,14 +51,13 @@ export function createTaskView(node: ResourceNode, childResourceIds: string[] = 
  * 从一组 ResourceNode 生成任务中心列表。
  *
  * 当前 root 选择规则：
- * - 没有 dependents 的节点通常是业务入口 root。
- * - externalRefCount > 0 的节点也视为 root，表示外部业务正在等待它。
+ * - 没有 dependents 的节点视为业务入口 root。
  */
 export function createTaskViews(nodes: ResourceNode[]): TaskView[] {
   const nodeById = new Map(nodes.map((node) => [node.id, node]))
 
   return nodes
-    .filter((node) => node.dependents.length === 0 || node.externalRefCount > 0)
+    .filter((node) => node.dependents.length === 0)
     .map((node) => {
       const childResourceIds = collectDependencies(node, nodeById)
       return createTaskView(node, childResourceIds)

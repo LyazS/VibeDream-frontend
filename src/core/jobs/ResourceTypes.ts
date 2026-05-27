@@ -112,8 +112,6 @@ export interface ResourceNode<TInput = unknown, TResult = unknown> {
   policy: ResourcePolicy
   /** 已重试次数，用于 maxRetries 限制。 */
   retryCount: number
-  /** 外部业务入口 ensure(root) 的引用计数。MVP 暂不做自动释放，但先保留计数。 */
-  externalRefCount: number
   /** 正在等待该节点 Promise 的调用方数量。 */
   waiterCount: number
   createdAt: string
@@ -190,7 +188,6 @@ export function createResourceNode<TInput>(request: ResourceRequest<TInput>): Re
     dependents: [],
     policy: request.policy ?? {},
     retryCount: 0,
-    externalRefCount: 0,
     waiterCount: 0,
     createdAt: now,
     updatedAt: now,
