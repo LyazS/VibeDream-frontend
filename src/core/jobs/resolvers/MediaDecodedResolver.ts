@@ -107,6 +107,18 @@ export class MediaDecodedResolver
     await Promise.race([waitPromise, abortPromise])
   }
 
+  async cancel(ctx: ResolveContext<MediaDecodedInput>): Promise<void> {
+    const mediaItem = this.mediaModule.getMediaItem(ctx.input.mediaId)
+    if (!mediaItem) {
+      return
+    }
+
+    const nonTerminalStatuses = ['pending', 'decoding', 'asyncprocessing']
+    if (nonTerminalStatuses.includes(mediaItem.mediaStatus)) {
+      mediaItem.mediaStatus = 'cancelled'
+    }
+  }
+
   private getExistingMediaItem(mediaId: string): UnifiedMediaItemData {
     const mediaItem = this.mediaModule.getMediaItem(mediaId)
 

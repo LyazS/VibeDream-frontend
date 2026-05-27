@@ -109,6 +109,10 @@ export class MediaReadyResolver implements ResourceResolver<MediaReadyInput, Med
     return toResult(readyMediaItem)
   }
 
+  async cancel(ctx: ResolveContext<MediaReadyInput>): Promise<void> {
+    void ctx
+  }
+
   private getExistingMediaItem(mediaId: string): UnifiedMediaItemData {
     const mediaItem = this.mediaModule.getMediaItem(mediaId)
 

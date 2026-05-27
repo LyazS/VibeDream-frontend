@@ -73,6 +73,18 @@ export class MediaFileAvailableResolver
     return toResult(preparedMediaItem)
   }
 
+  async cancel(ctx: ResolveContext<MediaFileAvailableInput>): Promise<void> {
+    const mediaItem = this.mediaModule.getMediaItem(ctx.input.mediaId)
+    if (!mediaItem) {
+      return
+    }
+
+    const nonTerminalStatuses = ['pending']
+    if (nonTerminalStatuses.includes(mediaItem.mediaStatus)) {
+      mediaItem.mediaStatus = 'cancelled'
+    }
+  }
+
   private getExistingMediaItem(mediaId: string): UnifiedMediaItemData {
     const mediaItem = this.mediaModule.getMediaItem(mediaId)
 

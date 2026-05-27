@@ -85,6 +85,10 @@ export class MediaSourceProcessedResolver
     return toResult(processedMediaItem)
   }
 
+  async cancel(ctx: ResolveContext<MediaSourceProcessedInput>): Promise<void> {
+    void ctx
+  }
+
   private getExistingMediaItem(mediaId: string): UnifiedMediaItemData {
     const mediaItem = this.mediaModule.getMediaItem(mediaId)
 

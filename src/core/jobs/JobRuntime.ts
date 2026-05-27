@@ -51,7 +51,7 @@ interface RuntimeEntry {
  * Runtime 不负责：
  * - 具体业务如何执行，例如媒体解码、远程轮询。
  * - 直接修改 mediaItem / timeline / project。
- * - 当前 MVP 中的持久化恢复、节点自动释放、复杂共享取消传播。
+ * - 当前 MVP 中的持久化恢复。
  */
 export class JobRuntime {
   /** resourceId -> ResourceNode。DAG 的运行态主存储。 */
@@ -82,23 +82,34 @@ export class JobRuntime {
   }
 
   /**
-   * 取消某个资源节点。
+   * 取消某个资源节点，并沿独占子依赖递归传播取消。
    *
-   * MVP 只取消当前 resourceId 本身：
-   * - 如果还在 Scheduler 队列里，会从队列移除。
-   * - 如果已经运行，会 abort signal，并调用 resolver.cancel()。
-   *
-   * 暂不做“只取消独占子依赖”的复杂传播，避免误伤共享资源。
+   * 策略：只取消独占子节点——断边后，如果依赖节点不再被其他路径依赖且无外部等待，
+   * 才递归取消。共享依赖只断边，不影响其他 root。
    */
   async cancel(resourceId: string): Promise<boolean> {
+    const node = this.nodes.get(resourceId)
+    if (!node || isTerminalResourceStatus(node.status)) {
+      return false
+    }
+
+    const cancelled = await this.cancelSingleNode(resourceId)
+    if (cancelled) {
+      await this.propagateCancelFromNode(node)
+    }
+    return cancelled
+  }
+
+  /**
+   * 取消单个节点：abort signal、调用 resolver.cancel()、推进状态。
+   * 不负责断边或传播。返回是否成功取消。
+   */
+  private async cancelSingleNode(resourceId: string): Promise<boolean> {
     const node = this.nodes.get(resourceId)
     const entry = this.entries.get(resourceId)
     if (!node || !entry || isTerminalResourceStatus(node.status)) {
       return false
     }
-
-    this.scheduler.cancelQueued(resourceId)
-    entry.controller.abort()
 
     const resolver = this.registry.get(node.type)
     const context = this.createResolveContext(node, entry.controller)
@@ -107,12 +118,67 @@ export class JobRuntime {
       await resolver.cancel?.(context)
     } catch (error) {
       console.warn(`[JobRuntime] Resolver cancel failed: ${resourceId}`, error)
+      return false
     }
+
+    this.scheduler.cancelQueued(resourceId)
+    entry.controller.abort()
 
     this.setStatus(node, 'cancelled')
     this.emitResourceEvent({ type: 'resource:cancelled', node })
     this.tryReleaseNode(node.id)
     return true
+  }
+
+  /**
+   * 对已取消节点的依赖执行独占传播取消。
+   *
+   * 流程：遍历 deps 快照 → 断边 → 分流处理：
+   * - succeeded: 尝试释放
+   * - 终态(failed/blocked/cancelled): 跳过
+   * - 非终态且无其他引用: 递归取消
+   */
+  private async propagateCancelFromNode(node: ResourceNode): Promise<void> {
+    const depIds = [...node.deps]
+
+    for (const depId of depIds) {
+      await this.handleDetachedDependency(node.id, depId)
+    }
+  }
+
+  /**
+   * 处理父节点取消后断开的单个依赖。
+   *
+   * 先断边，再根据依赖状态分流：
+   * - succeeded → tryReleaseNode
+   * - 终态(failed/blocked/cancelled) → 跳过
+   * - 非终态 + 无其他引用 → 取消 + 递归传播
+   */
+  private async handleDetachedDependency(parentId: string, depId: string): Promise<void> {
+    this.disconnect(parentId, depId)
+
+    const dependency = this.nodes.get(depId)
+    if (!dependency) {
+      return
+    }
+
+    if (dependency.status === 'succeeded') {
+      this.tryReleaseNode(dependency.id)
+      return
+    }
+
+    if (isTerminalResourceStatus(dependency.status)) {
+      return
+    }
+
+    if (dependency.dependents.length > 0 || dependency.externalWaiterCount > 0) {
+      return
+    }
+
+    const cancelled = await this.cancelSingleNode(dependency.id)
+    if (cancelled) {
+      await this.propagateCancelFromNode(dependency)
+    }
   }
 
   /**
@@ -218,31 +284,31 @@ export class JobRuntime {
     // 多个 ensure 同一 resourceId 时会共享同一个 entry.promise，实现执行去重。
     const entry = this.getOrCreateEntry(node)
     node.waiterCount += 1
+    if (external) {
+      node.externalWaiterCount += 1
+    }
     this.touch(node)
     console.log('[JobRuntime][ensureNode] waiter +1', {
       resourceId: node.id,
       waiterCount: node.waiterCount,
+      externalWaiterCount: node.externalWaiterCount,
+      external,
     })
 
     try {
       return (await entry.promise) as TResult
     } finally {
-      const previousWaiterCount = node.waiterCount
-
       node.waiterCount = Math.max(0, node.waiterCount - 1)
+      if (external) {
+        node.externalWaiterCount = Math.max(0, node.externalWaiterCount - 1)
+      }
       this.touch(node)
       console.log('[JobRuntime][ensureNode] waiter -1', {
         resourceId: node.id,
         waiterCount: node.waiterCount,
+        externalWaiterCount: node.externalWaiterCount,
         status: node.status,
       })
-
-      const hasVisibleReferenceChange =
-        node.waiterCount !== previousWaiterCount && node.waiterCount > 0
-
-      if (hasVisibleReferenceChange) {
-        this.emitResourceEvent({ type: 'resource:updated', node })
-      }
 
       this.tryReleaseNode(node.id)
     }
@@ -361,8 +427,10 @@ export class JobRuntime {
       })
       // 取消是独立终态。其他错误如果来自失败依赖，则当前节点标记为 blocked。
       if (isAbortError(error)) {
-        this.setStatus(node, 'cancelled')
-        this.emitResourceEvent({ type: 'resource:cancelled', node })
+        if (node.status !== 'cancelled') {
+          this.setStatus(node, 'cancelled')
+          this.emitResourceEvent({ type: 'resource:cancelled', node })
+        }
         this.tryReleaseNode(node.id)
       } else if (node.deps.some((depId) => this.isBlockedByDependency(depId))) {
         this.markBlocked(node, error)
@@ -470,9 +538,10 @@ export class JobRuntime {
       return
     }
 
-    if (node.waiterCount > 0 || node.dependents.length > 0) {
+    if (node.externalWaiterCount > 0 || node.dependents.length > 0) {
       console.log('[JobRuntime][release] keep node because still referenced', {
         resourceId: node.id,
+        externalWaiterCount: node.externalWaiterCount,
         waiterCount: node.waiterCount,
         dependents: node.dependents,
       })

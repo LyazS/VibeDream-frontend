@@ -214,6 +214,15 @@ export class AIGeneratedMediaResolver
     return [createAITaskSubmittedRequest(mediaItem.id, getProviderForMediaItem(mediaItem))]
   }
 
+  async cancel(ctx: ResolveContext<AIGeneratedMediaInput>): Promise<void> {
+    const mediaItem = this.mediaModule.getMediaItem(ctx.input.mediaId)
+    if (!mediaItem || !isAIGeneratedMediaItem(mediaItem)) {
+      return
+    }
+
+    await cancelAIGeneratedMediaTask(this.mediaModule, mediaItem)
+  }
+
   private async ensureMediaReady(ctx: ResolveContext<AIGeneratedMediaInput>, mediaId: string) {
     ctx.update({
       progress: 0.95,
@@ -293,6 +302,10 @@ export class AIInputPreparedResolver
       provider: ctx.input.provider,
       prepared: true,
     }
+  }
+
+  async cancel(ctx: ResolveContext<AIInputPreparedInput>): Promise<void> {
+    void ctx
   }
 
   private getMediaItem(mediaId: string): UnifiedMediaItemData {
@@ -387,6 +400,15 @@ export class AITaskSubmittedResolver
       provider: ctx.input.provider,
       taskId,
     }
+  }
+
+  async cancel(ctx: ResolveContext<RemoteTaskSubmittedInput>): Promise<void> {
+    const mediaItem = this.mediaModule.getMediaItem(ctx.input.mediaId)
+    if (!mediaItem || !isAIGeneratedMediaItem(mediaItem)) {
+      return
+    }
+
+    await cancelAIGeneratedMediaTask(this.mediaModule, mediaItem)
   }
 
   private async submitBizyAirTask(
@@ -522,24 +544,7 @@ export class RemoteTaskCompletedResolver
       return
     }
 
-    if (ctx.input.provider === 'bizyair') {
-      const apiKey = await this.mediaModule.getBizyAirApiKey()
-      if (apiKey) {
-        await BizyAirAPIClient.cancelTask(ctx.input.taskId, apiKey)
-      }
-      if (BizyAirTypeGuards.isBizyAirSource(mediaItem.source)) {
-        mediaItem.source.taskStatus = BizyAirTaskStatus.CANCELED
-      }
-    } else {
-      await fetchClient.delete(`/api/media/tasks/${ctx.input.taskId}`)
-      if (AIGenerationTypeGuards.isAIGenerationSource(mediaItem.source)) {
-        mediaItem.source.taskStatus = TaskStatus.CANCELLED
-      }
-    }
-
-    mediaItem.mediaStatus = 'cancelled'
-    mediaItem.source.errorMessage = '任务已取消'
-    await persistMediaItem(mediaItem)
+    await cancelAIGeneratedMediaTask(this.mediaModule, mediaItem, ctx.input.taskId)
   }
 
   private async waitForBizyAirCompletion(
@@ -827,6 +832,52 @@ async function waitForBackendCompletion(
       delaySeconds = Math.min(delaySeconds * 2, 60)
     }
   }
+}
+
+async function cancelAIGeneratedMediaTask(
+  mediaModule: AIGeneratedMediaModule,
+  mediaItem: UnifiedMediaItemData,
+  preferredTaskId?: string,
+): Promise<void> {
+  const source = getAIGeneratedSourceFromMediaItem(mediaItem)
+  const provider = getProviderForMediaItem(mediaItem)
+  const taskId = preferredTaskId || getTaskId(source)
+
+  const alreadyCancelled =
+    provider === 'bizyair'
+      ? source.taskStatus === BizyAirTaskStatus.CANCELED
+      : source.taskStatus === TaskStatus.CANCELLED
+
+  if (alreadyCancelled) {
+    return
+  }
+
+  if (taskId) {
+    if (provider === 'bizyair') {
+      const apiKey = await mediaModule.getBizyAirApiKey()
+      if (!apiKey) {
+        throw new Error('BizyAir API Key 未配置')
+      }
+
+      await BizyAirAPIClient.cancelTask(taskId, apiKey)
+      if (BizyAirTypeGuards.isBizyAirSource(source)) {
+        source.taskStatus = BizyAirTaskStatus.CANCELED
+      }
+    } else {
+      // 后端 DELETE /api/media/tasks/{taskId} (backend/routers/tasks.py:163)
+      // 成功: 200 + { success: true, message: "任务已取消" }
+      // 失败: 抛 HTTP 异常 —— 403 (任务不存在/无权限) / 400 (状态不允许取消) / 500 (内部错误)
+      // 此处不读取返回值，仅依赖请求是否抛异常来判断远程取消是否成功。
+      await fetchClient.delete(`/api/media/tasks/${taskId}`)
+      if (AIGenerationTypeGuards.isAIGenerationSource(source)) {
+        source.taskStatus = TaskStatus.CANCELLED
+      }
+    }
+  }
+
+  mediaItem.mediaStatus = 'cancelled'
+  source.errorMessage = '任务已取消'
+  await persistMediaItem(mediaItem)
 }
 
 function getProviderForMediaItem(mediaItem: UnifiedMediaItemData): AIGeneratedMediaProvider {

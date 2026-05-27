@@ -1471,7 +1471,7 @@ function canCancel(item: DisplayItem): boolean {
   const mediaItem = getMediaItem(item.id)
   if (!mediaItem) return false
 
-  return mediaItem.mediaStatus === 'pending'
+  return ['pending', 'asyncprocessing', 'decoding'].includes(mediaItem.mediaStatus)
 }
 
 /**
@@ -1507,7 +1507,26 @@ async function handleCancelTask(): Promise<void> {
   if (!mediaItem) return
 
   showContextMenu.value = false
-  unifiedStore.messageWarning(`TODO: 媒体资源取消链路待统一接入 JobRuntime.cancel() (${mediaItem.name})`)
+
+  const taskView = unifiedStore.jobTaskViews.find(
+    (tv) => tv.rootResourceId.endsWith(`:${mediaItem.id}`) && tv.actions.canCancel,
+  )
+
+  if (taskView) {
+    try {
+      const success = await unifiedStore.cancelJobTask(taskView.rootResourceId)
+      if (success) {
+        unifiedStore.messageSuccess(t('media.cancelSuccess', { name: mediaItem.name }))
+      } else {
+        unifiedStore.messageWarning(t('media.cancelFailed', { name: mediaItem.name }))
+      }
+    } catch (error) {
+      console.error('取消媒体资源失败:', error)
+      unifiedStore.messageError(t('media.cancelFailed', { name: mediaItem.name }))
+    }
+  } else {
+    unifiedStore.messageWarning(t('media.cancelFailed', { name: mediaItem.name }))
+  }
 }
 
 // ==================== 重试功能 ====================

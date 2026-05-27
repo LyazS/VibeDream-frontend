@@ -112,8 +112,10 @@ export interface ResourceNode<TInput = unknown, TResult = unknown> {
   policy: ResourcePolicy
   /** 已重试次数，用于 maxRetries 限制。 */
   retryCount: number
-  /** 正在等待该节点 Promise 的调用方数量。 */
+  /** 正在等待该节点 Promise 的调用方数量（含内部依赖等待和外部直接等待）。仅用于观测。 */
   waiterCount: number
+  /** 外部直接等待该节点 Promise 的数量（通过 runtime.ensure() 入口）。用于取消传播和释放判定。 */
+  externalWaiterCount: number
   createdAt: string
   updatedAt: string
 }
@@ -189,6 +191,7 @@ export function createResourceNode<TInput>(request: ResourceRequest<TInput>): Re
     policy: request.policy ?? {},
     retryCount: 0,
     waiterCount: 0,
+    externalWaiterCount: 0,
     createdAt: now,
     updatedAt: now,
   }

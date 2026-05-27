@@ -144,14 +144,14 @@ export class ASRSubtitlesResolver
     const placeholder = this.module.getTimelineItem(ctx.input.placeholderTimelineItemId)
     const task = getASRPlaceholderTask(placeholder)
 
-    try {
-      if (task?.remoteTaskId) {
-        await cancelASRRemoteTask(task.remoteTaskId)
-      }
-    } finally {
-      if (placeholder) {
-        await cleanupPlaceholder(this.module, placeholder.id)
-      }
+    if (!placeholder && !task) {
+      return
+    }
+
+    // ASR 远程任务不需要主动调用后端取消接口，仅清理本地 placeholder 即可。
+    // 轮询会通过 AbortSignal 自动停止，后端任务会自然超时结束。
+    if (placeholder) {
+      await cleanupPlaceholder(this.module, placeholder.id)
     }
   }
 }
@@ -211,8 +211,8 @@ export class ASRRemoteTaskCompletedResolver
   }
 
   async cancel(ctx: ResolveContext<ASRRemoteTaskCompletedInput>): Promise<void> {
+    // ASR 远程任务不需要主动调用后端取消接口，abort 轮询即可。
     this.abortControllers.get(ctx.input.remoteTaskId)?.abort()
-    await cancelASRRemoteTask(ctx.input.remoteTaskId)
   }
 }
 
@@ -445,6 +445,4 @@ async function waitForASRCompletion(
   return resolvedResult
 }
 
-async function cancelASRRemoteTask(remoteTaskId: string): Promise<void> {
-  await fetchClient.delete(`/api/media/tasks/${remoteTaskId}`)
-}
+

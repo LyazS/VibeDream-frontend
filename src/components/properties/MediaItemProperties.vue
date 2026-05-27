@@ -105,7 +105,7 @@
       </n-button>
 
       <n-button
-        v-if="mediaItem.mediaStatus === 'pending'"
+        v-if="canCancelMedia"
         type="error"
         size="small"
         @click="handleCancel"
@@ -241,7 +241,13 @@ const visualTitle = computed(() => {
 // 是否显示操作区
 const showActions = computed(() => {
   const status = props.mediaItem.mediaStatus
-  return status === 'pending' || status === 'error' || status === 'cancelled'
+  return (
+    status === 'pending' ||
+    status === 'error' ||
+    status === 'cancelled' ||
+    status === 'asyncprocessing' ||
+    status === 'decoding'
+  )
 })
 
 // 是否可以重试（仅 AI 生成类型）
@@ -250,6 +256,10 @@ const canRetry = computed(() => {
   const isAIType =
     props.mediaItem.source.type === 'ai-generation' || props.mediaItem.source.type === 'bizyair'
   return (status === 'error' || status === 'cancelled') && isAIType
+})
+
+const canCancelMedia = computed(() => {
+  return ['pending', 'asyncprocessing', 'decoding'].includes(props.mediaItem.mediaStatus)
 })
 
 // 是否可创建真人角色（AI 生成视频且存在 bltcy_task_id）
@@ -338,7 +348,25 @@ async function handleCancel(): Promise<void> {
   const mediaItem = props.mediaItem
   if (!mediaItem) return
 
-  unifiedStore.messageWarning(`TODO: 媒体资源取消链路待统一接入 JobRuntime.cancel() (${mediaItem.name})`)
+  const taskView = unifiedStore.jobTaskViews.find(
+    (tv) => tv.rootResourceId.endsWith(`:${mediaItem.id}`) && tv.actions.canCancel,
+  )
+
+  if (taskView) {
+    try {
+      const success = await unifiedStore.cancelJobTask(taskView.rootResourceId)
+      if (success) {
+        unifiedStore.messageSuccess(t('media.cancelSuccess', { name: mediaItem.name }))
+      } else {
+        unifiedStore.messageWarning(t('media.cancelFailed', { name: mediaItem.name }))
+      }
+    } catch (error) {
+      console.error('取消媒体资源失败:', error)
+      unifiedStore.messageError(t('media.cancelFailed', { name: mediaItem.name }))
+    }
+  } else {
+    unifiedStore.messageWarning(t('media.cancelFailed', { name: mediaItem.name }))
+  }
 }
 
 </script>
