@@ -103,6 +103,7 @@
       "currentTasks": "Current Tasks",
       "titles": {
         "mediaReady": "Preparing Media",
+        "mediaIndexing": "Indexing Media",
         "timelineItemReady": "Preparing Timeline Media",
         "aiGeneratedMedia": "Generating AI Media",
         "asrSubtitles": "Transcribing Subtitles",

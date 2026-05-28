@@ -26,6 +26,10 @@ import {
   createASRSubtitlesResolver,
   createEffectTemplateReadyRequest,
   createEffectTemplateReadyResolver,
+  createMediaIndexMetadataWritebackRequest,
+  createMediaIndexMetadataWritebackResolver,
+  createMediaIndexTaskCompleteResolver,
+  createMediaIndexTaskSubmitResolver,
   getResourceId,
   createJobRuntime,
   createMediaDecodedResolver,
@@ -36,6 +40,12 @@ import {
   createRemoteTaskCompletedResolver,
   createTimelineItemReadyRequest,
   createTimelineItemReadyResolver,
+  createVideoSceneSegmentsResolver,
+  createVideoSegmentExportsResolver,
+  createVideoSegmentOssUploadsResolver,
+  persistMediaItem,
+  setIndexingMetadata,
+  canResumeMediaIndexingFromRemote,
   useJobTaskCenter,
 } from '@/core/jobs'
 import { ModuleRegistry, MODULE_NAMES } from '@/core/modules/ModuleRegistry'
@@ -132,6 +142,84 @@ export const useUnifiedStore = defineStore('unified', () => {
   jobRuntime.registerResolver(createMediaSourceProcessedResolver(unifiedMediaModule))
   jobRuntime.registerResolver(createMediaReadyResolver(unifiedMediaModule))
   jobRuntime.registerResolver(
+    createVideoSceneSegmentsResolver({
+      getMediaItem: unifiedMediaModule.getMediaItem,
+      ensureMediaReady,
+      getProjectId: () => {
+        const projectId = unifiedConfigModule.projectId.value
+        if (!projectId) {
+          throw new Error('当前项目未初始化')
+        }
+        return projectId
+      },
+    }),
+  )
+  jobRuntime.registerResolver(
+    createVideoSegmentExportsResolver({
+      getMediaItem: unifiedMediaModule.getMediaItem,
+      ensureMediaReady,
+      getProjectId: () => {
+        const projectId = unifiedConfigModule.projectId.value
+        if (!projectId) {
+          throw new Error('当前项目未初始化')
+        }
+        return projectId
+      },
+    }),
+  )
+  jobRuntime.registerResolver(
+    createVideoSegmentOssUploadsResolver({
+      getMediaItem: unifiedMediaModule.getMediaItem,
+      ensureMediaReady,
+      getProjectId: () => {
+        const projectId = unifiedConfigModule.projectId.value
+        if (!projectId) {
+          throw new Error('当前项目未初始化')
+        }
+        return projectId
+      },
+    }),
+  )
+  jobRuntime.registerResolver(
+    createMediaIndexTaskSubmitResolver({
+      getMediaItem: unifiedMediaModule.getMediaItem,
+      ensureMediaReady,
+      getProjectId: () => {
+        const projectId = unifiedConfigModule.projectId.value
+        if (!projectId) {
+          throw new Error('当前项目未初始化')
+        }
+        return projectId
+      },
+    }),
+  )
+  jobRuntime.registerResolver(
+    createMediaIndexTaskCompleteResolver({
+      getMediaItem: unifiedMediaModule.getMediaItem,
+      ensureMediaReady,
+      getProjectId: () => {
+        const projectId = unifiedConfigModule.projectId.value
+        if (!projectId) {
+          throw new Error('当前项目未初始化')
+        }
+        return projectId
+      },
+    }),
+  )
+  jobRuntime.registerResolver(
+    createMediaIndexMetadataWritebackResolver({
+      getMediaItem: unifiedMediaModule.getMediaItem,
+      ensureMediaReady,
+      getProjectId: () => {
+        const projectId = unifiedConfigModule.projectId.value
+        if (!projectId) {
+          throw new Error('当前项目未初始化')
+        }
+        return projectId
+      },
+    }),
+  )
+  jobRuntime.registerResolver(
     createAIInputPreparedResolver({
       getMediaItem: unifiedMediaModule.getMediaItem,
       ensureMediaReady,
@@ -198,6 +286,24 @@ export const useUnifiedStore = defineStore('unified', () => {
   function ensureAIGeneratedMedia(mediaId: string) {
     return jobRuntime.ensure(createAIGeneratedMediaRequest(mediaId))
   }
+  async function ensureMediaIndexing(mediaId: string) {
+    const mediaItem = unifiedMediaModule.getMediaItem(mediaId)
+    if (mediaItem?.mediaType === 'video') {
+      const indexing = mediaItem.metadata?.indexing
+      if (!canResumeMediaIndexingFromRemote(indexing)) {
+        setIndexingMetadata(mediaItem, {
+          indexStatus: 'pending',
+          indexedAt: undefined,
+          lastIndexTaskId: undefined,
+          failedSegmentCount: 0,
+          segmentSummaries: undefined,
+        })
+        await persistMediaItem(mediaItem)
+      }
+    }
+
+    return jobRuntime.ensure(createMediaIndexMetadataWritebackRequest(mediaId))
+  }
   function ensureTimelineItemReady(timelineItemId: string) {
     return jobRuntime.ensure(createTimelineItemReadyRequest(timelineItemId))
   }
@@ -238,6 +344,7 @@ export const useUnifiedStore = defineStore('unified', () => {
   }
   unifiedProjectModule.setMediaReadyEnsurer(ensureMediaReady)
   unifiedProjectModule.setAIGeneratedMediaEnsurer(ensureAIGeneratedMedia)
+  unifiedProjectModule.setMediaIndexingEnsurer(ensureMediaIndexing)
   unifiedProjectModule.setEffectTemplateReadyEnsurer(ensureEffectTemplateReady)
   unifiedProjectModule.setTimelineItemResolvedEnsurer(ensureTimelineItemResolved)
   unifiedDirectoryModule.setMediaReadyEnsurer(ensureMediaReady)
@@ -314,6 +421,7 @@ export const useUnifiedStore = defineStore('unified', () => {
     retryJobTask: jobTaskCenter.retryTask,
     ensureMediaReady,
     ensureAIGeneratedMedia,
+    ensureMediaIndexing,
     ensureTimelineItemReady,
     ensureASRSubtitles,
     ensureTimelineItemResolved,

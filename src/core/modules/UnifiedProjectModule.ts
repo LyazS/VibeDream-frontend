@@ -10,6 +10,7 @@ import type { UnifiedMediaItemData } from '@/core/mediaitem/types'
 import { globalMetaFileManager } from '@/core/managers/media/globalMetaFileManager'
 import { globalMediaItemLoader } from '@/core/managers/media/MediaItemLoader'
 import { isEffectTemplateAsset, isMediaAsset } from '@/core/asset/types'
+import { shouldRecoverMediaIndexing } from '@/core/jobs'
 import { useProjectThumbnailService } from '@/core/composables/useProjectThumbnailService'
 import { framesToSeconds } from '@/core/utils/timeUtils'
 import { useAppI18n } from '@/core/composables/useI18n'
@@ -60,6 +61,7 @@ export function createUnifiedProjectModule(registry: ModuleRegistry) {
   
   let ensureMediaReadyForProjectLoad: ((mediaId: string) => Promise<unknown>) | null = null
   let ensureAIGeneratedMediaForProjectLoad: ((mediaId: string) => Promise<unknown>) | null = null
+  let ensureMediaIndexingForProjectLoad: ((mediaId: string) => Promise<unknown>) | null = null
   let ensureEffectTemplateReadyForProjectLoad: ((assetId: string) => Promise<unknown>) | null = null
   let ensureTimelineItemResolvedForProjectLoad: ((timelineItemId: string) => Promise<unknown>) | null =
     null
@@ -110,6 +112,10 @@ export function createUnifiedProjectModule(registry: ModuleRegistry) {
 
   function setAIGeneratedMediaEnsurer(ensurer: (mediaId: string) => Promise<unknown>): void {
     ensureAIGeneratedMediaForProjectLoad = ensurer
+  }
+
+  function setMediaIndexingEnsurer(ensurer: (mediaId: string) => Promise<unknown>): void {
+    ensureMediaIndexingForProjectLoad = ensurer
   }
 
   function setEffectTemplateReadyEnsurer(ensurer: (assetId: string) => Promise<unknown>): void {
@@ -446,6 +452,39 @@ export function createUnifiedProjectModule(registry: ModuleRegistry) {
           continue
         }
 
+        if (isMediaAsset(mediaItem) && isRecoverableMediaIndexing(mediaItem)) {
+          if (ensureMediaIndexingForProjectLoad) {
+            void ensureMediaIndexingForProjectLoad(mediaItem.id).catch((error) => {
+              console.error(
+                `❌ [rebuildMediaItems] 恢复素材索引任务失败，已跳过: ${mediaItem.name}`,
+                error,
+              )
+            })
+          } else {
+            console.warn(
+              `⚠️ [rebuildMediaItems] ensureMediaIndexing 未初始化，跳过恢复: ${mediaItem.name}`,
+            )
+          }
+
+          if (immediateLoadIds.has(mediaItem.id) && mediaItem.mediaStatus === 'pending') {
+            if (ensureMediaReadyForProjectLoad) {
+              void ensureMediaReadyForProjectLoad(mediaItem.id).catch((error) => {
+                console.error(
+                  `❌ [rebuildMediaItems] 恢复索引中的素材本地加载失败，已跳过: ${mediaItem.name}`,
+                  error,
+                )
+              })
+            } else {
+              console.warn(
+                `⚠️ [rebuildMediaItems] ensureMediaReady 未初始化，跳过索引中素材立即加载: ${mediaItem.name}`,
+              )
+            }
+          }
+
+          immediateCount++
+          continue
+        }
+
         if (immediateLoadIds.has(mediaItem.id)) {
           if (isMediaAsset(mediaItem) && mediaItem.mediaStatus === 'pending') {
             if (ensureMediaReadyForProjectLoad) {
@@ -733,6 +772,7 @@ export function createUnifiedProjectModule(registry: ModuleRegistry) {
     // 加载进度方法
     setMediaReadyEnsurer,
     setAIGeneratedMediaEnsurer,
+    setMediaIndexingEnsurer,
     setEffectTemplateReadyEnsurer,
     setTimelineItemResolvedEnsurer,
     updateLoadingProgress,
@@ -768,4 +808,12 @@ function isRecoverableAIGeneratedMedia(mediaItem: UnifiedMediaItemData): boolean
   }
 
   return false
+}
+
+function isRecoverableMediaIndexing(mediaItem: UnifiedMediaItemData): boolean {
+  if (mediaItem.mediaType !== 'video') {
+    return false
+  }
+
+  return shouldRecoverMediaIndexing(mediaItem.metadata?.indexing)
 }

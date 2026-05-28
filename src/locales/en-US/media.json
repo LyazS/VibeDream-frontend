@@ -67,6 +67,11 @@
     "generateSummarySuccess": "Summary generated for {name}",
     "generateSummaryAlreadyExists": "Summary is already available for {name}",
     "generateSummaryFailed": "Failed to generate summary for {name}: {error}",
+    "startIndexing": "Start Indexing",
+    "startIndexingStarted": "Started indexing media: {name}",
+    "startIndexingSuccess": "Media indexing completed: {name}",
+    "startIndexingPartialSuccess": "Media indexing partially completed: {name}",
+    "startIndexingFailed": "Failed to index media {name}: {error}",
     "folderNameLabel": "Folder Name:",
     "folderNamePlaceholder": "Enter folder name",
     "newNameLabel": "New Name:",
@@ -155,6 +160,14 @@
     "retryNotSupported": "This media type does not support retry, please delete and re-import",
     "cancelSuccess": "Task cancelled: {name}",
     "cancelFailed": "Failed to cancel task: {name}",
+    "indexStatus": {
+      "idle": "Not Indexed",
+      "pending": "Pending Index",
+      "processing": "Indexing",
+      "completed": "Completed",
+      "partialFailed": "Partial Failed",
+      "failed": "Failed"
+    },
     "tooltip": {
       "status": "Status",
       "pending": "Waiting to process...",

@@ -77,6 +77,8 @@ export interface UnifiedMediaItemData {
 export interface UnifiedMediaItemMetadata {
   /** 视觉分析结果 */
   visual?: UnifiedMediaVisualMetadata
+  /** 素材 AI 索引结果 */
+  indexing?: UnifiedMediaIndexMetadata
 }
 
 export interface UnifiedMediaVisualMetadata {
@@ -84,6 +86,31 @@ export interface UnifiedMediaVisualMetadata {
   title?: string
   /** 素材级视觉摘要 */
   summary?: string
+}
+
+export type MediaIndexStatus =
+  | 'idle'
+  | 'pending'
+  | 'processing'
+  | 'completed'
+  | 'partial_failed'
+  | 'failed'
+
+export interface UnifiedMediaIndexSegmentSummary {
+  segmentIndex: number
+  startTimecode?: string
+  endTimecode?: string
+  title?: string
+  summary?: string
+}
+
+export interface UnifiedMediaIndexMetadata {
+  indexStatus: MediaIndexStatus
+  indexedAt?: string
+  lastIndexTaskId?: string
+  segmentCount?: number
+  failedSegmentCount?: number
+  segmentSummaries?: UnifiedMediaIndexSegmentSummary[]
 }
 
 // ==================== 专门的状态类型定义 ====================

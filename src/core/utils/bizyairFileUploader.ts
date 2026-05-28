@@ -337,6 +337,9 @@ export class BizyairFileUploader {
       return await exportTimelineItem({
         timelineItem,
         getMediaItem,
+        outputWidth: exportOptions?.outputWidth,
+        outputHeight: exportOptions?.outputHeight,
+        frameRate: exportOptions?.frameRate,
       })
     }
   }

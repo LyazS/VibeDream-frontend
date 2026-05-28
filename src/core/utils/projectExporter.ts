@@ -115,6 +115,10 @@ export interface ExportTimelineItemOptions {
   exportType?: ExportType
   /** 导出帧率（可选，默认 30fps，仅视频有效） */
   frameRate?: number
+  /** 自定义导出宽度（可选，仅视频有效） */
+  outputWidth?: number
+  /** 自定义导出高度（可选，仅视频有效） */
+  outputHeight?: number
 }
 
 /**
@@ -979,6 +983,7 @@ async function exportVideoTimelineItem(
   getMediaItem: (id: string | null) => UnifiedMediaItemData | undefined,
   onProgress?: (progress: number) => void,
   frameRate?: number,
+  sizeOptions?: Pick<ExportMediaItemOptions, 'outputWidth' | 'outputHeight'>,
 ): Promise<Blob> {
   // 1. 获取媒体项目
   const mediaItem = getMediaItem(timelineItem.mediaItemId)
@@ -996,6 +1001,9 @@ async function exportVideoTimelineItem(
     throw new Error('媒体项目未就绪：bunnyMedia 不存在')
   }
   await bunnyMedia.ready
+
+  const outputWidth = normalizeEvenExportDimension(sizeOptions?.outputWidth) ?? bunnyMedia.width
+  const outputHeight = normalizeEvenExportDimension(sizeOptions?.outputHeight) ?? bunnyMedia.height
 
   // 3. 创建新的时间轴项目（只保留时间范围，重置其他配置）
   const cleanTimelineItem: UnifiedTimelineItemData<'video'> = {
@@ -1016,8 +1024,8 @@ async function exportVideoTimelineItem(
       // 重置为默认配置，不应用任何效果
       x: 0,
       y: 0,
-      width: bunnyMedia.width,
-      height: bunnyMedia.height,
+      width: outputWidth,
+      height: outputHeight,
       rotation: 0,
       opacity: 1,
       blendMode: DEFAULT_BLEND_MODE,
@@ -1033,8 +1041,8 @@ async function exportVideoTimelineItem(
   // 4. 构造 ExportProjectOptions
   const exportOptions: ExportProjectOptions = {
     exportType: 'video',
-    videoWidth: bunnyMedia.width,
-    videoHeight: bunnyMedia.height,
+    videoWidth: outputWidth,
+    videoHeight: outputHeight,
     projectName: 'temp-export',
     timelineItems: [cleanTimelineItem],
     tracks: [{ id: 'temp-track', isVisible: true, isMuted: false }],
@@ -1138,7 +1146,7 @@ async function exportAudioTimelineItem(
  * 导出单个时间轴项目为 Blob（使用原始尺寸）
  */
 export async function exportTimelineItem(options: ExportTimelineItemOptions): Promise<Blob> {
-  const { timelineItem, onProgress, getMediaItem, frameRate, exportType } = options
+  const { timelineItem, onProgress, getMediaItem, frameRate, exportType, outputWidth, outputHeight } = options
 
   // 1. 类型检查
   if (timelineItem.mediaType === 'image') {
@@ -1154,7 +1162,16 @@ export async function exportTimelineItem(options: ExportTimelineItemOptions): Pr
         onProgress,
       )
     }
-    return await exportVideoTimelineItem(timelineItem, getMediaItem, onProgress, frameRate)
+    return await exportVideoTimelineItem(
+      timelineItem,
+      getMediaItem,
+      onProgress,
+      frameRate,
+      {
+        outputWidth,
+        outputHeight,
+      },
+    )
   }
 
   if (timelineItem.mediaType === 'audio') {

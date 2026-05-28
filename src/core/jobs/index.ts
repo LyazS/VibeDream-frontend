@@ -41,6 +41,62 @@ export {
   type MediaReadyResult,
 } from './resolvers/MediaReadyResolver'
 export {
+  canResumeMediaIndexingFromRemote,
+  createVideoSceneSegmentsRequest,
+  createVideoSegmentExportsRequest,
+  createVideoSegmentOssUploadsRequest,
+  createMediaIndexTaskSubmitRequest,
+  createMediaIndexTaskCompleteRequest,
+  createMediaIndexMetadataWritebackRequest,
+  MEDIA_INDEX_METADATA_WRITEBACK_RESOURCE_TYPE,
+  MEDIA_INDEX_TASK_COMPLETE_RESOURCE_TYPE,
+  MEDIA_INDEX_TASK_SUBMIT_RESOURCE_TYPE,
+  VIDEO_SCENE_SEGMENTS_RESOURCE_TYPE,
+  VIDEO_SEGMENT_EXPORTS_RESOURCE_TYPE,
+  VIDEO_SEGMENT_OSS_UPLOADS_RESOURCE_TYPE,
+  setIndexingMetadata,
+  shouldRecoverMediaIndexing,
+  persistMediaItem,
+  type MediaIndexMetadataWritebackInput,
+  type MediaIndexMetadataWritebackResult,
+  type MediaIndexTaskCompleteInput,
+  type MediaIndexTaskCompleteResult,
+  type MediaIndexTaskSubmitInput,
+  type MediaIndexTaskSubmitResult,
+  type MediaIndexingResult,
+  type VideoSceneSegment,
+  type VideoSceneSegmentsInput,
+  type VideoSceneSegmentsResult,
+  type VideoSegmentExportsInput,
+  type VideoSegmentExportsResult,
+  type VideoSegmentOssUploadsInput,
+  type VideoSegmentOssUploadsResult,
+} from './resolvers/mediaIndexingShared'
+export {
+  VideoSceneSegmentsResolver,
+  createVideoSceneSegmentsResolver,
+} from './resolvers/VideoSceneSegmentsResolver'
+export {
+  VideoSegmentExportsResolver,
+  createVideoSegmentExportsResolver,
+} from './resolvers/VideoSegmentExportsResolver'
+export {
+  VideoSegmentOssUploadsResolver,
+  createVideoSegmentOssUploadsResolver,
+} from './resolvers/VideoSegmentOssUploadsResolver'
+export {
+  MediaIndexTaskSubmitResolver,
+  createMediaIndexTaskSubmitResolver,
+} from './resolvers/MediaIndexTaskSubmitResolver'
+export {
+  MediaIndexTaskCompleteResolver,
+  createMediaIndexTaskCompleteResolver,
+} from './resolvers/MediaIndexTaskCompleteResolver'
+export {
+  MediaIndexMetadataWritebackResolver,
+  createMediaIndexMetadataWritebackResolver,
+} from './resolvers/MediaIndexMetadataWritebackResolver'
+export {
   MEDIA_FILE_AVAILABLE_RESOURCE_TYPE,
   MediaFileAvailableResolver,
   createMediaFileAvailableRequest,

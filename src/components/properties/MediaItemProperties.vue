@@ -83,6 +83,50 @@
       </div>
     </div>
 
+    <div v-if="indexingSummary || indexingStatus" class="properties-section">
+      <h3 class="section-title">{{ t('properties.mediaItem.indexingInfo') }}</h3>
+      <div v-if="indexingStatus" class="info-row">
+        <span class="info-label">{{ t('properties.mediaItem.indexStatus') }}</span>
+        <span class="info-value">{{ indexingStatusText }}</span>
+      </div>
+      <div v-if="indexedAt" class="info-row">
+        <span class="info-label">{{ t('properties.mediaItem.indexedAt') }}</span>
+        <span class="info-value">{{ formatCreatedAt(indexedAt) }}</span>
+      </div>
+      <div v-if="segmentCount !== null" class="info-row">
+        <span class="info-label">{{ t('properties.mediaItem.segmentCount') }}</span>
+        <span class="info-value">{{ segmentCount }}</span>
+      </div>
+      <div v-if="failedSegmentCount !== null" class="info-row">
+        <span class="info-label">{{ t('properties.mediaItem.failedSegmentCount') }}</span>
+        <span class="info-value">{{ failedSegmentCount }}</span>
+      </div>
+      <div v-if="indexingSummary" class="summary-card">
+        <div v-if="indexingTitle" class="summary-title">{{ indexingTitle }}</div>
+        <div v-if="indexingTitle" class="summary-divider"></div>
+        {{ indexingSummary }}
+      </div>
+      <div v-if="indexingSegmentSummaries.length > 1" class="segment-summary-list">
+        <div
+          v-for="segment in indexingSegmentSummaries"
+          :key="`${segment.segmentIndex}-${segment.startTimecode || ''}-${segment.endTimecode || ''}`"
+          class="segment-summary-card"
+        >
+          <div class="segment-summary-header">
+            <span class="segment-summary-index">#{{ segment.segmentIndex + 1 }}</span>
+            <span
+              v-if="segment.startTimecode || segment.endTimecode"
+              class="segment-summary-timecode"
+            >
+              {{ segment.startTimecode || '--' }} - {{ segment.endTimecode || '--' }}
+            </span>
+          </div>
+          <div v-if="segment.title" class="segment-summary-title">{{ segment.title }}</div>
+          <div v-if="segment.summary" class="segment-summary-text">{{ segment.summary }}</div>
+        </div>
+      </div>
+    </div>
+
     <!-- AI 任务信息区 -->
     <div v-if="canCreateCharacter" class="properties-section">
       <div class="info-row">
@@ -114,6 +158,18 @@
           <component :is="IconComponents.CLOSE" size="16px" />
         </template>
         {{ t('properties.mediaItem.cancel') }}
+      </n-button>
+
+      <n-button
+        v-if="canStartIndexing"
+        type="primary"
+        size="small"
+        @click="handleStartIndexing"
+      >
+        <template #icon>
+          <component :is="IconComponents.SEARCH" size="16px" />
+        </template>
+        {{ t('media.startIndexing') }}
       </n-button>
 
     </div>
@@ -227,7 +283,11 @@ const visualSummary = computed(() => {
     return ''
   }
 
-  return props.mediaItem.metadata?.visual?.summary?.trim() || ''
+  return (
+    props.mediaItem.metadata?.visual?.summary?.trim() ||
+    props.mediaItem.metadata?.indexing?.segmentSummaries?.[0]?.summary?.trim() ||
+    ''
+  )
 })
 
 const visualTitle = computed(() => {
@@ -235,12 +295,54 @@ const visualTitle = computed(() => {
     return ''
   }
 
-  return props.mediaItem.metadata?.visual?.title?.trim() || ''
+  return (
+    props.mediaItem.metadata?.visual?.title?.trim() ||
+    props.mediaItem.metadata?.indexing?.segmentSummaries?.[0]?.title?.trim() ||
+    ''
+  )
+})
+
+const indexingStatus = computed(() => props.mediaItem.metadata?.indexing?.indexStatus || '')
+const indexedAt = computed(() => props.mediaItem.metadata?.indexing?.indexedAt || '')
+const segmentCount = computed(() => props.mediaItem.metadata?.indexing?.segmentCount ?? null)
+const failedSegmentCount = computed(
+  () => props.mediaItem.metadata?.indexing?.failedSegmentCount ?? null,
+)
+const indexingSegmentSummaries = computed(() => {
+  return props.mediaItem.metadata?.indexing?.segmentSummaries || []
+})
+const indexingSummary = computed(() => {
+  const summaries = indexingSegmentSummaries.value
+    .map((segment) => segment.summary?.trim() || '')
+    .filter(Boolean)
+  return summaries.join('\n\n')
+})
+const indexingTitle = computed(() => {
+  return indexingSegmentSummaries.value[0]?.title?.trim() || ''
+})
+
+const indexingStatusText = computed(() => {
+  switch (indexingStatus.value) {
+    case 'pending':
+      return t('media.indexStatus.pending')
+    case 'processing':
+      return t('media.indexStatus.processing')
+    case 'completed':
+      return t('media.indexStatus.completed')
+    case 'partial_failed':
+      return t('media.indexStatus.partialFailed')
+    case 'failed':
+      return t('media.indexStatus.failed')
+    case 'idle':
+      return t('media.indexStatus.idle')
+    default:
+      return ''
+  }
 })
 
 // 是否显示操作区
 const showActions = computed(() => {
-  const status = props.mediaItem.mediaStatus
+  const status = props.mediaItem.mediaStatus as string
   return (
     status === 'pending' ||
     status === 'error' ||
@@ -259,7 +361,12 @@ const canRetry = computed(() => {
 })
 
 const canCancelMedia = computed(() => {
-  return ['pending', 'asyncprocessing', 'decoding'].includes(props.mediaItem.mediaStatus)
+  const status = props.mediaItem.mediaStatus as string
+  return ['pending', 'asyncprocessing', 'decoding', 'processing', 'uploading'].includes(status)
+})
+
+const canStartIndexing = computed(() => {
+  return props.mediaItem.mediaType === 'video' && props.mediaItem.mediaStatus === 'ready'
 })
 
 // 是否可创建真人角色（AI 生成视频且存在 bltcy_task_id）
@@ -366,6 +473,33 @@ async function handleCancel(): Promise<void> {
     }
   } else {
     unifiedStore.messageWarning(t('media.cancelFailed', { name: mediaItem.name }))
+  }
+}
+
+async function handleStartIndexing(): Promise<void> {
+  const mediaItem = props.mediaItem
+  if (!mediaItem || mediaItem.mediaType !== 'video') return
+
+  try {
+    unifiedStore.messageSuccess(t('media.startIndexingStarted', { name: mediaItem.name }))
+    await unifiedStore.ensureMediaIndexing(mediaItem.id)
+    const status = mediaItem.metadata?.indexing?.indexStatus
+    unifiedStore.messageSuccess(
+      t(
+        status === 'partial_failed'
+          ? 'media.startIndexingPartialSuccess'
+          : 'media.startIndexingSuccess',
+        { name: mediaItem.name },
+      ),
+    )
+  } catch (error) {
+    console.error('素材索引失败:', error)
+    unifiedStore.messageError(
+      t('media.startIndexingFailed', {
+        name: mediaItem.name,
+        error: error instanceof Error ? error.message : '未知错误',
+      }),
+    )
   }
 }
 
@@ -529,5 +663,51 @@ async function handleCancel(): Promise<void> {
   height: 1px;
   margin: var(--spacing-xs) 0;
   background: var(--color-border-hover);
+}
+
+.segment-summary-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+  margin-top: var(--spacing-sm);
+}
+
+.segment-summary-card {
+  padding: var(--spacing-sm);
+  border-radius: var(--border-radius-small);
+  border: 1px solid var(--color-border-default);
+  background: var(--color-bg-secondary);
+}
+
+.segment-summary-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--spacing-sm);
+  margin-bottom: var(--spacing-xs);
+}
+
+.segment-summary-index {
+  font-size: var(--font-size-xs);
+  font-weight: 600;
+  color: var(--color-primary);
+}
+
+.segment-summary-timecode {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+}
+
+.segment-summary-title {
+  font-weight: 600;
+  color: var(--color-text-primary);
+  margin-bottom: 4px;
+}
+
+.segment-summary-text {
+  white-space: pre-wrap;
+  line-height: 1.6;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-primary);
 }
 </style>

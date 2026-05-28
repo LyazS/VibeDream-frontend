@@ -67,6 +67,11 @@
     "generateSummarySuccess": "素材总结已生成：{name}",
     "generateSummaryAlreadyExists": "素材总结已就绪：{name}",
     "generateSummaryFailed": "生成素材总结失败：{name}，{error}",
+    "startIndexing": "开始索引",
+    "startIndexingStarted": "开始建立素材索引：{name}",
+    "startIndexingSuccess": "素材索引已完成：{name}",
+    "startIndexingPartialSuccess": "素材索引部分完成：{name}",
+    "startIndexingFailed": "素材索引失败：{name}，{error}",
     "folderNameLabel": "文件夹名称：",
     "folderNamePlaceholder": "请输入文件夹名称",
     "newNameLabel": "新名称：",
@@ -155,6 +160,14 @@
     "retryNotSupported": "此类型素材不支持重试，请删除后重新导入",
     "cancelSuccess": "任务已取消：{name}",
     "cancelFailed": "取消任务失败：{name}",
+    "indexStatus": {
+      "idle": "未索引",
+      "pending": "等待索引",
+      "processing": "索引中",
+      "completed": "已完成",
+      "partialFailed": "部分失败",
+      "failed": "失败"
+    },
     "tooltip": {
       "status": "状态",
       "pending": "等待处理中...",

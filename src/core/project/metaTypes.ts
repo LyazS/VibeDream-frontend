@@ -7,6 +7,7 @@ import type {
 import type {
   MediaStatus,
   MediaTypeOrUnknown,
+  UnifiedMediaIndexSegmentSummary,
   UnifiedMediaItemMetadata,
 } from '@/core/mediaitem/types'
 
@@ -58,6 +59,14 @@ function isOptionalString(value: unknown): value is string | undefined {
   return value === undefined || typeof value === 'string'
 }
 
+function isOptionalInteger(value: unknown): value is number | undefined {
+  return value === undefined || (typeof value === 'number' && Number.isInteger(value))
+}
+
+function isInteger(value: unknown): value is number {
+  return typeof value === 'number' && Number.isInteger(value)
+}
+
 function isUnifiedMediaVisualMetadata(
   value: unknown,
 ): value is NonNullable<UnifiedMediaItemMetadata['visual']> {
@@ -66,6 +75,51 @@ function isUnifiedMediaVisualMetadata(
   }
 
   return isOptionalString(value.title) && isOptionalString(value.summary)
+}
+
+function isUnifiedMediaIndexSegmentSummary(
+  value: unknown,
+): value is UnifiedMediaIndexSegmentSummary {
+  if (!isRecord(value)) {
+    return false
+  }
+
+  return isInteger(value.segmentIndex)
+    && isOptionalString(value.startTimecode)
+    && isOptionalString(value.endTimecode)
+    && isOptionalString(value.title)
+    && isOptionalString(value.summary)
+}
+
+function isOptionalUnifiedMediaIndexSegmentSummaryArray(
+  value: unknown,
+): value is UnifiedMediaIndexSegmentSummary[] | undefined {
+  return value === undefined
+    || (Array.isArray(value) && value.every((item) => isUnifiedMediaIndexSegmentSummary(item)))
+}
+
+function isUnifiedMediaIndexMetadata(
+  value: unknown,
+): value is NonNullable<UnifiedMediaItemMetadata['indexing']> {
+  if (!isRecord(value)) {
+    return false
+  }
+
+  const status = value.indexStatus
+  const validStatus =
+    status === 'idle' ||
+    status === 'pending' ||
+    status === 'processing' ||
+    status === 'completed' ||
+    status === 'partial_failed' ||
+    status === 'failed'
+
+  return validStatus
+    && isOptionalString(value.indexedAt)
+    && isOptionalString(value.lastIndexTaskId)
+    && isOptionalInteger(value.segmentCount)
+    && isOptionalInteger(value.failedSegmentCount)
+    && isOptionalUnifiedMediaIndexSegmentSummaryArray(value.segmentSummaries)
 }
 
 function isOptionalNumber(value: unknown): value is number | undefined {
@@ -90,7 +144,8 @@ function isUnifiedMediaItemMetadata(value: unknown): value is UnifiedMediaItemMe
     return false
   }
 
-  return value.visual === undefined || isUnifiedMediaVisualMetadata(value.visual)
+  return (value.visual === undefined || isUnifiedMediaVisualMetadata(value.visual))
+    && (value.indexing === undefined || isUnifiedMediaIndexMetadata(value.indexing))
 }
 
 function isBaseEffectTemplateSourceData(value: unknown): value is BaseEffectTemplateSourceData {

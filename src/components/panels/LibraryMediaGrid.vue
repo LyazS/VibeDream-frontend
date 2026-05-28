@@ -736,6 +736,16 @@ const currentMenuItems = computed((): MenuItem[] => {
             },
           ] satisfies MenuItem[])
         : []),
+      ...(canStartMediaIndexing(target)
+        ? ([
+            { type: 'separator' as const },
+            {
+              label: t('media.startIndexing'),
+              icon: IconComponents.SEARCH,
+              onClick: handleStartMediaIndexing,
+            },
+          ] satisfies MenuItem[])
+        : []),
       ...(isMediaAsset(getAsset(target.id)) || isEffectTemplateAsset(getAsset(target.id))
         ? ([
             { type: 'separator' as const },
@@ -1629,6 +1639,48 @@ async function handleGenerateSummary(): Promise<void> {
     console.error('生成素材总结失败:', error)
     unifiedStore.messageError(
       t('media.generateSummaryFailed', {
+        name: mediaItem.name,
+        error: error instanceof Error ? error.message : t('media.unknown'),
+      }),
+    )
+  }
+}
+
+function canStartMediaIndexing(item: DisplayItem): boolean {
+  if (item.type !== 'asset') {
+    return false
+  }
+
+  const mediaItem = getMediaItem(item.id)
+  return Boolean(mediaItem && mediaItem.mediaType === 'video' && mediaItem.mediaStatus === 'ready')
+}
+
+async function handleStartMediaIndexing(): Promise<void> {
+  if (!contextMenuTarget.value || contextMenuTarget.value.type !== 'asset') return
+
+  const mediaItem = getMediaItem(contextMenuTarget.value.id)
+  if (!mediaItem || mediaItem.mediaType !== 'video') {
+    return
+  }
+
+  showContextMenu.value = false
+  unifiedStore.messageSuccess(t('media.startIndexingStarted', { name: mediaItem.name }))
+
+  try {
+    await unifiedStore.ensureMediaIndexing(mediaItem.id)
+    const status = mediaItem.metadata?.indexing?.indexStatus
+    unifiedStore.messageSuccess(
+      t(
+        status === 'partial_failed'
+          ? 'media.startIndexingPartialSuccess'
+          : 'media.startIndexingSuccess',
+        { name: mediaItem.name },
+      ),
+    )
+  } catch (error) {
+    console.error('素材索引失败:', error)
+    unifiedStore.messageError(
+      t('media.startIndexingFailed', {
         name: mediaItem.name,
         error: error instanceof Error ? error.message : t('media.unknown'),
       }),

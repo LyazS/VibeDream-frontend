@@ -33,6 +33,7 @@ type ActiveTaskStatus = 'idle' | 'queued' | 'running' | 'blocked'
 const ACTIVE_STATUSES = new Set(['idle', 'queued', 'running', 'blocked'] as const)
 const VISIBLE_ROOT_TYPES = new Set([
   'media-ready',
+  'media-index-metadata-writeback',
   'ai-generated-media',
   'asr-subtitles',
   'effect-template-ready',
@@ -82,6 +83,8 @@ function formatTaskTitle(task: TaskView) {
       return `${t('editor.taskCenter.titles.timelineItemReady')}：${name}`
     case 'ai-generated-media':
       return `${t('editor.taskCenter.titles.aiGeneratedMedia')}：${name}`
+    case 'media-index-metadata-writeback':
+      return `${t('editor.taskCenter.titles.mediaIndexing')}：${name}`
     case 'asr-subtitles':
       return `${t('editor.taskCenter.titles.asrSubtitles')}：${name}`
     case 'effect-template-ready':
@@ -113,6 +116,7 @@ function resolveTaskObjectName(task: TaskView) {
 
   switch (getTaskType(task)) {
     case 'media-ready':
+    case 'media-index-metadata-writeback':
     case 'ai-generated-media':
       return unifiedStore.getMediaItem(key)?.name || key
     case 'effect-template-ready':

@@ -103,6 +103,7 @@
       "currentTasks": "当前任务",
       "titles": {
         "mediaReady": "准备素材",
+        "mediaIndexing": "索引素材",
         "timelineItemReady": "准备时间轴素材",
         "aiGeneratedMedia": "生成 AI 素材",
         "asrSubtitles": "识别字幕",
