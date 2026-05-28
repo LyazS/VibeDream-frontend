@@ -74,15 +74,6 @@
       </div>
     </div>
 
-    <div v-if="visualSummary" class="properties-section">
-      <h3 class="section-title">{{ t('properties.mediaItem.visualSummary') }}</h3>
-      <div class="summary-card">
-        <div v-if="visualTitle" class="summary-title">{{ visualTitle }}</div>
-        <div v-if="visualTitle" class="summary-divider"></div>
-        {{ visualSummary }}
-      </div>
-    </div>
-
     <div v-if="indexingSummary || indexingStatus" class="properties-section">
       <h3 class="section-title">{{ t('properties.mediaItem.indexingInfo') }}</h3>
       <div v-if="indexingStatus" class="info-row">
@@ -276,30 +267,6 @@ const filePath = computed(() => {
     return source.selectedFile.name
   }
   return null
-})
-
-const visualSummary = computed(() => {
-  if (props.mediaItem.mediaType !== 'video' && props.mediaItem.mediaType !== 'image') {
-    return ''
-  }
-
-  return (
-    props.mediaItem.metadata?.visual?.summary?.trim() ||
-    props.mediaItem.metadata?.indexing?.segmentSummaries?.[0]?.summary?.trim() ||
-    ''
-  )
-})
-
-const visualTitle = computed(() => {
-  if (props.mediaItem.mediaType !== 'video' && props.mediaItem.mediaType !== 'image') {
-    return ''
-  }
-
-  return (
-    props.mediaItem.metadata?.visual?.title?.trim() ||
-    props.mediaItem.metadata?.indexing?.segmentSummaries?.[0]?.title?.trim() ||
-    ''
-  )
 })
 
 const indexingStatus = computed(() => props.mediaItem.metadata?.indexing?.indexStatus || '')

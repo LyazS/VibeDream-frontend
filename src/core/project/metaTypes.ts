@@ -67,16 +67,6 @@ function isInteger(value: unknown): value is number {
   return typeof value === 'number' && Number.isInteger(value)
 }
 
-function isUnifiedMediaVisualMetadata(
-  value: unknown,
-): value is NonNullable<UnifiedMediaItemMetadata['visual']> {
-  if (!isRecord(value)) {
-    return false
-  }
-
-  return isOptionalString(value.title) && isOptionalString(value.summary)
-}
-
 function isUnifiedMediaIndexSegmentSummary(
   value: unknown,
 ): value is UnifiedMediaIndexSegmentSummary {
@@ -144,8 +134,7 @@ function isUnifiedMediaItemMetadata(value: unknown): value is UnifiedMediaItemMe
     return false
   }
 
-  return (value.visual === undefined || isUnifiedMediaVisualMetadata(value.visual))
-    && (value.indexing === undefined || isUnifiedMediaIndexMetadata(value.indexing))
+  return (value.indexing === undefined || isUnifiedMediaIndexMetadata(value.indexing))
 }
 
 function isBaseEffectTemplateSourceData(value: unknown): value is BaseEffectTemplateSourceData {

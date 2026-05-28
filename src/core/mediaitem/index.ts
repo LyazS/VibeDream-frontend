@@ -25,10 +25,6 @@ export type {
 } from './types'
 
 export { createUnifiedMediaItemData } from './types'
-export {
-  MediaVisualSummaryService,
-  mediaVisualSummaryService,
-} from './MediaVisualSummaryService'
 
 // 导出查询函数
 export { MediaItemQueries as MediaItemQueries } from './queries'

@@ -4,7 +4,6 @@
  */
 
 import { useUnifiedStore } from '@/core/unifiedStore'
-import { mediaVisualSummaryService } from '@/core/mediaitem'
 import { framesToTimecode } from '@/core/utils/timeUtils'
 import type { ToolDefinition } from '../core/toolTypes'
 import type { UnifiedMediaItemData } from '@/core/mediaitem/types'
@@ -94,64 +93,11 @@ export async function executeReadMedia(args: Record<string, any>): Promise<strin
       continue
     }
 
-    // 3. 检查已有完整视觉元数据
-    if (mediaItem.metadata?.visual?.title?.trim() && mediaItem.metadata.visual.summary?.trim()) {
-      results.push(formatMediaDetail(mediaItem))
-      continue
-    }
-
-    // 4. 根据类型处理
-    if (mediaItem.mediaType === 'video' || mediaItem.mediaType === 'image') {
-      // 触发视觉摘要生成
-      const result = await generateVisualSummary(mediaItem)
-      results.push(result)
-    } else if (mediaItem.mediaType === 'audio') {
-      // 音频特殊处理
-      results.push({
-        ...formatMediaDetail(mediaItem),
-        description: '[音频素材暂不支持视觉摘要]',
-      })
-    } else {
-      // 其他类型
-      results.push(formatMediaDetail(mediaItem))
-    }
+    results.push(formatMediaDetail(mediaItem))
   }
 
-  // 5. 格式化输出
+  // 4. 格式化输出
   return formatResults(results)
-}
-
-// ==================== 视觉摘要生成函数 ====================
-
-/**
- * 生成视觉摘要
- */
-async function generateVisualSummary(mediaItem: UnifiedMediaItemData): Promise<MediaDetail> {
-  try {
-    const result = await mediaVisualSummaryService.summarizeMediaVisual(mediaItem)
-
-    if (!result.success) {
-      throw new Error(result.error || 'Visual summary failed')
-    }
-
-    return {
-      id: mediaItem.id,
-      name: mediaItem.name,
-      mediaType: mediaItem.mediaType as 'video' | 'image',
-      duration: formatDuration(mediaItem.duration),
-      title: result.visual?.title || '',
-      description: result.visual?.summary || '',
-    }
-  } catch (error) {
-    console.error(`Visual summary generation failed for ${mediaItem.id}:`, error)
-    return {
-      id: mediaItem.id,
-      name: mediaItem.name,
-      mediaType: mediaItem.mediaType as 'video' | 'image',
-      duration: formatDuration(mediaItem.duration),
-      description: '',
-    }
-  }
 }
 
 // ==================== 辅助函数 ====================
@@ -165,8 +111,8 @@ function formatMediaDetail(mediaItem: UnifiedMediaItemData): MediaDetail {
     name: mediaItem.name,
     mediaType: mediaItem.mediaType as 'video' | 'image' | 'audio',
     duration: formatDuration(mediaItem.duration),
-    title: mediaItem.metadata?.visual?.title?.trim() || '',
-    description: mediaItem.metadata?.visual?.summary?.trim() || '',
+    title: '',
+    description: '',
   }
 }
 
@@ -196,7 +142,6 @@ function formatResults(details: MediaDetail[]): string {
     if (
       detail.description
       && !detail.description.startsWith('⚠️')
-      && !detail.description.startsWith('[音频素材')
     ) {
       successGroup.push(detail)
     } else {

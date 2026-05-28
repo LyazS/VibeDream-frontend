@@ -75,17 +75,8 @@ export interface UnifiedMediaItemData {
  * 统一媒体项目元数据接口
  */
 export interface UnifiedMediaItemMetadata {
-  /** 视觉分析结果 */
-  visual?: UnifiedMediaVisualMetadata
   /** 素材 AI 索引结果 */
   indexing?: UnifiedMediaIndexMetadata
-}
-
-export interface UnifiedMediaVisualMetadata {
-  /** 素材级视觉标题 */
-  title?: string
-  /** 素材级视觉摘要 */
-  summary?: string
 }
 
 export type MediaIndexStatus =
