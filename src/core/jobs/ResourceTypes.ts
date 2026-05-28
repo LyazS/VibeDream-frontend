@@ -111,7 +111,7 @@ export interface ResourceNode<TInput = unknown, TResult = unknown> {
   error?: ResourceError
   /** 0 到 1 的进度值。业务层如果使用百分比，需要自行转换。 */
   progress?: number
-  /** 当前阶段，例如 uploading、polling、decoding。 */
+  /** 当前任务阶段，例如 uploading、polling、decoding；仅用于任务展示，不等同于 mediaStatus/indexStatus。 */
   stage?: string
   /** 面向任务中心展示的简短状态文案。 */
   message?: string

@@ -1468,7 +1468,7 @@ function openFilterTemplatePicker(): void {
 
 /**
  * 判断素材是否可以取消
- * 只有 pending 状态的任务才可以取消
+ * 仅媒体处理链路的根任务支持取消；索引任务单独走 indexStatus，不在这里混用。
  */
 function canCancel(item: DisplayItem): boolean {
   if (item.type !== 'asset') return false
@@ -1481,7 +1481,10 @@ function canCancel(item: DisplayItem): boolean {
   const mediaItem = getMediaItem(item.id)
   if (!mediaItem) return false
 
-  return ['pending', 'asyncprocessing', 'decoding'].includes(mediaItem.mediaStatus)
+  return (
+    ['pending', 'asyncprocessing', 'decoding'].includes(mediaItem.mediaStatus)
+    && Boolean(unifiedStore.findMediaProcessingTaskView(mediaItem.id))
+  )
 }
 
 /**
@@ -1518,9 +1521,7 @@ async function handleCancelTask(): Promise<void> {
 
   showContextMenu.value = false
 
-  const taskView = unifiedStore.jobTaskViews.find(
-    (tv) => tv.rootResourceId.endsWith(`:${mediaItem.id}`) && tv.actions.canCancel,
-  )
+  const taskView = unifiedStore.findMediaProcessingTaskView(mediaItem.id)
 
   if (taskView) {
     try {

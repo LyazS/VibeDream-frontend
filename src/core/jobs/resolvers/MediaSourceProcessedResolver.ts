@@ -18,7 +18,10 @@ export interface MediaSourceProcessedResult {
 type MediaSourceProcessedModule = Pick<UnifiedMediaModule, 'getMediaItem'>
 
 /**
- * 处理媒体数据源，让 media item 从 pending/processing 走到 ready。
+ * 处理媒体数据源，让 media item 从 pending / asyncprocessing / decoding 走到 ready。
+ *
+ * 注意：这里说的是 mediaStatus。像 uploading、polling 这类字符串只属于任务 stage，
+ * processing 则属于索引链路的 indexStatus，不应混入 mediaStatus。
  *
  * 这是 MediaReady 下面的兼容聚合子资源。当前继续向下声明：
  * MediaSourceProcessed(mediaId)

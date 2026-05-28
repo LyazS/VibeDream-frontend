@@ -342,7 +342,7 @@ const indexingStatusText = computed(() => {
 
 // 是否显示操作区
 const showActions = computed(() => {
-  const status = props.mediaItem.mediaStatus as string
+  const status = props.mediaItem.mediaStatus
   return (
     status === 'pending' ||
     status === 'error' ||
@@ -361,8 +361,10 @@ const canRetry = computed(() => {
 })
 
 const canCancelMedia = computed(() => {
-  const status = props.mediaItem.mediaStatus as string
-  return ['pending', 'asyncprocessing', 'decoding', 'processing', 'uploading'].includes(status)
+  return (
+    ['pending', 'asyncprocessing', 'decoding'].includes(props.mediaItem.mediaStatus)
+    && Boolean(unifiedStore.findMediaProcessingTaskView(props.mediaItem.id))
+  )
 })
 
 const canStartIndexing = computed(() => {
@@ -455,9 +457,7 @@ async function handleCancel(): Promise<void> {
   const mediaItem = props.mediaItem
   if (!mediaItem) return
 
-  const taskView = unifiedStore.jobTaskViews.find(
-    (tv) => tv.rootResourceId.endsWith(`:${mediaItem.id}`) && tv.actions.canCancel,
-  )
+  const taskView = unifiedStore.findMediaProcessingTaskView(mediaItem.id)
 
   if (taskView) {
     try {

@@ -17,6 +17,7 @@ import { createUnifiedDirectoryModule } from '@/core/modules/UnifiedDirectoryMod
 import { createUnifiedMediaBunnyModule } from '@/core/modules/UnifiedMediaBunnyModule'
 import { createUnifiedUIModule } from '@/core/modules/UnifiedUIModule'
 import {
+  AI_GENERATED_MEDIA_RESOURCE_TYPE,
   createAIGeneratedMediaRequest,
   createAIGeneratedMediaResolver,
   createAIInputPreparedResolver,
@@ -38,6 +39,7 @@ import {
   createMediaReadyResolver,
   createMediaSourceProcessedResolver,
   createRemoteTaskCompletedResolver,
+  MEDIA_READY_RESOURCE_TYPE,
   createTimelineItemReadyRequest,
   createTimelineItemReadyResolver,
   createVideoSceneSegmentsResolver,
@@ -326,6 +328,17 @@ export const useUnifiedStore = defineStore('unified', () => {
     const request = createEffectTemplateReadyRequest(assetId)
     return jobRuntime.cancel(getResourceId(request.type, assetId))
   }
+  function findMediaProcessingTaskView(mediaId: string) {
+    const candidateRootIds = [
+      getResourceId(AI_GENERATED_MEDIA_RESOURCE_TYPE, mediaId),
+      getResourceId(MEDIA_READY_RESOURCE_TYPE, mediaId),
+    ]
+
+    return jobTaskCenter.taskViews.value.find(
+      (taskView) =>
+        candidateRootIds.includes(taskView.rootResourceId) && taskView.actions.canCancel,
+    )
+  }
   function ensureTimelineItemResolved(timelineItemId: string) {
     const timelineItem = unifiedTimelineModule.getTimelineItem(timelineItemId)
     if (!timelineItem) {
@@ -419,6 +432,7 @@ export const useUnifiedStore = defineStore('unified', () => {
     jobTaskViews: jobTaskCenter.taskViews,
     cancelJobTask: jobTaskCenter.cancelTask,
     retryJobTask: jobTaskCenter.retryTask,
+    findMediaProcessingTaskView,
     ensureMediaReady,
     ensureAIGeneratedMedia,
     ensureMediaIndexing,
@@ -454,8 +468,6 @@ export const useUnifiedStore = defineStore('unified', () => {
 
     // 异步等待方法
     waitForMediaItemReady: unifiedMediaModule.waitForMediaItemReady,
-
-    // TODO(Resource DAG): 媒体资源取消链路后续统一到 JobRuntime.cancel()。
 
     // 便捷查询方法
     getReadyMediaItems: unifiedMediaModule.getReadyMediaItems,
