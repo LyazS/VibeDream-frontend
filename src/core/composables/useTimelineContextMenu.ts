@@ -525,7 +525,13 @@ export function useTimelineContextMenu(
       let boundaries: bigint[]
 
       try {
-        boundaries = await detectSceneTransNetV2(timelineItem, {
+        const mediaItem = unifiedStore.getMediaItem(timelineItem.mediaItemId)
+        const oriFile = mediaItem?.runtime?.bunny?.bunnyMedia?.getOriFile()
+        if (!oriFile) {
+          throw new Error('无法获取原始文件')
+        }
+
+        boundaries = await detectSceneTransNetV2(timelineItem, oriFile, {
           threshold: 0.5,
           minShotFrames: 15,
           signal: abortController.signal,

@@ -92,7 +92,7 @@ export class CommandFactory {
     const unifiedStore = useUnifiedStore()
 
     // 获取素材
-    let mediaItem = unifiedStore.getMediaItem(params.mediaItemId)
+    const mediaItem = unifiedStore.getMediaItem(params.mediaItemId)
     if (!mediaItem) {
       throw new Error(`素材不存在: ${params.mediaItemId}`)
     }

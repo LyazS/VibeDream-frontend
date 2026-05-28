@@ -18,7 +18,7 @@ const setup = (frameInterval: number): void => {
   let timerId: number
 
   // 使用传入的基础时间间隔
-  let interval: number = frameInterval
+  const interval: number = frameInterval
 
   // 监听来自主线程的消息
   self.onmessage = (e) => {

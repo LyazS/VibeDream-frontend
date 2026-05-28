@@ -248,7 +248,7 @@ export class AIGenerationProcessor extends DataSourceProcessor {
     streamEvent: ProgressUpdateEvent,
   ): boolean {
     const oldStatus = source.taskStatus
-    let hasChanges = false
+    const hasChanges = false
 
     // 只在进度值真正变化时更新
     if (source.progress !== streamEvent.progress) {

@@ -123,7 +123,7 @@ export class SplitTimelineItemCommand implements SimpleCommand {
     const splitItems: UnifiedTimelineItemData<MediaType>[] = []
 
     // 处理关键帧动画
-    let animations: Array<GetAnimation<MediaType> | undefined> = []
+    const animations: Array<GetAnimation<MediaType> | undefined> = []
     if (
       this.originalTimelineItemData.animation?.groups &&
       Object.keys(this.originalTimelineItemData.animation.groups).length > 0

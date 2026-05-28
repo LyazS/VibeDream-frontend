@@ -45,7 +45,12 @@ export class VideoSceneSegmentsResolver
         message: `正在分析镜头切分: ${mediaItem.name}`,
       })
 
-      const boundaries = await detectSceneTransNetV2(timelineItem, {
+      const oriFile = mediaItem.runtime.bunny?.bunnyMedia?.getOriFile()
+      if (!oriFile) {
+        throw new Error(`无法获取原始文件: ${mediaItem.name}`)
+      }
+
+      const boundaries = await detectSceneTransNetV2(timelineItem, oriFile, {
         threshold: 0.5,
         minShotFrames: 15,
         signal: ctx.signal,

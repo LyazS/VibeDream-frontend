@@ -219,7 +219,7 @@ export function createUnifiedMediaBunnyModule(
       // 播放的情况下，会基于真实时间单调增长获取当前播放时间（秒）
       // 暂停的情况下，会使用mPlaybackTimeAtStart作为基准，即seek的时候只需要更新mPlaybackTimeAtStart就行了
       // 然后再来计算当前播放帧数
-      let currentTime = Math.floor(getCurrentPlaybackTime() * RENDERER_FPS)
+      const currentTime = Math.floor(getCurrentPlaybackTime() * RENDERER_FPS)
 
       // 检查是否播放结束
       if (playbackModule.isPlaying.value && currentTime >= mTimelineDuration) {
