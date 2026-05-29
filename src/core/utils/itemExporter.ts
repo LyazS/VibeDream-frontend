@@ -205,8 +205,8 @@ async function exportVideoMediaItem(
     throw new Error('Conversion 配置无效，请检查输入文件和输出格式')
   }
 
-  conversion.onProgress = (progress: number, processedTime: number) => {
-    if (DEBUG_EXPORT) console.log(`[exportVideoMediaItem] progress: ${progress.toFixed(3)}, processedTime: ${processedTime.toFixed(2)}s`)
+  conversion.onProgress = (progress: number) => {
+    if (DEBUG_EXPORT) console.log(`[exportVideoMediaItem] progress: ${progress.toFixed(3)}`)
     onProgress?.(progress)
   }
 
@@ -350,8 +350,8 @@ async function exportVideoTimelineItem(
     throw new Error('Conversion 配置无效，请检查输入文件和输出格式')
   }
 
-  conversion.onProgress = (progress: number, processedTime: number) => {
-    if (DEBUG_EXPORT) console.log(`[exportVideoTimelineItem] progress: ${progress.toFixed(3)}, processedTime: ${processedTime.toFixed(2)}s`)
+  conversion.onProgress = (progress: number) => {
+    if (DEBUG_EXPORT) console.log(`[exportVideoTimelineItem] progress: ${progress.toFixed(3)}`)
     onProgress?.(progress)
   }
 
@@ -415,8 +415,8 @@ async function exportAudioTimelineItem(
     throw new Error('Conversion 配置无效，请检查输入文件和输出格式')
   }
 
-  conversion.onProgress = (progress: number, processedTime: number) => {
-    if (DEBUG_EXPORT) console.log(`[exportAudioTimelineItem] progress: ${progress.toFixed(3)}, processedTime: ${processedTime.toFixed(2)}s`)
+  conversion.onProgress = (progress: number) => {
+    if (DEBUG_EXPORT) console.log(`[exportAudioTimelineItem] progress: ${progress.toFixed(3)}`)
     onProgress?.(progress)
   }
 
