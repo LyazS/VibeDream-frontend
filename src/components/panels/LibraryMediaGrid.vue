@@ -296,6 +296,7 @@ import type { UnifiedLibraryAssetData } from '@/core/asset/types'
 import { isEffectTemplateAsset, isMediaAsset } from '@/core/asset/types'
 import { globalMetaFileManager } from '@/core/managers/media/globalMetaFileManager'
 import { resetAIGeneratedMediaForRetry } from '@/core/jobs'
+import { exportMediaItem } from '@/core/utils/itemExporter'
 
 const unifiedStore = useUnifiedStore()
 const { t } = useAppI18n()
@@ -715,6 +716,13 @@ const currentMenuItems = computed((): MenuItem[] => {
         label: t('media.copy'),
         icon: IconComponents.COPY,
         onClick: handleCopy,
+      },
+      { type: 'separator' },
+      {
+        label: '导出素材',
+        icon: IconComponents.DOWNLOAD,
+        onClick: handleExportMediaItem,
+        disabled: !getMediaItem(target.id),
       },
       { type: 'separator' },
       {
@@ -1729,6 +1737,43 @@ function removeAssetItem(mediaId: string): void {
       }
     },
   })
+}
+
+async function handleExportMediaItem(): Promise<void> {
+  const target = contextMenuTarget.value
+  if (!target) return
+  showContextMenu.value = false
+
+  const mediaItem = getMediaItem(target.id)
+  if (!mediaItem) return
+
+  try {
+    const blob = await exportMediaItem({
+      mediaItem,
+      outputWidth: 3840,
+      outputHeight: 2160,
+      frameRate: 60,
+    })
+
+    // 根据 mediaType 确定文件扩展名
+    const extensionMap: Record<string, string> = {
+      image: 'png',
+      video: 'mp4',
+      audio: 'mp3',
+    }
+    const extension = extensionMap[mediaItem.mediaType] || 'bin'
+    const asset = getAsset(target.id)
+    const fileName = asset?.name || 'export'
+
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `${fileName}.${extension}`
+    a.click()
+    URL.revokeObjectURL(url)
+  } catch (error) {
+    console.error('导出素材失败:', error)
+  }
 }
 
 // 删除文件夹

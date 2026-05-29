@@ -4,13 +4,13 @@
  * 支持代理模式和直接模式
  */
 
-import { exportMediaItem, exportTimelineItem } from './projectExporter'
+import { exportMediaItem, exportTimelineItem } from './itemExporter'
 import { fetchClient } from '@/utils/fetchClient'
 import type { FileData } from '@/core/datasource/providers/ai-generation/types'
 import type { UnifiedMediaItemData } from '@/core/mediaitem/types'
 import type { UnifiedTimelineItemData } from '@/core/timelineitem'
 import type { MediaType } from '@/core/mediaitem'
-import type { ExportMediaItemOptions } from './projectExporter'
+import type { ExportMediaItemOptions } from './itemExporter'
 import { cloneDeep } from 'lodash'
 import { useUnifiedStore } from '@/core/unifiedStore'
 

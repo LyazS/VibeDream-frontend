@@ -5,7 +5,7 @@
  */
 
 import { cloneDeep } from 'lodash'
-import { exportMediaItem, exportTimelineItem } from './projectExporter'
+import { exportMediaItem, exportTimelineItem } from './itemExporter'
 import type { FileData } from '@/core/datasource/providers/ai-generation/types'
 import type { UnifiedMediaItemData } from '@/core/mediaitem/types'
 import type { UnifiedTimelineItemData } from '@/core/timelineitem'
