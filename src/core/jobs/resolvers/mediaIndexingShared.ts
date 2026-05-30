@@ -23,6 +23,8 @@ export const MEDIA_INDEX_TASK_SUBMIT_RESOURCE_TYPE = 'media-index-task-submit'
 export const MEDIA_INDEX_TASK_COMPLETE_RESOURCE_TYPE = 'media-index-task-complete'
 export const MEDIA_INDEX_METADATA_WRITEBACK_RESOURCE_TYPE = 'media-index-metadata-writeback'
 
+export const SHORT_SEGMENT_MAX_DURATION_SECONDS = 3
+
 export interface VideoSceneSegmentsInput {
   mediaId: string
 }
@@ -32,9 +34,7 @@ export interface VideoSceneSegment {
   segmentIndex: number
   startFrame: number
   endFrame: number
-  startTimecode: string
-  endTimecode: string
-  durationMs: number
+  durationN: number
 }
 
 export interface VideoSceneSegmentsResult {
@@ -46,11 +46,25 @@ export interface VideoSegmentExportsInput {
   mediaId: string
 }
 
-export interface VideoSegmentExportPlan {
-  segment: VideoSceneSegment
-  fileData: FileData
-  exportOptions?: UploadFileExportOptions
-}
+export type VideoSegmentExportPlan =
+  | {
+      exportKind: 'video'
+      segment: VideoSceneSegment
+      fileData: FileData
+      exportOptions?: UploadFileExportOptions
+    }
+  | {
+      exportKind: 'frames'
+      segment: VideoSceneSegment
+      frameExportOptions: {
+        timestampsMs: number[]
+        frameCount: number
+        outputWidth?: number
+        outputHeight?: number
+      }
+      fileData: FileData
+      exportOptions?: UploadFileExportOptions
+    }
 
 export interface VideoSegmentExportsResult {
   mediaId: string
@@ -62,14 +76,26 @@ export interface VideoSegmentOssUploadsInput {
   mediaId: string
 }
 
-export interface MediaIndexSegmentInput {
-  mediaItemId: string
-  segmentIndex: number
-  startTimecode: string
-  endTimecode: string
-  durationMs: number
-  ossUrl: string
-}
+export type MediaIndexSegmentInput =
+  | {
+      mediaItemId: string
+      segmentIndex: number
+      startTimecode: string
+      endTimecode: string
+      durationN: number
+      sourceType: 'video_url'
+      ossUrl: string
+    }
+  | {
+      mediaItemId: string
+      segmentIndex: number
+      startTimecode: string
+      endTimecode: string
+      durationN: number
+      sourceType: 'image_urls'
+      imageUrls: string[]
+      embeddingVideoUrl: string
+    }
 
 export interface VideoSegmentOssUploadsResult {
   mediaId: string
@@ -277,9 +303,7 @@ export function buildSegmentsFromBoundaries(
       segmentIndex: segments.length,
       startFrame,
       endFrame,
-      startTimecode: framesToMillisecondTimecode(startFrame),
-      endTimecode: framesToMillisecondTimecode(endFrame),
-      durationMs: Math.max(1, Math.round(((endFrame - startFrame) / RENDERER_FPS) * 1000)),
+      durationN: endFrame - startFrame,
     })
   }
 
@@ -290,9 +314,7 @@ export function buildSegmentsFromBoundaries(
         segmentIndex: 0,
         startFrame: 0,
         endFrame: totalFrames,
-        startTimecode: framesToMillisecondTimecode(0),
-        endTimecode: framesToMillisecondTimecode(totalFrames),
-        durationMs: Math.max(1, Math.round((totalFrames / RENDERER_FPS) * 1000)),
+        durationN: totalFrames,
       },
     ]
   }
@@ -349,7 +371,7 @@ export function buildIndexingExportSize(
     return {
       outputWidth: 480,
       outputHeight: 270,
-      frameRate: 1,
+      frameRate: 10,
     }
   }
 
@@ -358,7 +380,7 @@ export function buildIndexingExportSize(
     return {
       outputWidth: width,
       outputHeight: height,
-      frameRate: 1,
+      frameRate: 10,
     }
   }
 
@@ -366,7 +388,7 @@ export function buildIndexingExportSize(
   return {
     outputWidth: Math.max(2, Math.round(width * scale)),
     outputHeight: Math.max(2, Math.round(height * scale)),
-    frameRate: 1,
+    frameRate: 10,
   }
 }
 
@@ -522,6 +544,30 @@ export async function waitForMediaIndexTaskCompletion(
   }
 
   return finalResult
+}
+
+export function isShortSegment(durationN: number): boolean {
+  return durationN <= SHORT_SEGMENT_MAX_DURATION_SECONDS * RENDERER_FPS
+}
+
+export function computeFrameTimestampsMs(durationN: number): {
+  frameCount: number
+  timestampsMs: number[]
+} {
+  const durationSeconds = durationN / RENDERER_FPS
+  const frameCount = Math.min(6, Math.max(4, Math.round(durationSeconds * 2)))
+  const timestampsMs: number[] = []
+  for (let i = 0; i < frameCount; i += 1) {
+    const centerMs = ((i + 0.5) / frameCount) * durationSeconds * 1000
+    timestampsMs.push(Math.round(centerMs))
+  }
+  return { frameCount, timestampsMs }
+}
+
+export function buildFrameFileName(mediaName: string, segmentIndex: number, frameIndex: number): string {
+  const dotIndex = mediaName.lastIndexOf('.')
+  const baseName = dotIndex > 0 ? mediaName.slice(0, dotIndex) : mediaName
+  return `${baseName}-segment-${String(segmentIndex).padStart(4, '0')}-frame-${String(frameIndex).padStart(2, '0')}.png`
 }
 
 function pad2(value: number): string {

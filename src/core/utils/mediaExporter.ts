@@ -8,6 +8,8 @@ import type { UnifiedTimelineItemData } from '@/core/timelineitem/type'
 import type { UnifiedMediaItemData } from '@/core/mediaitem/types'
 import { DEFAULT_BLEND_MODE } from '@/core/timelineitem'
 import { createDefaultMaskConfig } from '@/core/timelineitem/mask'
+import { RENDERER_FPS } from '@/core/mediabunny/constant'
+import { BunnyClip } from '@/core/mediabunny/bunny-clip'
 import { ExportManager, type ExportProjectOptions } from './projectExporter'
 
 export type { ExportType } from './projectExporter'
@@ -429,4 +431,90 @@ export async function exportTimelineItem(options: ExportTimelineItemOptions): Pr
   }
 
   throw new Error(`不支持导出 ${timelineItem.mediaType} 类型的时间轴项目`)
+}
+
+export interface ExportVideoFramesOptions {
+  timelineItem: UnifiedTimelineItemData<'video'>
+  getMediaItem: (id: string | null) => UnifiedMediaItemData | undefined
+  timestampsMs: number[]
+  outputWidth?: number
+  outputHeight?: number
+  format?: 'png' | 'jpeg'
+}
+
+export async function exportVideoFrames(options: ExportVideoFramesOptions): Promise<Blob[]> {
+  const { timelineItem, getMediaItem, timestampsMs, outputWidth, outputHeight, format = 'png' } = options
+
+  const mediaItem = getMediaItem(timelineItem.mediaItemId)
+  if (!mediaItem || mediaItem.mediaType !== 'video') {
+    throw new Error(`找不到视频素材: ${timelineItem.mediaItemId}`)
+  }
+
+  const bunnyMedia = mediaItem.runtime.bunny?.bunnyMedia
+  if (!bunnyMedia) {
+    throw new Error('媒体项目未就绪：bunnyMedia 不存在')
+  }
+  await bunnyMedia.ready
+
+  const sourceWidth = bunnyMedia.width
+  const sourceHeight = bunnyMedia.height
+  let targetWidth = outputWidth
+  let targetHeight = outputHeight
+
+  if (!targetWidth && !targetHeight) {
+    const maxSide = Math.max(sourceWidth, sourceHeight)
+    if (maxSide > 480) {
+      const scale = 480 / maxSide
+      targetWidth = Math.max(2, Math.round(sourceWidth * scale))
+      targetHeight = Math.max(2, Math.round(sourceHeight * scale))
+    } else {
+      targetWidth = sourceWidth
+      targetHeight = sourceHeight
+    }
+  }
+
+  const clipStartFrame = timelineItem.timeRange.clipStartTime
+  const mimeType = format === 'jpeg' ? 'image/jpeg' : 'image/png'
+  const quality = format === 'jpeg' ? 0.85 : undefined
+
+  const clip = new BunnyClip(bunnyMedia)
+  try {
+    const blobs: Blob[] = []
+
+    for (const msOffset of timestampsMs) {
+      const absoluteFrame = clipStartFrame + Math.round((msOffset / 1000) * RENDERER_FPS)
+      const result = await clip.getSampleN(BigInt(absoluteFrame))
+
+      if (result.state !== 'success' || !result.video) {
+        throw new Error(`无法获取帧: offset=${msOffset}ms frame=${absoluteFrame}`)
+      }
+
+      const videoFrame = result.video.toVideoFrame()
+      result.video.close()
+
+      const canvas = document.createElement('canvas')
+      canvas.width = targetWidth ?? sourceWidth
+      canvas.height = targetHeight ?? sourceHeight
+      const ctx = canvas.getContext('2d')!
+      ctx.drawImage(videoFrame, 0, 0, canvas.width, canvas.height)
+      videoFrame.close()
+
+      const blob = await new Promise<Blob>((resolve, reject) => {
+        canvas.toBlob(
+          (b) => {
+            if (b) resolve(b)
+            else reject(new Error('帧转换失败'))
+          },
+          mimeType,
+          quality,
+        )
+      })
+
+      blobs.push(blob)
+    }
+
+    return blobs
+  } finally {
+    await clip.dispose()
+  }
 }

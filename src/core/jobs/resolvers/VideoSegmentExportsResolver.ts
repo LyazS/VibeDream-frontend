@@ -3,10 +3,12 @@ import type { ResourceRequest } from '../ResourceTypes'
 import {
   buildIndexingExportSize,
   buildSegmentFileName,
+  computeFrameTimestampsMs,
   createTemporaryVideoTimelineItem,
   createVideoSceneSegmentsRequest,
   createVideoSegmentExportsRequest,
   getVideoMediaItem,
+  isShortSegment,
   type MediaIndexingModule,
   type VideoSegmentExportPlan,
   type VideoSegmentExportsInput,
@@ -48,17 +50,42 @@ export class VideoSegmentExportsResolver
         `${mediaItem.id}:segment:${segment.segmentIndex}`,
       )
       timelineItems[timelineItem.id] = timelineItem
-      exportPlans.push({
-        segment,
-        fileData: {
-          __type__: 'FileData',
+
+      if (isShortSegment(segment.durationN)) {
+        const { frameCount, timestampsMs } = computeFrameTimestampsMs(segment.durationN)
+        const fileData = {
+          __type__: 'FileData' as const,
           name: buildSegmentFileName(mediaItem.name, segment.segmentIndex),
-          mediaType: 'video',
+          mediaType: 'video' as const,
           timelineItemId: timelineItem.id,
-          source: 'timeline-item',
-        },
-        exportOptions: exportSize,
-      })
+          source: 'timeline-item' as const,
+        }
+        exportPlans.push({
+          exportKind: 'frames',
+          segment,
+          frameExportOptions: {
+            timestampsMs,
+            frameCount,
+            outputWidth: exportSize?.outputWidth,
+            outputHeight: exportSize?.outputHeight,
+          },
+          fileData,
+          exportOptions: exportSize,
+        })
+      } else {
+        exportPlans.push({
+          exportKind: 'video',
+          segment,
+          fileData: {
+            __type__: 'FileData',
+            name: buildSegmentFileName(mediaItem.name, segment.segmentIndex),
+            mediaType: 'video',
+            timelineItemId: timelineItem.id,
+            source: 'timeline-item',
+          },
+          exportOptions: exportSize,
+        })
+      }
     }
 
     ctx.update({

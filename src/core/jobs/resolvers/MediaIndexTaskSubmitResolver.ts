@@ -72,14 +72,27 @@ export class MediaIndexTaskSubmitResolver
         project_id: this.module.getProjectId(),
         media_item_id: mediaItem.id,
         media_name: mediaItem.name,
-        segments: uploadResult.segments.map((segment) => ({
-          media_item_id: segment.mediaItemId,
-          segment_index: segment.segmentIndex,
-          start_timecode: segment.startTimecode,
-          end_timecode: segment.endTimecode,
-          duration_ms: segment.durationMs,
-          oss_url: segment.ossUrl,
-        })),
+        segments: uploadResult.segments.map((segment) => {
+          const base = {
+            media_item_id: segment.mediaItemId,
+            segment_index: segment.segmentIndex,
+            start_timecode: segment.startTimecode,
+            end_timecode: segment.endTimecode,
+            duration_n: segment.durationN,
+            source_type: segment.sourceType,
+          }
+          if (segment.sourceType === 'image_urls') {
+            return {
+              ...base,
+              image_urls: segment.imageUrls,
+              embedding_video_url: segment.embeddingVideoUrl,
+            }
+          }
+          return {
+            ...base,
+            oss_url: segment.ossUrl,
+          }
+        }),
       },
       { signal: ctx.signal },
     )

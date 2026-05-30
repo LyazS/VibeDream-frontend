@@ -1,9 +1,12 @@
 import { BizyairFileUploader } from '@/core/utils/bizyairFileUploader'
+import { exportVideoFrames } from '@/core/utils/mediaExporter'
 import type { ResolveContext, ResourceResolver } from '../ResourceResolver'
 import type { ResourceRequest } from '../ResourceTypes'
 import {
+  buildFrameFileName,
   createVideoSegmentExportsRequest,
   createVideoSegmentOssUploadsRequest,
+  framesToMillisecondTimecode,
   getVideoMediaItem,
   throwIfAborted,
   type MediaIndexSegmentInput,
@@ -46,33 +49,103 @@ export class VideoSegmentOssUploadsResolver
         message: `正在上传分片 ${index + 1}/${exportResult.exportPlans.length}: ${mediaItem.name}`,
       })
 
-      const uploadResult = await BizyairFileUploader.uploadFile(
-        plan.fileData,
-        this.module.getMediaItem,
-        getTimelineItem,
-        (stage, progress) => {
-          const normalized = (index + progress / 100) / Math.max(1, exportResult.exportPlans.length)
-          ctx.update({
-            progress: Math.max(0.05, Math.min(0.95, normalized)),
-            stage: 'uploading-segments',
-            message: `${stage} ${index + 1}/${exportResult.exportPlans.length}`,
-          })
-        },
-        plan.exportOptions,
-      )
+      if (plan.exportKind === 'frames') {
+        const timelineItem = getTimelineItem(plan.fileData.timelineItemId!)
+        if (!timelineItem) {
+          throw new Error(`找不到时间轴项: ${plan.fileData.timelineItemId}`)
+        }
 
-      if (!uploadResult.success || !uploadResult.url) {
-        throw new Error(uploadResult.error || `上传分片失败: ${plan.fileData.name}`)
+        const videoUploadResult = await BizyairFileUploader.uploadFile(
+          plan.fileData,
+          this.module.getMediaItem,
+          getTimelineItem,
+          (stage, progress) => {
+            const normalized = (index + progress / 100) / Math.max(1, exportResult.exportPlans.length)
+            ctx.update({
+              progress: Math.max(0.05, Math.min(0.95, normalized * 0.5)),
+              stage: 'uploading-segments',
+              message: `${stage} (视频) ${index + 1}/${exportResult.exportPlans.length}`,
+            })
+          },
+          plan.exportOptions,
+        )
+
+        if (!videoUploadResult.success || !videoUploadResult.url) {
+          throw new Error(videoUploadResult.error || `上传短视频分片失败: ${plan.fileData.name}`)
+        }
+
+        const frameBlobs = await exportVideoFrames({
+          timelineItem: timelineItem as any,
+          getMediaItem: this.module.getMediaItem,
+          timestampsMs: plan.frameExportOptions.timestampsMs,
+          outputWidth: plan.frameExportOptions.outputWidth,
+          outputHeight: plan.frameExportOptions.outputHeight,
+        })
+
+        const imageUrls: string[] = []
+        for (let frameIdx = 0; frameIdx < frameBlobs.length; frameIdx += 1) {
+          const frameName = buildFrameFileName(mediaItem.name, plan.segment.segmentIndex, frameIdx)
+          const frameUploadResult = await BizyairFileUploader.uploadBlob(
+            frameBlobs[frameIdx],
+            frameName,
+            (stage, progress) => {
+              const frameProgress = (frameIdx + progress / 100) / frameBlobs.length
+              const normalized = (index + 0.5 + frameProgress * 0.5) / Math.max(1, exportResult.exportPlans.length)
+              ctx.update({
+                progress: Math.max(0.05, Math.min(0.95, normalized)),
+                stage: 'uploading-segments',
+                message: `${stage} (帧 ${frameIdx + 1}/${frameBlobs.length}) ${index + 1}/${exportResult.exportPlans.length}`,
+              })
+            },
+          )
+
+          if (!frameUploadResult.success || !frameUploadResult.url) {
+            throw new Error(frameUploadResult.error || `上传帧失败: ${frameName}`)
+          }
+
+          imageUrls.push(frameUploadResult.url)
+        }
+
+        uploadedSegments.push({
+          mediaItemId: mediaItem.id,
+          segmentIndex: plan.segment.segmentIndex,
+          startTimecode: framesToMillisecondTimecode(plan.segment.startFrame),
+          endTimecode: framesToMillisecondTimecode(plan.segment.endFrame),
+          durationN: plan.segment.durationN,
+          sourceType: 'image_urls',
+          imageUrls,
+          embeddingVideoUrl: videoUploadResult.url,
+        })
+      } else {
+        const uploadResult = await BizyairFileUploader.uploadFile(
+          plan.fileData,
+          this.module.getMediaItem,
+          getTimelineItem,
+          (stage, progress) => {
+            const normalized = (index + progress / 100) / Math.max(1, exportResult.exportPlans.length)
+            ctx.update({
+              progress: Math.max(0.05, Math.min(0.95, normalized)),
+              stage: 'uploading-segments',
+              message: `${stage} ${index + 1}/${exportResult.exportPlans.length}`,
+            })
+          },
+          plan.exportOptions,
+        )
+
+        if (!uploadResult.success || !uploadResult.url) {
+          throw new Error(uploadResult.error || `上传分片失败: ${plan.fileData.name}`)
+        }
+
+        uploadedSegments.push({
+          mediaItemId: mediaItem.id,
+          segmentIndex: plan.segment.segmentIndex,
+          startTimecode: framesToMillisecondTimecode(plan.segment.startFrame),
+          endTimecode: framesToMillisecondTimecode(plan.segment.endFrame),
+          durationN: plan.segment.durationN,
+          sourceType: 'video_url',
+          ossUrl: uploadResult.url,
+        })
       }
-
-      uploadedSegments.push({
-        mediaItemId: mediaItem.id,
-        segmentIndex: plan.segment.segmentIndex,
-        startTimecode: plan.segment.startTimecode,
-        endTimecode: plan.segment.endTimecode,
-        durationMs: plan.segment.durationMs,
-        ossUrl: uploadResult.url,
-      })
     }
 
     ctx.update({

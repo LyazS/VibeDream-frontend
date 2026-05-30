@@ -345,6 +345,38 @@ export class BizyairFileUploader {
   }
 
   /**
+   * 上传已准备好的 Blob
+   */
+  private static async uploadPreparedBlob(
+    blob: Blob,
+    fileName: string,
+    onProgress?: (stage: string, progress: number) => void,
+  ): Promise<UploadResult> {
+    const unifiedStore = useUnifiedStore()
+    const userApiKey = unifiedStore.getBizyAirApiKey()
+    const strategy = this.createStrategy(userApiKey)
+
+    onProgress?.('获取凭证', 20)
+    const credentials = await strategy.getUploadToken(fileName, userApiKey)
+
+    onProgress?.('上传中', 30)
+    await OSSUploader.uploadToOSS(blob, credentials, (p) => {
+      onProgress?.('上传中', 30 + Math.round(p * 0.5))
+    })
+
+    onProgress?.('提交资源', 80)
+    const url = await strategy.commitResource(fileName, credentials.object_key, userApiKey)
+
+    onProgress?.('完成', 100)
+
+    return {
+      success: true,
+      url,
+      object_key: credentials.object_key,
+    }
+  }
+
+  /**
    * 完整的上传流程
    */
   static async uploadFile(
@@ -355,14 +387,7 @@ export class BizyairFileUploader {
     exportOptions?: UploadFileExportOptions,
   ): Promise<UploadResult> {
     try {
-      // 1. 获取用户 API Key（每次调用时从 unifiedStore 获取最新值）
-      const unifiedStore = useUnifiedStore()
-      const userApiKey = unifiedStore.getBizyAirApiKey()
-      
-      // 2. 选择策略
-      const strategy = this.createStrategy(userApiKey)
-      
-      // 3. 导出文件
+      // 1. 导出文件
       onProgress?.('导出文件', 0)
       const blob = await this.exportFileDataToBlob(
         fileData,
@@ -371,27 +396,24 @@ export class BizyairFileUploader {
         exportOptions,
       )
 
-      // 4. 获取上传凭证（传入 API Key）
-      onProgress?.('获取凭证', 20)
-      const credentials = await strategy.getUploadToken(fileData.name, userApiKey)
-
-      // 5. 上传到 OSS（共享逻辑）
-      onProgress?.('上传中', 30)
-      await OSSUploader.uploadToOSS(blob, credentials, (p) => {
-        onProgress?.('上传中', 30 + Math.round(p * 0.5))
-      })
-
-      // 6. 提交资源（传入 API Key）
-      onProgress?.('提交资源', 80)
-      const url = await strategy.commitResource(fileData.name, credentials.object_key, userApiKey)
-
-      onProgress?.('完成', 100)
-
+      // 2. 复用通用上传流程
+      return await this.uploadPreparedBlob(blob, fileData.name, onProgress)
+    } catch (error) {
+      console.error('文件上传失败:', error)
       return {
-        success: true,
-        url,
-        object_key: credentials.object_key,
+        success: false,
+        error: error instanceof Error ? error.message : '上传失败',
       }
+    }
+  }
+
+  static async uploadBlob(
+    blob: Blob,
+    fileName: string,
+    onProgress?: (stage: string, progress: number) => void,
+  ): Promise<UploadResult> {
+    try {
+      return await this.uploadPreparedBlob(blob, fileName, onProgress)
     } catch (error) {
       console.error('文件上传失败:', error)
       return {
