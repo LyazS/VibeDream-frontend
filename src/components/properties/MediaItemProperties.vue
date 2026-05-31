@@ -92,12 +92,7 @@
         <span class="info-label">{{ t('properties.mediaItem.failedSegmentCount') }}</span>
         <span class="info-value">{{ failedSegmentCount }}</span>
       </div>
-      <div v-if="indexingSummary" class="summary-card">
-        <div v-if="indexingTitle" class="summary-title">{{ indexingTitle }}</div>
-        <div v-if="indexingTitle" class="summary-divider"></div>
-        {{ indexingSummary }}
-      </div>
-      <div v-if="indexingSegmentSummaries.length > 1" class="segment-summary-list">
+      <div v-if="indexingSegmentSummaries.length > 0" class="segment-summary-list">
         <div
           v-for="segment in indexingSegmentSummaries"
           :key="`${segment.segmentIndex}-${segment.startTimecode || ''}-${segment.endTimecode || ''}`"

@@ -85,6 +85,7 @@ export class MediaIndexTaskSubmitResolver
             return {
               ...base,
               image_urls: segment.imageUrls,
+              image_timecodes: segment.imageTimecodes,
               embedding_video_url: segment.embeddingVideoUrl,
             }
           }

@@ -94,6 +94,7 @@ export type MediaIndexSegmentInput =
       durationN: number
       sourceType: 'image_urls'
       imageUrls: string[]
+      imageTimecodes: string[]
       embeddingVideoUrl: string
     }
 
@@ -399,15 +400,6 @@ export function buildSegmentFileName(mediaName: string, segmentIndex: number): s
   return `${baseName}-segment-${String(segmentIndex).padStart(4, '0')}${ext}`
 }
 
-export function framesToMillisecondTimecode(frames: number): string {
-  const totalMilliseconds = Math.max(0, Math.round((frames / RENDERER_FPS) * 1000))
-  const hours = Math.floor(totalMilliseconds / 3_600_000)
-  const minutes = Math.floor((totalMilliseconds % 3_600_000) / 60_000)
-  const seconds = Math.floor((totalMilliseconds % 60_000) / 1000)
-  const milliseconds = totalMilliseconds % 1000
-  return `${pad2(hours)}:${pad2(minutes)}:${pad2(seconds)}.${String(milliseconds).padStart(3, '0')}`
-}
-
 export function setIndexingMetadata(
   mediaItem: UnifiedMediaItemData,
   patch: Partial<UnifiedMediaIndexMetadata> & Pick<UnifiedMediaIndexMetadata, 'indexStatus'>,
@@ -570,6 +562,3 @@ export function buildFrameFileName(mediaName: string, segmentIndex: number, fram
   return `${baseName}-segment-${String(segmentIndex).padStart(4, '0')}-frame-${String(frameIndex).padStart(2, '0')}.png`
 }
 
-function pad2(value: number): string {
-  return String(value).padStart(2, '0')
-}

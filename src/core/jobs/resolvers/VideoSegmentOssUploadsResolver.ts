@@ -2,11 +2,12 @@ import { BizyairFileUploader } from '@/core/utils/bizyairFileUploader'
 import { exportVideoFrames } from '@/core/utils/mediaExporter'
 import type { ResolveContext, ResourceResolver } from '../ResourceResolver'
 import type { ResourceRequest } from '../ResourceTypes'
+import { RENDERER_FPS } from '@/core/mediabunny/constant'
+import { framesToTimecode } from '@/core/utils/timeUtils'
 import {
   buildFrameFileName,
   createVideoSegmentExportsRequest,
   createVideoSegmentOssUploadsRequest,
-  framesToMillisecondTimecode,
   getVideoMediaItem,
   throwIfAborted,
   type MediaIndexSegmentInput,
@@ -109,11 +110,14 @@ export class VideoSegmentOssUploadsResolver
         uploadedSegments.push({
           mediaItemId: mediaItem.id,
           segmentIndex: plan.segment.segmentIndex,
-          startTimecode: framesToMillisecondTimecode(plan.segment.startFrame),
-          endTimecode: framesToMillisecondTimecode(plan.segment.endFrame),
+          startTimecode: framesToTimecode(plan.segment.startFrame),
+          endTimecode: framesToTimecode(plan.segment.endFrame),
           durationN: plan.segment.durationN,
           sourceType: 'image_urls',
           imageUrls,
+          imageTimecodes: plan.frameExportOptions.timestampsMs.map(
+            (ms) => framesToTimecode(plan.segment.startFrame + Math.round(ms / 1000 * RENDERER_FPS)),
+          ),
           embeddingVideoUrl: videoUploadResult.url,
         })
       } else {
@@ -139,8 +143,8 @@ export class VideoSegmentOssUploadsResolver
         uploadedSegments.push({
           mediaItemId: mediaItem.id,
           segmentIndex: plan.segment.segmentIndex,
-          startTimecode: framesToMillisecondTimecode(plan.segment.startFrame),
-          endTimecode: framesToMillisecondTimecode(plan.segment.endFrame),
+          startTimecode: framesToTimecode(plan.segment.startFrame),
+          endTimecode: framesToTimecode(plan.segment.endFrame),
           durationN: plan.segment.durationN,
           sourceType: 'video_url',
           ossUrl: uploadResult.url,
