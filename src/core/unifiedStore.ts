@@ -290,7 +290,7 @@ export const useUnifiedStore = defineStore('unified', () => {
   }
   async function ensureMediaIndexing(mediaId: string) {
     const mediaItem = unifiedMediaModule.getMediaItem(mediaId)
-    if (mediaItem?.mediaType === 'video') {
+    if (mediaItem && (mediaItem.mediaType === 'video' || mediaItem.mediaType === 'image')) {
       const indexing = mediaItem.metadata?.indexing
       if (!canResumeMediaIndexingFromRemote(indexing)) {
         setIndexingMetadata(mediaItem, {

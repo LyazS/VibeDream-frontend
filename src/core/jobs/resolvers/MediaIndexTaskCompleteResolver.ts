@@ -5,7 +5,7 @@ import {
   canResumeMediaIndexingFromRemote,
   createMediaIndexTaskCompleteRequest,
   createMediaIndexTaskSubmitRequest,
-  getVideoMediaItem,
+  getIndexableMediaItem,
   persistMediaItem,
   setIndexingMetadata,
   waitForMediaIndexTaskCompletion,
@@ -42,7 +42,7 @@ export class MediaIndexTaskCompleteResolver
   }
 
   async resolve(ctx: ResolveContext<MediaIndexTaskCompleteInput>): Promise<MediaIndexTaskCompleteResult> {
-    const mediaItem = getVideoMediaItem(this.module, ctx.input.mediaId)
+    const mediaItem = getIndexableMediaItem(this.module, ctx.input.mediaId)
     const indexing = mediaItem.metadata?.indexing
     const existingTaskId = canResumeMediaIndexingFromRemote(indexing)
       ? ctx.input.taskId || indexing?.lastIndexTaskId

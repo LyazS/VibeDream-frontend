@@ -1,9 +1,11 @@
 import { globalMetaFileManager } from '@/core/managers/media/globalMetaFileManager'
 import type {
+  ImageMediaItem,
   MediaIndexStatus,
   UnifiedMediaIndexSegmentSummary,
   UnifiedMediaIndexMetadata,
   UnifiedMediaItemData,
+  VideoMediaItem,
 } from '@/core/mediaitem/types'
 import type { UnifiedMediaModule } from '@/core/modules/UnifiedMediaModule'
 import { RENDERER_FPS } from '@/core/mediabunny/constant'
@@ -97,6 +99,11 @@ export type MediaIndexSegmentInput =
       imageTimecodes: string[]
       embeddingVideoUrl: string
     }
+  | {
+      mediaItemId: string
+      sourceType: 'image_url'
+      imageUrl: string
+    }
 
 export interface VideoSegmentOssUploadsResult {
   mediaId: string
@@ -124,7 +131,7 @@ export interface MediaIndexingResult {
   indexed_count: number
   failed_segment_count: number
   segment_summaries?: Array<{
-    segment_index: number
+    segment_index?: number
     start_timecode?: string
     end_timecode?: string
     title?: string
@@ -132,10 +139,10 @@ export interface MediaIndexingResult {
   }>
   indexed_at?: string
   failed_segments?: Array<{
-    segment_index: number
-    start_timecode: string
-    end_timecode: string
-    oss_url: string
+    segment_index?: number
+    start_timecode?: string
+    end_timecode?: string
+    oss_url?: string
     error: string
   }>
   metadata?: {
@@ -266,15 +273,26 @@ export function createMediaIndexMetadataWritebackRequest(
   }
 }
 
+export function getIndexableMediaItem(
+  module: MediaIndexingModule,
+  mediaId: string,
+): VideoMediaItem | ImageMediaItem {
+  const mediaItem = module.getMediaItem(mediaId)
+  if (!mediaItem || (mediaItem.mediaType !== 'video' && mediaItem.mediaType !== 'image')) {
+    throw new Error(`仅支持图片或视频素材索引: ${mediaId}`)
+  }
+  return mediaItem as VideoMediaItem | ImageMediaItem
+}
+
 export function getVideoMediaItem(
   module: MediaIndexingModule,
   mediaId: string,
-): UnifiedMediaItemData & { mediaType: 'video' } {
-  const mediaItem = module.getMediaItem(mediaId)
-  if (!mediaItem || mediaItem.mediaType !== 'video') {
+): VideoMediaItem {
+  const mediaItem = getIndexableMediaItem(module, mediaId)
+  if (mediaItem.mediaType !== 'video') {
     throw new Error(`仅支持视频素材索引: ${mediaId}`)
   }
-  return mediaItem as UnifiedMediaItemData & { mediaType: 'video' }
+  return mediaItem
 }
 
 export function buildSegmentsFromBoundaries(
@@ -561,4 +579,3 @@ export function buildFrameFileName(mediaName: string, segmentIndex: number, fram
   const baseName = dotIndex > 0 ? mediaName.slice(0, dotIndex) : mediaName
   return `${baseName}-segment-${String(segmentIndex).padStart(4, '0')}-frame-${String(frameIndex).padStart(2, '0')}.png`
 }
-

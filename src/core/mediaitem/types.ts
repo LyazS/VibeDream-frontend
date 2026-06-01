@@ -88,7 +88,7 @@ export type MediaIndexStatus =
   | 'failed'
 
 export interface UnifiedMediaIndexSegmentSummary {
-  segmentIndex: number
+  segmentIndex?: number
   startTimecode?: string
   endTimecode?: string
   title?: string

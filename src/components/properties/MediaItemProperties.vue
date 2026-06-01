@@ -95,11 +95,13 @@
       <div v-if="indexingSegmentSummaries.length > 0" class="segment-summary-list">
         <div
           v-for="segment in indexingSegmentSummaries"
-          :key="`${segment.segmentIndex}-${segment.startTimecode || ''}-${segment.endTimecode || ''}`"
+          :key="`${segment.segmentIndex ?? 'image'}-${segment.startTimecode || ''}-${segment.endTimecode || ''}-${segment.title || ''}`"
           class="segment-summary-card"
         >
           <div class="segment-summary-header">
-            <span class="segment-summary-index">#{{ segment.segmentIndex + 1 }}</span>
+            <span v-if="segment.segmentIndex !== undefined" class="segment-summary-index">
+              #{{ segment.segmentIndex + 1 }}
+            </span>
             <span
               v-if="segment.startTimecode || segment.endTimecode"
               class="segment-summary-timecode"
@@ -330,7 +332,10 @@ const canCancelMedia = computed(() => {
 })
 
 const canStartIndexing = computed(() => {
-  return props.mediaItem.mediaType === 'video' && props.mediaItem.mediaStatus === 'ready'
+  return (
+    (props.mediaItem.mediaType === 'video' || props.mediaItem.mediaType === 'image')
+    && props.mediaItem.mediaStatus === 'ready'
+  )
 })
 
 // 是否可创建真人角色（AI 生成视频且存在 bltcy_task_id）
@@ -440,7 +445,7 @@ async function handleCancel(): Promise<void> {
 
 async function handleStartIndexing(): Promise<void> {
   const mediaItem = props.mediaItem
-  if (!mediaItem || mediaItem.mediaType !== 'video') return
+  if (!mediaItem || (mediaItem.mediaType !== 'video' && mediaItem.mediaType !== 'image')) return
 
   try {
     unifiedStore.messageSuccess(t('media.startIndexingStarted', { name: mediaItem.name }))

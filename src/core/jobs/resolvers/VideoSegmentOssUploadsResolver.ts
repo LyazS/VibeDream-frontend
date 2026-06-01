@@ -8,7 +8,7 @@ import {
   buildFrameFileName,
   createVideoSegmentExportsRequest,
   createVideoSegmentOssUploadsRequest,
-  getVideoMediaItem,
+  getIndexableMediaItem,
   throwIfAborted,
   type MediaIndexSegmentInput,
   type MediaIndexingModule,
@@ -34,7 +34,10 @@ export class VideoSegmentOssUploadsResolver
   }
 
   async resolve(ctx: ResolveContext<VideoSegmentOssUploadsInput>): Promise<VideoSegmentOssUploadsResult> {
-    const mediaItem = getVideoMediaItem(this.module, ctx.input.mediaId)
+    const mediaItem = getIndexableMediaItem(this.module, ctx.input.mediaId)
+    if (mediaItem.mediaType !== 'video') {
+      throw new Error(`仅视频素材需要分片上传: ${mediaItem.id}`)
+    }
     const exportResult = await ctx.ensure<VideoSegmentExportsResult>(
       createVideoSegmentExportsRequest(ctx.input.mediaId),
     )

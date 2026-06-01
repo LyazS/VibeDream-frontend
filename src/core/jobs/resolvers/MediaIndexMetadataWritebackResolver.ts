@@ -3,7 +3,7 @@ import type { ResourceRequest } from '../ResourceTypes'
 import {
   createMediaIndexMetadataWritebackRequest,
   createMediaIndexTaskCompleteRequest,
-  getVideoMediaItem,
+  getIndexableMediaItem,
   persistMediaItem,
   setIndexingMetadata,
   type MediaIndexMetadataWritebackInput,
@@ -50,7 +50,7 @@ export class MediaIndexMetadataWritebackResolver
   async resolve(
     ctx: ResolveContext<MediaIndexMetadataWritebackInput>,
   ): Promise<MediaIndexMetadataWritebackResult> {
-    const mediaItem = getVideoMediaItem(this.module, ctx.input.mediaId)
+    const mediaItem = getIndexableMediaItem(this.module, ctx.input.mediaId)
     const { taskId, result } = await ctx.ensure<MediaIndexTaskCompleteResult>(
       createMediaIndexTaskCompleteRequest(ctx.input.mediaId),
     )

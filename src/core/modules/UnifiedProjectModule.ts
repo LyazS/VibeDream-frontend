@@ -811,7 +811,7 @@ function isRecoverableAIGeneratedMedia(mediaItem: UnifiedMediaItemData): boolean
 }
 
 function isRecoverableMediaIndexing(mediaItem: UnifiedMediaItemData): boolean {
-  if (mediaItem.mediaType !== 'video') {
+  if (mediaItem.mediaType !== 'video' && mediaItem.mediaType !== 'image') {
     return false
   }
 

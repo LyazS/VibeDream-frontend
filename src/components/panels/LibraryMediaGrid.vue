@@ -1599,14 +1599,18 @@ function canStartMediaIndexing(item: DisplayItem): boolean {
   }
 
   const mediaItem = getMediaItem(item.id)
-  return Boolean(mediaItem && mediaItem.mediaType === 'video' && mediaItem.mediaStatus === 'ready')
+  return Boolean(
+    mediaItem
+      && (mediaItem.mediaType === 'video' || mediaItem.mediaType === 'image')
+      && mediaItem.mediaStatus === 'ready',
+  )
 }
 
 async function handleStartMediaIndexing(): Promise<void> {
   if (!contextMenuTarget.value || contextMenuTarget.value.type !== 'asset') return
 
   const mediaItem = getMediaItem(contextMenuTarget.value.id)
-  if (!mediaItem || mediaItem.mediaType !== 'video') {
+  if (!mediaItem || (mediaItem.mediaType !== 'video' && mediaItem.mediaType !== 'image')) {
     return
   }
 

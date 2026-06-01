@@ -1,4 +1,5 @@
 import { fetchClient } from '@/utils/fetchClient'
+import { BizyairFileUploader } from '@/core/utils/bizyairFileUploader'
 import type { TaskSubmitResponse } from '@/types/taskApi'
 import type { ResolveCheckContext, ResolveContext, ResourceResolver } from '../ResourceResolver'
 import type { ResourceRequest } from '../ResourceTypes'
@@ -6,15 +7,48 @@ import {
   canResumeMediaIndexingFromRemote,
   createMediaIndexTaskSubmitRequest,
   createVideoSegmentOssUploadsRequest,
-  getVideoMediaItem,
+  getIndexableMediaItem,
   persistMediaItem,
   setIndexingMetadata,
   type MediaIndexTaskSubmitInput,
   type MediaIndexTaskSubmitResult,
+  type MediaIndexSegmentInput,
   type MediaIndexingModule,
   type VideoSegmentOssUploadsResult,
   MEDIA_INDEX_TASK_SUBMIT_RESOURCE_TYPE,
 } from './mediaIndexingShared'
+
+const IMAGE_INDEXING_MAX_SIDE = 768
+
+function buildImageIndexingExportSize(
+  mediaItem: MediaIndexingModule['getMediaItem'] extends (id: any) => infer T ? NonNullable<T> : never,
+): { outputWidth?: number; outputHeight?: number } | undefined {
+  if (mediaItem.mediaType !== 'image') {
+    return undefined
+  }
+
+  const width = mediaItem.runtime.bunny?.originalWidth
+  const height = mediaItem.runtime.bunny?.originalHeight
+  if (!width || !height) {
+    return {
+      outputWidth: IMAGE_INDEXING_MAX_SIDE,
+    }
+  }
+
+  const maxSide = Math.max(width, height)
+  if (maxSide <= IMAGE_INDEXING_MAX_SIDE) {
+    return {
+      outputWidth: width,
+      outputHeight: height,
+    }
+  }
+
+  const scale = IMAGE_INDEXING_MAX_SIDE / maxSide
+  return {
+    outputWidth: Math.max(1, Math.round(width * scale)),
+    outputHeight: Math.max(1, Math.round(height * scale)),
+  }
+}
 
 export class MediaIndexTaskSubmitResolver
   implements ResourceResolver<MediaIndexTaskSubmitInput, MediaIndexTaskSubmitResult>
@@ -44,18 +78,66 @@ export class MediaIndexTaskSubmitResolver
   }
 
   async getDependencies(ctx: ResolveContext<MediaIndexTaskSubmitInput>): Promise<ResourceRequest[]> {
-    return [createVideoSegmentOssUploadsRequest(ctx.input.mediaId)]
+    const mediaItem = this.module.getMediaItem(ctx.input.mediaId)
+    if (mediaItem?.mediaType === 'video') {
+      return [createVideoSegmentOssUploadsRequest(ctx.input.mediaId)]
+    }
+    return []
   }
 
   async resolve(ctx: ResolveContext<MediaIndexTaskSubmitInput>): Promise<MediaIndexTaskSubmitResult> {
-    const mediaItem = getVideoMediaItem(this.module, ctx.input.mediaId)
-    const uploadResult = await ctx.ensure<VideoSegmentOssUploadsResult>(
-      createVideoSegmentOssUploadsRequest(ctx.input.mediaId),
-    )
+    const mediaItem = getIndexableMediaItem(this.module, ctx.input.mediaId)
+    let segments: MediaIndexSegmentInput[]
+
+    if (mediaItem.mediaType === 'video') {
+      const uploadResult = await ctx.ensure<VideoSegmentOssUploadsResult>(
+        createVideoSegmentOssUploadsRequest(ctx.input.mediaId),
+      )
+      segments = uploadResult.segments
+    } else {
+      await this.module.ensureMediaReady(mediaItem.id)
+      ctx.update({
+        progress: 0.05,
+        stage: 'uploading-image',
+        message: `正在上传图片素材: ${mediaItem.name}`,
+      })
+
+      const uploadResult = await BizyairFileUploader.uploadFile(
+        {
+          __type__: 'FileData',
+          source: 'media-item',
+          name: mediaItem.name,
+          mediaType: 'image',
+          mediaItemId: mediaItem.id,
+        },
+        this.module.getMediaItem,
+        () => undefined,
+        (stage, progress) => {
+          ctx.update({
+            progress: Math.max(0.05, Math.min(0.45, progress / 100 * 0.4 + 0.05)),
+            stage: 'uploading-image',
+            message: `${stage}: ${mediaItem.name}`,
+          })
+        },
+        buildImageIndexingExportSize(mediaItem),
+      )
+
+      if (!uploadResult.success || !uploadResult.url) {
+        throw new Error(uploadResult.error || `上传图片素材失败: ${mediaItem.name}`)
+      }
+
+      segments = [
+        {
+          mediaItemId: mediaItem.id,
+          sourceType: 'image_url',
+          imageUrl: uploadResult.url,
+        },
+      ]
+    }
 
     setIndexingMetadata(mediaItem, {
       indexStatus: 'processing',
-      segmentCount: uploadResult.segments.length,
+      segmentCount: segments.length,
       failedSegmentCount: 0,
     })
     await persistMediaItem(mediaItem)
@@ -72,7 +154,14 @@ export class MediaIndexTaskSubmitResolver
         project_id: this.module.getProjectId(),
         media_item_id: mediaItem.id,
         media_name: mediaItem.name,
-        segments: uploadResult.segments.map((segment) => {
+        segments: segments.map((segment) => {
+          if (segment.sourceType === 'image_url') {
+            return {
+              media_item_id: segment.mediaItemId,
+              source_type: segment.sourceType,
+              image_url: segment.imageUrl,
+            }
+          }
           const base = {
             media_item_id: segment.mediaItemId,
             segment_index: segment.segmentIndex,
