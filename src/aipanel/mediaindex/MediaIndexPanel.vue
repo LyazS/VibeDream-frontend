@@ -112,34 +112,34 @@ const searchQuery = ref('')
 const isSearching = ref(false)
 const hasSearched = ref(false)
 const searchError = ref('')
-const searchResults = ref<SearchResultItem[]>([])
+const searchResults = ref<RetrievalResultItem[]>([])
 const selectedPointId = ref<string | null>(null)
 
-interface SearchKeywordMatch {
+interface RetrievalKeywordMatch {
   field: string
   value: string
   matched_terms: string[]
   score: number
 }
 
-interface SearchSegmentInfo {
+interface RetrievalSegmentInfo {
   segment_index: number
   start_timecode: string
   end_timecode: string
   duration_n: number
 }
 
-interface SearchResultItem {
+interface RetrievalResultItem {
   point_id: string
   media_item_id: string
   media_name: string
   media_kind: string
-  segment: SearchSegmentInfo | null
+  segment: RetrievalSegmentInfo | null
   title: string | null
   summary: string | null
   score: number
   routes: string[]
-  keyword_matches: SearchKeywordMatch[]
+  keyword_matches: RetrievalKeywordMatch[]
 }
 
 const mediaItemCount = computed(() => {
@@ -190,10 +190,10 @@ const handleSearch = async () => {
 
   try {
     const response = await fetchClient.post<{
-      results: SearchResultItem[]
+      results: RetrievalResultItem[]
       total: number
       query: string
-    }>('/api/media/search', {
+    }>('/api/media/retrieval', {
       query,
       project_id: projectId,
       top_k: 10,
