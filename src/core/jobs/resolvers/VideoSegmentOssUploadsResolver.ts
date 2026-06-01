@@ -1,5 +1,5 @@
-import { BizyairFileUploader } from '@/core/utils/bizyairFileUploader'
-import { exportVideoFrames } from '@/core/utils/mediaExporter'
+import { DashScopeTemporaryFileUploader } from '@/core/utils/dashscopeTemporaryFileUploader'
+import { exportMediaItem, exportTimelineItem, exportVideoFrames } from '@/core/utils/mediaExporter'
 import type { ResolveContext, ResourceResolver } from '../ResourceResolver'
 import type { ResourceRequest } from '../ResourceTypes'
 import { RENDERER_FPS } from '@/core/mediabunny/constant'
@@ -59,23 +59,28 @@ export class VideoSegmentOssUploadsResolver
           throw new Error(`找不到时间轴项: ${plan.fileData.timelineItemId}`)
         }
 
-        const videoUploadResult = await BizyairFileUploader.uploadFile(
-          plan.fileData,
-          this.module.getMediaItem,
-          getTimelineItem,
-          (stage, progress) => {
+        const videoBlob = await exportTimelineItem({
+          timelineItem,
+          getMediaItem: this.module.getMediaItem,
+          ...plan.exportOptions,
+        })
+
+        const embeddingVideoResult = await DashScopeTemporaryFileUploader.uploadBlob(
+          videoBlob,
+          plan.fileData.name,
+          'embedding',
+          (progress) => {
             const normalized = (index + progress / 100) / Math.max(1, exportResult.exportPlans.length)
             ctx.update({
-              progress: Math.max(0.05, Math.min(0.95, normalized * 0.5)),
+              progress: Math.max(0.05, Math.min(0.95, normalized * 0.3)),
               stage: 'uploading-segments',
-              message: `${stage} (视频) ${index + 1}/${exportResult.exportPlans.length}`,
+              message: `上传短视频（向量化） ${index + 1}/${exportResult.exportPlans.length}`,
             })
           },
-          plan.exportOptions,
         )
 
-        if (!videoUploadResult.success || !videoUploadResult.url) {
-          throw new Error(videoUploadResult.error || `上传短视频分片失败: ${plan.fileData.name}`)
+        if (!embeddingVideoResult.success || !embeddingVideoResult.url) {
+          throw new Error(embeddingVideoResult.error || `上传短视频分片失败: ${plan.fileData.name}`)
         }
 
         const frameBlobs = await exportVideoFrames({
@@ -86,19 +91,20 @@ export class VideoSegmentOssUploadsResolver
           outputHeight: plan.frameExportOptions.outputHeight,
         })
 
-        const imageUrls: string[] = []
+        const taggingImageUrls: string[] = []
         for (let frameIdx = 0; frameIdx < frameBlobs.length; frameIdx += 1) {
           const frameName = buildFrameFileName(mediaItem.name, plan.segment.segmentIndex, frameIdx)
-          const frameUploadResult = await BizyairFileUploader.uploadBlob(
+          const frameUploadResult = await DashScopeTemporaryFileUploader.uploadBlob(
             frameBlobs[frameIdx],
             frameName,
-            (stage, progress) => {
+            'tagging',
+            (progress) => {
               const frameProgress = (frameIdx + progress / 100) / frameBlobs.length
-              const normalized = (index + 0.5 + frameProgress * 0.5) / Math.max(1, exportResult.exportPlans.length)
+              const normalized = (index + 0.3 + frameProgress * 0.7) / Math.max(1, exportResult.exportPlans.length)
               ctx.update({
                 progress: Math.max(0.05, Math.min(0.95, normalized)),
                 stage: 'uploading-segments',
-                message: `${stage} (帧 ${frameIdx + 1}/${frameBlobs.length}) ${index + 1}/${exportResult.exportPlans.length}`,
+                message: `上传帧 ${frameIdx + 1}/${frameBlobs.length} ${index + 1}/${exportResult.exportPlans.length}`,
               })
             },
           )
@@ -107,7 +113,7 @@ export class VideoSegmentOssUploadsResolver
             throw new Error(frameUploadResult.error || `上传帧失败: ${frameName}`)
           }
 
-          imageUrls.push(frameUploadResult.url)
+          taggingImageUrls.push(frameUploadResult.url)
         }
 
         uploadedSegments.push({
@@ -117,30 +123,54 @@ export class VideoSegmentOssUploadsResolver
           endTimecode: framesToTimecode(plan.segment.endFrame),
           durationN: plan.segment.durationN,
           sourceType: 'image_urls',
-          imageUrls,
+          taggingImageUrls,
           imageTimecodes: plan.frameExportOptions.timestampsMs.map(
             (ms) => framesToTimecode(plan.segment.startFrame + Math.round(ms / 1000 * RENDERER_FPS)),
           ),
-          embeddingVideoUrl: videoUploadResult.url,
+          embeddingVideoUrl: embeddingVideoResult.url,
         })
       } else {
-        const uploadResult = await BizyairFileUploader.uploadFile(
-          plan.fileData,
-          this.module.getMediaItem,
-          getTimelineItem,
-          (stage, progress) => {
-            const normalized = (index + progress / 100) / Math.max(1, exportResult.exportPlans.length)
+        const timelineItem = getTimelineItem(plan.fileData.timelineItemId!)
+        const videoBlob = await exportTimelineItem({
+          timelineItem: timelineItem || ({} as any),
+          getMediaItem: this.module.getMediaItem,
+          ...plan.exportOptions,
+        })
+
+        const taggingResult = await DashScopeTemporaryFileUploader.uploadBlob(
+          videoBlob,
+          plan.fileData.name,
+          'tagging',
+          (progress) => {
+            const normalized = (index + progress / 200) / Math.max(1, exportResult.exportPlans.length)
             ctx.update({
               progress: Math.max(0.05, Math.min(0.95, normalized)),
               stage: 'uploading-segments',
-              message: `${stage} ${index + 1}/${exportResult.exportPlans.length}`,
+              message: `上传打标视频 ${index + 1}/${exportResult.exportPlans.length}`,
             })
           },
-          plan.exportOptions,
         )
 
-        if (!uploadResult.success || !uploadResult.url) {
-          throw new Error(uploadResult.error || `上传分片失败: ${plan.fileData.name}`)
+        if (!taggingResult.success || !taggingResult.url) {
+          throw new Error(taggingResult.error || `上传打标视频分片失败: ${plan.fileData.name}`)
+        }
+
+        const embeddingResult = await DashScopeTemporaryFileUploader.uploadBlob(
+          videoBlob,
+          plan.fileData.name,
+          'embedding',
+          (progress) => {
+            const normalized = (index + 0.5 + progress / 200) / Math.max(1, exportResult.exportPlans.length)
+            ctx.update({
+              progress: Math.max(0.05, Math.min(0.95, normalized)),
+              stage: 'uploading-segments',
+              message: `上传向量化视频 ${index + 1}/${exportResult.exportPlans.length}`,
+            })
+          },
+        )
+
+        if (!embeddingResult.success || !embeddingResult.url) {
+          throw new Error(embeddingResult.error || `上传向量化视频分片失败: ${plan.fileData.name}`)
         }
 
         uploadedSegments.push({
@@ -150,7 +180,8 @@ export class VideoSegmentOssUploadsResolver
           endTimecode: framesToTimecode(plan.segment.endFrame),
           durationN: plan.segment.durationN,
           sourceType: 'video_url',
-          ossUrl: uploadResult.url,
+          taggingOssUrl: taggingResult.url,
+          embeddingOssUrl: embeddingResult.url,
         })
       }
     }

@@ -87,7 +87,8 @@ export type MediaIndexSegmentInput =
       endTimecode: string
       durationN: number
       sourceType: 'video_url'
-      ossUrl: string
+      taggingOssUrl: string
+      embeddingOssUrl: string
     }
   | {
       mediaItemId: string
@@ -96,14 +97,15 @@ export type MediaIndexSegmentInput =
       endTimecode: string
       durationN: number
       sourceType: 'image_urls'
-      imageUrls: string[]
+      taggingImageUrls: string[]
       imageTimecodes: string[]
       embeddingVideoUrl: string
     }
   | {
       mediaItemId: string
       sourceType: 'image_url'
-      imageUrl: string
+      taggingImageUrl: string
+      embeddingImageUrl: string
     }
 
 export interface VideoSegmentOssUploadsResult {

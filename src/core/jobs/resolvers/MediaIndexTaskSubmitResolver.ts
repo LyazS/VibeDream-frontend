@@ -1,5 +1,6 @@
 import { fetchClient } from '@/utils/fetchClient'
-import { BizyairFileUploader } from '@/core/utils/bizyairFileUploader'
+import { DashScopeTemporaryFileUploader } from '@/core/utils/dashscopeTemporaryFileUploader'
+import { exportMediaItem } from '@/core/utils/mediaExporter'
 import type { TaskSubmitResponse } from '@/types/taskApi'
 import type { ResolveCheckContext, ResolveContext, ResourceResolver } from '../ResourceResolver'
 import type { ResourceRequest } from '../ResourceTypes'
@@ -99,38 +100,61 @@ export class MediaIndexTaskSubmitResolver
       ctx.update({
         progress: 0.05,
         stage: 'uploading-image',
-        message: `正在上传图片素材: ${mediaItem.name}`,
+        message: `正在上传图片素材（打标）: ${mediaItem.name}`,
       })
 
-      const uploadResult = await BizyairFileUploader.uploadFile(
-        {
-          __type__: 'FileData',
-          source: 'media-item',
-          name: mediaItem.name,
-          mediaType: 'image',
-          mediaItemId: mediaItem.id,
-        },
-        this.module.getMediaItem,
-        () => undefined,
-        (stage, progress) => {
+      const exportSize = buildImageIndexingExportSize(mediaItem)
+      const imageBlob = await exportMediaItem({
+        mediaItem: mediaItem as any,
+        ...exportSize,
+      })
+
+      const taggingResult = await DashScopeTemporaryFileUploader.uploadBlob(
+        imageBlob,
+        mediaItem.name,
+        'tagging',
+        (progress) => {
           ctx.update({
-            progress: Math.max(0.05, Math.min(0.45, progress / 100 * 0.4 + 0.05)),
+            progress: Math.max(0.05, Math.min(0.25, progress / 100 * 0.2 + 0.05)),
             stage: 'uploading-image',
-            message: `${stage}: ${mediaItem.name}`,
+            message: `上传打标图片: ${progress}%`,
           })
         },
-        buildImageIndexingExportSize(mediaItem),
       )
 
-      if (!uploadResult.success || !uploadResult.url) {
-        throw new Error(uploadResult.error || `上传图片素材失败: ${mediaItem.name}`)
+      if (!taggingResult.success || !taggingResult.url) {
+        throw new Error(taggingResult.error || `上传打标图片失败: ${mediaItem.name}`)
+      }
+
+      ctx.update({
+        progress: 0.25,
+        stage: 'uploading-image',
+        message: `正在上传图片素材（向量化）: ${mediaItem.name}`,
+      })
+
+      const embeddingResult = await DashScopeTemporaryFileUploader.uploadBlob(
+        imageBlob,
+        mediaItem.name,
+        'embedding',
+        (progress) => {
+          ctx.update({
+            progress: Math.max(0.25, Math.min(0.45, progress / 100 * 0.2 + 0.25)),
+            stage: 'uploading-image',
+            message: `上传向量化图片: ${progress}%`,
+          })
+        },
+      )
+
+      if (!embeddingResult.success || !embeddingResult.url) {
+        throw new Error(embeddingResult.error || `上传向量化图片失败: ${mediaItem.name}`)
       }
 
       segments = [
         {
           mediaItemId: mediaItem.id,
           sourceType: 'image_url',
-          imageUrl: uploadResult.url,
+          taggingImageUrl: taggingResult.url,
+          embeddingImageUrl: embeddingResult.url,
         },
       ]
     }
@@ -162,7 +186,8 @@ export class MediaIndexTaskSubmitResolver
             return {
               media_item_id: segment.mediaItemId,
               source_type: segment.sourceType,
-              image_url: segment.imageUrl,
+              tagging_image_url: segment.taggingImageUrl,
+              embedding_image_url: segment.embeddingImageUrl,
             }
           }
           const base = {
@@ -176,14 +201,15 @@ export class MediaIndexTaskSubmitResolver
           if (segment.sourceType === 'image_urls') {
             return {
               ...base,
-              image_urls: segment.imageUrls,
+              tagging_image_urls: segment.taggingImageUrls,
               image_timecodes: segment.imageTimecodes,
               embedding_video_url: segment.embeddingVideoUrl,
             }
           }
           return {
             ...base,
-            oss_url: segment.ossUrl,
+            tagging_oss_url: segment.taggingOssUrl,
+            embedding_oss_url: segment.embeddingOssUrl,
           }
         }),
       },
