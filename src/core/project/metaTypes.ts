@@ -7,7 +7,8 @@ import type {
 import type {
   MediaStatus,
   MediaTypeOrUnknown,
-  UnifiedMediaIndexSegmentSummary,
+  UnifiedImageMediaIndexMetadata,
+  UnifiedVideoIndexSegmentSummary,
   UnifiedMediaItemMetadata,
 } from '@/core/mediaitem/types'
 
@@ -69,21 +70,21 @@ function isInteger(value: unknown): value is number {
 
 function isUnifiedMediaIndexSegmentSummary(
   value: unknown,
-): value is UnifiedMediaIndexSegmentSummary {
+): value is UnifiedVideoIndexSegmentSummary {
   if (!isRecord(value)) {
     return false
   }
 
   return isInteger(value.segmentIndex)
-    && isOptionalString(value.startTimecode)
-    && isOptionalString(value.endTimecode)
+    && typeof value.startTimecode === 'string'
+    && typeof value.endTimecode === 'string'
     && isOptionalString(value.title)
     && isOptionalString(value.summary)
 }
 
 function isOptionalUnifiedMediaIndexSegmentSummaryArray(
   value: unknown,
-): value is UnifiedMediaIndexSegmentSummary[] | undefined {
+): value is UnifiedVideoIndexSegmentSummary[] | undefined {
   return value === undefined
     || (Array.isArray(value) && value.every((item) => isUnifiedMediaIndexSegmentSummary(item)))
 }
@@ -104,12 +105,29 @@ function isUnifiedMediaIndexMetadata(
     status === 'partial_failed' ||
     status === 'failed'
 
-  return validStatus
-    && isOptionalString(value.indexedAt)
-    && isOptionalString(value.lastIndexTaskId)
-    && isOptionalInteger(value.segmentCount)
-    && isOptionalInteger(value.failedSegmentCount)
-    && isOptionalUnifiedMediaIndexSegmentSummaryArray(value.segmentSummaries)
+  if (!validStatus || !isOptionalString(value.indexedAt) || !isOptionalString(value.lastIndexTaskId)) {
+    return false
+  }
+
+  if (value.mediaKind === 'video') {
+    return isOptionalInteger(value.segmentCount)
+      && isOptionalInteger(value.failedSegmentCount)
+      && isOptionalUnifiedMediaIndexSegmentSummaryArray(value.segmentSummaries)
+  }
+
+  if (value.mediaKind === 'image') {
+    if (value.summary !== undefined && !isRecord(value.summary)) {
+      return false
+    }
+    const summary = value.summary as UnifiedImageMediaIndexMetadata['summary'] | undefined
+    return summary === undefined
+      || (
+        isOptionalString(summary.title)
+        && isOptionalString(summary.summary)
+      )
+  }
+
+  return false
 }
 
 function isOptionalNumber(value: unknown): value is number | undefined {

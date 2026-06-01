@@ -2,7 +2,8 @@ import { globalMetaFileManager } from '@/core/managers/media/globalMetaFileManag
 import type {
   ImageMediaItem,
   MediaIndexStatus,
-  UnifiedMediaIndexSegmentSummary,
+  UnifiedImageMediaIndexMetadata,
+  UnifiedVideoMediaIndexMetadata,
   UnifiedMediaIndexMetadata,
   UnifiedMediaItemData,
   VideoMediaItem,
@@ -124,16 +125,17 @@ export interface MediaIndexTaskCompleteInput {
   taskId?: string
 }
 
-export interface MediaIndexingResult {
+export interface VideoMediaIndexingResult {
+  media_kind: 'video'
   project_id: string
   media_item_id: string
   segment_count: number
   indexed_count: number
   failed_segment_count: number
   segment_summaries?: Array<{
-    segment_index?: number
-    start_timecode?: string
-    end_timecode?: string
+    segment_index: number
+    start_timecode: string
+    end_timecode: string
     title?: string
     summary?: string
   }>
@@ -150,6 +152,25 @@ export interface MediaIndexingResult {
     vector_names?: string[]
   }
 }
+
+export interface ImageMediaIndexingResult {
+  media_kind: 'image'
+  project_id: string
+  media_item_id: string
+  indexed_count: number
+  summary?: {
+    title?: string
+    summary?: string
+  }
+  failed_reason?: string
+  indexed_at?: string
+  metadata?: {
+    status?: MediaIndexStatus
+    vector_names?: string[]
+  }
+}
+
+export type MediaIndexingResult = VideoMediaIndexingResult | ImageMediaIndexingResult
 
 export interface MediaIndexingTaskResultData {
   url: string
@@ -420,13 +441,24 @@ export function buildSegmentFileName(mediaName: string, segmentIndex: number): s
 
 export function setIndexingMetadata(
   mediaItem: UnifiedMediaItemData,
-  patch: Partial<UnifiedMediaIndexMetadata> & Pick<UnifiedMediaIndexMetadata, 'indexStatus'>,
+  patch: {
+    indexStatus: MediaIndexStatus
+    mediaKind?: 'video' | 'image'
+    indexedAt?: string
+    lastIndexTaskId?: string
+    segmentCount?: number
+    failedSegmentCount?: number
+    segmentSummaries?: UnifiedVideoMediaIndexMetadata['segmentSummaries']
+    summary?: UnifiedImageMediaIndexMetadata['summary']
+  },
 ): void {
   const current = mediaItem.metadata?.indexing
+  const mediaKind = patch.mediaKind || current?.mediaKind || (mediaItem.mediaType === 'image' ? 'image' : 'video')
   mediaItem.metadata = {
     ...mediaItem.metadata,
     indexing: {
       ...(current || {}),
+      mediaKind,
       ...patch,
     },
   }

@@ -12,6 +12,11 @@
       "edit_sdk": "Edit Operation"
     },
     "characterEditor": "Character Editor",
+    "mediaIndex": "Media Index",
+    "indexAllMedia": "Index All Media",
+    "indexingAllMedia": "Indexing all media...",
+    "indexAllMediaSuccess": "Submitted indexing tasks for {count} media items",
+    "indexAllMediaNoItems": "No media items to index",
     "selectConfig": "Select a configuration",
     "generate": "Generate",
     "generating": "Generating...",

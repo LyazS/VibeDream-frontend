@@ -136,9 +136,12 @@ export class MediaIndexTaskSubmitResolver
     }
 
     setIndexingMetadata(mediaItem, {
+      mediaKind: mediaItem.mediaType,
       indexStatus: 'processing',
       segmentCount: segments.length,
-      failedSegmentCount: 0,
+      failedSegmentCount: mediaItem.mediaType === 'video' ? 0 : undefined,
+      summary: undefined,
+      segmentSummaries: undefined,
     })
     await persistMediaItem(mediaItem)
 
@@ -200,6 +203,7 @@ export class MediaIndexTaskSubmitResolver
     }
 
     setIndexingMetadata(mediaItem, {
+      mediaKind: mediaItem.mediaType,
       indexStatus: 'processing',
       lastIndexTaskId: response.data.task_id,
     })

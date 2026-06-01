@@ -84,15 +84,15 @@
         <span class="info-label">{{ t('properties.mediaItem.indexedAt') }}</span>
         <span class="info-value">{{ formatCreatedAt(indexedAt) }}</span>
       </div>
-      <div v-if="segmentCount !== null" class="info-row">
+      <div v-if="isVideoIndexing && segmentCount !== null" class="info-row">
         <span class="info-label">{{ t('properties.mediaItem.segmentCount') }}</span>
         <span class="info-value">{{ segmentCount }}</span>
       </div>
-      <div v-if="failedSegmentCount !== null" class="info-row">
+      <div v-if="isVideoIndexing && failedSegmentCount !== null" class="info-row">
         <span class="info-label">{{ t('properties.mediaItem.failedSegmentCount') }}</span>
         <span class="info-value">{{ failedSegmentCount }}</span>
       </div>
-      <div v-if="indexingSegmentSummaries.length > 0" class="segment-summary-list">
+      <div v-if="isVideoIndexing && indexingSegmentSummaries.length > 0" class="segment-summary-list">
         <div
           v-for="segment in indexingSegmentSummaries"
           :key="`${segment.segmentIndex ?? 'image'}-${segment.startTimecode || ''}-${segment.endTimecode || ''}-${segment.title || ''}`"
@@ -111,6 +111,12 @@
           </div>
           <div v-if="segment.title" class="segment-summary-title">{{ segment.title }}</div>
           <div v-if="segment.summary" class="segment-summary-text">{{ segment.summary }}</div>
+        </div>
+      </div>
+      <div v-if="!isVideoIndexing && (indexingTitle || indexingSummary)" class="segment-summary-list">
+        <div class="segment-summary-card">
+          <div v-if="indexingTitle" class="segment-summary-title">{{ indexingTitle }}</div>
+          <div v-if="indexingSummary" class="segment-summary-text">{{ indexingSummary }}</div>
         </div>
       </div>
     </div>
@@ -267,21 +273,38 @@ const filePath = computed(() => {
 })
 
 const indexingStatus = computed(() => props.mediaItem.metadata?.indexing?.indexStatus || '')
+const indexingMediaKind = computed(() => props.mediaItem.metadata?.indexing?.mediaKind)
+const isVideoIndexing = computed(() => indexingMediaKind.value !== 'image')
 const indexedAt = computed(() => props.mediaItem.metadata?.indexing?.indexedAt || '')
-const segmentCount = computed(() => props.mediaItem.metadata?.indexing?.segmentCount ?? null)
+const segmentCount = computed(() => {
+  const indexing = props.mediaItem.metadata?.indexing
+  return indexing?.mediaKind === 'video' ? indexing.segmentCount ?? null : null
+})
 const failedSegmentCount = computed(
-  () => props.mediaItem.metadata?.indexing?.failedSegmentCount ?? null,
+  () => {
+    const indexing = props.mediaItem.metadata?.indexing
+    return indexing?.mediaKind === 'video' ? indexing.failedSegmentCount ?? null : null
+  },
 )
 const indexingSegmentSummaries = computed(() => {
-  return props.mediaItem.metadata?.indexing?.segmentSummaries || []
+  const indexing = props.mediaItem.metadata?.indexing
+  return indexing?.mediaKind === 'video' ? indexing.segmentSummaries || [] : []
 })
 const indexingSummary = computed(() => {
+  const indexing = props.mediaItem.metadata?.indexing
+  if (indexing?.mediaKind === 'image') {
+    return indexing.summary?.summary?.trim() || ''
+  }
   const summaries = indexingSegmentSummaries.value
     .map((segment) => segment.summary?.trim() || '')
     .filter(Boolean)
   return summaries.join('\n\n')
 })
 const indexingTitle = computed(() => {
+  const indexing = props.mediaItem.metadata?.indexing
+  if (indexing?.mediaKind === 'image') {
+    return indexing.summary?.title?.trim() || ''
+  }
   return indexingSegmentSummaries.value[0]?.title?.trim() || ''
 })
 

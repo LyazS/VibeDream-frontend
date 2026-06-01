@@ -55,22 +55,46 @@ export class MediaIndexMetadataWritebackResolver
       createMediaIndexTaskCompleteRequest(ctx.input.mediaId),
     )
 
-    const status = result.metadata?.status || (result.failed_segment_count > 0 ? 'partial_failed' : 'completed')
+    const status = result.metadata?.status || (
+      result.media_kind === 'video' && result.failed_segment_count > 0
+        ? 'partial_failed'
+        : 'completed'
+    )
 
-    setIndexingMetadata(mediaItem, {
-      indexStatus: status,
-      indexedAt: result.indexed_at,
-      lastIndexTaskId: taskId,
-      segmentCount: result.segment_count,
-      failedSegmentCount: result.failed_segment_count,
-      segmentSummaries: result.segment_summaries?.map((segment) => ({
-        segmentIndex: segment.segment_index,
-        startTimecode: segment.start_timecode,
-        endTimecode: segment.end_timecode,
-        title: segment.title,
-        summary: segment.summary,
-      })),
-    })
+    if (result.media_kind === 'video') {
+      setIndexingMetadata(mediaItem, {
+        mediaKind: 'video',
+        indexStatus: status,
+        indexedAt: result.indexed_at,
+        lastIndexTaskId: taskId,
+        segmentCount: result.segment_count,
+        failedSegmentCount: result.failed_segment_count,
+        segmentSummaries: result.segment_summaries?.map((segment) => ({
+          segmentIndex: segment.segment_index,
+          startTimecode: segment.start_timecode,
+          endTimecode: segment.end_timecode,
+          title: segment.title,
+          summary: segment.summary,
+        })),
+        summary: undefined,
+      })
+    } else {
+      setIndexingMetadata(mediaItem, {
+        mediaKind: 'image',
+        indexStatus: status,
+        indexedAt: result.indexed_at,
+        lastIndexTaskId: taskId,
+        segmentCount: undefined,
+        failedSegmentCount: undefined,
+        segmentSummaries: undefined,
+        summary: result.summary
+          ? {
+              title: result.summary.title,
+              summary: result.summary.summary,
+            }
+          : undefined,
+      })
+    }
     await persistMediaItem(mediaItem)
 
     ctx.update({

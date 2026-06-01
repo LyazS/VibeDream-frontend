@@ -87,22 +87,41 @@ export type MediaIndexStatus =
   | 'partial_failed'
   | 'failed'
 
-export interface UnifiedMediaIndexSegmentSummary {
-  segmentIndex?: number
-  startTimecode?: string
-  endTimecode?: string
+export interface BaseUnifiedMediaIndexMetadata {
+  mediaKind: 'video' | 'image'
+  indexStatus: MediaIndexStatus
+  indexedAt?: string
+  lastIndexTaskId?: string
+}
+
+export interface UnifiedVideoIndexSegmentSummary {
+  segmentIndex: number
+  startTimecode: string
+  endTimecode: string
   title?: string
   summary?: string
 }
 
-export interface UnifiedMediaIndexMetadata {
-  indexStatus: MediaIndexStatus
-  indexedAt?: string
-  lastIndexTaskId?: string
+export interface UnifiedImageIndexSummary {
+  title?: string
+  summary?: string
+}
+
+export interface UnifiedVideoMediaIndexMetadata extends BaseUnifiedMediaIndexMetadata {
+  mediaKind: 'video'
   segmentCount?: number
   failedSegmentCount?: number
-  segmentSummaries?: UnifiedMediaIndexSegmentSummary[]
+  segmentSummaries?: UnifiedVideoIndexSegmentSummary[]
 }
+
+export interface UnifiedImageMediaIndexMetadata extends BaseUnifiedMediaIndexMetadata {
+  mediaKind: 'image'
+  summary?: UnifiedImageIndexSummary
+}
+
+export type UnifiedMediaIndexMetadata =
+  | UnifiedVideoMediaIndexMetadata
+  | UnifiedImageMediaIndexMetadata
 
 // ==================== 专门的状态类型定义 ====================
 

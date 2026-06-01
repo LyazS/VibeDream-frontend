@@ -294,11 +294,17 @@ export const useUnifiedStore = defineStore('unified', () => {
       const indexing = mediaItem.metadata?.indexing
       if (!canResumeMediaIndexingFromRemote(indexing)) {
         setIndexingMetadata(mediaItem, {
+          mediaKind: mediaItem.mediaType,
           indexStatus: 'pending',
           indexedAt: undefined,
           lastIndexTaskId: undefined,
-          failedSegmentCount: 0,
+          failedSegmentCount: mediaItem.mediaType === 'video' ? 0 : undefined,
+          segmentCount:
+            mediaItem.mediaType === 'video' && indexing?.mediaKind === 'video'
+              ? indexing.segmentCount
+              : undefined,
           segmentSummaries: undefined,
+          summary: undefined,
         })
         await persistMediaItem(mediaItem)
       }
