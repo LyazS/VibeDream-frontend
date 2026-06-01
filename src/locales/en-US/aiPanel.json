@@ -71,6 +71,19 @@
       "generatingAvatar": "Generating character avatar...",
       "characterCreated": "Character created successfully"
     },
-    "taskComplete": "Task Complete"
+    "taskComplete": "Task Complete",
+    "search": {
+      "placeholder": "Search indexed media...",
+      "button": "Search",
+      "searching": "Searching...",
+      "noResults": "No matching media found",
+      "error": "Search failed: {error}",
+      "noQuery": "Please enter a search query",
+      "resultCount": "Found {count} results",
+      "video": "Video",
+      "image": "Image",
+      "routes": "Matched routes",
+      "keywordMatches": "Keyword matches"
+    }
   }
 }

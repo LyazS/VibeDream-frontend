@@ -71,6 +71,19 @@
       "generatingAvatar": "正在生成角色头像...",
       "characterCreated": "角色创建完成"
     },
-    "taskComplete": "任务完成"
+    "taskComplete": "任务完成",
+    "search": {
+      "placeholder": "输入关键词搜索已索引素材...",
+      "button": "搜索",
+      "searching": "搜索中...",
+      "noResults": "未找到匹配的素材",
+      "error": "搜索失败: {error}",
+      "noQuery": "请输入搜索内容",
+      "resultCount": "找到 {count} 个结果",
+      "video": "视频",
+      "image": "图片",
+      "routes": "命中路由",
+      "keywordMatches": "关键词匹配"
+    }
   }
 }
