@@ -110,8 +110,19 @@ function isUnifiedMediaIndexMetadata(
   }
 
   if (value.mediaKind === 'video') {
+    if (value.summary !== undefined && !isRecord(value.summary)) {
+      return false
+    }
+    const summary = value.summary as UnifiedImageMediaIndexMetadata['summary'] | undefined
     return isOptionalInteger(value.segmentCount)
       && isOptionalInteger(value.failedSegmentCount)
+      && (
+        summary === undefined
+        || (
+          isOptionalString(summary.title)
+          && isOptionalString(summary.summary)
+        )
+      )
       && isOptionalUnifiedMediaIndexSegmentSummaryArray(value.segmentSummaries)
   }
 

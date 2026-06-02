@@ -76,7 +76,12 @@ export class MediaIndexMetadataWritebackResolver
           title: segment.title,
           summary: segment.summary,
         })),
-        summary: undefined,
+        summary: result.summary
+          ? {
+              title: result.summary.title,
+              summary: result.summary.summary,
+            }
+          : undefined,
       })
     } else {
       setIndexingMetadata(mediaItem, {

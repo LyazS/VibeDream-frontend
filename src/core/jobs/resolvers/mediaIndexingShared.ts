@@ -2,7 +2,6 @@ import { globalMetaFileManager } from '@/core/managers/media/globalMetaFileManag
 import type {
   ImageMediaItem,
   MediaIndexStatus,
-  UnifiedImageMediaIndexMetadata,
   UnifiedVideoMediaIndexMetadata,
   UnifiedMediaIndexMetadata,
   UnifiedMediaItemData,
@@ -134,6 +133,10 @@ export interface VideoMediaIndexingResult {
   segment_count: number
   indexed_count: number
   failed_segment_count: number
+  summary?: {
+    title?: string
+    summary?: string
+  }
   segment_summaries?: Array<{
     segment_index: number
     start_timecode: string
@@ -445,7 +448,7 @@ export function setIndexingMetadata(
     segmentCount?: number
     failedSegmentCount?: number
     segmentSummaries?: UnifiedVideoMediaIndexMetadata['segmentSummaries']
-    summary?: UnifiedImageMediaIndexMetadata['summary']
+    summary?: UnifiedMediaIndexMetadata['summary']
   },
 ): void {
   const current = mediaItem.metadata?.indexing

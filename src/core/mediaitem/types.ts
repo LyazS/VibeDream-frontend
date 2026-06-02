@@ -111,6 +111,7 @@ export interface UnifiedVideoMediaIndexMetadata extends BaseUnifiedMediaIndexMet
   mediaKind: 'video'
   segmentCount?: number
   failedSegmentCount?: number
+  summary?: UnifiedImageIndexSummary
   segmentSummaries?: UnifiedVideoIndexSegmentSummary[]
 }
 

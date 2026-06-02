@@ -74,7 +74,7 @@
       </div>
     </div>
 
-    <div v-if="indexingSummary || indexingStatus" class="properties-section">
+    <div v-if="indexingTitle || indexingSummary || indexingStatus" class="properties-section">
       <h3 class="section-title">{{ t('properties.mediaItem.indexingInfo') }}</h3>
       <div v-if="indexingStatus" class="info-row">
         <span class="info-label">{{ t('properties.mediaItem.indexStatus') }}</span>
@@ -91,6 +91,12 @@
       <div v-if="isVideoIndexing && failedSegmentCount !== null" class="info-row">
         <span class="info-label">{{ t('properties.mediaItem.failedSegmentCount') }}</span>
         <span class="info-value">{{ failedSegmentCount }}</span>
+      </div>
+      <div v-if="isVideoIndexing && (indexingTitle || indexingSummary)" class="segment-summary-list">
+        <div class="segment-summary-card">
+          <div v-if="indexingTitle" class="segment-summary-title">{{ indexingTitle }}</div>
+          <div v-if="indexingSummary" class="segment-summary-text">{{ indexingSummary }}</div>
+        </div>
       </div>
       <div v-if="isVideoIndexing && indexingSegmentSummaries.length > 0" class="segment-summary-list">
         <div
@@ -292,20 +298,17 @@ const indexingSegmentSummaries = computed(() => {
 })
 const indexingSummary = computed(() => {
   const indexing = props.mediaItem.metadata?.indexing
-  if (indexing?.mediaKind === 'image') {
+  if (indexing?.mediaKind === 'image' || indexing?.mediaKind === 'video') {
     return indexing.summary?.summary?.trim() || ''
   }
-  const summaries = indexingSegmentSummaries.value
-    .map((segment) => segment.summary?.trim() || '')
-    .filter(Boolean)
-  return summaries.join('\n\n')
+  return ''
 })
 const indexingTitle = computed(() => {
   const indexing = props.mediaItem.metadata?.indexing
-  if (indexing?.mediaKind === 'image') {
+  if (indexing?.mediaKind === 'image' || indexing?.mediaKind === 'video') {
     return indexing.summary?.title?.trim() || ''
   }
-  return indexingSegmentSummaries.value[0]?.title?.trim() || ''
+  return ''
 })
 
 const indexingStatusText = computed(() => {
