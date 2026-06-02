@@ -17,6 +17,12 @@
     "indexingAllMedia": "Indexing all media...",
     "indexAllMediaSuccess": "Submitted indexing tasks for {count} media items",
     "indexAllMediaNoItems": "No media items to index",
+    "reconcileMediaIndex": "Refresh Index",
+    "reconcilingMediaIndex": "Refreshing index...",
+    "reconcileMediaIndexSuccess": "Index refresh complete: found {unindexed} unindexed, started reindexing {startedIndexing}, failed to start {failedIndexing}, cleaned {deletedMedia} orphan media / {deletedPoints} points",
+    "reconcileMediaIndexFailed": "Index refresh failed: {error}",
+    "reconcileMediaIndexNoItems": "No media items to reconcile",
+    "reconcileMediaIndexProjectMissing": "Project is not initialized, cannot refresh index",
     "selectConfig": "Select a configuration",
     "generate": "Generate",
     "generating": "Generating...",
@@ -80,11 +86,19 @@
       "error": "Search failed: {error}",
       "noQuery": "Please enter a search query",
       "resultCount": "Found {count} results",
+      "resultCountWithRelevant": "Found {count} results, {relevant} relevant",
       "video": "Video",
       "image": "Image",
       "routes": "Matched routes",
       "keywordMatches": "Keyword matches",
-      "rerankFailed": "Rerank failed, showing retrieval results"
+      "rerankFailed": "Rerank failed, showing retrieval results",
+      "enableValidation": "Enable VLM validation",
+      "validationRelevant": "Validation relevant",
+      "validationUncertain": "Validation uncertain",
+      "validationIrrelevant": "Validation irrelevant",
+      "validationError": "Validation failed",
+      "validationFailed": "VLM validation failed, keeping rerank results",
+      "validationPrepareFailed": "Could not prepare validation media, keeping rerank results"
     }
   }
 }

@@ -6,10 +6,18 @@
         type="primary"
         :loading="isIndexing"
         :disabled="isIndexing || mediaItemCount === 0"
-        @click="handleIndexAll"
+        @click="onIndexAllClick"
         block
       >
         {{ isIndexing ? t('aiPanel.indexingAllMedia') : t('aiPanel.indexAllMedia') }}
+      </n-button>
+      <n-button
+        :loading="isReconciling"
+        :disabled="isReconciling || mediaItemCount === 0"
+        @click="onReconcileClick"
+        block
+      >
+        {{ isReconciling ? t('aiPanel.reconcilingMediaIndex') : t('aiPanel.reconcileMediaIndex') }}
       </n-button>
       <p v-if="resultMessage" class="result-message">{{ resultMessage }}</p>
     </div>
@@ -22,18 +30,24 @@
           v-model:value="searchQuery"
           :placeholder="t('aiPanel.search.placeholder')"
           clearable
-          @keydown.enter="handleSearch"
+          @keydown.enter="onSearchSubmit"
           style="flex: 1"
         />
         <n-button
           type="primary"
           :loading="isSearching"
           :disabled="isSearching || !searchQuery.trim()"
-          @click="handleSearch"
+          @click="onSearchSubmit"
           style="margin-left: 8px"
         >
           {{ isSearching ? t('aiPanel.search.searching') : t('aiPanel.search.button') }}
         </n-button>
+      </div>
+
+      <div class="search-options-row">
+        <n-checkbox v-model:checked="enableValidation">
+          {{ t('aiPanel.search.enableValidation') }}
+        </n-checkbox>
       </div>
 
       <div v-if="searchError" class="search-error">{{ searchError }}</div>
@@ -49,7 +63,14 @@
 
       <div v-else-if="searchResults.length > 0" class="search-results">
         <div class="search-results-header">
-          {{ t('aiPanel.search.resultCount', { count: searchResults.length }) }}
+          {{
+            validationRelevantCount > 0
+              ? t('aiPanel.search.resultCountWithRelevant', {
+                  count: searchResults.length,
+                  relevant: validationRelevantCount,
+                })
+              : t('aiPanel.search.resultCount', { count: searchResults.length })
+          }}
         </div>
         <div
           v-for="result in searchResults"
@@ -83,6 +104,17 @@
             </span>
           </div>
 
+          <div
+            v-if="result.validation_result"
+            class="validation-badge"
+            :class="`validation-badge--${result.validation_result.verdict}`"
+          >
+            {{ validationLabel(result.validation_result.verdict) }}
+          </div>
+          <div v-if="result.validation_result?.reason" class="validation-reason">
+            {{ result.validation_result.reason }}
+          </div>
+
           <div v-if="result.keyword_matches.length > 0" class="result-keyword-matches">
             <span
               v-for="match in result.keyword_matches.slice(0, 3)"
@@ -100,20 +132,22 @@
 
 <script setup lang="ts">
 import { ref, computed } from 'vue'
-import { NButton, NInput, NDivider, NSpin } from 'naive-ui'
+import { NButton, NInput, NDivider, NSpin, NCheckbox } from 'naive-ui'
 import { useUnifiedStore } from '@/core/unifiedStore'
 import { useAppI18n } from '@/core/composables/useI18n'
-import { fetchClient } from '@/utils/fetchClient'
 import {
-  prepareRerankCandidates,
-  callRerankApi,
-  type RerankCandidateInput,
-} from './mediaRerankPreparer'
+  indexAllMedia,
+  reconcileMediaIndexing,
+  searchMedia,
+  type RetrievalResultItem,
+  type ValidationResultItem,
+} from '../agent/services/mediaIndexService'
 
 const { t } = useAppI18n()
 const unifiedStore = useUnifiedStore()
 
 const isIndexing = ref(false)
+const isReconciling = ref(false)
 const resultMessage = ref('')
 
 const searchQuery = ref('')
@@ -122,34 +156,7 @@ const hasSearched = ref(false)
 const searchError = ref('')
 const searchResults = ref<RetrievalResultItem[]>([])
 const selectedPointId = ref<string | null>(null)
-
-interface RetrievalKeywordMatch {
-  field: string
-  value: string
-  matched_terms: string[]
-  score: number
-}
-
-interface RetrievalSegmentInfo {
-  segment_index: number
-  start_timecode: string
-  end_timecode: string
-  duration_n: number
-}
-
-interface RetrievalResultItem {
-  point_id: string
-  media_item_id: string
-  media_name: string
-  media_kind: string
-  segment: RetrievalSegmentInfo | null
-  title: string | null
-  summary: string | null
-  score: number
-  rerank_score?: number
-  routes: string[]
-  keyword_matches: RetrievalKeywordMatch[]
-}
+const enableValidation = ref(true)
 
 const mediaItemCount = computed(() => {
   return (unifiedStore.mediaItems || []).filter(
@@ -157,22 +164,20 @@ const mediaItemCount = computed(() => {
   ).length
 })
 
-const handleIndexAll = async () => {
-  const items = (unifiedStore.mediaItems || []).filter(
-    (item) => item.mediaType === 'video' || item.mediaType === 'image',
-  )
+const validationRelevantCount = computed(() => {
+  return searchResults.value.filter((result) => result.validation_result?.verdict === 'relevant').length
+})
 
-  if (items.length === 0) {
-    resultMessage.value = t('aiPanel.indexAllMediaNoItems')
-    return
-  }
-
+const onIndexAllClick = async () => {
   isIndexing.value = true
   resultMessage.value = ''
 
   try {
-    await Promise.all(items.map((item) => unifiedStore.ensureMediaIndexing(item.id)))
-    resultMessage.value = t('aiPanel.indexAllMediaSuccess', { count: items.length })
+    resultMessage.value = await indexAllMedia({
+      mediaItems: unifiedStore.mediaItems || [],
+      ensureMediaIndexing: (id) => unifiedStore.ensureMediaIndexing(id),
+      t,
+    })
   } catch (error) {
     console.error('索引全部素材失败:', error)
     resultMessage.value = `索引失败: ${error}`
@@ -181,18 +186,49 @@ const handleIndexAll = async () => {
   }
 }
 
-const RETRIEVAL_TOP_K = 30
-const RERANK_TOP_K = 10
-
-const handleSearch = async () => {
-  const query = searchQuery.value.trim()
-  if (!query) return
-
-  const projectId = unifiedStore.projectId
-  if (!projectId) {
-    searchError.value = '当前项目未初始化'
+const onReconcileClick = async () => {
+  if (!unifiedStore.projectId) {
+    resultMessage.value = t('aiPanel.reconcileMediaIndexProjectMissing')
     return
   }
+
+  const mediaIds = (unifiedStore.mediaItems || [])
+    .filter((item) => item.mediaType === 'video' || item.mediaType === 'image')
+    .map((item) => item.id)
+
+  if (mediaIds.length === 0) {
+    resultMessage.value = t('aiPanel.reconcileMediaIndexNoItems')
+    return
+  }
+
+  isReconciling.value = true
+  resultMessage.value = ''
+
+  try {
+    const result = await reconcileMediaIndexing(unifiedStore.projectId, mediaIds)
+    const indexingResults = await Promise.allSettled(
+      result.unindexed_media_ids.map((mediaId) => unifiedStore.ensureMediaIndexing(mediaId)),
+    )
+    const startedIndexingCount = indexingResults.filter((item) => item.status === 'fulfilled').length
+    const failedIndexingCount = indexingResults.length - startedIndexingCount
+
+    resultMessage.value = t('aiPanel.reconcileMediaIndexSuccess', {
+      unindexed: result.unindexed_media_ids.length,
+      startedIndexing: startedIndexingCount,
+      failedIndexing: failedIndexingCount,
+      deletedMedia: result.deleted_orphan_media_count,
+      deletedPoints: result.deleted_orphan_point_count,
+    })
+  } catch (error) {
+    console.error('素材索引对账失败:', error)
+    resultMessage.value = t('aiPanel.reconcileMediaIndexFailed', { error: String(error) })
+  } finally {
+    isReconciling.value = false
+  }
+}
+
+const onSearchSubmit = async () => {
+  if (!searchQuery.value.trim()) return
 
   isSearching.value = true
   hasSearched.value = true
@@ -200,64 +236,16 @@ const handleSearch = async () => {
   searchResults.value = []
   selectedPointId.value = null
 
-  let retrievalResults: RetrievalResultItem[] = []
-
   try {
-    const response = await fetchClient.post<{
-      results: RetrievalResultItem[]
-      total: number
-      query: string
-    }>('/api/media/retrieval', {
-      query,
-      project_id: projectId,
-      top_k: RETRIEVAL_TOP_K,
+    const { results, error } = await searchMedia({
+      query: searchQuery.value,
+      projectId: unifiedStore.projectId,
+      getMediaItem: (id) => unifiedStore.getMediaItem(id),
+      t,
+      enableValidation: enableValidation.value,
     })
-    retrievalResults = response.data?.results || []
-
-    if (retrievalResults.length === 0) {
-      isSearching.value = false
-      return
-    }
-
-    const candidates: RerankCandidateInput[] = retrievalResults.map((r) => ({
-      pointId: r.point_id,
-      mediaItemId: r.media_item_id,
-      mediaKind: r.media_kind,
-      segment: r.segment,
-    }))
-
-    const prepared = await prepareRerankCandidates(
-      candidates,
-      (id: string) => unifiedStore.getMediaItem(id),
-    )
-
-    if (prepared.length === 0) {
-      searchResults.value = retrievalResults.slice(0, RERANK_TOP_K)
-      isSearching.value = false
-      return
-    }
-
-    try {
-      const rerankResults = await callRerankApi(query, projectId, prepared, RERANK_TOP_K)
-
-      if (rerankResults.length === 0) {
-        searchResults.value = retrievalResults.slice(0, RERANK_TOP_K)
-        isSearching.value = false
-        return
-      }
-
-      const scoreMap = new Map(rerankResults.map((r) => [r.point_id, r.rerank_score]))
-      const reranked = retrievalResults
-        .filter((r) => scoreMap.has(r.point_id))
-        .map((r) => ({ ...r, rerank_score: scoreMap.get(r.point_id)!, score: scoreMap.get(r.point_id)! }))
-        .sort((a, b) => b.score - a.score)
-
-      searchResults.value = reranked
-    } catch (rerankError) {
-      console.warn('Rerank 失败，回退到原始召回结果:', rerankError)
-      searchError.value = t('aiPanel.search.rerankFailed')
-      searchResults.value = retrievalResults.slice(0, RERANK_TOP_K)
-    }
+    searchResults.value = results
+    searchError.value = error
   } catch (error) {
     console.error('素材搜索失败:', error)
     searchError.value = t('aiPanel.search.error', { error: String(error) })
@@ -269,6 +257,13 @@ const handleSearch = async () => {
 const truncateText = (text: string, maxLen: number) => {
   if (text.length <= maxLen) return text
   return text.slice(0, maxLen) + '...'
+}
+
+const validationLabel = (verdict: ValidationResultItem['verdict']) => {
+  if (verdict === 'relevant') return t('aiPanel.search.validationRelevant')
+  if (verdict === 'uncertain') return t('aiPanel.search.validationUncertain')
+  if (verdict === 'irrelevant') return t('aiPanel.search.validationIrrelevant')
+  return t('aiPanel.search.validationError')
 }
 </script>
 
@@ -306,6 +301,11 @@ const truncateText = (text: string, maxLen: number) => {
 }
 
 .search-input-row {
+  display: flex;
+  align-items: center;
+}
+
+.search-options-row {
   display: flex;
   align-items: center;
 }
@@ -428,6 +428,40 @@ const truncateText = (text: string, maxLen: number) => {
   font-size: 11px;
   color: var(--primary-color, #1890ff);
   font-family: monospace;
+}
+
+.validation-badge {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  margin-top: 6px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.validation-badge--relevant {
+  background: rgba(22, 119, 255, 0.12);
+  color: #0958d9;
+}
+
+.validation-badge--uncertain {
+  background: rgba(250, 173, 20, 0.14);
+  color: #ad6800;
+}
+
+.validation-badge--irrelevant,
+.validation-badge--error {
+  background: rgba(245, 34, 45, 0.12);
+  color: #cf1322;
+}
+
+.validation-reason {
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--text-color-secondary);
+  line-height: 1.4;
 }
 
 .result-keyword-matches {

@@ -17,6 +17,12 @@
     "indexingAllMedia": "正在索引全部素材...",
     "indexAllMediaSuccess": "已提交 {count} 个素材的索引任务",
     "indexAllMediaNoItems": "没有可索引的素材",
+    "reconcileMediaIndex": "索引更新",
+    "reconcilingMediaIndex": "正在更新索引...",
+    "reconcileMediaIndexSuccess": "索引更新完成：发现未索引 {unindexed} 个，已提交补索引 {startedIndexing} 个，提交失败 {failedIndexing} 个，已清理孤儿媒体 {deletedMedia} 个 / 点位 {deletedPoints} 个",
+    "reconcileMediaIndexFailed": "索引更新失败：{error}",
+    "reconcileMediaIndexNoItems": "没有可对账的素材",
+    "reconcileMediaIndexProjectMissing": "当前项目未初始化，无法执行索引更新",
     "selectConfig": "选择一个配置",
     "generate": "生成",
     "generating": "生成中...",
@@ -80,11 +86,19 @@
       "error": "搜索失败: {error}",
       "noQuery": "请输入搜索内容",
       "resultCount": "找到 {count} 个结果",
+      "resultCountWithRelevant": "找到 {count} 个结果，相关 {relevant} 个",
       "video": "视频",
       "image": "图片",
       "routes": "命中路由",
       "keywordMatches": "关键词匹配",
-      "rerankFailed": "重排失败，已回退到召回结果"
+      "rerankFailed": "重排失败，已回退到召回结果",
+      "enableValidation": "启用 VLM 校验",
+      "validationRelevant": "校验相关",
+      "validationUncertain": "校验不确定",
+      "validationIrrelevant": "校验不相关",
+      "validationError": "校验失败",
+      "validationFailed": "VLM 校验失败，已保留重排结果",
+      "validationPrepareFailed": "未能准备校验素材，已保留重排结果"
     }
   }
 }
