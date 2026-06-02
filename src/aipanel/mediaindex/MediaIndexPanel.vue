@@ -78,6 +78,9 @@
             <span v-if="result.routes.length > 0" class="result-routes">
               {{ t('aiPanel.search.routes') }}: {{ result.routes.join(', ') }}
             </span>
+            <span v-if="result.rerank_score != null" class="result-rerank-score">
+              rerank: {{ result.rerank_score.toFixed(3) }}
+            </span>
           </div>
 
           <div v-if="result.keyword_matches.length > 0" class="result-keyword-matches">
@@ -101,6 +104,11 @@ import { NButton, NInput, NDivider, NSpin } from 'naive-ui'
 import { useUnifiedStore } from '@/core/unifiedStore'
 import { useAppI18n } from '@/core/composables/useI18n'
 import { fetchClient } from '@/utils/fetchClient'
+import {
+  prepareRerankCandidates,
+  callRerankApi,
+  type RerankCandidateInput,
+} from './mediaRerankPreparer'
 
 const { t } = useAppI18n()
 const unifiedStore = useUnifiedStore()
@@ -138,6 +146,7 @@ interface RetrievalResultItem {
   title: string | null
   summary: string | null
   score: number
+  rerank_score?: number
   routes: string[]
   keyword_matches: RetrievalKeywordMatch[]
 }
@@ -172,6 +181,9 @@ const handleIndexAll = async () => {
   }
 }
 
+const RETRIEVAL_TOP_K = 30
+const RERANK_TOP_K = 10
+
 const handleSearch = async () => {
   const query = searchQuery.value.trim()
   if (!query) return
@@ -188,6 +200,8 @@ const handleSearch = async () => {
   searchResults.value = []
   selectedPointId.value = null
 
+  let retrievalResults: RetrievalResultItem[] = []
+
   try {
     const response = await fetchClient.post<{
       results: RetrievalResultItem[]
@@ -196,9 +210,54 @@ const handleSearch = async () => {
     }>('/api/media/retrieval', {
       query,
       project_id: projectId,
-      top_k: 10,
+      top_k: RETRIEVAL_TOP_K,
     })
-    searchResults.value = response.data?.results || []
+    retrievalResults = response.data?.results || []
+
+    if (retrievalResults.length === 0) {
+      isSearching.value = false
+      return
+    }
+
+    const candidates: RerankCandidateInput[] = retrievalResults.map((r) => ({
+      pointId: r.point_id,
+      mediaItemId: r.media_item_id,
+      mediaKind: r.media_kind,
+      segment: r.segment,
+    }))
+
+    const prepared = await prepareRerankCandidates(
+      candidates,
+      (id: string) => unifiedStore.getMediaItem(id),
+    )
+
+    if (prepared.length === 0) {
+      searchResults.value = retrievalResults.slice(0, RERANK_TOP_K)
+      isSearching.value = false
+      return
+    }
+
+    try {
+      const rerankResults = await callRerankApi(query, projectId, prepared, RERANK_TOP_K)
+
+      if (rerankResults.length === 0) {
+        searchResults.value = retrievalResults.slice(0, RERANK_TOP_K)
+        isSearching.value = false
+        return
+      }
+
+      const scoreMap = new Map(rerankResults.map((r) => [r.point_id, r.rerank_score]))
+      const reranked = retrievalResults
+        .filter((r) => scoreMap.has(r.point_id))
+        .map((r) => ({ ...r, rerank_score: scoreMap.get(r.point_id)!, score: scoreMap.get(r.point_id)! }))
+        .sort((a, b) => b.score - a.score)
+
+      searchResults.value = reranked
+    } catch (rerankError) {
+      console.warn('Rerank 失败，回退到原始召回结果:', rerankError)
+      searchError.value = t('aiPanel.search.rerankFailed')
+      searchResults.value = retrievalResults.slice(0, RERANK_TOP_K)
+    }
   } catch (error) {
     console.error('素材搜索失败:', error)
     searchError.value = t('aiPanel.search.error', { error: String(error) })
@@ -363,6 +422,12 @@ const truncateText = (text: string, maxLen: number) => {
 .result-routes {
   font-size: 11px;
   color: var(--text-color-tertiary, #999);
+}
+
+.result-rerank-score {
+  font-size: 11px;
+  color: var(--primary-color, #1890ff);
+  font-family: monospace;
 }
 
 .result-keyword-matches {

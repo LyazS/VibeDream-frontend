@@ -83,7 +83,8 @@
       "video": "Video",
       "image": "Image",
       "routes": "Matched routes",
-      "keywordMatches": "Keyword matches"
+      "keywordMatches": "Keyword matches",
+      "rerankFailed": "Rerank failed, showing retrieval results"
     }
   }
 }

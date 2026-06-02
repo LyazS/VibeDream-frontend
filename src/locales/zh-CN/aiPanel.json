@@ -83,7 +83,8 @@
       "video": "视频",
       "image": "图片",
       "routes": "命中路由",
-      "keywordMatches": "关键词匹配"
+      "keywordMatches": "关键词匹配",
+      "rerankFailed": "重排失败，已回退到召回结果"
     }
   }
 }
