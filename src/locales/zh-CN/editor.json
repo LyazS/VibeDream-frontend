@@ -112,8 +112,7 @@
       "statuses": {
         "idle": "等待启动",
         "queued": "排队中",
-        "running": "处理中",
-        "blocked": "等待上游完成"
+        "running": "处理中"
       }
     }
   }

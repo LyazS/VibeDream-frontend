@@ -23,7 +23,7 @@ interface ActiveTaskItem {
   id: string
   title: string
   subtitle?: string
-  status: 'idle' | 'queued' | 'running' | 'blocked'
+  status: 'idle' | 'queued' | 'running'
   progress?: number
 }
 
@@ -41,8 +41,6 @@ function statusLabel(status: ActiveTaskItem['status']) {
       return t('editor.taskCenter.statuses.queued')
     case 'running':
       return t('editor.taskCenter.statuses.running')
-    case 'blocked':
-      return t('editor.taskCenter.statuses.blocked')
   }
 }
 </script>

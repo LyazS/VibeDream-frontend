@@ -39,6 +39,7 @@ import {
   createMediaReadyResolver,
   createMediaSourceProcessedResolver,
   createRemoteTaskCompletedResolver,
+  MEDIA_INDEX_METADATA_WRITEBACK_RESOURCE_TYPE,
   MEDIA_READY_RESOURCE_TYPE,
   createTimelineItemReadyRequest,
   createTimelineItemReadyResolver,
@@ -322,13 +323,7 @@ export const useUnifiedStore = defineStore('unified', () => {
     return jobRuntime.ensure(createEffectTemplateReadyRequest(assetId))
   }
   async function retryEffectTemplateReady(assetId: string) {
-    const request = createEffectTemplateReadyRequest(assetId)
-    const retried = await jobRuntime.retry(getResourceId(request.type, assetId))
-    if (retried) {
-      return
-    }
-
-    await jobRuntime.ensure(request)
+    await jobRuntime.ensure(createEffectTemplateReadyRequest(assetId))
   }
   function cancelEffectTemplateReady(assetId: string) {
     const request = createEffectTemplateReadyRequest(assetId)
@@ -338,6 +333,7 @@ export const useUnifiedStore = defineStore('unified', () => {
     const candidateRootIds = [
       getResourceId(AI_GENERATED_MEDIA_RESOURCE_TYPE, mediaId),
       getResourceId(MEDIA_READY_RESOURCE_TYPE, mediaId),
+      getResourceId(MEDIA_INDEX_METADATA_WRITEBACK_RESOURCE_TYPE, mediaId),
     ]
 
     return jobTaskCenter.taskViews.value.find(
@@ -437,7 +433,6 @@ export const useUnifiedStore = defineStore('unified', () => {
     jobRuntime,
     jobTaskViews: jobTaskCenter.taskViews,
     cancelJobTask: jobTaskCenter.cancelTask,
-    retryJobTask: jobTaskCenter.retryTask,
     findMediaProcessingTaskView,
     ensureMediaReady,
     ensureAIGeneratedMedia,

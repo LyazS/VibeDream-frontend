@@ -209,7 +209,6 @@ export function createVideoSceneSegmentsRequest(
     input: { mediaId },
     policy: {
       queue: 'local-heavy',
-      maxRetries: 1,
       ...policy,
     },
   }
@@ -225,7 +224,6 @@ export function createVideoSegmentExportsRequest(
     input: { mediaId },
     policy: {
       queue: 'export',
-      maxRetries: 1,
       ...policy,
     },
   }
@@ -241,7 +239,6 @@ export function createVideoSegmentOssUploadsRequest(
     input: { mediaId },
     policy: {
       queue: 'export',
-      maxRetries: 1,
       ...policy,
     },
   }
@@ -257,7 +254,6 @@ export function createMediaIndexTaskSubmitRequest(
     input: { mediaId },
     policy: {
       queue: 'ai-remote',
-      maxRetries: 2,
       ...policy,
     },
   }
@@ -274,7 +270,6 @@ export function createMediaIndexTaskCompleteRequest(
     input: { mediaId, taskId },
     policy: {
       queue: 'ai-remote',
-      maxRetries: 2,
       ...policy,
     },
   }
@@ -290,7 +285,6 @@ export function createMediaIndexMetadataWritebackRequest(
     input: { mediaId },
     policy: {
       queue: 'background',
-      maxRetries: 1,
       ...policy,
     },
   }

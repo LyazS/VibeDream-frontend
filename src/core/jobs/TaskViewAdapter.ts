@@ -16,7 +16,6 @@ export interface TaskView {
   childResourceIds: string[]
   actions: {
     canCancel: boolean
-    canRetry: boolean
     canRevealSource: boolean
   }
 }
@@ -37,10 +36,7 @@ export function createTaskView(node: ResourceNode, childResourceIds: string[] = 
     rootResourceId: node.id,
     childResourceIds,
     actions: {
-      // blocked 暂时允许 cancel，是为了 UI 能把阻塞中的 root 从用户视角终止掉。
-      canCancel: node.status === 'queued' || node.status === 'running' || node.status === 'blocked',
-      canRetry:
-        node.status === 'failed' || node.status === 'cancelled' || node.status === 'blocked',
+      canCancel: node.status === 'queued' || node.status === 'running',
       // 来源定位依赖后续 bindings 设计，MVP 固定为 false。
       canRevealSource: false,
     },

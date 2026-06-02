@@ -5,7 +5,7 @@ import type { JobRuntime } from './JobRuntime'
  * TaskCenter MVP 的最小数据流。
  *
  * 它只订阅 JobRuntime 的 ResourceEvent，并把当前 DAG 投影成响应式 taskViews。
- * 真正的执行、取消、重试仍回到 JobRuntime；这里不保存第二份任务状态。
+ * 真正的执行、取消仍回到 JobRuntime；这里不保存第二份任务状态。
  */
 export function useJobTaskCenter(runtime: JobRuntime) {
   const revision = ref(0)
@@ -24,14 +24,9 @@ export function useJobTaskCenter(runtime: JobRuntime) {
     return runtime.cancel(rootResourceId)
   }
 
-  function retryTask(rootResourceId: string): Promise<boolean> {
-    return runtime.retry(rootResourceId)
-  }
-
   return {
     taskViews,
     cancelTask,
-    retryTask,
     dispose: unsubscribe,
   }
 }

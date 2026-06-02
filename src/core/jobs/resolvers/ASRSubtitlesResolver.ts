@@ -234,7 +234,6 @@ export function createASRSubtitlesRequest(
     input: { placeholderTimelineItemId },
     policy: {
       queue: 'asr',
-      maxRetries: 1,
       ...policy,
     },
   }
@@ -254,7 +253,6 @@ export function createASRRemoteTaskCompletedRequest(
     },
     policy: {
       queue: 'asr',
-      maxRetries: 3,
       ...policy,
     },
   }
@@ -444,5 +442,4 @@ async function waitForASRCompletion(
 
   return resolvedResult
 }
-
 

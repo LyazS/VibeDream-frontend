@@ -28,9 +28,9 @@ interface ActiveTaskItem {
   progress?: number
 }
 
-type ActiveTaskStatus = 'idle' | 'queued' | 'running' | 'blocked'
+type ActiveTaskStatus = 'idle' | 'queued' | 'running'
 
-const ACTIVE_STATUSES = new Set(['idle', 'queued', 'running', 'blocked'] as const)
+const ACTIVE_STATUSES = new Set(['idle', 'queued', 'running'] as const)
 const VISIBLE_ROOT_TYPES = new Set([
   'media-ready',
   'media-index-metadata-writeback',
@@ -106,8 +106,6 @@ function formatTaskSubtitle(task: TaskView) {
       return t('editor.taskCenter.statuses.queued')
     case 'running':
       return t('editor.taskCenter.statuses.running')
-    case 'blocked':
-      return t('editor.taskCenter.statuses.blocked')
   }
 }
 
@@ -170,10 +168,8 @@ function statusPriority(status: ActiveTaskStatus) {
       return 0
     case 'queued':
       return 1
-    case 'blocked':
-      return 2
     case 'idle':
-      return 3
+      return 2
   }
 }
 </script>

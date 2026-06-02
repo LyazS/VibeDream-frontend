@@ -9,7 +9,6 @@ import {
   type ResourceNode,
   type ResourceRequest,
   type ResourceStatus,
-  type ResourceType,
 } from './ResourceTypes'
 import {
   ResourceResolverRegistry,
@@ -45,7 +44,7 @@ interface RuntimeEntry {
  * Runtime 的职责：
  * - 根据 type + key 去重 ResourceNode。
  * - 调用 resolver 检查资源是否已满足、声明依赖、执行资源。
- * - 维护 DAG 边、状态、等待者、取消和 retry。
+ * - 维护 DAG 边、状态、等待者和取消。
  * - 发布 ResourceEvent，供 TaskCenter 或业务模块订阅。
  *
  * Runtime 不负责：
@@ -135,7 +134,7 @@ export class JobRuntime {
    *
    * 流程：遍历 deps 快照 → 断边 → 分流处理：
    * - succeeded: 尝试释放
-   * - 终态(failed/blocked/cancelled): 跳过
+   * - 终态(failed/cancelled): 跳过
    * - 非终态且无其他引用: 递归取消
    */
   private async propagateCancelFromNode(node: ResourceNode): Promise<void> {
@@ -151,7 +150,7 @@ export class JobRuntime {
    *
    * 先断边，再根据依赖状态分流：
    * - succeeded → tryReleaseNode
-   * - 终态(failed/blocked/cancelled) → 跳过
+   * - 终态(failed/cancelled) → 跳过
    * - 非终态 + 无其他引用 → 取消 + 递归传播
    */
   private async handleDetachedDependency(parentId: string, depId: string): Promise<void> {
@@ -179,44 +178,6 @@ export class JobRuntime {
     if (cancelled) {
       await this.propagateCancelFromNode(dependency)
     }
-  }
-
-  /**
-   * 重试失败、取消或 blocked 的节点。
-   *
-   * 当前实现只重试这个节点，不自动重算所有下游；后续 TaskCenter 可以根据用户操作
-   * 再扩展“重试整条 root 路径”。
-   */
-  retry(resourceId: string): Promise<boolean> {
-    const node = this.nodes.get(resourceId)
-    if (!node) return Promise.resolve(false)
-
-    if (node.status !== 'failed' && node.status !== 'cancelled' && node.status !== 'blocked') {
-      return Promise.resolve(false)
-    }
-
-    const maxRetries = node.policy.maxRetries
-    if (typeof maxRetries === 'number' && node.retryCount >= maxRetries) {
-      return Promise.resolve(false)
-    }
-
-    node.retryCount += 1
-    node.error = undefined
-    node.result = undefined
-    node.progress = undefined
-    node.stage = undefined
-    node.message = undefined
-    node.updatedAt = new Date().toISOString()
-
-    const entry: RuntimeEntry = { controller: new AbortController() }
-    this.entries.set(resourceId, entry)
-    entry.promise = this.runNode(node, entry)
-    this.emitResourceEvent({ type: 'resource:updated', node })
-
-    return entry.promise.then(
-      () => true,
-      () => true,
-    )
   }
 
   /** 查询单个运行态节点，供调试面板或 TaskCenter 使用。 */
@@ -276,8 +237,8 @@ export class JobRuntime {
       return node.result as TResult
     }
 
-    // 失败/取消/阻塞的节点不会被隐式重跑，调用方需要显式 retry()。
-    if (node.status === 'failed' || node.status === 'blocked' || node.status === 'cancelled') {
+    // 失败/取消的节点不会被隐式重跑，业务需要重新 ensure root request。
+    if (node.status === 'failed' || node.status === 'cancelled') {
       throw this.createNodeError(node)
     }
 
@@ -425,17 +386,16 @@ export class JobRuntime {
         resourceId: node.id,
         error: error instanceof Error ? error.message : String(error),
       })
-      // 取消是独立终态。其他错误如果来自失败依赖，则当前节点标记为 blocked。
+      // 取消是独立终态。其他错误统一收敛到 failed。
       if (isAbortError(error)) {
         if (node.status !== 'cancelled') {
           this.setStatus(node, 'cancelled')
           this.emitResourceEvent({ type: 'resource:cancelled', node })
         }
         this.tryReleaseNode(node.id)
-      } else if (node.deps.some((depId) => this.isBlockedByDependency(depId))) {
-        this.markBlocked(node, error)
       } else {
         this.markFailed(node, error)
+        this.tryReleaseNode(node.id)
       }
 
       throw error
@@ -530,7 +490,7 @@ export class JobRuntime {
       return
     }
 
-    if (node.status !== 'succeeded') {
+    if (!isTerminalResourceStatus(node.status)) {
       console.log('[JobRuntime][release] keep node because status not releasable', {
         resourceId: node.id,
         status: node.status,
@@ -593,27 +553,8 @@ export class JobRuntime {
     this.emitResourceEvent({ type: 'resource:failed', node })
   }
 
-  private markBlocked(node: ResourceNode, error: unknown): void {
-    node.error = {
-      message: error instanceof Error ? error.message : String(error),
-      retryable: true,
-    }
-    node.status = 'blocked'
-    this.touch(node)
-    this.emitResourceEvent({ type: 'resource:blocked', node })
-  }
-
   private createNodeError(node: ResourceNode): Error {
     return new Error(node.error?.message ?? `Resource ${node.id} is ${node.status}`)
-  }
-
-  private isBlockedByDependency(resourceId: string): boolean {
-    const dependency = this.nodes.get(resourceId)
-    return (
-      dependency?.status === 'failed' ||
-      dependency?.status === 'blocked' ||
-      dependency?.status === 'cancelled'
-    )
   }
 
   private touch(node: ResourceNode): void {

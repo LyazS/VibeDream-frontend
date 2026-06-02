@@ -112,8 +112,7 @@
       "statuses": {
         "idle": "Waiting to start",
         "queued": "Queued",
-        "running": "In progress",
-        "blocked": "Waiting for dependency"
+        "running": "In progress"
       }
     }
   }

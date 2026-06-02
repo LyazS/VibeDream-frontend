@@ -35,14 +35,12 @@ export type ResourceType =
  * ResourceNode 的运行态状态。
  *
  * idle: 节点已创建，但还没检查依赖或进入调度。
- * blocked: 上游依赖失败/取消，当前节点不能继续执行。
  * queued: 依赖已满足，正在队列里等待并发名额。
  * running: resolver.resolve() 正在执行。
  * succeeded / failed / cancelled: 终态。
  */
 export type ResourceStatus =
   | 'idle'
-  | 'blocked'
   | 'queued'
   | 'running'
   | 'succeeded'
@@ -64,11 +62,9 @@ export interface ResourcePolicy {
   priority?: number
   /** 使用哪个并发队列。未指定时 Scheduler 会放入 background。 */
   queue?: ResourceQueue
-  /** retry() 允许的最大次数。未指定表示 Runtime 不限制。 */
-  maxRetries?: number
 }
 
-/** Runtime 保存的错误摘要，供 TaskCenter 展示和 retry 判断。 */
+/** Runtime 保存的错误摘要，供 TaskCenter 和业务层展示。 */
 export interface ResourceError {
   message: string
   code?: string
@@ -116,8 +112,6 @@ export interface ResourceNode<TInput = unknown, TResult = unknown> {
   /** 面向任务中心展示的简短状态文案。 */
   message?: string
   policy: ResourcePolicy
-  /** 已重试次数，用于 maxRetries 限制。 */
-  retryCount: number
   /** 正在等待该节点 Promise 的调用方数量（含内部依赖等待和外部直接等待）。仅用于观测。 */
   waiterCount: number
   /** 外部直接等待该节点 Promise 的数量（通过 runtime.ensure() 入口）。用于取消传播和释放判定。 */
@@ -136,7 +130,6 @@ export type ResourceEvent =
   | { type: 'resource:updated'; node: ResourceNode }
   | { type: 'resource:succeeded'; node: ResourceNode }
   | { type: 'resource:failed'; node: ResourceNode }
-  | { type: 'resource:blocked'; node: ResourceNode }
   | { type: 'resource:cancelled'; node: ResourceNode }
   | { type: 'resource:released'; node: ResourceNode }
 
@@ -157,11 +150,9 @@ export function getResourceId(type: ResourceType, key: string): string {
   return `${type}:${key}`
 }
 
-/** 终态节点不会再被当前 promise 自动推进；retry() 会显式重开一次执行。 */
+/** 终态节点不会再被当前 promise 自动推进；业务如需重跑，应重新 ensure root request。 */
 export function isTerminalResourceStatus(status: ResourceStatus): boolean {
-  return (
-    status === 'succeeded' || status === 'failed' || status === 'cancelled' || status === 'blocked'
-  )
+  return status === 'succeeded' || status === 'failed' || status === 'cancelled'
 }
 
 /**
@@ -195,7 +186,6 @@ export function createResourceNode<TInput>(request: ResourceRequest<TInput>): Re
     deps: [],
     dependents: [],
     policy: request.policy ?? {},
-    retryCount: 0,
     waiterCount: 0,
     externalWaiterCount: 0,
     createdAt: now,
