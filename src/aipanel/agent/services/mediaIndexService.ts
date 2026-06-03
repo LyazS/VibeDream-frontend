@@ -12,6 +12,8 @@ import { ThumbnailMode } from '@/constants/ThumbnailConstants'
 
 const RETRIEVAL_TOP_K = 30
 const RERANK_TOP_K = 10
+const SEARCH_TOP_K_MIN = 1
+const SEARCH_TOP_K_MAX = 10
 const SEARCH_VIDEO_EXPORT_MAX_SIDE = 480
 const SEARCH_VIDEO_EXPORT_FPS = 6
 const SEARCH_IMAGE_EXPORT_MAX_SIDE = 768
@@ -552,11 +554,23 @@ interface SearchMediaParams {
   getMediaItem: (id: string) => UnifiedMediaItemData | undefined
   t: (key: string, params?: Record<string, unknown>) => string
   enableValidation?: boolean
+  topK?: number
 }
 
 interface SearchMediaResult {
   results: RetrievalResultItem[]
   error: string
+}
+
+function normalizeSearchTopK(value: number | undefined): number {
+  if (!value || !Number.isFinite(value)) {
+    return RERANK_TOP_K
+  }
+
+  const normalized = Math.trunc(value)
+  if (normalized < SEARCH_TOP_K_MIN) return SEARCH_TOP_K_MIN
+  if (normalized > SEARCH_TOP_K_MAX) return SEARCH_TOP_K_MAX
+  return normalized
 }
 
 export async function searchMedia({
@@ -565,7 +579,9 @@ export async function searchMedia({
   getMediaItem,
   t,
   enableValidation = true,
+  topK = RERANK_TOP_K,
 }: SearchMediaParams): Promise<SearchMediaResult> {
+  const normalizedTopK = normalizeSearchTopK(topK)
   const normalizedQuery = query.trim()
   if (!normalizedQuery) {
     return { results: [], error: '' }
@@ -599,7 +615,7 @@ export async function searchMedia({
 
   const prepared = await prepareRerankCandidates(candidates, getMediaItem)
   if (prepared.length === 0) {
-    return { results: retrievalResults.slice(0, RERANK_TOP_K), error: '' }
+    return { results: retrievalResults.slice(0, normalizedTopK), error: '' }
   }
 
   try {
@@ -607,11 +623,11 @@ export async function searchMedia({
       normalizedQuery,
       projectId,
       prepared,
-      RERANK_TOP_K,
+      normalizedTopK,
     )
 
     if (rerankResults.length === 0) {
-      return { results: retrievalResults.slice(0, RERANK_TOP_K), error: '' }
+      return { results: retrievalResults.slice(0, normalizedTopK), error: '' }
     }
 
     const scoreMap = new Map(rerankResults.map((result) => [result.point_id, result.rerank_score]))
@@ -649,7 +665,7 @@ export async function searchMedia({
         normalizedQuery,
         projectId,
         preparedValidationCandidates,
-        RERANK_TOP_K,
+        normalizedTopK,
       )
       const validationMap = new Map(validationResults.map((result) => [result.point_id, result]))
       return {
@@ -669,7 +685,7 @@ export async function searchMedia({
   } catch (error) {
     console.warn('Rerank 失败，回退到原始召回结果:', error)
     return {
-      results: retrievalResults.slice(0, RERANK_TOP_K),
+      results: retrievalResults.slice(0, normalizedTopK),
       error: t('aiPanel.search.rerankFailed'),
     }
   }

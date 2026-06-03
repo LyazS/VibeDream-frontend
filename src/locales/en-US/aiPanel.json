@@ -9,7 +9,8 @@
       "list_tracks": "List Tracks",
       "read_track": "Read Track",
       "read_timelineitem": "Read Timeline Item",
-      "edit_sdk": "Edit Operation"
+      "edit_sdk": "Edit Operation",
+      "search_media": "Search Media"
     },
     "characterEditor": "Character Editor",
     "mediaIndex": "Media Index",

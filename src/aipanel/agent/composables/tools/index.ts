@@ -9,6 +9,7 @@ import { listTracksTool } from './listTracks'
 import { readTrackTool } from './readTrack'
 import { readTimelineitemTool } from './readTimelineitem'
 import { editSdkTool } from './editSdkTool'
+import { searchMediaTool } from './searchMedia'
 import type { ToolDefinition, ToolResult } from '../core/toolTypes'
 
 // 工具存储
@@ -28,6 +29,7 @@ registerTool(listTracksTool)
 registerTool(readTrackTool)
 registerTool(readTimelineitemTool)
 registerTool(editSdkTool)
+registerTool(searchMediaTool)
 
 /**
  * 执行工具
@@ -74,5 +76,13 @@ export function listTools(): ToolDefinition[] {
 }
 
 // 导出工具定义供外部参考
-export { listContentsTool, readMediaTool, listTracksTool, readTrackTool, readTimelineitemTool, editSdkTool }
+export {
+  listContentsTool,
+  readMediaTool,
+  listTracksTool,
+  readTrackTool,
+  readTimelineitemTool,
+  editSdkTool,
+  searchMediaTool,
+}
 export type { ToolDefinition, ToolResult }
