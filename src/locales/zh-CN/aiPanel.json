@@ -12,6 +12,11 @@
       "edit_sdk": "剪辑操作",
       "search_media": "检索素材"
     },
+    "interaction": {
+      "submitCustom": "提交",
+      "customPlaceholder": "其他，请输入你的自定义回复",
+      "pausedNote": "请在上方问题卡片中选择一个选项，或直接填写自定义回复后提交。"
+    },
     "characterEditor": "角色编辑器",
     "mediaIndex": "素材索引",
     "indexAllMedia": "索引全部素材",

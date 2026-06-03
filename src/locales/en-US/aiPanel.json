@@ -12,6 +12,11 @@
       "edit_sdk": "Edit Operation",
       "search_media": "Search Media"
     },
+    "interaction": {
+      "submitCustom": "Submit",
+      "customPlaceholder": "Other, enter a custom response",
+      "pausedNote": "Choose an option from the card above, or enter a custom response and submit it."
+    },
     "characterEditor": "Character Editor",
     "mediaIndex": "Media Index",
     "indexAllMedia": "Index All Media",

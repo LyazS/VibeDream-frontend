@@ -1,4 +1,9 @@
-import type { SessionSnapshot, StartRunRequest, ToolResultRequest } from '@/aipanel/agent/types'
+import type {
+  InteractionResultRequest,
+  SessionSnapshot,
+  StartRunRequest,
+  ToolResultRequest,
+} from '@/aipanel/agent/types'
 
 export const API_ENDPOINTS = {
   createSession: '/api/agent/sessions',
@@ -6,6 +11,8 @@ export const API_ENDPOINTS = {
   startRun: (sessionId: string) => `/api/agent/sessions/${sessionId}/runs`,
   submitToolResult: (sessionId: string, runId: string) =>
     `/api/agent/sessions/${sessionId}/runs/${runId}/tool-results`,
+  submitInteractionResult: (sessionId: string, runId: string) =>
+    `/api/agent/sessions/${sessionId}/runs/${runId}/interaction-results`,
 } as const
 
 export interface CreateSessionResponse {
@@ -18,6 +25,8 @@ export type SessionSnapshotResponse = SessionSnapshot
 export type StartRunPayload = StartRunRequest
 
 export type SubmitToolResultPayload = ToolResultRequest
+
+export type SubmitInteractionResultPayload = InteractionResultRequest
 
 export interface ApiError {
   detail: string

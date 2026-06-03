@@ -1,6 +1,5 @@
 <template>
-  <AskUserToolDisplay v-if="isAskUserTool" :item="item" />
-  <div v-else class="tool-call-display">
+  <div class="tool-call-display">
     <div class="tool-header tool-header--interactive" @click="toggleExpand">
       <div class="status-dot"></div>
       <component :is="IconComponents.TOOLS_FILL" size="16px" class="tool-icon" />
@@ -30,7 +29,6 @@ import { computed, inject, ref } from 'vue'
 import 'github-markdown-css/github-markdown.css'
 import { useAppI18n } from '@/core/composables/useI18n'
 import { IconComponents } from '@/constants/iconComponents'
-import AskUserToolDisplay from './AskUserToolDisplay.vue'
 import type { ToolCallPart } from '../types'
 
 const props = defineProps<{
@@ -46,7 +44,6 @@ const renderMarkdown = inject<(content: string) => string>(
 )
 
 const isEditSdkTool = computed(() => props.item.tool_name === 'edit_sdk')
-const isAskUserTool = computed(() => props.item.tool_name === 'ask_user')
 const formattedArgs = computed(() => JSON.stringify(props.item.args || {}, null, 2))
 
 const editSdkScript = computed(() => {

@@ -9,9 +9,11 @@ import type {
 import type {
   AgentMessage,
   AgentStreamEvent,
-  AskUserToolArgs,
-  FrontendToolInterrupt,
+  InteractionResultRequest,
+  InteractiveInterrupt,
   MessageDeltaEvent,
+  PendingInterrupt,
+  SessionInteractionRecord,
   SessionSummary,
   StartRunRequest,
   ToolResultRequest,
@@ -20,6 +22,7 @@ import {
   AgentMessageRole,
   MessagePartType,
   getMessageTextParts,
+  isInteractiveInterrupt,
   isUserMessage,
 } from '@/aipanel/agent/types'
 import { useEditSDK } from '@/aipanel/agent/composables/useEditSDK'
@@ -35,6 +38,7 @@ interface SessionData {
   sessionId: string
   messages: AgentMessage[]
   completedMessageIds: string[]
+  interactions: SessionInteractionRecord[]
   createdAt: string
   updatedAt: string
 }
@@ -46,8 +50,10 @@ export class SessionManager {
   public isLoading = ref(false)
   public sessionError = ref<string | null>(null)
   public isSending = ref(false)
-  public pendingInterrupt = ref<FrontendToolInterrupt | null>(null)
+  public pendingInterrupt = ref<PendingInterrupt | null>(null)
+  public pendingInteraction = ref<InteractiveInterrupt | null>(null)
   public pendingRunId = ref<string | null>(null)
+  public interactions = ref<SessionInteractionRecord[]>([])
 
   private currentAbortController: AbortController | null = null
   private pendingUserMessage: AgentMessage | null = null
@@ -65,6 +71,7 @@ export class SessionManager {
     this.currentSessionId.value = null
     this.messages.value = []
     this.completedMessageIds.value = []
+    this.interactions.value = []
     this.isSending.value = false
     this.currentAbortController = null
     this.pendingUserMessage = null
@@ -100,7 +107,7 @@ export class SessionManager {
     try {
       if (this.hasPendingAskUserInterrupt()) {
         this.pendingUserMessage = null
-        await this.resumePendingAskUser(sessionId, message)
+        await this.resumePendingInteraction(sessionId, message, 'custom_input')
       } else {
         this.pendingUserMessage = this.createLocalUserMessage(message)
         const runRequest: StartRunRequest = {
@@ -139,9 +146,11 @@ export class SessionManager {
     if (localSession) {
       this.messages.value = localSession.messages
       this.completedMessageIds.value = localSession.completedMessageIds || []
+      this.interactions.value = localSession.interactions || []
     } else {
       this.messages.value = []
       this.completedMessageIds.value = []
+      this.interactions.value = []
     }
 
     const snapshot = await fetchClient.get<SessionSnapshotResponse>(
@@ -190,7 +199,7 @@ export class SessionManager {
 
   private async consumeStream(
     url: string,
-    payload: StartRunRequest | ToolResultRequest,
+    payload: StartRunRequest | ToolResultRequest | InteractionResultRequest,
     sessionId: string,
   ): Promise<void> {
     this.currentAbortController = new AbortController()
@@ -219,12 +228,7 @@ export class SessionManager {
         this.upsertMessage(event.message)
         break
       case 'run.paused':
-        await this.handlePausedRun(sessionId, event.run_id, {
-          type: 'frontend_tool',
-          tool_call_id: event.tool_call_id,
-          tool_name: event.tool_name,
-          args: event.args,
-        })
+        await this.handlePausedRun(sessionId, event.run_id, event.interrupt)
         break
       case 'run.completed':
         if (event.message_id) {
@@ -288,20 +292,24 @@ export class SessionManager {
   private async handlePausedRun(
     sessionId: string,
     runId: string,
-    tool: FrontendToolInterrupt,
+    interrupt: PendingInterrupt,
   ): Promise<void> {
-    if (tool.tool_name === 'ask_user') {
-      this.setPendingInterrupt(runId, tool)
+    if (isInteractiveInterrupt(interrupt)) {
+      this.upsertInteractionRecord({
+        interrupt,
+        result: this.getInteractionRecord(interrupt.interaction_id)?.result || null,
+      })
+      this.setPendingInterrupt(runId, interrupt)
       return
     }
 
-    if (!this.editSDK.hasTool(tool.tool_name)) {
-      throw new Error(`前端工具不存在: ${tool.tool_name}`)
+    if (!this.editSDK.hasTool(interrupt.tool_name)) {
+      throw new Error(`前端工具不存在: ${interrupt.tool_name}`)
     }
 
-    const result = await this.editSDK.executeTool(tool.tool_name, tool.args)
+    const result = await this.editSDK.executeTool(interrupt.tool_name, interrupt.args)
     const payload: ToolResultRequest = {
-      tool_call_id: tool.tool_call_id,
+      tool_call_id: interrupt.tool_call_id,
       output: result.success ? result.result : `工具执行失败: ${result.error}`,
       is_error: !result.success,
     }
@@ -316,6 +324,7 @@ export class SessionManager {
   private applySnapshot(snapshot: SessionSnapshotResponse): void {
     this.currentSessionId.value = snapshot.session.session_id
     this.messages.value = snapshot.messages
+    this.interactions.value = snapshot.interactions || []
     if (snapshot.pending_run?.interrupt) {
       this.setPendingInterrupt(snapshot.pending_run.run_id, snapshot.pending_run.interrupt)
       return
@@ -323,108 +332,133 @@ export class SessionManager {
     this.clearPendingInterrupt()
   }
 
-  private async resumePendingAskUser(sessionId: string, message: string): Promise<void> {
-    const interrupt = this.pendingInterrupt.value
+  private async resumePendingInteraction(
+    sessionId: string,
+    message: string,
+    submittedVia: 'option' | 'custom_input',
+  ): Promise<void> {
+    const interrupt = this.pendingInteraction.value
     const runId = this.pendingRunId.value
-    if (!interrupt || interrupt.tool_name !== 'ask_user' || !runId) {
-      throw new Error('当前没有待回答的提问工具')
+    if (!interrupt || !runId) {
+      throw new Error('当前没有待回答的交互问题')
     }
 
     const previousInterrupt = interrupt
     const previousRunId = runId
+    const previousInteractions = [...this.interactions.value]
     this.clearPendingInterrupt()
+    this.upsertInteractionResult(interrupt.interaction_id, message.trim(), submittedVia)
 
-    const payload: ToolResultRequest = {
-      tool_call_id: interrupt.tool_call_id,
-      output: message,
-      is_error: false,
+    const payload: InteractionResultRequest = {
+      interaction_id: interrupt.interaction_id,
+      answer: message,
+      submitted_via: submittedVia,
     }
 
     try {
       await this.consumeStream(
-        API_ENDPOINTS.submitToolResult(sessionId, runId),
+        API_ENDPOINTS.submitInteractionResult(sessionId, runId),
         payload,
         sessionId,
       )
     } catch (error) {
+      this.interactions.value = previousInteractions
       this.setPendingInterrupt(previousRunId, previousInterrupt)
       throw error
     }
   }
 
   private hasPendingAskUserInterrupt(): boolean {
-    return this.pendingInterrupt.value?.tool_name === 'ask_user' && !!this.pendingRunId.value
+    return !!this.pendingInteraction.value && !!this.pendingRunId.value
   }
 
-  private setPendingInterrupt(runId: string, tool: FrontendToolInterrupt): void {
+  private setPendingInterrupt(runId: string, interrupt: PendingInterrupt): void {
     this.pendingRunId.value = runId
-    this.pendingInterrupt.value = tool
+    this.pendingInterrupt.value = interrupt
+    this.pendingInteraction.value = isInteractiveInterrupt(interrupt) ? interrupt : null
   }
 
   private clearPendingInterrupt(): void {
     this.pendingRunId.value = null
     this.pendingInterrupt.value = null
-  }
-
-  public getPendingAskUserArgs(): AskUserToolArgs | null {
-    if (this.pendingInterrupt.value?.tool_name !== 'ask_user') {
-      return null
-    }
-    const args = this.pendingInterrupt.value.args
-    const question = typeof args.question === 'string' ? args.question.trim() : ''
-    if (!question) {
-      return null
-    }
-
-    return {
-      question,
-      context: typeof args.context === 'string' ? args.context : undefined,
-      answer_format: typeof args.answer_format === 'string' ? args.answer_format : undefined,
-      suggested_options: Array.isArray(args.suggested_options)
-        ? args.suggested_options.filter(
-            (option): option is string => typeof option === 'string' && option.trim().length > 0,
-          )
-        : undefined,
-      placeholder: typeof args.placeholder === 'string' ? args.placeholder : undefined,
-    }
-  }
-
-  public isPendingAskUserToolCall(toolCallId: string): boolean {
-    return (
-      this.pendingInterrupt.value?.tool_name === 'ask_user' &&
-      this.pendingInterrupt.value.tool_call_id === toolCallId
-    )
+    this.pendingInteraction.value = null
   }
 
   public async submitPendingAskUserOption(option: string): Promise<void> {
     const answer = option.trim()
     if (!answer) return
-    await this.submitPendingAskUserResponse(answer)
+    const sessionId = await this.ensureSession()
+    this.isSending.value = true
+    this.sessionError.value = null
+
+    try {
+      await this.resumePendingInteraction(sessionId, answer, 'option')
+      await this.saveSessionToDB()
+    } catch (error) {
+      this.sessionError.value = error instanceof Error ? error.message : '发送消息失败'
+      throw error instanceof Error ? error : new Error('发送消息失败')
+    } finally {
+      this.isSending.value = false
+      this.currentAbortController = null
+    }
   }
 
   public async submitPendingAskUserResponse(response: string): Promise<void> {
     const answer = response.trim()
     if (!answer) return
-    await this.handleSendMessage(answer)
+    const sessionId = await this.ensureSession()
+    this.isSending.value = true
+    this.sessionError.value = null
+
+    try {
+      await this.resumePendingInteraction(sessionId, answer, 'custom_input')
+      await this.saveSessionToDB()
+    } catch (error) {
+      this.sessionError.value = error instanceof Error ? error.message : '发送消息失败'
+      throw error instanceof Error ? error : new Error('发送消息失败')
+    } finally {
+      this.isSending.value = false
+      this.currentAbortController = null
+    }
   }
 
-  public getAskUserResponse(toolCallId: string): string | null {
-    for (let index = this.messages.value.length - 1; index >= 0; index -= 1) {
-      const message = this.messages.value[index]
-      if (message.role !== AgentMessageRole.TOOL) {
-        continue
-      }
+  public getInteractionRecord(interactionId: string): SessionInteractionRecord | null {
+    return (
+      this.interactions.value.find((record) => record.interrupt.interaction_id === interactionId) || null
+    )
+  }
 
-      const toolResult = message.parts.find(
-        (part) =>
-          part.type === MessagePartType.TOOL_RESULT && part.tool_call_id === toolCallId,
-      )
-      if (toolResult && toolResult.type === MessagePartType.TOOL_RESULT) {
-        return toolResult.output.trim() || null
-      }
+  private upsertInteractionRecord(record: SessionInteractionRecord): void {
+    const index = this.interactions.value.findIndex(
+      (item) => item.interrupt.interaction_id === record.interrupt.interaction_id,
+    )
+    if (index >= 0) {
+      this.interactions.value[index] = record
+      return
     }
+    this.interactions.value = [...this.interactions.value, record]
+  }
 
-    return null
+  private upsertInteractionResult(
+    interactionId: string,
+    answer: string,
+    submittedVia: 'option' | 'custom_input',
+  ): void {
+    const submittedAt = new Date().toISOString()
+    this.interactions.value = this.interactions.value.map((record) =>
+      record.interrupt.interaction_id === interactionId
+        ? {
+            ...record,
+            result: {
+              interaction_id: interactionId,
+              kind: record.interrupt.kind,
+              answer,
+              submitted_via: submittedVia,
+              submitted_at: submittedAt,
+            },
+          }
+        : record,
+    )
   }
 
   private async saveSessionToDB(): Promise<void> {
@@ -438,6 +472,7 @@ export class SessionManager {
       sessionId: this.currentSessionId.value,
       messages: plainMessages,
       completedMessageIds: [...this.completedMessageIds.value],
+      interactions: JSON.parse(JSON.stringify(this.interactions.value)) as SessionInteractionRecord[],
       createdAt: existing?.createdAt || now,
       updatedAt: now,
     }

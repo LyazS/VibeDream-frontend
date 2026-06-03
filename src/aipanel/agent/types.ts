@@ -1,14 +1,12 @@
 export enum AgentMessageRole {
   USER = 'user',
   ASSISTANT = 'assistant',
-  TOOL = 'tool',
 }
 
 export enum MessagePartType {
   TEXT = 'text',
   IMAGE = 'image',
   TOOL_CALL = 'tool_call',
-  TOOL_RESULT = 'tool_result',
 }
 
 export enum ToolCallStatus {
@@ -35,14 +33,7 @@ export interface ToolCallPart {
   status: ToolCallStatus
 }
 
-export interface ToolResultPart {
-  type: MessagePartType.TOOL_RESULT
-  tool_call_id: string
-  output: string
-  is_error: boolean
-}
-
-export type AgentMessagePart = TextPart | ImagePart | ToolCallPart | ToolResultPart
+export type AgentMessagePart = TextPart | ImagePart | ToolCallPart
 
 export interface AgentMessage {
   id: string
@@ -58,13 +49,40 @@ export interface FrontendToolInterrupt {
   args: Record<string, unknown>
 }
 
+export type InteractionKind = 'ask_user'
+
+export type InteractionSubmittedVia = 'option' | 'custom_input'
+
+export interface InteractiveInterrupt {
+  type: 'interactive_interrupt'
+  interaction_id: string
+  kind: InteractionKind
+  prompt: string
+  options: string[]
+  placeholder: string
+  created_at: string
+}
+
+export interface InteractionResult {
+  interaction_id: string
+  kind: InteractionKind
+  answer: string
+  submitted_via: InteractionSubmittedVia
+  submitted_at: string
+}
+
+export interface SessionInteractionRecord {
+  interrupt: InteractiveInterrupt
+  result: InteractionResult | null
+}
+
 export interface AskUserToolArgs {
   question: string
-  context?: string
-  answer_format?: string
   suggested_options?: string[]
   placeholder?: string
 }
+
+export type PendingInterrupt = FrontendToolInterrupt | InteractiveInterrupt
 
 export enum RunStatus {
   RUNNING = 'running',
@@ -76,7 +94,7 @@ export enum RunStatus {
 export interface PendingRun {
   run_id: string
   status: RunStatus
-  interrupt?: FrontendToolInterrupt | null
+  interrupt?: PendingInterrupt | null
 }
 
 export interface SessionSummary {
@@ -108,6 +126,12 @@ export interface ToolResultRequest {
   is_error: boolean
 }
 
+export interface InteractionResultRequest {
+  interaction_id: string
+  answer: string
+  submitted_via: InteractionSubmittedVia
+}
+
 export interface SessionSnapshot {
   session: {
     session_id: string
@@ -115,6 +139,7 @@ export interface SessionSnapshot {
     updated_at: string
   }
   messages: AgentMessage[]
+  interactions: SessionInteractionRecord[]
   pending_run: PendingRun | null
 }
 
@@ -141,10 +166,8 @@ export interface MessageCompletedEvent {
 export interface RunPausedEvent {
   type: 'run.paused'
   run_id: string
-  reason: 'frontend_tool'
-  tool_call_id: string
-  tool_name: string
-  args: Record<string, unknown>
+  reason: 'frontend_tool' | 'interaction'
+  interrupt: PendingInterrupt
 }
 
 export interface RunCompletedEvent {
@@ -184,4 +207,16 @@ export function isPublicMessage(message: AgentMessage): boolean {
 
 export function getMessageTextParts(message: AgentMessage): TextPart[] {
   return message.parts.filter((part): part is TextPart => part.type === MessagePartType.TEXT)
+}
+
+export function isInteractiveInterrupt(
+  interrupt: PendingInterrupt | null | undefined,
+): interrupt is InteractiveInterrupt {
+  return interrupt?.type === 'interactive_interrupt'
+}
+
+export function isFrontendToolInterrupt(
+  interrupt: PendingInterrupt | null | undefined,
+): interrupt is FrontendToolInterrupt {
+  return interrupt?.type === 'frontend_tool'
 }

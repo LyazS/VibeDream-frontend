@@ -29,7 +29,7 @@
   </div>
   <div v-else class="chat-input-wrapper chat-input-wrapper--paused">
     <div class="paused-note">
-      请在上方问题卡片中选择一个选项，或使用第 4 个输入框填写自定义回复。
+      {{ t('aiPanel.interaction.pausedNote') }}
     </div>
   </div>
 </template>
@@ -39,7 +39,6 @@ import { ref, computed, nextTick } from 'vue'
 import { IconComponents } from '@/constants/iconComponents'
 import HoverButton from '@/components/base/HoverButton.vue'
 import { SESSION_MANAGER } from '@/aipanel/agent/services'
-import type { AskUserToolArgs } from '@/aipanel/agent/types'
 import { useAppI18n } from '@/core/composables/useI18n'
 
 const { t } = useAppI18n()
@@ -52,7 +51,8 @@ const textareaHeight = ref(72) // 初始高度 72px (3行 × 24px)
 
 // 检查是否有进行中的消息（使用响应式计算属性）
 const hasProcessingMessage = computed(() => SESSION_MANAGER.isSending.value)
-const pendingAskUserArgs = computed<AskUserToolArgs | null>(() => SESSION_MANAGER.getPendingAskUserArgs())
+const pendingInteraction = computed(() => SESSION_MANAGER.pendingInteraction.value)
+const pendingAskUserArgs = computed(() => pendingInteraction.value)
 
 // 基础行高（字体大小 + 行间距）
 const LINE_HEIGHT = 24 // px
@@ -73,7 +73,7 @@ const inputPlaceholder = computed(() => {
   if (typeof placeholder === 'string' && placeholder.trim()) {
     return placeholder
   }
-  return pendingAskUserArgs.value?.question || t('common.chat.inputPlaceholder')
+  return pendingAskUserArgs.value?.prompt || t('common.chat.inputPlaceholder')
 })
 
 const adjustTextareaHeight = () => {

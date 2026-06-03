@@ -1,13 +1,14 @@
 <template>
   <div class="chat-messages-container" ref="messagesContainer">
     <AgentMessage :message="welcomeMessage" />
-    <template v-for="message in messages" :key="message.id">
-      <UserMessage v-if="isUserMessage(message)" :message="message" />
+    <template v-for="item in timelineItems" :key="item.id">
+      <UserMessage v-if="item.type === 'message' && isUserMessage(item.message)" :message="item.message" />
       <AgentMessage
-        v-else-if="isAssistantMessage(message)"
-        :message="message"
-        :is-task-complete="SESSION_MANAGER.isTaskCompleteMessage(message.id)"
+        v-else-if="item.type === 'message' && isAssistantMessage(item.message)"
+        :message="item.message"
+        :is-task-complete="SESSION_MANAGER.isTaskCompleteMessage(item.message.id)"
       />
+      <InteractionCard v-else-if="item.type === 'interaction'" :record="item.record" />
     </template>
     <ThinkingIndicator v-if="isSending" />
   </div>
@@ -18,6 +19,7 @@ import { ref, nextTick, watch, provide, computed } from 'vue'
 import MarkdownIt from 'markdown-it'
 import UserMessage from './UserMessage.vue'
 import AgentMessage from './AgentMessage.vue'
+import InteractionCard from './InteractionCard.vue'
 import ThinkingIndicator from './ThinkingIndicator.vue'
 import { SESSION_MANAGER } from '@/aipanel/agent/services'
 import {
@@ -27,7 +29,10 @@ import {
   isPublicMessage,
   isUserMessage,
 } from '@/aipanel/agent/types'
-import type { AgentMessage as AgentMessageModel } from '@/aipanel/agent/types'
+import type {
+  AgentMessage as AgentMessageModel,
+  SessionInteractionRecord,
+} from '@/aipanel/agent/types'
 import { useAppI18n } from '@/core/composables/useI18n'
 
 // AI 发送状态
@@ -47,6 +52,30 @@ const renderMarkdown = (content: string) => {
 provide('renderMarkdown', renderMarkdown)
 
 const messages = computed(() => SESSION_MANAGER.messages.value.filter(isPublicMessage))
+const interactions = computed(() => SESSION_MANAGER.interactions.value)
+
+type TimelineItem =
+  | { type: 'message'; id: string; createdAt: string; message: AgentMessageModel }
+  | { type: 'interaction'; id: string; createdAt: string; record: SessionInteractionRecord }
+
+const timelineItems = computed<TimelineItem[]>(() => {
+  const messageItems = messages.value.map((message) => ({
+    type: 'message' as const,
+    id: message.id,
+    createdAt: message.created_at,
+    message,
+  }))
+  const interactionItems = interactions.value.map((record) => ({
+    type: 'interaction' as const,
+    id: `interaction-${record.interrupt.interaction_id}`,
+    createdAt: record.interrupt.created_at,
+    record,
+  }))
+
+  return [...messageItems, ...interactionItems].sort(
+    (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
+  )
+})
 
 const { t } = useAppI18n()
 
@@ -72,7 +101,7 @@ const scrollToBottom = async () => {
 }
 
 watch(
-  messages,
+  timelineItems,
   () => {
     scrollToBottom()
   },
