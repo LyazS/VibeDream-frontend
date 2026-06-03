@@ -4,6 +4,7 @@
  */
 
 import { useUnifiedStore } from '@/core/unifiedStore'
+import type { UnifiedMediaItemData, UnifiedMediaIndexMetadata } from '@/core/mediaitem/types'
 import type { ToolDefinition } from '../core/toolTypes'
 
 /**
@@ -16,6 +17,143 @@ interface VirtualEntry {
   name: string
   /** 类型 */
   type: 'directory' | 'asset'
+  /** 资产对象 */
+  mediaItem?: UnifiedMediaItemData
+}
+
+interface ShotOutlineItem {
+  index: number
+  title: string
+}
+
+const SHOT_OUTLINE_HEAD_COUNT = 2
+const SHOT_OUTLINE_TAIL_COUNT = 1
+const FALLBACK_MEDIA_TAG = 'media'
+
+function escapeXmlText(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+}
+
+function escapeXmlAttribute(value: string): string {
+  return escapeXmlText(value)
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&apos;')
+}
+
+function buildXmlAttributes(attributes: Array<[string, string | number | undefined]>): string {
+  return attributes
+    .filter(([, value]) => value !== undefined)
+    .map(([key, value]) => `${key}="${escapeXmlAttribute(String(value))}"`)
+    .join(' ')
+}
+
+function getCompletedIndexingMetadata(mediaItem?: UnifiedMediaItemData): UnifiedMediaIndexMetadata | undefined {
+  const indexing = mediaItem?.metadata?.indexing
+  if (!indexing || indexing.indexStatus !== 'completed') {
+    return undefined
+  }
+
+  return indexing
+}
+
+function isUnifiedMediaItemData(value: unknown): value is UnifiedMediaItemData {
+  if (!value || typeof value !== 'object') {
+    return false
+  }
+
+  return 'id' in value && 'name' in value && 'mediaType' in value
+}
+
+function buildShotOutline(
+  indexing: Extract<UnifiedMediaIndexMetadata, { mediaKind: 'video' }>,
+): ShotOutlineItem[] {
+  const titledShots = (indexing.segmentSummaries || [])
+    .filter((segment) => typeof segment.title === 'string' && segment.title.trim())
+    .map((segment) => ({
+      index: segment.segmentIndex,
+      title: segment.title!.trim(),
+    }))
+
+  if (titledShots.length <= SHOT_OUTLINE_HEAD_COUNT + SHOT_OUTLINE_TAIL_COUNT) {
+    return titledShots
+  }
+
+  const head = titledShots.slice(0, SHOT_OUTLINE_HEAD_COUNT)
+  const tail = titledShots.slice(-SHOT_OUTLINE_TAIL_COUNT)
+  const dedupedTail = tail.filter(
+    (tailItem) => !head.some((headItem) => headItem.index === tailItem.index),
+  )
+
+  return [...head, ...dedupedTail]
+}
+
+function formatDirectoryEntry(entry: VirtualEntry): string {
+  const attrs = buildXmlAttributes([['id', entry.id]])
+  return `<dir ${attrs}>${escapeXmlText(entry.name)}</dir>`
+}
+
+function getMediaTagName(mediaItem?: UnifiedMediaItemData): string {
+  const mediaType = mediaItem?.mediaType
+  if (mediaType === 'video' || mediaType === 'image' || mediaType === 'audio' || mediaType === 'text') {
+    return mediaType
+  }
+
+  return FALLBACK_MEDIA_TAG
+}
+
+function formatMediaEntry(entry: VirtualEntry): string {
+  const mediaItem = entry.mediaItem
+  const indexing = getCompletedIndexingMetadata(mediaItem)
+  const tagName = getMediaTagName(mediaItem)
+  const baseAttributes: Array<[string, string | number | undefined]> = [
+    ['id', entry.id],
+    ['name', entry.name],
+  ]
+
+  if (!indexing) {
+    return `<${tagName} ${buildXmlAttributes(baseAttributes)} />`
+  }
+
+  const title = indexing.summary?.title?.trim() || undefined
+
+  if (indexing.mediaKind === 'image') {
+    return `<${tagName} ${buildXmlAttributes([
+      ...baseAttributes,
+      ['title', title],
+    ])} />`
+  }
+
+  const shotOutline = buildShotOutline(indexing)
+  const mediaAttributes = buildXmlAttributes([
+    ...baseAttributes,
+    ['title', title],
+    ['shots', indexing.segmentCount],
+  ])
+
+  if (shotOutline.length === 0) {
+    return `<${tagName} ${mediaAttributes} />`
+  }
+
+  const totalShots = indexing.segmentCount ?? shotOutline.length
+  const shouldShowEllipsis = totalShots > shotOutline.length
+  const lines: string[] = [`<${tagName} ${mediaAttributes}>`]
+
+  for (let i = 0; i < shotOutline.length; i++) {
+    const shot = shotOutline[i]
+    const isBeforeTail = shouldShowEllipsis && i === SHOT_OUTLINE_HEAD_COUNT
+    if (isBeforeTail) {
+      lines.push(`  <ellipsis>...</ellipsis>`)
+    }
+    lines.push(
+      `  <shot ${buildXmlAttributes([['index', shot.index]])}>${escapeXmlText(shot.title)}</shot>`,
+    )
+  }
+
+  lines.push(`</${tagName}>`)
+  return lines.join('\n')
 }
 
 /**
@@ -113,7 +251,11 @@ function getDirectoryEntries(dirId: string): VirtualEntry[] {
     const store = useUnifiedStore()
     const directoriesMap = store.directories || new Map()
     const mediaItemsArray = store.getAllAssets ? store.getAllAssets() : store.mediaItems || []
-    const mediaItemsMap = new Map(mediaItemsArray.map((item: any) => [item.id, item]))
+    const mediaItemsMap = new Map<string, UnifiedMediaItemData>(
+      mediaItemsArray
+        .filter(isUnifiedMediaItemData)
+        .map((item) => [item.id, item]),
+    )
 
     const dir = directoriesMap.get(dirId)
     if (!dir) {
@@ -141,7 +283,8 @@ function getDirectoryEntries(dirId: string): VirtualEntry[] {
         entries.push({
           id: mediaId,
           name: media.name,
-          type: 'asset'
+          type: 'asset',
+          mediaItem: media,
         })
       }
     }
@@ -185,6 +328,16 @@ function buildPathName(dirId: string): string {
   }
 }
 
+function logListContentsResult(
+  filePath: string,
+  offset: number,
+  limit: number,
+  result: string,
+): string {
+  console.log('[list_contents] result', result)
+  return result
+}
+
 /**
  * list_contents 工具执行函数
  *
@@ -206,7 +359,7 @@ export async function executeListContents(args: Record<string, any>): Promise<st
       const dirId = resolveIdPathToDirId(filePath)
 
       if (!dirId) {
-        return `File not found: ${filePath}`
+        return logListContentsResult(filePath, offset, limit, `File not found: ${filePath}`)
       }
 
       // 2. 从素材库获取目录的直接子项（非递归）
@@ -218,7 +371,12 @@ export async function executeListContents(args: Record<string, any>): Promise<st
       // 4. 分页验证
       const totalEntries = entries.length
       if (offset > totalEntries) {
-        return `Offset ${offset} is out of range for this directory (${totalEntries} entries)`
+        return logListContentsResult(
+          filePath,
+          offset,
+          limit,
+          `Offset ${offset} is out of range for this directory (${totalEntries} entries)`,
+        )
       }
 
       // 5. 应用分页
@@ -230,11 +388,9 @@ export async function executeListContents(args: Record<string, any>): Promise<st
       const entryLines: string[] = []
       for (const entry of pagedEntries) {
         if (entry.type === 'directory') {
-          // 目录格式：<dir id="完整ID">名称</dir>
-          entryLines.push(`<dir id="${entry.id}">${entry.name}</dir>`)
+          entryLines.push(formatDirectoryEntry(entry))
         } else {
-          // 媒体格式：<media id="完整ID">名称</media>
-          entryLines.push(`<media id="${entry.id}">${entry.name}</media>`)
+          entryLines.push(formatMediaEntry(entry))
         }
       }
 
@@ -259,9 +415,14 @@ export async function executeListContents(args: Record<string, any>): Promise<st
         outputLines.push(`(${totalEntries} entries)`)
       }
 
-      return outputLines.join('\n')
+      return logListContentsResult(filePath, offset, limit, outputLines.join('\n'))
     } catch (error: any) {
-      return `Error reading directory: ${error.message}`
+      return logListContentsResult(
+        filePath,
+        offset,
+        limit,
+        `Error reading directory: ${error.message}`,
+      )
     }
   }
 
