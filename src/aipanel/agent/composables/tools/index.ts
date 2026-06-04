@@ -10,7 +10,7 @@ import { readTrackTool } from './readTrack'
 import { readTimelineitemTool } from './readTimelineitem'
 import { editSdkTool } from './editSdkTool'
 import { searchMediaTool } from './searchMedia'
-import type { ToolDefinition, ToolResult } from '../core/toolTypes'
+import type { ToolDefinition, ToolExecutionContext, ToolResult } from '../core/toolTypes'
 
 // 工具存储
 const tools = new Map<string, ToolDefinition>()
@@ -34,7 +34,11 @@ registerTool(searchMediaTool)
 /**
  * 执行工具
  */
-export function executeTool(name: string, args: Record<string, any>): Promise<ToolResult> {
+export function executeTool(
+  name: string,
+  args: Record<string, any>,
+  context?: ToolExecutionContext,
+): Promise<ToolResult> {
   const tool = tools.get(name)
   if (!tool) {
     return Promise.resolve({
@@ -44,7 +48,7 @@ export function executeTool(name: string, args: Record<string, any>): Promise<To
     })
   }
 
-  return tool.execute(args).then(
+  return tool.execute(args, context).then(
     (result) => ({ success: true, result }),
     (error) => ({
       success: false,

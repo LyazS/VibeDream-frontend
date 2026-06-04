@@ -3,9 +3,13 @@
  * 在 useEditSDK 和工具实现之间共享
  */
 
+export interface ToolExecutionContext {
+  toolCallId?: string
+}
+
 export interface ToolDefinition {
   name: string
-  execute: (args: Record<string, any>) => Promise<string>
+  execute: (args: Record<string, any>, context?: ToolExecutionContext) => Promise<string>
 }
 
 export interface ToolResult {

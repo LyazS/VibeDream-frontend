@@ -9,6 +9,7 @@ import type {
 import type {
   AgentMessage,
   AgentStreamEvent,
+  FrontendToolInterrupt,
   InteractionResultRequest,
   InteractiveInterrupt,
   MessageDeltaEvent,
@@ -22,6 +23,7 @@ import {
   AgentMessageRole,
   MessagePartType,
   getMessageTextParts,
+  isFrontendToolInterrupt,
   isInteractiveInterrupt,
   isUserMessage,
 } from '@/aipanel/agent/types'
@@ -52,6 +54,7 @@ export class SessionManager {
   public isSending = ref(false)
   public pendingInterrupt = ref<PendingInterrupt | null>(null)
   public pendingInteraction = ref<InteractiveInterrupt | null>(null)
+  public pendingFrontendTool = ref<FrontendToolInterrupt | null>(null)
   public pendingRunId = ref<string | null>(null)
   public interactions = ref<SessionInteractionRecord[]>([])
 
@@ -307,18 +310,30 @@ export class SessionManager {
       throw new Error(`前端工具不存在: ${interrupt.tool_name}`)
     }
 
-    const result = await this.editSDK.executeTool(interrupt.tool_name, interrupt.args)
-    const payload: ToolResultRequest = {
-      tool_call_id: interrupt.tool_call_id,
-      output: result.success ? result.result : `工具执行失败: ${result.error}`,
-      is_error: !result.success,
-    }
+    const previousInterrupt = interrupt
+    const previousRunId = runId
+    this.setPendingInterrupt(runId, interrupt)
 
-    await this.consumeStream(
-      API_ENDPOINTS.submitToolResult(sessionId, runId),
-      payload,
-      sessionId,
-    )
+    try {
+      const result = await this.editSDK.executeTool(interrupt.tool_name, interrupt.args, {
+        toolCallId: interrupt.tool_call_id,
+      })
+      const payload: ToolResultRequest = {
+        tool_call_id: interrupt.tool_call_id,
+        output: result.success ? result.result : `工具执行失败: ${result.error}`,
+        is_error: !result.success,
+      }
+
+      this.clearPendingInterrupt()
+      await this.consumeStream(
+        API_ENDPOINTS.submitToolResult(sessionId, runId),
+        payload,
+        sessionId,
+      )
+    } catch (error) {
+      this.setPendingInterrupt(previousRunId, previousInterrupt)
+      throw error
+    }
   }
 
   private applySnapshot(snapshot: SessionSnapshotResponse): void {
@@ -376,12 +391,14 @@ export class SessionManager {
     this.pendingRunId.value = runId
     this.pendingInterrupt.value = interrupt
     this.pendingInteraction.value = isInteractiveInterrupt(interrupt) ? interrupt : null
+    this.pendingFrontendTool.value = isFrontendToolInterrupt(interrupt) ? interrupt : null
   }
 
   private clearPendingInterrupt(): void {
     this.pendingRunId.value = null
     this.pendingInterrupt.value = null
     this.pendingInteraction.value = null
+    this.pendingFrontendTool.value = null
   }
 
   public async submitPendingAskUserOption(option: string): Promise<void> {

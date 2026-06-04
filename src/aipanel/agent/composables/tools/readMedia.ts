@@ -1,124 +1,225 @@
 /**
  * read_media 工具实现
- * 获取素材详情，包括视觉摘要
+ * 按字段读取素材详情，必要时触发索引并等待完成，最终返回 XML。
  */
 
+import { computed, reactive } from 'vue'
+import type { ResourceEvent } from '@/core/jobs/ResourceTypes'
 import { useUnifiedStore } from '@/core/unifiedStore'
 import { framesToTimecode } from '@/core/utils/timeUtils'
-import type { ToolDefinition } from '../core/toolTypes'
-import type { UnifiedMediaItemData } from '@/core/mediaitem/types'
+import type {
+  MediaIndexStatus,
+  UnifiedImageMediaIndexMetadata,
+  UnifiedMediaItemData,
+  UnifiedMediaIndexMetadata,
+  UnifiedVideoMediaIndexMetadata,
+} from '@/core/mediaitem/types'
+import type { ToolDefinition, ToolExecutionContext } from '../core/toolTypes'
 
-// ==================== read_media 工具 ====================
+const MAX_MEDIA_IDS = 10
+const MAX_WAIT_MS = 30 * 60 * 1000
 
-// ==================== 类型定义 ====================
+type ReadMediaField = 'basic' | 'summary' | 'segments'
+type ReadMediaOverallStatus = 'success' | 'partial_success' | 'failed'
+type ReadMediaItemStatus = 'success' | 'failed' | 'pending'
+type ReadMediaFailureReason =
+  | 'not_found'
+  | 'indexing_failed'
+  | 'indexing_timeout'
+  | 'user_cancelled_before_completed'
 
-interface MediaDetail {
-  id: string
-  name: string
-  mediaType: 'video' | 'image' | 'audio'
-  duration?: string // HH:MM:SS+FF 格式
-  title?: string
-  description: string
+interface ReadMediaToolContext {
+  resolveMediaRequest: (mediaId: string) => {
+    mediaItem?: UnifiedMediaItemData
+    suggestedItem?: UnifiedMediaItemData
+  }
+  ensureMediaIndexing: (mediaId: string) => Promise<unknown>
+  onJobResourceEvent: (listener: (event: ResourceEvent) => void) => () => void
 }
 
-// ==================== 主执行函数 ====================
+const SUPPORTED_FIELDS = new Set<ReadMediaField>(['basic', 'summary', 'segments'])
 
-/**
- * read_media 工具执行函数
- *
- * 获取指定素材的详细信息，包括视觉摘要。
- * 如果摘要不存在，会自动触发视觉摘要生成流程并等待完成。
- *
- * @param args - 工具参数
- * @param args.mediaIds - 素材ID数组（1-10个）
- * @returns 格式化的素材详情文本
- */
-export async function executeReadMedia(args: Record<string, any>): Promise<string> {
-  const { mediaIds } = args
+export interface ReadMediaExecutionState {
+  toolCallId: string
+  mediaIds: string[]
+  fields: ReadMediaField[]
+  totalCount: number
+  completedCount: number
+  failedCount: number
+  active: boolean
+  canCancel: boolean
+  cancelled: boolean
+  message: string
+}
 
-  // 1. 参数验证
-  if (!Array.isArray(mediaIds) || mediaIds.length === 0) {
-    return 'Error: mediaIds must be a non-empty array'
+interface ReadMediaItemController {
+  requestedId: string
+  itemStatus: ReadMediaItemStatus
+  failureReason?: ReadMediaFailureReason
+  failureMessage?: string
+  suggestedId?: string
+  waitStarted: boolean
+  waitPromise?: Promise<void>
+  waitError?: string
+}
+
+const activeExecutions = reactive<Record<string, ReadMediaExecutionState>>({})
+const cancellationHooks = new Map<string, () => Promise<void> | void>()
+
+export function useReadMediaExecutionState(toolCallId: string) {
+  return computed(() => activeExecutions[toolCallId] ?? null)
+}
+
+function startExecutionState(
+  toolCallId: string,
+  mediaIds: string[],
+  fields: ReadMediaField[],
+): void {
+  activeExecutions[toolCallId] = {
+    toolCallId,
+    mediaIds,
+    fields,
+    totalCount: mediaIds.length,
+    completedCount: 0,
+    failedCount: 0,
+    active: true,
+    canCancel: true,
+    cancelled: false,
+    message: '正在准备读取素材…',
+  }
+}
+
+function updateExecutionState(
+  toolCallId: string,
+  patch: Partial<ReadMediaExecutionState>,
+): void {
+  const current = activeExecutions[toolCallId]
+  if (!current) return
+  Object.assign(current, patch)
+}
+
+function finishExecutionState(toolCallId: string): void {
+  delete activeExecutions[toolCallId]
+  cancellationHooks.delete(toolCallId)
+}
+
+export async function cancelReadMediaExecution(toolCallId: string): Promise<void> {
+  const hook = cancellationHooks.get(toolCallId)
+  if (!hook) return
+  await hook()
+}
+
+function registerCancellationHook(
+  toolCallId: string,
+  hook: () => Promise<void> | void,
+): void {
+  cancellationHooks.set(toolCallId, hook)
+}
+
+function escapeXml(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&apos;')
+}
+
+function buildAttributes(attributes: Array<[string, string | number | boolean | undefined]>): string {
+  return attributes
+    .filter(([, value]) => value !== undefined)
+    .map(([key, value]) => `${key}="${escapeXml(String(value))}"`)
+    .join(' ')
+}
+
+function isReadMediaField(value: unknown): value is ReadMediaField {
+  return typeof value === 'string' && SUPPORTED_FIELDS.has(value as ReadMediaField)
+}
+
+function normalizeFields(fields: unknown): ReadMediaField[] {
+  if (!Array.isArray(fields) || fields.length === 0) {
+    throw new Error('fields must be a non-empty array')
   }
 
-  if (mediaIds.length > 10) {
-    return 'Error: Maximum 10 media IDs per request'
-  }
-
-  const unifiedStore = useUnifiedStore()
-  const results: MediaDetail[] = []
-
-  // 2. 遍历处理每个素材
-  for (const mediaId of mediaIds) {
-    const mediaItem = unifiedStore.getMediaItem(mediaId)
-
-    if (!mediaItem) {
-      // 素材不存在，尝试模糊匹配
-      const allMediaItems = unifiedStore.mediaItems || []
-      let suggestedItem: UnifiedMediaItemData | null = null
-
-      // 查找可能的匹配项
-      for (const item of allMediaItems) {
-        // 情况1：用户传入了不含扩展名的ID，实际ID包含扩展名
-        if (item.id.startsWith(mediaId)) {
-          suggestedItem = item
-          break
-        }
-        // 情况2：用户传入了含扩展名的ID，但实际ID不含扩展名
-        if (mediaId.startsWith(item.id)) {
-          suggestedItem = item
-          break
-        }
-      }
-
-      if (suggestedItem) {
-        // 找到相似的素材，返回提示信息
-        results.push({
-          id: mediaId,
-          name: suggestedItem.name,
-          mediaType: suggestedItem.mediaType as 'video' | 'image' | 'audio',
-          duration: formatDuration(suggestedItem.duration),
-          description: `⚠️ 未找到 ID "${mediaId}" 的素材。你是不是要寻找 ID "${suggestedItem.id}"？请使用完整的 ID 重试。`,
-        })
-        continue
-      }
-
-      // 确实找不到
-      results.push({
-        id: mediaId,
-        name: 'Unknown',
-        mediaType: 'video',
-        description: `未找到 ID "${mediaId}" 的素材。请使用 list_contents 查看正确的素材 ID。`,
-      })
-      continue
+  const normalized: ReadMediaField[] = []
+  for (const field of fields) {
+    if (!isReadMediaField(field)) {
+      throw new Error(`Unsupported read_media field: ${String(field)}`)
     }
-
-    results.push(formatMediaDetail(mediaItem))
+    if (!normalized.includes(field)) {
+      normalized.push(field)
+    }
   }
 
-  // 4. 格式化输出
-  return formatResults(results)
+  return normalized
 }
 
-// ==================== 辅助函数 ====================
-
-/**
- * 格式化媒体详情
- */
-function formatMediaDetail(mediaItem: UnifiedMediaItemData): MediaDetail {
-  return {
-    id: mediaItem.id,
-    name: mediaItem.name,
-    mediaType: mediaItem.mediaType as 'video' | 'image' | 'audio',
-    duration: formatDuration(mediaItem.duration),
-    title: '',
-    description: '',
+function normalizeMediaIds(mediaIds: unknown): string[] {
+  if (!Array.isArray(mediaIds) || mediaIds.length === 0) {
+    throw new Error('mediaIds must be a non-empty array')
   }
+  if (mediaIds.length > MAX_MEDIA_IDS) {
+    throw new Error(`Maximum ${MAX_MEDIA_IDS} media IDs per request`)
+  }
+
+  const normalized = mediaIds.map((mediaId) => (typeof mediaId === 'string' ? mediaId.trim() : ''))
+  if (normalized.some((mediaId) => !mediaId)) {
+    throw new Error('mediaIds must only contain non-empty strings')
+  }
+  return normalized
 }
 
-/**
- * 格式化时长（帧数 -> 时间码）
- */
+function getMediaItemOrSuggestion(mediaId: string, allMediaItems: UnifiedMediaItemData[]) {
+  const mediaItem = allMediaItems.find((item) => item.id === mediaId)
+  if (mediaItem) {
+    return { mediaItem }
+  }
+
+  const suggestedItem = allMediaItems.find(
+    (item) => item.id.startsWith(mediaId) || mediaId.startsWith(item.id),
+  )
+  return { suggestedItem }
+}
+
+function getIndexStatus(mediaItem?: UnifiedMediaItemData): MediaIndexStatus | 'not_indexed' {
+  return mediaItem?.metadata?.indexing?.indexStatus ?? 'not_indexed'
+}
+
+function getIndexMetadata(mediaItem?: UnifiedMediaItemData): UnifiedMediaIndexMetadata | undefined {
+  return mediaItem?.metadata?.indexing
+}
+
+function fieldNeedsIndex(field: ReadMediaField): boolean {
+  return field === 'summary' || field === 'segments'
+}
+
+function fieldSupported(mediaItem: UnifiedMediaItemData, field: ReadMediaField): boolean {
+  if (field === 'basic') return true
+  if (field === 'summary') {
+    return mediaItem.mediaType === 'video' || mediaItem.mediaType === 'image'
+  }
+  if (field === 'segments') {
+    return mediaItem.mediaType === 'video'
+  }
+  return false
+}
+
+function isIndexedFieldReady(mediaItem: UnifiedMediaItemData, field: ReadMediaField): boolean {
+  if (!fieldNeedsIndex(field) || !fieldSupported(mediaItem, field)) {
+    return true
+  }
+
+  const indexStatus = getIndexStatus(mediaItem)
+  return indexStatus === 'completed' || indexStatus === 'partial_failed'
+}
+
+function isMediaResolved(
+  mediaItem: UnifiedMediaItemData,
+  fields: ReadMediaField[],
+): boolean {
+  return fields.every((field) => isIndexedFieldReady(mediaItem, field))
+}
+
 function formatDuration(duration?: number): string | undefined {
   if (duration === undefined || duration === null) {
     return undefined
@@ -126,87 +227,486 @@ function formatDuration(duration?: number): string | undefined {
   return framesToTimecode(duration)
 }
 
-/**
- * 格式化结果输出
- * 按"成功读取"和"读取失败"分组显示
- */
-function formatResults(details: MediaDetail[]): string {
-  const lines: string[] = []
+function getVideoMetadata(
+  indexing?: UnifiedMediaIndexMetadata,
+): UnifiedVideoMediaIndexMetadata | undefined {
+  return indexing?.mediaKind === 'video' ? indexing : undefined
+}
 
-  // 分组：成功读取 vs 读取失败
-  const successGroup: MediaDetail[] = []
-  const failedGroup: MediaDetail[] = []
+function getImageMetadata(
+  indexing?: UnifiedMediaIndexMetadata,
+): UnifiedImageMediaIndexMetadata | undefined {
+  return indexing?.mediaKind === 'image' ? indexing : undefined
+}
 
-  for (const detail of details) {
-    // 判断是否成功读取description
-    if (
-      detail.description
-      && !detail.description.startsWith('⚠️')
-    ) {
-      successGroup.push(detail)
-    } else {
-      failedGroup.push(detail)
-    }
+function buildBasicNode(mediaItem: UnifiedMediaItemData): string {
+  return `<basic ${buildAttributes([
+    ['id', mediaItem.id],
+    ['name', mediaItem.name],
+    ['media_type', mediaItem.mediaType],
+    ['duration', formatDuration(mediaItem.duration)],
+  ])} />`
+}
+
+function buildSummaryNode(indexing?: UnifiedMediaIndexMetadata): string | null {
+  const summary = indexing?.summary
+  if (!summary?.title && !summary?.summary) {
+    return null
   }
 
-  // 输出成功读取的分组
-  if (successGroup.length > 0) {
-    lines.push('=== ✅ 读取成功的素材 ===')
-    lines.push('')
+  const attrs = buildAttributes([['title', summary?.title]])
+  const content = summary?.summary ? escapeXml(summary.summary) : ''
+  return `<summary${attrs ? ` ${attrs}` : ''}>${content}</summary>`
+}
 
-    for (const detail of successGroup) {
-      lines.push(`[ID: ${detail.id}] ${detail.name}`)
-      lines.push(`  类型: '${detail.mediaType}'`)
-
-      if (detail.duration) {
-        lines.push(`  时长: '${detail.duration}'`)
-      }
-
-      if (detail.title) {
-        lines.push(`  标题: ${detail.title}`)
-      }
-
-      lines.push(`  描述: ${detail.description}`)
-      lines.push('')
-    }
+function buildSegmentsNode(indexing?: UnifiedVideoMediaIndexMetadata): string | null {
+  const segments = indexing?.segmentSummaries || []
+  if (segments.length === 0) {
+    return null
   }
 
-  // 输出读取失败的分组
-  if (failedGroup.length > 0) {
-    lines.push('=== ❌ 读取失败的素材 ===')
-    lines.push('')
-
-    for (const detail of failedGroup) {
-      lines.push(`[ID: ${detail.id}] ${detail.name}`)
-      lines.push(`  类型: '${detail.mediaType}'`)
-
-      if (detail.duration) {
-        lines.push(`  时长: '${detail.duration}'`)
-      }
-
-      lines.push('')
-    }
-
-    // 在失败分组末尾添加提示信息
-    lines.push('（对于读取失败的素材，请再次调用 read_media 重新尝试读取该素材）')
-    lines.push('')
+  const lines = [
+    `<segments ${buildAttributes([['count', segments.length]])}>`,
+  ]
+  for (const segment of segments) {
+    const attrs = buildAttributes([
+      ['index', segment.segmentIndex],
+      ['start', segment.startTimecode],
+      ['end', segment.endTimecode],
+      ['title', segment.title],
+    ])
+    lines.push(
+      `  <segment${attrs ? ` ${attrs}` : ''}>${escapeXml(segment.summary || '')}</segment>`,
+    )
   }
-
-  // 如果全部为空
-  if (successGroup.length === 0 && failedGroup.length === 0) {
-    lines.push('=== 素材详情 (0个) ===')
-    lines.push('')
-  }
-
+  lines.push('</segments>')
   return lines.join('\n')
 }
 
-// ==================== 工具定义导出 ====================
+function buildMediaNode(
+  controller: ReadMediaItemController,
+  fields: ReadMediaField[],
+  context: ReadMediaToolContext,
+): string {
+  const { mediaItem, suggestedItem } = context.resolveMediaRequest(controller.requestedId)
+  if (!mediaItem) {
+    return `<media ${buildAttributes([
+      ['id', controller.requestedId],
+      ['status', 'failed'],
+      ['reason', controller.failureReason || 'not_found'],
+      ['suggested_id', controller.suggestedId || suggestedItem?.id],
+      ['message', controller.failureMessage],
+    ])} />`
+  }
+
+  const indexing = getIndexMetadata(mediaItem)
+  const lines = [
+    `<media ${buildAttributes([
+      ['id', mediaItem.id],
+      ['status', controller.itemStatus === 'pending' ? 'failed' : controller.itemStatus],
+      ['media_type', mediaItem.mediaType],
+      ['index_status', getIndexStatus(mediaItem)],
+      ['reason', controller.itemStatus === 'failed' ? controller.failureReason : undefined],
+      ['message', controller.itemStatus === 'failed' ? controller.failureMessage : undefined],
+    ])}>`,
+  ]
+
+  if (fields.includes('basic')) {
+    lines.push(`  ${buildBasicNode(mediaItem)}`)
+  }
+
+  if (fields.includes('summary') && fieldSupported(mediaItem, 'summary')) {
+    const summaryNode = buildSummaryNode(
+      getVideoMetadata(indexing) || getImageMetadata(indexing),
+    )
+    if (summaryNode) {
+      lines.push(`  ${summaryNode}`)
+    }
+  }
+
+  if (fields.includes('segments') && fieldSupported(mediaItem, 'segments')) {
+    const segmentsNode = buildSegmentsNode(getVideoMetadata(indexing))
+    if (segmentsNode) {
+      lines.push(...segmentsNode.split('\n').map((line) => `  ${line}`))
+    }
+  }
+
+  lines.push('</media>')
+  return lines.join('\n')
+}
+
+function buildResultXml(
+  controllers: ReadMediaItemController[],
+  fields: ReadMediaField[],
+  context: ReadMediaToolContext,
+  cancelled: boolean,
+): string {
+  const successCount = controllers.filter((item) => item.itemStatus === 'success').length
+  const failedCount = controllers.filter((item) => item.itemStatus === 'failed').length
+  const status: ReadMediaOverallStatus = successCount > 0 && failedCount > 0
+    ? 'partial_success'
+    : successCount > 0
+      ? 'success'
+      : 'failed'
+
+  const lines = [
+    `<read_media ${buildAttributes([
+      ['status', status],
+      ['cancelled', cancelled],
+      ['fields', fields.join(',')],
+    ])}>`,
+  ]
+
+  for (const controller of controllers) {
+    lines.push(
+      ...buildMediaNode(controller, fields, context)
+        .split('\n')
+        .map((line) => `  ${line}`),
+    )
+  }
+
+  lines.push('</read_media>')
+  return lines.join('\n')
+}
+
+function markFailures(
+  controllers: ReadMediaItemController[],
+  reason: ReadMediaFailureReason,
+  message: string,
+): void {
+  for (const controller of controllers) {
+    if (controller.itemStatus === 'success' || controller.itemStatus === 'failed') {
+      continue
+    }
+    controller.itemStatus = 'failed'
+    controller.failureReason = reason
+    controller.failureMessage = message
+  }
+}
+
+function updateExecutionProgress(
+  toolCallId: string | undefined,
+  controllers: ReadMediaItemController[],
+): void {
+  if (!toolCallId) return
+
+  const completedCount = controllers.filter((item) => item.itemStatus === 'success').length
+  const failedCount = controllers.filter((item) => item.itemStatus === 'failed').length
+  const pendingCount = controllers.length - completedCount - failedCount
+
+  let message = `已完成 ${completedCount}/${controllers.length} 个素材读取`
+  if (pendingCount > 0) {
+    message = `正在索引并读取素材（${completedCount} 成功 / ${failedCount} 失败 / ${pendingCount} 进行中）`
+  }
+
+  updateExecutionState(toolCallId, {
+    completedCount,
+    failedCount,
+    message,
+  })
+}
+
+function createWaitPromise(
+  context: ReadMediaToolContext,
+  mediaId: string,
+  controller: ReadMediaItemController,
+  onSettled?: () => void,
+): Promise<void> {
+  return context.ensureMediaIndexing(mediaId)
+    .then(() => {
+      controller.waitError = undefined
+    })
+    .catch((error) => {
+      controller.waitError = error instanceof Error ? error.message : String(error)
+    })
+    .finally(() => {
+      onSettled?.()
+    })
+}
+
+function refreshControllers(
+  controllers: ReadMediaItemController[],
+  fields: ReadMediaField[],
+  context: ReadMediaToolContext,
+  onWaitSettled?: () => void,
+): void {
+  for (const controller of controllers) {
+    if (controller.itemStatus === 'success' || controller.itemStatus === 'failed') {
+      continue
+    }
+
+    const { mediaItem, suggestedItem } = context.resolveMediaRequest(controller.requestedId)
+    if (!mediaItem) {
+      controller.itemStatus = 'failed'
+      controller.failureReason = 'not_found'
+      controller.suggestedId = suggestedItem?.id
+      controller.failureMessage = suggestedItem
+        ? `未找到素材，建议使用完整 ID ${suggestedItem.id}`
+        : '未找到素材'
+      continue
+    }
+
+    if (isMediaResolved(mediaItem, fields)) {
+      controller.itemStatus = 'success'
+      continue
+    }
+
+    const indexStatus = getIndexStatus(mediaItem)
+    if (indexStatus === 'failed') {
+      controller.itemStatus = 'failed'
+      controller.failureReason = 'indexing_failed'
+      controller.failureMessage = controller.waitError || '素材索引失败'
+      continue
+    }
+
+    const needsIndex = fields.some(
+      (field) =>
+        fieldNeedsIndex(field)
+        && fieldSupported(mediaItem, field)
+        && !isIndexedFieldReady(mediaItem, field),
+    )
+
+    if (!needsIndex) {
+      controller.itemStatus = 'success'
+      continue
+    }
+
+    if (!controller.waitStarted) {
+      controller.waitStarted = true
+      controller.waitPromise = createWaitPromise(
+        context,
+        mediaItem.id,
+        controller,
+        onWaitSettled,
+      )
+    }
+  }
+}
+
+function hasPendingControllers(controllers: ReadMediaItemController[]): boolean {
+  return controllers.some((item) => item.itemStatus === 'pending')
+}
+
+function isRelevantResourceEvent(event: ResourceEvent, mediaIds: Set<string>): boolean {
+  const key = event.node.key
+  return Array.from(mediaIds).some((mediaId) => key === mediaId || key.startsWith(`${mediaId}:`))
+}
+
+async function waitForControllersToSettle(params: {
+  controllers: ReadMediaItemController[]
+  fields: ReadMediaField[]
+  context: ReadMediaToolContext
+  toolCallId?: string
+  deadline: number
+  isCancelled: () => boolean
+  getWakeWaiting: () => (() => void) | null
+  setWakeWaiting: (wake: (() => void) | null) => void
+}): Promise<'event' | 'cancelled' | 'timeout'> {
+  const {
+    controllers,
+    fields,
+    context,
+    toolCallId,
+    deadline,
+    isCancelled,
+    getWakeWaiting,
+    setWakeWaiting,
+  } = params
+
+  refreshControllers(
+    controllers,
+    fields,
+    context,
+    () => {
+      const wake = getWakeWaiting()
+      wake?.()
+    },
+  )
+
+  updateExecutionProgress(toolCallId, controllers)
+
+  if (!hasPendingControllers(controllers)) {
+    return Promise.resolve('event')
+  }
+
+  if (isCancelled()) {
+    return Promise.resolve('cancelled')
+  }
+
+  const remainingMs = deadline - Date.now()
+  if (remainingMs <= 0) {
+    return Promise.resolve('timeout')
+  }
+
+  return waitForRelevantReadMediaSignal({
+    controllers,
+    context,
+    remainingMs,
+    isCancelled,
+    setWakeWaiting,
+  })
+}
+
+function waitForRelevantReadMediaSignal(params: {
+  controllers: ReadMediaItemController[]
+  context: ReadMediaToolContext
+  remainingMs: number
+  isCancelled: () => boolean
+  setWakeWaiting: (wake: (() => void) | null) => void
+}): Promise<'event' | 'cancelled' | 'timeout'> {
+  const {
+    controllers,
+    context,
+    remainingMs,
+    isCancelled,
+    setWakeWaiting,
+  } = params
+
+  return new Promise((resolve) => {
+    let settled = false
+    const finish = (reason: 'event' | 'cancelled' | 'timeout') => {
+      if (settled) return
+      settled = true
+      cleanup()
+      resolve(reason)
+    }
+
+    const mediaIdSet = new Set(
+      controllers
+        .filter((item) => item.itemStatus === 'pending')
+        .map((item) => item.requestedId),
+    )
+
+    const unsubscribe = context.onJobResourceEvent((event) => {
+      if (isCancelled()) {
+        finish('cancelled')
+        return
+      }
+      if (isRelevantResourceEvent(event, mediaIdSet)) {
+        finish('event')
+      }
+    })
+
+    const timerId = setTimeout(() => {
+      finish(isCancelled() ? 'cancelled' : 'timeout')
+    }, remainingMs)
+
+    const wake = () => finish(isCancelled() ? 'cancelled' : 'event')
+    setWakeWaiting(wake)
+
+    const cleanup = () => {
+      clearTimeout(timerId)
+      unsubscribe()
+      setWakeWaiting(null)
+    }
+  })
+}
+
+/**
+ * read_media 工具执行函数
+ */
+export async function executeReadMedia(
+  args: Record<string, any>,
+  context?: ToolExecutionContext,
+): Promise<string> {
+  const mediaIds = normalizeMediaIds(args.mediaIds)
+  const fields = normalizeFields(args.fields)
+  const unifiedStore = useUnifiedStore()
+  const readMediaContext: ReadMediaToolContext = {
+    resolveMediaRequest: (mediaId) =>
+      getMediaItemOrSuggestion(mediaId, unifiedStore.mediaItems || []),
+    ensureMediaIndexing: (mediaId) => unifiedStore.ensureMediaIndexing(mediaId),
+    onJobResourceEvent: (listener) => unifiedStore.jobRuntime.onResourceEvent(listener),
+  }
+  const toolCallId = context?.toolCallId
+  const controllers: ReadMediaItemController[] = mediaIds.map((mediaId) => ({
+    requestedId: mediaId,
+    itemStatus: 'pending',
+    waitStarted: false,
+  }))
+
+  let cancelled = false
+  let wakeWaiting: (() => void) | null = null
+
+  if (toolCallId) {
+    startExecutionState(toolCallId, mediaIds, fields)
+    registerCancellationHook(toolCallId, () => {
+      cancelled = true
+      updateExecutionState(toolCallId, {
+        cancelled: true,
+        canCancel: false,
+        message: '正在停止等待索引…',
+      })
+      wakeWaiting?.()
+    })
+  }
+
+  const deadline = Date.now() + MAX_WAIT_MS
+
+  try {
+    while (true) {
+      const waitReason = await waitForControllersToSettle({
+        controllers,
+        fields,
+        context: readMediaContext,
+        toolCallId,
+        deadline,
+        isCancelled: () => cancelled,
+        getWakeWaiting: () => wakeWaiting,
+        setWakeWaiting: (wake) => {
+          wakeWaiting = wake
+        },
+      })
+
+      if (!hasPendingControllers(controllers)) {
+        break
+      }
+
+      if (waitReason === 'cancelled') {
+        markFailures(
+          controllers,
+          'user_cancelled_before_completed',
+          '用户取消了本次素材读取',
+        )
+        break
+      }
+
+      if (waitReason === 'timeout') {
+        markFailures(
+          controllers,
+          'indexing_timeout',
+          '等待素材索引超时',
+        )
+        break
+      }
+    }
+
+    const result = buildResultXml(
+      controllers,
+      fields,
+      readMediaContext,
+      cancelled,
+    )
+
+    if (toolCallId) {
+      updateExecutionState(toolCallId, {
+        active: false,
+        canCancel: false,
+        message: cancelled ? '素材读取已停止' : '素材读取完成',
+      })
+    }
+    return result
+  } finally {
+    if (toolCallId) {
+      finishExecutionState(toolCallId)
+    }
+  }
+}
 
 /**
  * 工具定义 - 供注册使用
  */
 export const readMediaTool: ToolDefinition = {
   name: 'read_media',
-  execute: executeReadMedia
+  execute: executeReadMedia,
 } as ToolDefinition

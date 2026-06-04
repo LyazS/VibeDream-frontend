@@ -4,8 +4,20 @@
       <div class="status-dot"></div>
       <component :is="IconComponents.TOOLS_FILL" size="16px" class="tool-icon" />
       <div class="tool-title-group">
-        <span class="tool-title">{{ displayName }}</span>
+        <div class="tool-title-stack">
+          <span class="tool-title">{{ displayName }}</span>
+        </div>
       </div>
+      <button
+        v-if="canCancelReadMedia"
+        type="button"
+        class="tool-stop-button"
+        :title="t('aiPanel.toolsState.stop')"
+        :aria-label="t('aiPanel.toolsState.stop')"
+        @click.stop="handleCancelReadMedia"
+      >
+        <component :is="IconComponents.STOP" size="12px" />
+      </button>
       <component
         :is="isExpanded ? IconComponents.DROPDOWN : IconComponents.NEXT_KEYFRAME"
         size="14px"
@@ -13,7 +25,18 @@
       />
     </div>
 
+    <div v-if="readMediaExecutionState" class="tool-progress">
+      <div class="tool-progress-track">
+        <div
+          class="tool-progress-fill"
+          :class="{ 'tool-progress-fill--active': readMediaExecutionState.active }"
+          :style="{ width: `${readMediaProgressPercent}%` }"
+        ></div>
+      </div>
+    </div>
+
     <div v-if="isExpanded" class="tool-params-expanded">
+      <ReadMediaRuntimeCard v-if="readMediaExecutionState" :state="readMediaExecutionState" />
       <div
         v-if="isEditSdkTool && editSdkScript"
         class="markdown-body"
@@ -30,6 +53,11 @@ import 'github-markdown-css/github-markdown.css'
 import { useAppI18n } from '@/core/composables/useI18n'
 import { IconComponents } from '@/constants/iconComponents'
 import type { ToolCallPart } from '../types'
+import ReadMediaRuntimeCard from './ReadMediaRuntimeCard.vue'
+import {
+  cancelReadMediaExecution,
+  useReadMediaExecutionState,
+} from '../composables/tools/readMedia'
 
 const props = defineProps<{
   item: ToolCallPart
@@ -45,6 +73,25 @@ const renderMarkdown = inject<(content: string) => string>(
 
 const isEditSdkTool = computed(() => props.item.tool_name === 'edit_sdk')
 const formattedArgs = computed(() => JSON.stringify(props.item.args || {}, null, 2))
+const readMediaExecutionState = useReadMediaExecutionState(props.item.tool_call_id)
+const canCancelReadMedia = computed(
+  () =>
+    props.item.tool_name === 'read_media'
+    && !!readMediaExecutionState.value?.active
+    && !!readMediaExecutionState.value?.canCancel,
+)
+const readMediaProgressPercent = computed(() => {
+  const state = readMediaExecutionState.value
+  if (!state || state.totalCount <= 0) return 0
+
+  const resolvedCount = state.completedCount + state.failedCount
+  const ratio = resolvedCount / state.totalCount
+  if (!state.active) {
+    return Math.max(0, Math.min(100, ratio * 100 || 100))
+  }
+
+  return Math.max(12, Math.min(92, ratio * 100))
+})
 
 const editSdkScript = computed(() => {
   if (!isEditSdkTool.value) return ''
@@ -59,6 +106,10 @@ const displayName = computed(() => {
 
 const toggleExpand = () => {
   isExpanded.value = !isExpanded.value
+}
+
+const handleCancelReadMedia = async () => {
+  await cancelReadMediaExecution(props.item.tool_call_id)
 }
 </script>
 
@@ -111,6 +162,64 @@ const toggleExpand = () => {
   display: flex;
   flex: 1;
   min-width: 0;
+}
+
+.tool-title-stack {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+}
+
+.tool-stop-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  border: 1px solid rgba(239, 68, 68, 0.35);
+  background: rgba(239, 68, 68, 0.12);
+  color: #fca5a5;
+  border-radius: 999px;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  cursor: pointer;
+}
+
+.tool-stop-button:hover {
+  background: rgba(239, 68, 68, 0.18);
+}
+
+.tool-progress {
+  margin-top: 8px;
+}
+
+.tool-progress-track {
+  width: 100%;
+  height: 4px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  overflow: hidden;
+}
+
+.tool-progress-fill {
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, rgba(16, 185, 129, 0.75) 0%, rgba(52, 211, 153, 1) 100%);
+  transition: width 0.25s ease;
+}
+
+.tool-progress-fill--active {
+  background-size: 200% 100%;
+  animation: tool-progress-pulse 1.4s linear infinite;
+}
+
+@keyframes tool-progress-pulse {
+  from {
+    background-position: 200% 0;
+  }
+  to {
+    background-position: 0 0;
+  }
 }
 
 .expand-icon {

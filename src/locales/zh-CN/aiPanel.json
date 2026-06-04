@@ -12,6 +12,15 @@
       "edit_sdk": "剪辑操作",
       "search_media": "检索素材"
     },
+    "toolsState": {
+      "stop": "停止",
+      "indexing": "索引中",
+      "running": "运行中",
+      "finished": "已完成",
+      "completed": "成功 {count}",
+      "failed": "失败 {count}",
+      "cancelled": "已取消"
+    },
     "interaction": {
       "submitCustom": "提交",
       "customPlaceholder": "其他，请输入你的自定义回复",

@@ -12,6 +12,15 @@
       "edit_sdk": "Edit Operation",
       "search_media": "Search Media"
     },
+    "toolsState": {
+      "stop": "Stop",
+      "indexing": "Indexing",
+      "running": "Running",
+      "finished": "Finished",
+      "completed": "Completed {count}",
+      "failed": "Failed {count}",
+      "cancelled": "Cancelled"
+    },
     "interaction": {
       "submitCustom": "Submit",
       "customPlaceholder": "Other, enter a custom response",
