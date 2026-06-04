@@ -2,15 +2,15 @@
   <div class="tool-runtime-card">
     <div class="tool-runtime-header">
       <span class="tool-runtime-status">
-        {{ t('aiPanel.toolsState.indexing') }}
+        {{ statusText }}
       </span>
       <span class="tool-runtime-count">
-        {{ resolvedCount }}/{{ state.totalCount }}
+        {{ progressText }}
       </span>
     </div>
     <div class="tool-runtime-meta">
-      <span>{{ t('aiPanel.toolsState.completed', { count: state.completedCount }) }}</span>
-      <span>{{ t('aiPanel.toolsState.failed', { count: state.failedCount }) }}</span>
+      <span>{{ t('aiPanel.toolsState.completed', { count: successCount }) }}</span>
+      <span>{{ t('aiPanel.toolsState.failed', { count: props.state.indexingFailedCount }) }}</span>
     </div>
   </div>
 </template>
@@ -18,15 +18,25 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useAppI18n } from '@/core/composables/useI18n'
-import type { ReadMediaExecutionState } from '../composables/tools/readMedia'
+import type { IndexingRuntimeState } from '../composables/tools/indexingRuntime'
 
 const props = defineProps<{
-  state: ReadMediaExecutionState
+  state: IndexingRuntimeState
 }>()
 
 const { t } = useAppI18n()
 
-const resolvedCount = computed(() => props.state.completedCount + props.state.failedCount)
+const successCount = computed(() =>
+  Math.max(props.state.indexingResolvedCount - props.state.indexingFailedCount, 0),
+)
+
+const statusText = computed(() =>
+  t(props.state.indexingStatus.key, props.state.indexingStatus.params || {}),
+)
+
+const progressText = computed(() => {
+  return `${props.state.indexingResolvedCount}/${props.state.indexingTotalCount}`
+})
 </script>
 
 <style scoped>

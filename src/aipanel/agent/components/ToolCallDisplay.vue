@@ -25,18 +25,18 @@
       />
     </div>
 
-    <div v-if="readMediaExecutionState" class="tool-progress">
+    <div v-if="progressState" class="tool-progress">
       <div class="tool-progress-track">
         <div
           class="tool-progress-fill"
-          :class="{ 'tool-progress-fill--active': readMediaExecutionState.active }"
-          :style="{ width: `${readMediaProgressPercent}%` }"
+          :class="{ 'tool-progress-fill--active': progressState.active }"
+          :style="{ width: `${progressPercent}%` }"
         ></div>
       </div>
     </div>
 
     <div v-if="isExpanded" class="tool-params-expanded">
-      <ReadMediaRuntimeCard v-if="readMediaExecutionState" :state="readMediaExecutionState" />
+      <IndexingRuntimeCard v-if="progressState" :state="progressState" />
       <div
         v-if="isEditSdkTool && editSdkScript"
         class="markdown-body"
@@ -53,11 +53,14 @@ import 'github-markdown-css/github-markdown.css'
 import { useAppI18n } from '@/core/composables/useI18n'
 import { IconComponents } from '@/constants/iconComponents'
 import type { ToolCallPart } from '../types'
-import ReadMediaRuntimeCard from './ReadMediaRuntimeCard.vue'
+import IndexingRuntimeCard from './IndexingRuntimeCard.vue'
 import {
   cancelReadMediaExecution,
   useReadMediaExecutionState,
 } from '../composables/tools/readMedia'
+import {
+  useSearchMediaExecutionState,
+} from '../composables/tools/searchMedia'
 
 const props = defineProps<{
   item: ToolCallPart
@@ -74,23 +77,49 @@ const renderMarkdown = inject<(content: string) => string>(
 const isEditSdkTool = computed(() => props.item.tool_name === 'edit_sdk')
 const formattedArgs = computed(() => JSON.stringify(props.item.args || {}, null, 2))
 const readMediaExecutionState = useReadMediaExecutionState(props.item.tool_call_id)
+const searchMediaExecutionState = useSearchMediaExecutionState(props.item.tool_call_id)
+const progressState = computed(() => readMediaExecutionState.value ?? searchMediaExecutionState.value)
+
 const canCancelReadMedia = computed(
   () =>
     props.item.tool_name === 'read_media'
     && !!readMediaExecutionState.value?.active
     && !!readMediaExecutionState.value?.canCancel,
 )
-const readMediaProgressPercent = computed(() => {
-  const state = readMediaExecutionState.value
-  if (!state || state.totalCount <= 0) return 0
+const progressPercent = computed(() => {
+  const readState = readMediaExecutionState.value
+  if (readState) {
+    if (readState.totalCount <= 0) return 0
+    const resolvedCount = readState.completedCount + readState.failedCount
+    const ratio = resolvedCount / readState.totalCount
+    if (!readState.active) {
+      return Math.max(0, Math.min(100, ratio * 100 || 100))
+    }
 
-  const resolvedCount = state.completedCount + state.failedCount
-  const ratio = resolvedCount / state.totalCount
-  if (!state.active) {
-    return Math.max(0, Math.min(100, ratio * 100 || 100))
+    return Math.max(12, Math.min(92, ratio * 100))
   }
 
-  return Math.max(12, Math.min(92, ratio * 100))
+  const searchState = searchMediaExecutionState.value
+  if (searchState) {
+    if (searchState.currentStage === 'indexing' && searchState.indexingTotalCount > 0) {
+      const ratio = searchState.indexingResolvedCount / searchState.indexingTotalCount
+      if (!searchState.active) {
+        return Math.max(0, Math.min(100, ratio * 100 || 100))
+      }
+
+      return Math.max(12, Math.min(92, ratio * 100))
+    }
+
+    if (searchState.totalSteps <= 0) return 0
+    const ratio = searchState.completedSteps / searchState.totalSteps
+    if (!searchState.active) {
+      return Math.max(0, Math.min(100, ratio * 100 || 100))
+    }
+
+    return Math.max(12, Math.min(92, ratio * 100))
+  }
+
+  return 0
 })
 
 const editSdkScript = computed(() => {

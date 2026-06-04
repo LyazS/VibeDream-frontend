@@ -6,7 +6,6 @@
       </template>
       <n-tab name="ai-generate" :tab="t('aiPanel.aiGenerate')"> </n-tab>
       <n-tab name="agent" :tab="t('aiPanel.agent')"> </n-tab>
-      <n-tab name="media-index" :tab="t('aiPanel.mediaIndex')"> </n-tab>
       <n-tab v-if="unifiedStore.canShowCharacterEditor" name="character-editor" :tab="t('aiPanel.characterEditor')"> </n-tab>
       <template #suffix>
         <div class="header-buttons">
@@ -36,9 +35,6 @@
     <div v-show="unifiedStore.aiPanelActiveTab === 'agent'" style="flex: 1; display: flex; flex-direction: column; overflow: hidden;">
       <AgentPanel v-model:showHistory="showHistory" />
     </div>
-    <div v-show="unifiedStore.aiPanelActiveTab === 'media-index'" style="flex: 1; display: flex; flex-direction: column; overflow: hidden;">
-      <MediaIndexPanel />
-    </div>
     <div v-show="unifiedStore.aiPanelActiveTab === 'character-editor'" style="flex: 1; display: flex; flex-direction: column; overflow: hidden;">
       <CharacterEditor />
     </div>
@@ -53,7 +49,6 @@ import HoverButton from '@/components/base/HoverButton.vue'
 import AgentPanel from './agent/components/AgentPanel.vue'
 import GeneratePanel from './aigenerate/GeneratePanel.vue'
 import CharacterEditor from './character/CharacterEditor.vue'
-import MediaIndexPanel from './mediaindex/MediaIndexPanel.vue'
 import { useAppI18n } from '@/core/composables/useI18n'
 import { useUnifiedStore } from '@/core/unifiedStore'
 import { SESSION_MANAGER } from '@/aipanel/agent/services'

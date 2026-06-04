@@ -2,7 +2,7 @@ import { DashScopeTemporaryFileUploader } from '@/core/utils/dashscopeTemporaryF
 import { exportTimelineItem, exportMediaItem } from '@/core/utils/mediaExporter'
 import { timecodeToFrames } from '@/core/utils/timeUtils'
 import { fetchClient } from '@/utils/fetchClient'
-import type { UnifiedMediaItemData } from '@/core/mediaitem/types'
+import type { MediaIndexStatus, UnifiedMediaItemData } from '@/core/mediaitem/types'
 import type { UnifiedTimelineItemData } from '@/core/timelineitem/type'
 import { DEFAULT_BLEND_MODE } from '@/core/timelineitem'
 import { createDefaultMaskConfig } from '@/core/timelineitem/mask'
@@ -12,6 +12,7 @@ import { ThumbnailMode } from '@/constants/ThumbnailConstants'
 
 const RETRIEVAL_TOP_K = 30
 const RERANK_TOP_K = 10
+const RERANK_SCORE_THRESHOLD = 0.55
 const SEARCH_TOP_K_MIN = 1
 const SEARCH_TOP_K_MAX = 10
 const SEARCH_VIDEO_EXPORT_MAX_SIDE = 480
@@ -101,6 +102,8 @@ export interface ValidationResultItem {
   reason: string
   model: string
 }
+
+export type SearchMediaStage = 'indexing' | 'retrieval' | 'rerank' | 'validate'
 
 export interface ReconcileMediaIndexingResult {
   project_id: string
@@ -552,9 +555,12 @@ interface SearchMediaParams {
   query: string
   projectId?: string | null
   getMediaItem: (id: string) => UnifiedMediaItemData | undefined
+  mediaItems: UnifiedMediaItemData[]
+  ensureMediaIndexing: (id: string) => Promise<unknown>
   t: (key: string, params?: Record<string, unknown>) => string
-  enableValidation?: boolean
   topK?: number
+  onProgress?: (stage: SearchMediaStage, completedSteps: number, totalSteps: number) => void
+  onIndexingProgress?: (resolvedCount: number, totalCount: number, failedCount: number) => void
 }
 
 interface SearchMediaResult {
@@ -573,15 +579,76 @@ function normalizeSearchTopK(value: number | undefined): number {
   return normalized
 }
 
+function isSearchIndexReady(status: MediaIndexStatus | undefined): boolean {
+  return status === 'completed' || status === 'partial_failed'
+}
+
+async function ensureSearchMediaIndexed(params: {
+  projectId: string
+  mediaItems: UnifiedMediaItemData[]
+  ensureMediaIndexing: (id: string) => Promise<unknown>
+  onIndexingProgress?: (resolvedCount: number, totalCount: number, failedCount: number) => void
+}): Promise<void> {
+  const { projectId, mediaItems, ensureMediaIndexing, onIndexingProgress } = params
+  const indexableItems = mediaItems.filter(
+    (item) => item.mediaType === 'video' || item.mediaType === 'image',
+  )
+
+  if (indexableItems.length === 0) {
+    return
+  }
+
+  const reconcileResult = await reconcileMediaIndexing(
+    projectId,
+    indexableItems.map((item) => item.id),
+  )
+  const remoteMissingIds = new Set(reconcileResult.unindexed_media_ids)
+  const localIncompleteIds = indexableItems
+    .filter((item) => !isSearchIndexReady(item.metadata?.indexing?.indexStatus))
+    .map((item) => item.id)
+
+  const targetIds = Array.from(new Set([...remoteMissingIds, ...localIncompleteIds]))
+  if (targetIds.length === 0) {
+    onIndexingProgress?.(0, 0, 0)
+    return
+  }
+
+  let resolvedCount = 0
+  let failedCount = 0
+  onIndexingProgress?.(0, targetIds.length, 0)
+
+  const results = await Promise.allSettled(targetIds.map(async (mediaId) => {
+    try {
+      return await ensureMediaIndexing(mediaId)
+    } catch (error) {
+      failedCount += 1
+      throw error
+    } finally {
+      resolvedCount += 1
+      onIndexingProgress?.(resolvedCount, targetIds.length, failedCount)
+    }
+  }))
+  const failures = results.filter((result) => result.status === 'rejected')
+  if (failures.length > 0) {
+    const firstFailure = failures[0]
+    const reason = firstFailure.status === 'rejected' ? firstFailure.reason : '未知错误'
+    throw new Error(`搜索前补齐素材索引失败: ${String(reason)}`)
+  }
+}
+
 export async function searchMedia({
   query,
   projectId,
   getMediaItem,
+  mediaItems,
+  ensureMediaIndexing,
   t,
-  enableValidation = true,
   topK = RERANK_TOP_K,
+  onProgress,
+  onIndexingProgress,
 }: SearchMediaParams): Promise<SearchMediaResult> {
   const normalizedTopK = normalizeSearchTopK(topK)
+  const totalSteps = 4
   const normalizedQuery = query.trim()
   if (!normalizedQuery) {
     return { results: [], error: '' }
@@ -591,34 +658,46 @@ export async function searchMedia({
     return { results: [], error: '当前项目未初始化' }
   }
 
-  const response = await fetchClient.post<{
-    results: RetrievalResultItem[]
-    total: number
-    query: string
-  }>('/api/media/retrieval', {
-    query: normalizedQuery,
-    project_id: projectId,
-    top_k: RETRIEVAL_TOP_K,
-  })
-
-  const retrievalResults = response.data?.results || []
-  if (retrievalResults.length === 0) {
-    return { results: [], error: '' }
-  }
-
-  const candidates: RerankCandidateInput[] = retrievalResults.map((result) => ({
-    pointId: result.point_id,
-    mediaItemId: result.media_item_id,
-    mediaKind: result.media_kind,
-    segment: result.segment,
-  }))
-
-  const prepared = await prepareRerankCandidates(candidates, getMediaItem)
-  if (prepared.length === 0) {
-    return { results: retrievalResults.slice(0, normalizedTopK), error: '' }
-  }
-
   try {
+    onProgress?.('indexing', 0, totalSteps)
+    await ensureSearchMediaIndexed({
+      projectId,
+      mediaItems,
+      ensureMediaIndexing,
+      onIndexingProgress,
+    })
+    onProgress?.('indexing', 1, totalSteps)
+
+    onProgress?.('retrieval', 1, totalSteps)
+    const response = await fetchClient.post<{
+      results: RetrievalResultItem[]
+      total: number
+      query: string
+    }>('/api/media/retrieval', {
+      query: normalizedQuery,
+      project_id: projectId,
+      top_k: RETRIEVAL_TOP_K,
+    })
+
+    const retrievalResults = response.data?.results || []
+    if (retrievalResults.length === 0) {
+      return { results: [], error: '' }
+    }
+    onProgress?.('retrieval', 2, totalSteps)
+
+    const candidates: RerankCandidateInput[] = retrievalResults.map((result) => ({
+      pointId: result.point_id,
+      mediaItemId: result.media_item_id,
+      mediaKind: result.media_kind,
+      segment: result.segment,
+    }))
+
+    const prepared = await prepareRerankCandidates(candidates, getMediaItem)
+    if (prepared.length === 0) {
+      return { results: [], error: t('aiPanel.search.rerankFailed') }
+    }
+
+    onProgress?.('rerank', 2, totalSteps)
     const rerankResults = await callRerankApi(
       normalizedQuery,
       projectId,
@@ -627,7 +706,7 @@ export async function searchMedia({
     )
 
     if (rerankResults.length === 0) {
-      return { results: retrievalResults.slice(0, normalizedTopK), error: '' }
+      return { results: [], error: t('aiPanel.search.rerankFailed') }
     }
 
     const scoreMap = new Map(rerankResults.map((result) => [result.point_id, result.rerank_score]))
@@ -638,11 +717,13 @@ export async function searchMedia({
         rerank_score: scoreMap.get(result.point_id)!,
         score: scoreMap.get(result.point_id)!,
       }))
+      .filter((result) => result.score >= RERANK_SCORE_THRESHOLD)
       .sort((a, b) => b.score - a.score)
 
-    if (!enableValidation) {
-      return { results: reranked, error: '' }
+    if (reranked.length === 0) {
+      return { results: [], error: '' }
     }
+    onProgress?.('rerank', 3, totalSteps)
 
     const validateCandidates: ValidationCandidateInput[] = reranked.map((result) => ({
       pointId: result.point_id,
@@ -654,39 +735,37 @@ export async function searchMedia({
     }))
     const preparedValidationCandidates = await prepareValidateCandidates(validateCandidates, getMediaItem)
     if (preparedValidationCandidates.length === 0) {
-      return {
-        results: reranked,
-        error: t('aiPanel.search.validationPrepareFailed'),
-      }
+      return { results: [], error: t('aiPanel.search.validationPrepareFailed') }
     }
 
-    try {
-      const validationResults = await callValidateApi(
-        normalizedQuery,
-        projectId,
-        preparedValidationCandidates,
-        normalizedTopK,
-      )
-      const validationMap = new Map(validationResults.map((result) => [result.point_id, result]))
-      return {
-        results: reranked.map((result) => ({
-          ...result,
-          validation_result: validationMap.get(result.point_id),
-        })),
-        error: '',
-      }
-    } catch (error) {
-      console.warn('VLM 校验失败，保留 rerank 结果:', error)
-      return {
-        results: reranked,
-        error: t('aiPanel.search.validationFailed'),
-      }
+    onProgress?.('validate', 3, totalSteps)
+    const validationResults = await callValidateApi(
+      normalizedQuery,
+      projectId,
+      preparedValidationCandidates,
+      normalizedTopK,
+    )
+    const validationMap = new Map(validationResults.map((result) => [result.point_id, result]))
+    if (
+      validationResults.length !== reranked.length
+      || reranked.some((result) => !validationMap.has(result.point_id))
+    ) {
+      return { results: [], error: t('aiPanel.search.validationFailed') }
+    }
+    onProgress?.('validate', 4, totalSteps)
+
+    return {
+      results: reranked.map((result) => ({
+        ...result,
+        validation_result: validationMap.get(result.point_id)!,
+      })),
+      error: '',
     }
   } catch (error) {
-    console.warn('Rerank 失败，回退到原始召回结果:', error)
+    console.warn('素材检索失败:', error)
     return {
-      results: retrievalResults.slice(0, normalizedTopK),
-      error: t('aiPanel.search.rerankFailed'),
+      results: [],
+      error: error instanceof Error ? error.message : String(error),
     }
   }
 }

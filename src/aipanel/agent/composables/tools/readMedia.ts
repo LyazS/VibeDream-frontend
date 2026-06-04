@@ -15,6 +15,11 @@ import type {
   UnifiedVideoMediaIndexMetadata,
 } from '@/core/mediaitem/types'
 import type { ToolDefinition, ToolExecutionContext } from '../core/toolTypes'
+import {
+  buildIndexingStatusMessage,
+  createRuntimeI18nMessage,
+  type IndexingRuntimeState,
+} from './indexingRuntime'
 
 const MAX_MEDIA_IDS = 10
 const MAX_WAIT_MS = 30 * 60 * 1000
@@ -39,7 +44,7 @@ interface ReadMediaToolContext {
 
 const SUPPORTED_FIELDS = new Set<ReadMediaField>(['basic', 'summary', 'segments'])
 
-export interface ReadMediaExecutionState {
+export interface ReadMediaExecutionState extends IndexingRuntimeState {
   toolCallId: string
   mediaIds: string[]
   fields: ReadMediaField[]
@@ -82,10 +87,14 @@ function startExecutionState(
     totalCount: mediaIds.length,
     completedCount: 0,
     failedCount: 0,
+    indexingTotalCount: mediaIds.length,
+    indexingResolvedCount: 0,
+    indexingFailedCount: 0,
     active: true,
     canCancel: true,
     cancelled: false,
     message: '正在准备读取素材…',
+    indexingStatus: createRuntimeI18nMessage('aiPanel.toolsState.indexingPreparing'),
   }
 }
 
@@ -392,17 +401,30 @@ function updateExecutionProgress(
 
   const completedCount = controllers.filter((item) => item.itemStatus === 'success').length
   const failedCount = controllers.filter((item) => item.itemStatus === 'failed').length
-  const pendingCount = controllers.length - completedCount - failedCount
+  const resolvedCount = completedCount + failedCount
+  const pendingCount = controllers.length - resolvedCount
 
   let message = `已完成 ${completedCount}/${controllers.length} 个素材读取`
   if (pendingCount > 0) {
     message = `正在索引并读取素材（${completedCount} 成功 / ${failedCount} 失败 / ${pendingCount} 进行中）`
   }
 
+  const indexingStatus = buildIndexingStatusMessage({
+    resolvedCount,
+    totalCount: controllers.length,
+    failedCount,
+    idleKey: 'aiPanel.toolsState.indexingIdle',
+    progressKey: 'aiPanel.toolsState.indexingRunning',
+  })
+
   updateExecutionState(toolCallId, {
     completedCount,
     failedCount,
+    indexingTotalCount: controllers.length,
+    indexingResolvedCount: resolvedCount,
+    indexingFailedCount: failedCount,
     message,
+    indexingStatus,
   })
 }
 
@@ -636,6 +658,7 @@ export async function executeReadMedia(
         cancelled: true,
         canCancel: false,
         message: '正在停止等待索引…',
+        indexingStatus: createRuntimeI18nMessage('aiPanel.toolsState.indexingStopping'),
       })
       wakeWaiting?.()
     })
@@ -693,6 +716,9 @@ export async function executeReadMedia(
         active: false,
         canCancel: false,
         message: cancelled ? '素材读取已停止' : '素材读取完成',
+        indexingStatus: createRuntimeI18nMessage(
+          cancelled ? 'aiPanel.toolsState.indexingStopped' : 'aiPanel.toolsState.indexingFinished',
+        ),
       })
     }
     return result
