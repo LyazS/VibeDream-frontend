@@ -5,6 +5,15 @@
     "exportSuccess": "{name} exported successfully",
     "exportFailed": "{name} export failed: {error}",
     "libraryTitle": "Media Library",
+    "sections": {
+      "media": "Media",
+      "transition": "Transition",
+      "filter": "Filter",
+      "transitionPlaceholderTitle": "Transition Templates Are Being Planned",
+      "transitionPlaceholderDescription": "This area will host transition template browsing and filtering later. For now, phase one only sets up the section framework.",
+      "filterPlaceholderTitle": "Filter Templates Are Being Planned",
+      "filterPlaceholderDescription": "This area will host filter template browsing and filtering later. For now, phase one only sets up the section framework."
+    },
     "all": "All",
     "video": "Video",
     "audio": "Audio",

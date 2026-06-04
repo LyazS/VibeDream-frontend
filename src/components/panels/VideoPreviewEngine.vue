@@ -6,7 +6,7 @@
       <div class="preview-section" :style="{ height: previewHeight + '%' }">
         <!-- 左侧：素材库 -->
         <div class="media-library-panel" :style="{ width: leftPanelPercent + '%' }">
-          <VirtualDirectory />
+          <AssetLibraryPanel />
         </div>
 
         <!-- 左侧分割器 -->
@@ -73,7 +73,7 @@
 <script setup lang="ts">
 import { ref, computed, watch, onUnmounted, onMounted } from 'vue'
 import PreviewWindow from '@/components/panels/PreviewWindow.vue'
-import VirtualDirectory from '@/components/panels/VirtualDirectory.vue'
+import AssetLibraryPanel from '@/components/panels/AssetLibraryPanel.vue'
 import UnifiedTimeline from '@/components/timeline/UnifiedTimeline.vue'
 import UnifiedClipManagementToolbar from '@/components/timeline/UnifiedClipManagementToolbar.vue'
 import UnifiedPropertiesPanel from '@/components/panels/UnifiedPropertiesPanel.vue'

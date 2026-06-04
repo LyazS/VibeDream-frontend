@@ -25,7 +25,7 @@
         @drop="handleTabDrop($event, tab.id)"
       >
         <div class="tab-icon">
-          <component :is="IconComponents.FOLDER" size="14px" />
+          <component :is="IconComponents.FOLDER" size="18px" />
         </div>
         <div class="tab-label">{{ getDirectory(tab.dirId)?.name || '' }}</div>
         <button
@@ -210,7 +210,7 @@ async function handleTabDrop(event: DragEvent, tabId: string): Promise<void> {
   left: 0;
   top: 0;
   height: 100%;
-  width: 44px; /* 折叠状态宽度 */
+  width: 38px; /* 折叠状态宽度 */
   background-color: var(--color-bg-tertiary);
   border-right: 1px solid var(--color-border-primary);
   display: flex;
@@ -229,13 +229,13 @@ async function handleTabDrop(event: DragEvent, tabId: string): Promise<void> {
 /* 固定在底部的区域 */
 .tabs-footer {
   flex-shrink: 0;
-  padding: var(--spacing-xs) 0;
+  padding: 4px 0;
   border-top: 1px solid var(--color-border-primary);
 }
 
 /* 展开状态 */
 .library-tabs.expanded {
-  width: 150px; /* 展开宽度 */
+  width: 132px; /* 展开宽度 */
   box-shadow: 2px 0 8px rgba(0, 0, 0, 0.3);
 }
 
@@ -243,13 +243,13 @@ async function handleTabDrop(event: DragEvent, tabId: string): Promise<void> {
   display: flex;
   flex-direction: row;
   align-items: center;
-  padding: var(--spacing-xs) 8px;
-  margin: 1px 4px;
+  padding: 6px 5px;
+  margin: 1px 3px;
   border-radius: var(--border-radius-small);
   cursor: pointer;
   transition: all var(--transition-fast);
   position: relative;
-  min-height: 40px;
+  min-height: 36px;
 }
 
 .tab-item:hover {
@@ -269,9 +269,9 @@ async function handleTabDrop(event: DragEvent, tabId: string): Promise<void> {
 }
 
 .tab-label {
-  font-size: 13px;
+  font-size: 12px;
   line-height: 1.2;
-  margin-left: 8px;
+  margin-left: 6px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -314,9 +314,9 @@ async function handleTabDrop(event: DragEvent, tabId: string): Promise<void> {
   flex-direction: row;
   align-items: center;
   justify-content: center;
-  min-height: 32px;
-  margin: 4px 8px;
-  padding: 6px;
+  min-height: 30px;
+  margin: 4px 6px;
+  padding: 5px;
   border: 1px dashed var(--color-border-secondary);
   border-radius: var(--border-radius-small);
   background: transparent;
@@ -326,7 +326,7 @@ async function handleTabDrop(event: DragEvent, tabId: string): Promise<void> {
 }
 
 .add-tab-label {
-  font-size: 13px;
+  font-size: 12px;
   margin-left: 0;
   width: 0;
   opacity: 0;

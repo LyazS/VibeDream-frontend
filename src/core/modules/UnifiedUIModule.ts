@@ -6,6 +6,7 @@ import type { CharacterDirectory } from '@/core/directory/types'
 import type { FileData } from '@/core/datasource/providers/ai-generation/types'
 
 export type PropertyTabKey = 'basic' | 'transition' | 'mask' | 'filter' | 'animation'
+export type LibrarySectionKey = 'media' | 'transition' | 'filter'
 
 /**
  * 角色编辑器状态接口
@@ -28,6 +29,7 @@ export function createUnifiedUIModule(registry: ModuleRegistry): {
   // 状态
   isChatPanelVisible: Ref<boolean>
   aiPanelActiveTab: Ref<'ai-generate' | 'agent' | 'character-editor'>
+  librarySection: Ref<LibrarySectionKey>
   activePropertyTab: Ref<PropertyTabKey>
   characterEditorState: Ref<CharacterEditorState>
 
@@ -39,6 +41,7 @@ export function createUnifiedUIModule(registry: ModuleRegistry): {
 
   // AI 面板状态管理方法
   setChatPanelVisible: (visible: boolean) => void
+  setLibrarySection: (section: LibrarySectionKey) => void
   setActivePropertyTab: (tab: PropertyTabKey) => void
 
   // 角色编辑器方法
@@ -55,6 +58,9 @@ export function createUnifiedUIModule(registry: ModuleRegistry): {
 
   // AI 面板当前激活的标签页
   const aiPanelActiveTab = ref<'ai-generate' | 'agent' | 'character-editor'>('agent')
+
+  // 素材区当前激活的一级分区
+  const librarySection = ref<LibrarySectionKey>('media')
 
   // 属性面板当前激活的标签页
   const activePropertyTab = ref<PropertyTabKey>('basic')
@@ -127,6 +133,10 @@ export function createUnifiedUIModule(registry: ModuleRegistry): {
     isChatPanelVisible.value = visible
   }
 
+  function setLibrarySection(section: LibrarySectionKey): void {
+    librarySection.value = section
+  }
+
   function setActivePropertyTab(tab: PropertyTabKey): void {
     activePropertyTab.value = tab
   }
@@ -180,6 +190,7 @@ export function createUnifiedUIModule(registry: ModuleRegistry): {
     // AI 面板状态
     isChatPanelVisible,
     aiPanelActiveTab,
+    librarySection,
     activePropertyTab,
 
     // 角色编辑器状态
@@ -193,6 +204,7 @@ export function createUnifiedUIModule(registry: ModuleRegistry): {
 
     // AI 面板状态管理方法
     setChatPanelVisible,
+    setLibrarySection,
     setActivePropertyTab,
 
     // 角色编辑器方法

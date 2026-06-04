@@ -1,6 +1,8 @@
 <template>
   <div class="media-grid" :class="{ 'drag-over': isDragOver }">
+    <LibraryBreadcrumb />
     <n-scrollbar
+      class="media-grid__scrollbar"
       @dragover="handleDragOver"
       @dragleave="handleDragLeave"
       @drop="handleDrop"
@@ -292,6 +294,7 @@ import MediaPreviewModal from '@/components/modals/MediaPreviewModal.vue'
 import TransitionTemplatePickerModal from '@/components/modals/TransitionTemplatePickerModal.vue'
 import FilterTemplatePickerModal from '@/components/modals/FilterTemplatePickerModal.vue'
 import FolderIcon from '@/components/utils/FolderIcon.vue'
+import LibraryBreadcrumb from './LibraryBreadcrumb.vue'
 import type { UnifiedLibraryAssetData } from '@/core/asset/types'
 import { isEffectTemplateAsset, isMediaAsset } from '@/core/asset/types'
 import { globalMetaFileManager } from '@/core/managers/media/globalMetaFileManager'
@@ -1940,7 +1943,15 @@ async function handleBatchDelete(): Promise<void> {
 /* 媒体网格样式 */
 .media-grid {
   height: 100%;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
   transition: background-color var(--transition-fast);
+}
+
+.media-grid__scrollbar {
+  flex: 1;
+  min-height: 0;
 }
 
 .media-grid.drag-over {

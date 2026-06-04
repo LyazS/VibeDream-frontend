@@ -5,6 +5,15 @@
     "exportSuccess": "{name} 导出成功",
     "exportFailed": "{name} 导出失败: {error}",
     "libraryTitle": "素材库",
+    "sections": {
+      "media": "素材",
+      "transition": "转场",
+      "filter": "滤镜",
+      "transitionPlaceholderTitle": "转场模板区规划中",
+      "transitionPlaceholderDescription": "这里将用于承载转场模板浏览与筛选能力，当前阶段先完成分区框架。",
+      "filterPlaceholderTitle": "滤镜模板区规划中",
+      "filterPlaceholderDescription": "这里将用于承载滤镜模板浏览与筛选能力，当前阶段先完成分区框架。"
+    },
     "all": "全部",
     "video": "视频",
     "audio": "音频",

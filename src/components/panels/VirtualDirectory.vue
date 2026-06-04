@@ -1,16 +1,10 @@
 <template>
   <div class="virtual-directory-library">
-    <!-- 顶部：面包屑导航 -->
-    <div class="breadcrumb-section">
-      <LibraryBreadcrumb />
-    </div>
-
-    <!-- 下方内容区域 -->
     <div class="content-section">
       <!-- 左侧：垂直标签页（悬浮） -->
       <LibraryVerticalTabs />
 
-      <!-- 右侧：媒体网格（永远留出44px空间） -->
+      <!-- 右侧：主内容区（永远留出44px空间） -->
       <div class="media-grid-section">
         <LibraryMediaGrid />
       </div>
@@ -20,7 +14,6 @@
 
 <script setup lang="ts">
 import LibraryVerticalTabs from './LibraryVerticalTabs.vue'
-import LibraryBreadcrumb from './LibraryBreadcrumb.vue'
 import LibraryMediaGrid from './LibraryMediaGrid.vue'
 </script>
 
@@ -35,13 +28,6 @@ import LibraryMediaGrid from './LibraryMediaGrid.vue'
   position: relative;
 }
 
-/* 顶部面包屑区域样式 */
-.breadcrumb-section {
-  flex-shrink: 0;
-  padding: 0;
-  border-bottom: 1px solid var(--color-border);
-}
-
 /* 下方内容区域样式 */
 .content-section {
   flex: 1;
@@ -54,7 +40,7 @@ import LibraryMediaGrid from './LibraryMediaGrid.vue'
 /* 右侧媒体网格区域样式 */
 .media-grid-section {
   flex: 1;
-  margin-left: 44px; /* 永远为折叠宽度，展开时标签页会覆盖在上方 */
+  margin-left: 38px; /* 永远为折叠宽度，展开时标签页会覆盖在上方 */
   overflow: hidden;
 }
 </style>

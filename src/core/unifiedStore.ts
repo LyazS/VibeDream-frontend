@@ -903,6 +903,7 @@ export const useUnifiedStore = defineStore('unified', () => {
     // AI 面板状态
     isChatPanelVisible: unifiedUIModule.isChatPanelVisible,
     aiPanelActiveTab: unifiedUIModule.aiPanelActiveTab,
+    librarySection: unifiedUIModule.librarySection,
     activePropertyTab: unifiedUIModule.activePropertyTab,
 
     // 角色编辑器状态
@@ -914,6 +915,7 @@ export const useUnifiedStore = defineStore('unified', () => {
 
     // AI 面板状态管理方法
     setChatPanelVisible: unifiedUIModule.setChatPanelVisible,
+    setLibrarySection: unifiedUIModule.setLibrarySection,
     setActivePropertyTab: unifiedUIModule.setActivePropertyTab,
 
     // 角色编辑器方法
