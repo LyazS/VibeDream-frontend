@@ -117,7 +117,12 @@ const handleSend = async () => {
   textareaHeight.value = MIN_LINES * LINE_HEIGHT // 重置为最小高度(3行)
 
   // 使用 SessionManager 处理消息发送（回调函数现在是可选的）
-  await SESSION_MANAGER.handleSendMessage(message)
+  try {
+    await SESSION_MANAGER.handleSendMessage(message)
+  } catch {
+    inputMessage.value = message
+    adjustTextareaHeight()
+  }
 }
 
 // 停止当前进行中的消息

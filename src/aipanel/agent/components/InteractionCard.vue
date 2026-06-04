@@ -78,14 +78,22 @@ const customInputPlaceholder = computed(
 
 const submitOption = async (option: string) => {
   if (!isPending.value || isSending.value) return
-  await SESSION_MANAGER.submitPendingAskUserOption(option)
+  try {
+    await SESSION_MANAGER.submitPendingAskUserOption(option)
+  } catch {
+    // SessionManager already exposes the user-facing error state.
+  }
 }
 
 const submitCustomAnswer = async () => {
   if (!isPending.value || isSending.value || !customAnswer.value.trim()) return
   const answer = customAnswer.value
   customAnswer.value = ''
-  await SESSION_MANAGER.submitPendingAskUserResponse(answer)
+  try {
+    await SESSION_MANAGER.submitPendingAskUserResponse(answer)
+  } catch {
+    customAnswer.value = answer
+  }
 }
 </script>
 

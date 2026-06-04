@@ -45,6 +45,22 @@ interface SessionData {
   updatedAt: string
 }
 
+class AgentRunFailedError extends Error {
+  constructor(
+    message: string,
+    public readonly runId: string,
+    public readonly errorCode: string,
+    public readonly retryable: boolean,
+  ) {
+    super(message)
+    this.name = 'AgentRunFailedError'
+  }
+}
+
+function isAgentRunFailedError(error: unknown): error is AgentRunFailedError {
+  return error instanceof AgentRunFailedError
+}
+
 export class SessionManager {
   public currentSessionId = ref<string | null>(null)
   public messages = ref<AgentMessage[]>([])
@@ -134,6 +150,9 @@ export class SessionManager {
       await this.saveSessionToDB()
     } catch (error) {
       this.pendingUserMessage = null
+      if (isAgentRunFailedError(error) && !error.retryable) {
+        this.clearPendingInterrupt()
+      }
       this.sessionError.value = error instanceof Error ? error.message : '发送消息失败'
       throw error instanceof Error ? error : new Error('发送消息失败')
     } finally {
@@ -237,9 +256,16 @@ export class SessionManager {
         if (event.message_id) {
           this.markMessageCompleted(event.message_id)
         }
+        this.clearPendingInterrupt()
         break
       case 'run.failed':
-        throw new Error(event.detail || event.error_code || 'Agent 运行失败')
+        this.clearPendingInterrupt()
+        throw new AgentRunFailedError(
+          event.detail || event.error_code || 'Agent 运行失败',
+          event.run_id,
+          event.error_code,
+          event.retryable,
+        )
     }
   }
 
@@ -331,7 +357,11 @@ export class SessionManager {
         sessionId,
       )
     } catch (error) {
-      this.setPendingInterrupt(previousRunId, previousInterrupt)
+      if (isAgentRunFailedError(error) && !error.retryable) {
+        this.clearPendingInterrupt()
+      } else {
+        this.setPendingInterrupt(previousRunId, previousInterrupt)
+      }
       throw error
     }
   }
@@ -377,8 +407,12 @@ export class SessionManager {
         sessionId,
       )
     } catch (error) {
-      this.interactions.value = previousInteractions
-      this.setPendingInterrupt(previousRunId, previousInterrupt)
+      if (isAgentRunFailedError(error) && !error.retryable) {
+        this.clearPendingInterrupt()
+      } else {
+        this.interactions.value = previousInteractions
+        this.setPendingInterrupt(previousRunId, previousInterrupt)
+      }
       throw error
     }
   }
