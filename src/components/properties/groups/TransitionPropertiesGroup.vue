@@ -37,6 +37,7 @@
 import { computed } from 'vue'
 import TimecodeInput from '@/components/base/TimecodeInput.vue'
 import { useAppI18n } from '@/core/composables/useI18n'
+import { effectTemplateRegistry } from '@/core/effect-template/EffectTemplateRegistry'
 import { useUnifiedStore } from '@/core/unifiedStore'
 import type { UnifiedTimelineItemData } from '@/core/timelineitem/type'
 import { normalizeClipTransitionOutConfig } from '@/core/timelineitem/transition'
@@ -56,9 +57,13 @@ const transitionConfig = computed(() =>
 const transitionRuntime = computed(() => props.selectedTimelineItem?.runtime.transition)
 
 const transitionTemplateName = computed(() => {
-  const assetId = transitionConfig.value.assetId
-  if (!assetId) return '-'
-  return unifiedStore.getAsset(assetId)?.name || assetId
+  const effectPackageId = transitionConfig.value.effectPackageId
+  if (!effectPackageId) return '-'
+  return effectTemplateRegistry.getPackageState(effectPackageId)?.meta?.name.zh
+    || effectTemplateRegistry.getPackageState(effectPackageId)?.meta?.name.en
+    || transitionConfig.value.packagePayload.manifestSnapshot.name.zh
+    || transitionConfig.value.packagePayload.manifestSnapshot.name.en
+    || effectPackageId
 })
 
 const boundRightItemName = computed(() => {

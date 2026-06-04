@@ -15,6 +15,7 @@ export type EffectType = 'transition' | 'filter' | 'animation'
 export interface BaseEffectTemplateSourceData {
   type: 'effect-template'
   templateId: string
+  packageVersion?: string
   catalogVersion?: string
 }
 
@@ -66,12 +67,14 @@ export function createEffectTemplateSourceData(): EffectTemplateSourceData {
 
 export function createEffectTemplateSourceDataFromTemplate(
   templateId: string,
+  packageVersion?: string,
   catalogVersion?: string,
   sourceOrigin: SourceOrigin = SourceOrigin.USER_CREATE,
 ): EffectTemplateSourceData {
   return reactive({
     type: 'effect-template' as const,
     templateId,
+    ...(packageVersion ? { packageVersion } : {}),
     ...(catalogVersion ? { catalogVersion } : {}),
     ...RuntimeStateFactory.createRuntimeState(sourceOrigin),
   }) as EffectTemplateSourceData
@@ -83,6 +86,7 @@ export function extractEffectTemplateSourceData(
   return {
     type: 'effect-template',
     templateId: source.templateId,
+    ...(source.packageVersion ? { packageVersion: source.packageVersion } : {}),
     ...(source.catalogVersion ? { catalogVersion: source.catalogVersion } : {}),
   }
 }
@@ -108,6 +112,7 @@ function createEffectTemplateAssetData(
     effectType,
     source: createEffectTemplateSourceDataFromTemplate(
       payload?.packageId ?? options?.source?.templateId ?? id,
+      options?.source?.packageVersion,
       options?.source?.catalogVersion,
       SourceOrigin.PROJECT_LOAD,
     ),

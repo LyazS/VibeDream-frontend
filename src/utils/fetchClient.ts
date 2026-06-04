@@ -249,13 +249,16 @@ export class FetchClient {
     data?: unknown,
     config: RequestConfig = {},
   ): Promise<void> {
-    const fullUrl = this.buildURL(url)
+    const fullUrl = this.buildURL(url, config.params)
     const headers: Record<string, string> = { ...this.defaultHeaders, ...config.headers }
 
     // 流式请求使用application/x-ndjson接受类型
     headers['Accept'] = 'application/x-ndjson'
 
+    const { params: _params, timeout: _timeout, isRetry: _isRetry, responseType: _responseType, ...requestInit } = config
+
     const response = await fetch(fullUrl, {
+      ...requestInit,
       method,
       headers,
       body: data ? JSON.stringify(data) : undefined,
@@ -388,7 +391,7 @@ export class FetchClient {
    * 通用的请求方法
    */
   private async request<T = unknown>(url: string, config: RequestConfig): Promise<ApiResponse<T>> {
-    const fullUrl = this.buildURL(url)
+    const fullUrl = this.buildURL(url, config.params)
     const headers = { ...this.defaultHeaders, ...config.headers }
 
     // 创建中止控制器（如果提供了超时）
@@ -403,8 +406,9 @@ export class FetchClient {
     }
 
     try {
+      const { params: _params, timeout: _timeout, isRetry: _isRetry, responseType: _responseType, ...requestInit } = config
       const response = await fetch(fullUrl, {
-        ...config,
+        ...requestInit,
         headers,
         signal: config.signal || abortController?.signal,
       })
@@ -476,11 +480,24 @@ export class FetchClient {
   /**
    * 构建完整的URL
    */
-  private buildURL(url: string): string {
-    if (url.startsWith('http')) {
-      return url
+  private buildURL(
+    url: string,
+    params?: Record<string, string | number | boolean | null | undefined>,
+  ): string {
+    const fullUrl = url.startsWith('http') ? url : `${this.baseURL}${url}`
+    if (!params) {
+      return fullUrl
     }
-    return `${this.baseURL}${url}`
+
+    const targetUrl = new URL(fullUrl, window.location.origin)
+    for (const [key, value] of Object.entries(params)) {
+      if (value === undefined || value === null) {
+        continue
+      }
+      targetUrl.searchParams.set(key, String(value))
+    }
+
+    return targetUrl.toString()
   }
 }
 

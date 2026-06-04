@@ -1,3 +1,4 @@
+import { toPackageVersionPathSegment } from '@/core/effect-template/commonTypes'
 import type { ParsedPath } from './types'
 
 /**
@@ -6,6 +7,9 @@ import type { ParsedPath } from './types'
  */
 export class PathResolver {
   private readonly PROJECTS_DIR = 'projects'
+  private readonly COMMON_EFFECTS_DIR = 'common_effects'
+  private readonly EFFECT_CATALOGS_DIR = 'catalogs'
+  private readonly EFFECT_PACKAGES_DIR = 'packages'
   private readonly MEDIA_DIR = 'media'
   private readonly THUMBNAILS_DIR = 'thumbnails'
 
@@ -67,6 +71,47 @@ export class PathResolver {
    */
   getProjectPath(projectId: string): string {
     return this.join(this.PROJECTS_DIR, projectId)
+  }
+
+  getCommonEffectsDirPath(): string {
+    return this.COMMON_EFFECTS_DIR
+  }
+
+  getEffectCatalogDirPath(): string {
+    return this.join(this.getCommonEffectsDirPath(), this.EFFECT_CATALOGS_DIR)
+  }
+
+  getEffectCatalogPath(effectType: 'transition' | 'filter'): string {
+    return this.join(this.getEffectCatalogDirPath(), `${effectType}.json`)
+  }
+
+  getEffectIndexPath(): string {
+    return this.join(this.getCommonEffectsDirPath(), 'index.json')
+  }
+
+  getEffectPackageDirPath(
+    effectType: 'transition' | 'filter',
+    templateId: string,
+    packageVersion: string,
+  ): string {
+    return this.join(
+      this.getCommonEffectsDirPath(),
+      this.EFFECT_PACKAGES_DIR,
+      effectType,
+      templateId,
+      toPackageVersionPathSegment(packageVersion),
+    )
+  }
+
+  getEffectPackageMetaPath(
+    effectType: 'transition' | 'filter',
+    templateId: string,
+    packageVersion: string,
+  ): string {
+    return this.join(
+      this.getEffectPackageDirPath(effectType, templateId, packageVersion),
+      '.effect-template-meta.json',
+    )
   }
 
   /**

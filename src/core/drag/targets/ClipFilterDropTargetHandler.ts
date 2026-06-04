@@ -13,6 +13,7 @@ import type { UnifiedTimelineModule } from '@/core/modules/UnifiedTimelineModule
 import { useUnifiedStore } from '@/core/unifiedStore'
 import { supportsClipFilter } from '@/core/timelineitem/filter'
 import { isFilterPackagePayload } from '@/core/effect-package/types'
+import { effectTemplateRegistry } from '@/core/effect-template/EffectTemplateRegistry'
 import { cancelFilterDeferredInteractionByTimelineItemId } from '@/core/composables/useUnifiedFilterControls'
 
 export class ClipFilterDropTargetHandler implements DropTargetHandler {
@@ -45,10 +46,8 @@ export class ClipFilterDropTargetHandler implements DropTargetHandler {
     }
 
     const mediaData = dragData as MediaItemDragData
-    const asset = this.mediaModule.getAsset(mediaData.assetId)
-    return asset?.assetKind === 'effect-template'
-      && asset.effectType === 'filter'
-      && asset.templateStatus === 'ready'
+    const effectPackageId = mediaData.effectPackageId ?? mediaData.assetId
+    return effectTemplateRegistry.getPackageState(effectPackageId)?.status === 'ready'
   }
 
   async handleDrop(
@@ -76,8 +75,8 @@ export class ClipFilterDropTargetHandler implements DropTargetHandler {
       return { success: false, error: '滤镜素材缺少有效 package 配置' }
     }
 
-    const asset = this.mediaModule.getAsset(mediaData.assetId)
-    if (!asset || asset.assetKind !== 'effect-template' || asset.effectType !== 'filter' || asset.templateStatus !== 'ready') {
+    const effectPackageId = mediaData.effectPackageId ?? ''
+    if (effectTemplateRegistry.getPackageState(effectPackageId)?.status !== 'ready') {
       return { success: false, error: '滤镜素材尚未就绪' }
     }
 
@@ -85,7 +84,10 @@ export class ClipFilterDropTargetHandler implements DropTargetHandler {
     cancelFilterDeferredInteractionByTimelineItemId(timelineItemId)
     store.pause()
     await store.updateFilterEffectWithHistory(timelineItemId, {
-      assetId: mediaData.assetId,
+      effectPackageId,
+      templateId: mediaData.templateId ?? templatePayload.packageId,
+      packageVersion: mediaData.packageVersion ?? templatePayload.version,
+      catalogVersion: mediaData.catalogVersion ?? '',
       intensity: 1,
       params: JSON.parse(JSON.stringify(templatePayload.defaultParams)),
       packagePayload: templatePayload,

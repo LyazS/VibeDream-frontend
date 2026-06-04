@@ -17,18 +17,11 @@
 
     <div class="asset-library-panel__content">
       <VirtualDirectory v-if="currentSection === 'media'" />
-      <LibrarySectionPlaceholder
+      <EffectTemplateLibraryPanel
         v-else-if="currentSection === 'transition'"
-        :icon="IconComponents.EFFECT_TRANSITION"
-        :title="t('media.sections.transitionPlaceholderTitle')"
-        :description="t('media.sections.transitionPlaceholderDescription')"
+        effect-type="transition"
       />
-      <LibrarySectionPlaceholder
-        v-else
-        :icon="IconComponents.EFFECT_FILTER"
-        :title="t('media.sections.filterPlaceholderTitle')"
-        :description="t('media.sections.filterPlaceholderDescription')"
-      />
+      <EffectTemplateLibraryPanel v-else effect-type="filter" />
     </div>
   </div>
 </template>
@@ -39,9 +32,8 @@ import { NTab, NTabs } from 'naive-ui'
 import type { LibrarySectionKey } from '@/core/modules/UnifiedUIModule'
 import { useUnifiedStore } from '@/core/unifiedStore'
 import { useAppI18n } from '@/core/composables/useI18n'
-import { IconComponents } from '@/constants/iconComponents'
 import VirtualDirectory from './VirtualDirectory.vue'
-import LibrarySectionPlaceholder from './LibrarySectionPlaceholder.vue'
+import EffectTemplateLibraryPanel from './EffectTemplateLibraryPanel.vue'
 
 const unifiedStore = useUnifiedStore()
 const { t } = useAppI18n()

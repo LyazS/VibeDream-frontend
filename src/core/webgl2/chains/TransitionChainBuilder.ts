@@ -1,7 +1,7 @@
-import { isEffectTemplateAsset, type UnifiedLibraryAssetData } from '@/core/asset/types'
-import { effectPackageRegistry } from '@/core/effect-package/EffectPackageRegistry'
+import type { UnifiedLibraryAssetData } from '@/core/asset/types'
 import { EffectPackageFilterPass } from '@/core/effect-package/runtime/EffectPackageFilterPass'
 import { EffectPackageTransitionPass } from '@/core/effect-package/runtime/EffectPackageTransitionPass'
+import { effectTemplateRegistry } from '@/core/effect-template/EffectTemplateRegistry'
 import { degreesToRadians } from '@/core/utils/rotationTransform'
 import type { UnifiedMediaItemData } from '@/core/mediaitem/types'
 import { DEFAULT_BLEND_MODE } from '@/core/timelineitem'
@@ -39,20 +39,16 @@ export class TransitionChainBuilder {
   constructor(private readonly params: TransitionChainBuilderParams) {}
 
   private resolveLoadedTransitionPackage(transitionItem: TransitionItem) {
-    const assetId = transitionItem.transitionOut?.assetId
-    const packageAsset = assetId ? this.params.getAsset(assetId) : undefined
-    return assetId && isEffectTemplateAsset(packageAsset)
-      ? effectPackageRegistry.getPackage(assetId)
+    const effectPackageId = transitionItem.transitionOut?.effectPackageId
+    return effectPackageId
+      ? effectTemplateRegistry.getReadyPackage(effectPackageId)
       : null
   }
 
   private resolveLoadedFilterPackage(item: TransitionItem) {
     const filterEffect = TimelineItemQueries.getRenderFilterEffect(item)
-    const filterAsset = filterEffect?.assetId ? this.params.getAsset(filterEffect.assetId) : undefined
-    return filterEffect?.assetId
-      && isEffectTemplateAsset(filterAsset)
-      && filterAsset.effectType === 'filter'
-      ? effectPackageRegistry.getPackage(filterEffect.assetId)
+    return filterEffect?.effectPackageId
+      ? effectTemplateRegistry.getReadyPackage(filterEffect.effectPackageId)
       : null
   }
 
@@ -169,7 +165,7 @@ export class TransitionChainBuilder {
     return [
       `left:${this.getBranchSignature(transitionItem)}`,
       `right:${this.getBranchSignature(rightItem)}`,
-      transitionItem.transitionOut?.assetId ?? '',
+      transitionItem.transitionOut?.effectPackageId ?? '',
       `transition-installed:${loadedTransitionPackage ? 'ready' : 'missing'}`,
       loadedTransitionPackage?.payload.version ?? transitionItem.transitionOut?.packagePayload?.version ?? '',
       loadedTransitionPackage?.payload.scriptHash ?? transitionItem.transitionOut?.packagePayload?.scriptHash ?? '',
@@ -302,7 +298,7 @@ export class TransitionChainBuilder {
     return [
       `blend:${item.config.blendMode ?? DEFAULT_BLEND_MODE}`,
       `mask:${mask?.enabled ? 'on' : 'off'}:${mask?.type ?? 'rectangle'}`,
-      `filter:${TimelineItemQueries.getRenderFilterEffect(item)?.assetId ?? ''}`,
+      `filter:${TimelineItemQueries.getRenderFilterEffect(item)?.effectPackageId ?? ''}`,
       `filter-installed:${loadedFilterPackage ? 'ready' : 'missing'}`,
       `filter-version:${loadedFilterPackage?.payload.version ?? TimelineItemQueries.getRenderFilterEffect(item)?.packagePayload?.version ?? ''}`,
       `filter-script:${loadedFilterPackage?.payload.scriptHash ?? TimelineItemQueries.getRenderFilterEffect(item)?.packagePayload?.scriptHash ?? ''}`,

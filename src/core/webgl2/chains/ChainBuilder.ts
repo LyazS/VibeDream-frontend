@@ -1,6 +1,6 @@
-import { isEffectTemplateAsset, type UnifiedLibraryAssetData } from '@/core/asset/types'
-import { effectPackageRegistry } from '@/core/effect-package/EffectPackageRegistry'
+import type { UnifiedLibraryAssetData } from '@/core/asset/types'
 import { EffectPackageFilterPass } from '@/core/effect-package/runtime/EffectPackageFilterPass'
+import { effectTemplateRegistry } from '@/core/effect-template/EffectTemplateRegistry'
 import { degreesToRadians } from '@/core/utils/rotationTransform'
 import type { UnifiedMediaItemData } from '@/core/mediaitem/types'
 import { DEFAULT_BLEND_MODE } from '@/core/timelineitem'
@@ -42,11 +42,8 @@ export class ChainBuilder {
 
   private resolveLoadedFilterPackage(item: VisualTimelineItem) {
     const filterEffect = TimelineItemQueries.getRenderFilterEffect(item)
-    const filterAsset = filterEffect?.assetId ? this.params.getAsset(filterEffect.assetId) : undefined
-    return filterEffect?.assetId
-      && isEffectTemplateAsset(filterAsset)
-      && filterAsset.effectType === 'filter'
-      ? effectPackageRegistry.getPackage(filterEffect.assetId)
+    return filterEffect?.effectPackageId
+      ? effectTemplateRegistry.getReadyPackage(filterEffect.effectPackageId)
       : null
   }
 
@@ -146,7 +143,7 @@ export class ChainBuilder {
     return [
       `mask:${mask?.enabled ? 'on' : 'off'}:${mask?.type ?? 'rectangle'}`,
       `blend:${config.blendMode ?? DEFAULT_BLEND_MODE}`,
-      `filter:${TimelineItemQueries.getRenderFilterEffect(item)?.assetId ?? ''}`,
+      `filter:${TimelineItemQueries.getRenderFilterEffect(item)?.effectPackageId ?? ''}`,
       `filter-installed:${loadedFilterPackage ? 'ready' : 'missing'}`,
       `filter-version:${loadedFilterPackage?.payload.version ?? TimelineItemQueries.getRenderFilterEffect(item)?.packagePayload?.version ?? ''}`,
       `filter-script:${loadedFilterPackage?.payload.scriptHash ?? TimelineItemQueries.getRenderFilterEffect(item)?.packagePayload?.scriptHash ?? ''}`,

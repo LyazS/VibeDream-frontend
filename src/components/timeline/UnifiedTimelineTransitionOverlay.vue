@@ -8,6 +8,10 @@
     @click.stop="handleSelect"
     @contextmenu.stop.prevent="handleContextMenu"
   >
+    <div v-if="hasPackageWarning" class="timeline-transition-overlay__warning">
+      <component :is="IconComponents.WARNING" size="12px" />
+    </div>
+
     <div
       v-if="isSelected"
       class="resize-handle resize-handle-left"
@@ -29,8 +33,10 @@
 
 <script setup lang="ts">
 import { computed, onUnmounted, ref } from 'vue'
+import { effectTemplateRegistry } from '@/core/effect-template/EffectTemplateRegistry'
 import { useUnifiedStore } from '@/core/unifiedStore'
 import { useAppI18n } from '@/core/composables/useI18n'
+import { IconComponents } from '@/constants/iconComponents'
 import { DEFAULT_TRACK_PADDING } from '@/constants/TrackConstants'
 import { THUMBNAIL_CONSTANTS } from '@/constants/ThumbnailConstants'
 import type { TimelineTransitionOverlayViewModel } from '@/core/timelineitem/transitionOverlay'
@@ -83,12 +89,22 @@ const transitionConfig = computed(() =>
 )
 
 const transitionLabel = computed(() => {
-  const assetId = sourceTimelineItem.value?.transitionOut?.assetId
-  if (!assetId) {
+  const effectPackageId = sourceTimelineItem.value?.transitionOut?.effectPackageId
+  if (!effectPackageId) {
     return t('properties.transition.title')
   }
 
-  return unifiedStore.getAsset(assetId)?.name || t('properties.transition.title')
+  return effectTemplateRegistry.getPackageState(effectPackageId)?.meta?.name.zh
+    || sourceTimelineItem.value?.transitionOut?.packagePayload?.manifestSnapshot.name.zh
+    || t('properties.transition.title')
+})
+
+const hasPackageWarning = computed(() => {
+  const effectPackageId = sourceTimelineItem.value?.transitionOut?.effectPackageId
+  if (!effectPackageId) {
+    return false
+  }
+  return effectTemplateRegistry.getPackageState(effectPackageId)?.status !== 'ready'
 })
 
 const rightTimelineItem = computed(() => {
@@ -327,6 +343,21 @@ function resolveTransitionBoundarySnap(frame: number): {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.timeline-transition-overlay__warning {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  z-index: 3;
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 184, 77, 0.95);
+  color: #2f1900;
 }
 
 .timeline-transition-overlay__content {

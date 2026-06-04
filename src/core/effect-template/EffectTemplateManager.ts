@@ -9,6 +9,7 @@ import {
   isEffectTemplateAsset,
 } from '@/core/asset/types'
 import type { LocalizedText } from '@/core/effect-template/catalogTypes'
+import { assertCatalogVersion } from '@/core/effect-template/commonTypes'
 import { filterTemplateCatalogService } from '@/core/effect-template/FilterTemplateCatalogService'
 import { transitionTemplateCatalogService } from '@/core/effect-template/TransitionTemplateCatalogService'
 import { effectPackageRegistry } from '@/core/effect-package/EffectPackageRegistry'
@@ -98,10 +99,12 @@ export class EffectTemplateManager {
       const download = asset.effectType === 'filter'
         ? await filterTemplateCatalogService.downloadTemplatePackage(
             asset.source.templateId,
+            this.requireCatalogVersion(asset),
             { signal: task.abortController.signal },
           )
         : await transitionTemplateCatalogService.downloadTemplatePackage(
             asset.source.templateId,
+            this.requireCatalogVersion(asset),
             { signal: task.abortController.signal },
           )
 
@@ -223,6 +226,10 @@ export class EffectTemplateManager {
 
   private resolveLocalizedText(value: LocalizedText): string {
     return value.zh || value.en
+  }
+
+  private requireCatalogVersion(asset: EffectTemplateAssetData): string {
+    return assertCatalogVersion(asset.source.catalogVersion ?? '')
   }
 
   private resolveDownloadError(error: unknown): string {

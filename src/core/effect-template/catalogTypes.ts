@@ -16,6 +16,7 @@ export interface TransitionCatalogVersionResponse {
 
 export interface BaseTemplateSummary {
   id: string
+  package_version: string
   name: LocalizedText
   summary: LocalizedText
   tags: LocalizedTagList
@@ -77,11 +78,13 @@ export interface EffectTemplatePackageFile {
 }
 
 export interface TransitionTemplateDownloadResponse extends TransitionTemplateSummary {
+  catalog_version: string
   package_manifest: TransitionTemplatePackageManifest
   package_files: EffectTemplatePackageFile[]
 }
 
 export interface FilterTemplateDownloadResponse extends FilterTemplateSummary {
+  catalog_version: string
   package_manifest: FilterTemplatePackageManifest
   package_files: EffectTemplatePackageFile[]
 }
@@ -94,6 +97,42 @@ export interface TransitionTemplateListResponse {
 export interface FilterTemplateListResponse {
   catalog_version: string
   items: FilterTemplateSummary[]
+}
+
+export interface CommonEffectCatalog<TItem extends BaseTemplateSummary = BaseTemplateSummary> {
+  effectType: 'transition' | 'filter'
+  catalogVersion: string
+  items: TItem[]
+}
+
+export interface CommonEffectTemplateMeta {
+  effectPackageId: string
+  effectType: 'transition' | 'filter'
+  templateId: string
+  packageVersion: string
+  catalogVersion: string
+  name: LocalizedText
+  summary: LocalizedText
+  tags: LocalizedTagList
+  coverUrl: string
+  installedAt: string
+}
+
+export interface CommonEffectIndexEntry {
+  effectPackageId: string
+  effectType: 'transition' | 'filter'
+  templateId: string
+  packageVersion: string
+  catalogVersion: string
+  status: 'ready' | 'error' | 'missing'
+  packagePath: string
+  installedAt?: string
+  errorMessage?: string
+}
+
+export interface CommonEffectIndexFile {
+  version: string
+  packages: CommonEffectIndexEntry[]
 }
 
 export interface TransitionTemplateCatalogCache {

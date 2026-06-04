@@ -111,8 +111,11 @@ export class TransitionEffectTemplateHandler
 
     store.pause()
     await store.updateTransitionOutWithHistory(candidate.sourceItemId, {
+      effectPackageId: dragData.effectPackageId ?? '',
+      templateId: dragData.templateId ?? packagePayload.packageId,
+      packageVersion: dragData.packageVersion ?? packagePayload.version,
+      catalogVersion: dragData.catalogVersion ?? '',
       durationFrames,
-      assetId: dragData.assetId,
       packagePayload: packagePayload,
       params: JSON.parse(JSON.stringify(packagePayload.defaultParams)),
     })

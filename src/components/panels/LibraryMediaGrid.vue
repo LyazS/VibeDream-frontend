@@ -235,20 +235,6 @@
         @close="showMediaPreviewModal = false"
       />
 
-      <TransitionTemplatePickerModal
-        :show="showTransitionTemplatePickerModal"
-        :directory-id="currentDir?.id || null"
-        @update:show="showTransitionTemplatePickerModal = $event"
-        @close="showTransitionTemplatePickerModal = false"
-      />
-
-      <FilterTemplatePickerModal
-        :show="showFilterTemplatePickerModal"
-        :directory-id="currentDir?.id || null"
-        @update:show="showFilterTemplatePickerModal = $event"
-        @close="showFilterTemplatePickerModal = false"
-      />
-
       <!-- 隐藏的文件输入 -->
       <input
         ref="fileInput"
@@ -291,8 +277,6 @@ import CreateFolderModal from '@/components/modals/CreateFolderModal.vue'
 import RenameModal from '@/components/modals/RenameModal.vue'
 import MediaItemThumbnail from '@/components/panels/MediaItemThumbnail.vue'
 import MediaPreviewModal from '@/components/modals/MediaPreviewModal.vue'
-import TransitionTemplatePickerModal from '@/components/modals/TransitionTemplatePickerModal.vue'
-import FilterTemplatePickerModal from '@/components/modals/FilterTemplatePickerModal.vue'
 import FolderIcon from '@/components/utils/FolderIcon.vue'
 import LibraryBreadcrumb from './LibraryBreadcrumb.vue'
 import type { UnifiedLibraryAssetData } from '@/core/asset/types'
@@ -329,8 +313,6 @@ const renameTarget = ref<DisplayItem | null>(null)
 // 预览模态框状态
 const showMediaPreviewModal = ref(false)
 const previewMediaItemId = ref<string>('')
-const showTransitionTemplatePickerModal = ref(false)
-const showFilterTemplatePickerModal = ref(false)
 
 // 文件夹拖拽状态（每个文件夹独立状态）
 const folderDragState = ref<Record<string, { isDragOver: boolean; canDrop: boolean }>>({})
@@ -1432,19 +1414,11 @@ async function addMediaItem(file: File): Promise<void> {
 }
 
 function openTransitionTemplatePicker(): void {
-  if (!currentDir.value) {
-    unifiedStore.messageError(t('media.selectDirectoryFirst'))
-    return
-  }
-  showTransitionTemplatePickerModal.value = true
+  unifiedStore.setLibrarySection('transition')
 }
 
 function openFilterTemplatePicker(): void {
-  if (!currentDir.value) {
-    unifiedStore.messageError(t('media.selectDirectoryFirst'))
-    return
-  }
-  showFilterTemplatePickerModal.value = true
+  unifiedStore.setLibrarySection('filter')
 }
 
 // ==================== 取消功能 ====================

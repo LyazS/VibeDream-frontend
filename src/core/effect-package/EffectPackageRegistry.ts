@@ -1,13 +1,5 @@
-import {
-  createEffectTemplateSourceDataFromTemplate,
-  createFilterTemplateAssetData,
-  createTransitionTemplateAssetData,
-  type EffectTemplateAssetData,
-} from '@/core/asset/types'
 import type { EffectTemplatePackageFile } from '@/core/effect-template/catalogTypes'
 import { fileSystemService } from '@/core/managers/filesystem/fileSystemService'
-import { globalMetaFileManager } from '@/core/managers/media/globalMetaFileManager'
-import { SourceOrigin } from '@/core/datasource/core/BaseDataSource'
 import {
   buildFilterPackagePayload,
   buildTransitionPackagePayload,
@@ -38,12 +30,12 @@ function stripLeading(path: string, prefix: string): string {
 export class EffectPackageRegistry {
   private readonly packages = new Map<string, LoadedEffectPackage>()
 
-  getPackage(assetId: string): LoadedEffectPackage | null {
-    return this.packages.get(assetId) ?? null
+  getPackage(effectPackageId: string): LoadedEffectPackage | null {
+    return this.packages.get(effectPackageId) ?? null
   }
 
-  removePackage(assetId: string): void {
-    const entry = this.packages.get(assetId)
+  removePackage(effectPackageId: string): void {
+    const entry = this.packages.get(effectPackageId)
     if (!entry) {
       return
     }
@@ -51,7 +43,7 @@ export class EffectPackageRegistry {
     for (const resource of entry.sampledResources.values()) {
       disposeLoadedSampledResource(resource)
     }
-    this.packages.delete(assetId)
+    this.packages.delete(effectPackageId)
   }
 
   clear(): void {
@@ -63,65 +55,10 @@ export class EffectPackageRegistry {
     this.packages.clear()
   }
 
-  async discoverProjectPackages(projectId: string): Promise<EffectTemplateAssetData[]> {
-    const mediaDirPath = fileSystemService.paths.getMediaDirPath(projectId)
-    const mediaDirExists = await fileSystemService.directoryExists(mediaDirPath)
-    if (!mediaDirExists) {
-      this.clear()
-      return []
-    }
-
-    const entries = await fileSystemService.listDirectory(mediaDirPath)
-    const packageDirectories: Array<{ path: string; assetId: string }> = []
-    for (const entry of entries) {
-      if (entry.kind !== 'directory') {
-        continue
-      }
-
-      const manifestPath = `${entry.path}/manifest.json`
-      const hasManifest = await fileSystemService.fileExists(manifestPath).catch(() => false)
-      if (!hasManifest) {
-        continue
-      }
-
-      packageDirectories.push({
-        path: entry.path,
-        assetId: entry.name.replace(/\.effectpkg$/, ''),
-      })
-    }
-
-    const discovered = await Promise.all(
-      packageDirectories.map((entry) => this.loadPackageDirectory(entry.path, entry.assetId)),
-    )
-
-    const packages = discovered.filter((entry): entry is { asset: EffectTemplateAssetData; loaded: LoadedEffectPackage } => Boolean(entry))
-    this.clear()
-
-    for (const entry of packages) {
-      this.packages.set(entry.asset.id, entry.loaded)
-    }
-
-    return packages.map((entry) => entry.asset)
-  }
-
-  async installDownloadedPackage(
-    projectId: string,
-    assetId: string,
+  async writePackageFiles(
+    packageDirPath: string,
     packageFiles: EffectTemplatePackageFile[],
-  ): Promise<EffectTemplateAssetData> {
-    const mediaDirPath = fileSystemService.paths.getMediaDirPath(projectId)
-    const mediaDirExists = await fileSystemService.directoryExists(mediaDirPath)
-    if (!mediaDirExists) {
-      await fileSystemService.createDirectory(mediaDirPath)
-    }
-
-    const packageDirPath = fileSystemService.paths.getMediaPath(projectId, assetId)
-    const existingPackageDir = await fileSystemService.directoryExists(packageDirPath).catch(() => false)
-    if (existingPackageDir) {
-      await fileSystemService.deleteDirectory(packageDirPath, true)
-    }
-    await fileSystemService.createDirectory(packageDirPath)
-
+  ): Promise<void> {
     for (const file of packageFiles) {
       const targetPath = `${packageDirPath}/${normalizePackageResourcePath(file.path)}`
       await this.ensureParentDirectory(targetPath)
@@ -132,32 +69,48 @@ export class EffectPackageRegistry {
         await fileSystemService.writeFile(targetPath, file.content)
       }
     }
+  }
 
-    const loaded = await this.loadPackageDirectory(packageDirPath, assetId)
+  async installDownloadedPackage(
+    projectId: string,
+    assetId: string,
+    packageFiles: EffectTemplatePackageFile[],
+  ): Promise<{ name: string; templatePayload: LoadedEffectPackage['payload'] }> {
+    const mediaDirPath = fileSystemService.paths.getMediaDirPath(projectId)
+    if (!(await fileSystemService.directoryExists(mediaDirPath).catch(() => false))) {
+      await fileSystemService.createDirectory(mediaDirPath)
+    }
+
+    const packageDirPath = fileSystemService.paths.getMediaPath(projectId, assetId)
+    if (await fileSystemService.directoryExists(packageDirPath).catch(() => false)) {
+      await fileSystemService.deleteDirectory(packageDirPath, true)
+    }
+    await fileSystemService.createDirectory(packageDirPath)
+    await this.writePackageFiles(packageDirPath, packageFiles)
+
+    const loaded = await this.loadPackageFromDirectory(packageDirPath, assetId)
     if (!loaded) {
       throw new Error(`下载的 effect package 无法加载: ${assetId}`)
     }
 
-    this.removePackage(assetId)
-    this.packages.set(assetId, loaded.loaded)
-    await globalMetaFileManager.saveMetaFile(loaded.asset)
-    return loaded.asset
+    return {
+      name: loaded.manifest.name.zh || loaded.manifest.name.en || loaded.manifest.packageId,
+      templatePayload: loaded.payload,
+    }
   }
 
   async cleanupInstalledPackage(projectId: string, assetId: string): Promise<void> {
     this.removePackage(assetId)
-
     const packageDirPath = fileSystemService.paths.getMediaPath(projectId, assetId)
-    const packageDirExists = await fileSystemService.directoryExists(packageDirPath).catch(() => false)
-    if (packageDirExists) {
+    if (await fileSystemService.directoryExists(packageDirPath).catch(() => false)) {
       await fileSystemService.deleteDirectory(packageDirPath, true)
     }
   }
 
-  private async loadPackageDirectory(
+  async loadPackageFromDirectory(
     directoryPath: string,
-    assetId: string,
-  ): Promise<{ asset: EffectTemplateAssetData; loaded: LoadedEffectPackage } | null> {
+    effectPackageId: string,
+  ): Promise<LoadedEffectPackage | null> {
     try {
       const manifestPath = `${directoryPath}/manifest.json`
       const manifestSource = await fileSystemService.readFile(manifestPath)
@@ -200,49 +153,39 @@ export class EffectPackageRegistry {
 
       const scriptHash = hashString(entrySource)
       let payload
-      let asset: EffectTemplateAssetData
       if (manifest.effectType === 'transition') {
         payload = buildTransitionPackagePayload(directoryPath, manifest, scriptHash)
-        asset = createTransitionTemplateAssetData(assetId, manifest.name.zh || manifest.name.en, payload, {
-          source: createEffectTemplateSourceDataFromTemplate(
-            manifest.packageId,
-            undefined,
-            SourceOrigin.PROJECT_LOAD,
-          ),
-          templateStatus: 'ready',
-        })
       } else {
         payload = buildFilterPackagePayload(directoryPath, manifest, scriptHash)
-        asset = createFilterTemplateAssetData(assetId, manifest.name.zh || manifest.name.en, payload, {
-          source: createEffectTemplateSourceDataFromTemplate(
-            manifest.packageId,
-            undefined,
-            SourceOrigin.PROJECT_LOAD,
-          ),
-          templateStatus: 'ready',
-        })
       }
 
-      return {
-        asset,
-        loaded: {
-          assetId,
-          packageDir: directoryPath,
-          manifest,
-          entrySource,
-          textResourcePaths,
-          textResources,
-          pendingTextLoads: new Map<string, Promise<string>>(),
-          sampledResourceDescriptors,
-          sampledResources: new Map<string, LoadedEffectPackageSampledResource>(),
-          pendingSampledResourceLoads: new Map<string, Promise<LoadedEffectPackageSampledResource>>(),
-          payload,
-        },
+      const loaded: LoadedEffectPackage = {
+        effectPackageId,
+        packageDir: directoryPath,
+        manifest,
+        entrySource,
+        textResourcePaths,
+        textResources,
+        pendingTextLoads: new Map<string, Promise<string>>(),
+        sampledResourceDescriptors,
+        sampledResources: new Map<string, LoadedEffectPackageSampledResource>(),
+        pendingSampledResourceLoads: new Map<string, Promise<LoadedEffectPackageSampledResource>>(),
+        payload,
       }
+      this.removePackage(effectPackageId)
+      this.packages.set(effectPackageId, loaded)
+      return loaded
     } catch (error) {
       console.error(`[EffectPackageRegistry] 加载 effect package 失败: ${directoryPath}`, error)
       return null
     }
+  }
+
+  async loadCommonPackageDirectory(
+    directoryPath: string,
+    effectPackageId: string,
+  ): Promise<LoadedEffectPackage | null> {
+    return this.loadPackageFromDirectory(directoryPath, effectPackageId)
   }
 
   private async collectFiles(directoryPath: string): Promise<string[]> {

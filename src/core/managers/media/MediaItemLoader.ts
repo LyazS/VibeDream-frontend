@@ -11,12 +11,6 @@ import { BizyAirSourceFactory } from '@/core/datasource/providers/bizyair/BizyAi
 import type { BaseASRSourceData } from '@/core/datasource/providers/asr/ASRSource'
 import { ASRSourceFactory } from '@/core/datasource/providers/asr/ASRSource'
 import type { UnifiedLibraryAssetData } from '@/core/asset/types'
-import {
-  createEffectTemplateSourceDataFromTemplate,
-  createFilterTemplateAssetData,
-  createTransitionTemplateAssetData,
-} from '@/core/asset/types'
-import { effectPackageRegistry } from '@/core/effect-package/EffectPackageRegistry'
 
 /**
  * 媒体项目加载器（阶段二彻底重构版）
@@ -33,8 +27,6 @@ export class MediaItemLoader {
   async loadMediaItemsFromMeta(projectId: string): Promise<UnifiedLibraryAssetData[]> {
     try {
       console.log(`📂 [MediaItemLoader] 开始从 Meta 文件加载媒体项目: ${projectId}`)
-      const discoveredEffectPackages = await effectPackageRegistry.discoverProjectPackages(projectId)
-      const discoveredPackageIdSet = new Set(discoveredEffectPackages.map((item) => item.id))
 
       // 1. 扫描所有 Meta 文件
       const metaFiles = await globalMetaFileManager.scanAllMetaFiles()
@@ -43,14 +35,9 @@ export class MediaItemLoader {
       // 2. 从每个 Meta 文件重建媒体项目
       const mediaItems: UnifiedLibraryAssetData[] = []
 
-      mediaItems.push(...discoveredEffectPackages)
-
       for (const metaData of metaFiles) {
         try {
-          if (
-            metaData.assetKind === 'effect-template' &&
-            discoveredPackageIdSet.has(metaData.id)
-          ) {
+          if (metaData.assetKind === 'effect-template') {
             continue
           }
 
@@ -97,74 +84,7 @@ export class MediaItemLoader {
    */
   private async rebuildMediaItemFromMeta(metaData: MediaMetaFile): Promise<UnifiedLibraryAssetData> {
     if (metaData.assetKind === 'effect-template') {
-      if (metaData.effectType !== 'transition' && metaData.effectType !== 'filter') {
-        throw new Error(`不支持的效果模板类型: ${metaData.effectType}`)
-      }
-
-      const templateId = metaData.source.templateId
-        || (typeof metaData.templatePayload === 'object' && metaData.templatePayload && 'packageId' in metaData.templatePayload
-          ? String((metaData.templatePayload as { packageId?: unknown }).packageId || '')
-          : '')
-        || metaData.id
-
-      const installedPackage = effectPackageRegistry.getPackage(metaData.id)
-      if (installedPackage) {
-        if (installedPackage.payload.effectType === 'transition') {
-          return createTransitionTemplateAssetData(metaData.id, metaData.name, installedPackage.payload, {
-            createdAt: metaData.createdAt,
-            source: createEffectTemplateSourceDataFromTemplate(
-              templateId || installedPackage.payload.packageId,
-              metaData.source.catalogVersion,
-              SourceOrigin.PROJECT_LOAD,
-            ),
-            templateStatus: 'ready',
-          })
-        }
-
-        return createFilterTemplateAssetData(metaData.id, metaData.name, installedPackage.payload, {
-          createdAt: metaData.createdAt,
-          source: createEffectTemplateSourceDataFromTemplate(
-            templateId || installedPackage.payload.packageId,
-            metaData.source.catalogVersion,
-            SourceOrigin.PROJECT_LOAD,
-          ),
-          templateStatus: 'ready',
-        })
-      }
-
-      const restoredStatus = ['error', 'cancelled', 'missing'].includes(metaData.templateStatus)
-        ? metaData.templateStatus
-        : 'pending'
-
-      if (metaData.effectType === 'transition') {
-        return createTransitionTemplateAssetData(metaData.id, metaData.name, null, {
-          createdAt: metaData.createdAt,
-          source: createEffectTemplateSourceDataFromTemplate(
-            templateId,
-            metaData.source.catalogVersion,
-            SourceOrigin.PROJECT_LOAD,
-          ),
-          templateStatus: restoredStatus,
-          templatePayload:
-            metaData.templatePayload && typeof metaData.templatePayload === 'object'
-              ? metaData.templatePayload as Record<string, unknown>
-              : null,
-        })
-      }
-
-      return createFilterTemplateAssetData(metaData.id, metaData.name, null, {
-        createdAt: metaData.createdAt,
-        source: createEffectTemplateSourceDataFromTemplate(
-          templateId,
-          metaData.source.catalogVersion,
-          SourceOrigin.PROJECT_LOAD,
-        ),
-        templateStatus: restoredStatus,
-        templatePayload:
-          metaData.templatePayload && typeof metaData.templatePayload === 'object'
-            ? metaData.templatePayload as Record<string, unknown>
-            : null,
-      })
+      throw new Error('新链路不再支持从项目媒体目录恢复 effect-template 资产')
     }
 
     // 1. 根据数据源类型创建相应的数据源（运行时状态）

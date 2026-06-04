@@ -5,10 +5,9 @@ import type { MediaType } from '@/core/mediaitem/types'
 import type { ClipFilterConfig } from '@/core/filter/types'
 import { supportsClipFilter } from '@/core/timelineitem/filter'
 import {
-  isEffectTemplateAsset,
-  isReadyEffectTemplateAsset,
   type UnifiedLibraryAssetData,
 } from '@/core/asset/types'
+import { effectTemplateRegistry } from '@/core/effect-template/EffectTemplateRegistry'
 
 export class UpdateFilterEffectCommand implements SimpleCommand {
   public readonly id: string
@@ -52,14 +51,14 @@ export class UpdateFilterEffectCommand implements SimpleCommand {
       throw new Error(`当前片段类型不支持滤镜: ${this.timelineItemId}`)
     }
 
-    const targetAssetId = nextValue?.assetId
-    if (targetAssetId) {
-      const templateAsset = this.mediaModule.getAsset(targetAssetId)
-      if (!isEffectTemplateAsset(templateAsset) || templateAsset.effectType !== 'filter') {
-        throw new Error(`滤镜效果素材不存在或类型无效: ${targetAssetId}`)
-      }
-      if (!isReadyEffectTemplateAsset(templateAsset)) {
-        throw new Error(`滤镜效果素材尚未就绪: ${targetAssetId}`)
+    const effectPackageId = nextValue?.effectPackageId
+    if (nextValue && (!effectPackageId || !nextValue.templateId || !nextValue.packageVersion || !nextValue.catalogVersion)) {
+      throw new Error('滤镜效果缺少必要标识字段')
+    }
+    if (effectPackageId) {
+      const state = effectTemplateRegistry.getPackageState(effectPackageId)
+      if (!state || state.status !== 'ready') {
+        throw new Error(`滤镜效果包尚未就绪: ${effectPackageId}`)
       }
     }
 
