@@ -85,6 +85,7 @@ export interface RequestConfig extends RequestInit {
   headers?: Record<string, string>
   isRetry?: boolean // 标记是否为重试请求
   responseType?: 'json' | 'text' | 'blob' | 'auto' // 响应数据解析方式，默认为 'auto'
+  params?: Record<string, string | number | boolean | null | undefined>
 }
 
 // API响应接口

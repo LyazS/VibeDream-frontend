@@ -88,7 +88,7 @@ export class ScriptEffectController {
           resolveInputTexture: (textureRef) => {
             if (textureRef.startsWith('resource:')) {
               const resourcePath = normalizePackageResourcePath(textureRef.slice('resource:'.length))
-              return `effectpkg-resource:${this.loadedPackage.assetId}:${resourcePath}`
+              return `effectpkg-resource:${this.loadedPackage.effectPackageId}:${resourcePath}`
             }
 
             if (textureRef.startsWith('pass:')) {
@@ -103,7 +103,7 @@ export class ScriptEffectController {
       if (error instanceof PendingEffectPackageResourceError) {
         return
       }
-      console.error(`[ScriptEffectController] 渲染 effect package 失败: ${this.loadedPackage.assetId}`, error)
+      console.error(`[ScriptEffectController] 渲染 effect package 失败: ${this.loadedPackage.effectPackageId}`, error)
       this.failed = true
       this.dispose(ctx.gl)
     }

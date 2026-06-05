@@ -3,6 +3,7 @@ import { isEffectTemplateAsset } from '@/core/asset/types'
 import { effectPackageRegistry } from '@/core/effect-package/EffectPackageRegistry'
 import { filterTemplateCatalogService } from '@/core/effect-template/FilterTemplateCatalogService'
 import type { LocalizedText } from '@/core/effect-template/catalogTypes'
+import { assertCatalogVersion } from '@/core/effect-template/commonTypes'
 import { transitionTemplateCatalogService } from '@/core/effect-template/TransitionTemplateCatalogService'
 import { globalMetaFileManager } from '@/core/managers/media/globalMetaFileManager'
 import type { ResolveCheckContext, ResolveContext, ResourceResolver } from '../ResourceResolver'
@@ -92,12 +93,20 @@ export class EffectTemplateReadyResolver
       })
 
       const download = asset.effectType === 'filter'
-        ? await filterTemplateCatalogService.downloadTemplatePackage(asset.source.templateId, {
-            signal: abortController.signal,
-          })
-        : await transitionTemplateCatalogService.downloadTemplatePackage(asset.source.templateId, {
-            signal: abortController.signal,
-          })
+        ? await filterTemplateCatalogService.downloadTemplatePackage(
+            asset.source.templateId,
+            this.requireCatalogVersion(asset),
+            {
+              signal: abortController.signal,
+            },
+          )
+        : await transitionTemplateCatalogService.downloadTemplatePackage(
+            asset.source.templateId,
+            this.requireCatalogVersion(asset),
+            {
+              signal: abortController.signal,
+            },
+          )
 
       if (ctx.signal.aborted) {
         throw new DOMException('Effect template download cancelled', 'AbortError')
@@ -189,6 +198,10 @@ export class EffectTemplateReadyResolver
 
   private resolveLocalizedText(value: LocalizedText): string {
     return value.zh || value.en
+  }
+
+  private requireCatalogVersion(asset: EffectTemplateAssetData): string {
+    return assertCatalogVersion(asset.source.catalogVersion ?? '')
   }
 
   private resolveDownloadError(error: unknown): string {

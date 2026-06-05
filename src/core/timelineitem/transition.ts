@@ -73,6 +73,10 @@ function clampDurationFrames(durationFrames: number): number {
 
 export function createDefaultClipTransitionOutConfig(): ClipTransitionOutConfig {
   return {
+    effectPackageId: '',
+    templateId: '',
+    packageVersion: '',
+    catalogVersion: '',
     durationFrames: DEFAULT_CLIP_TRANSITION_DURATION_FRAMES,
     params: {},
   }
@@ -83,10 +87,17 @@ export function normalizeClipTransitionOutConfig(
 ): ClipTransitionOutConfig {
   const defaults = createDefaultClipTransitionOutConfig()
   return {
+    effectPackageId: config?.effectPackageId ?? defaults.effectPackageId,
+    templateId: config?.templateId ?? defaults.templateId,
+    packageVersion: config?.packageVersion ?? defaults.packageVersion,
+    catalogVersion: config?.catalogVersion ?? defaults.catalogVersion,
     durationFrames: clampDurationFrames(config?.durationFrames ?? defaults.durationFrames),
-    assetId: config?.assetId,
     params: config?.params ? JSON.parse(JSON.stringify(config.params)) : {},
-    packagePayload: config?.packagePayload,
+    ...(config?.packagePayload
+      ? {
+          packagePayload: JSON.parse(JSON.stringify(config.packagePayload)),
+        }
+      : {}),
   }
 }
 
@@ -103,8 +114,11 @@ export function areClipTransitionOutConfigsEqual(
   }
 
   return (
+    a.effectPackageId === b.effectPackageId &&
+    a.templateId === b.templateId &&
+    a.packageVersion === b.packageVersion &&
+    a.catalogVersion === b.catalogVersion &&
     a.durationFrames === b.durationFrames &&
-    a.assetId === b.assetId &&
     JSON.stringify(a.params ?? {}) === JSON.stringify(b.params ?? {})
   )
 }

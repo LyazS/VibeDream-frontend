@@ -16,6 +16,7 @@ export interface TransitionCatalogVersionResponse {
 
 export interface BaseTemplateSummary {
   id: string
+  package_version: string
   name: LocalizedText
   summary: LocalizedText
   tags: LocalizedTagList
@@ -77,11 +78,13 @@ export interface EffectTemplatePackageFile {
 }
 
 export interface TransitionTemplateDownloadResponse extends TransitionTemplateSummary {
+  catalog_version: string
   package_manifest: TransitionTemplatePackageManifest
   package_files: EffectTemplatePackageFile[]
 }
 
 export interface FilterTemplateDownloadResponse extends FilterTemplateSummary {
+  catalog_version: string
   package_manifest: FilterTemplatePackageManifest
   package_files: EffectTemplatePackageFile[]
 }
@@ -96,14 +99,41 @@ export interface FilterTemplateListResponse {
   items: FilterTemplateSummary[]
 }
 
-export interface TransitionTemplateCatalogCache {
-  version: string
-  timestamp: number
-  items: TransitionTemplateSummary[]
+export interface CommonEffectCatalog<TItem extends BaseTemplateSummary = BaseTemplateSummary> {
+  effectType: 'transition' | 'filter'
+  catalogVersion: string
+  checkedAt?: string
+  items: TItem[]
 }
 
-export interface FilterTemplateCatalogCache {
+export interface CommonEffectTemplateMeta {
+  effectPackageId: string
+  effectType: 'transition' | 'filter'
+  templateId: string
+  packageVersion: string
+  catalogVersion: string
+  name: LocalizedText
+  summary: LocalizedText
+  tags: LocalizedTagList
+  coverUrl: string
+  installedAt: string
+  transitionDurationFrames?: number
+  supportedMediaTypes?: Array<'video' | 'image'>
+}
+
+export interface CommonEffectIndexEntry {
+  effectPackageId: string
+  effectType: 'transition' | 'filter'
+  templateId: string
+  packageVersion: string
+  catalogVersion: string
+  status: 'installed' | 'ready' | 'error' | 'missing'
+  packagePath: string
+  installedAt?: string
+  errorMessage?: string
+}
+
+export interface CommonEffectIndexFile {
   version: string
-  timestamp: number
-  items: FilterTemplateSummary[]
+  packages: CommonEffectIndexEntry[]
 }

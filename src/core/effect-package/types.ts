@@ -116,7 +116,7 @@ export interface EffectPackageLut3DResourceInfo {
 }
 
 export interface LoadedEffectPackage {
-  assetId: string
+  effectPackageId: string
   packageDir: string
   manifest: EffectPackageManifest
   entrySource: string

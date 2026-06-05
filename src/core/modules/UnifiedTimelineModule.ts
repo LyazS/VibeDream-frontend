@@ -155,10 +155,13 @@ export function createUnifiedTimelineModule(registry: ModuleRegistry) {
 
     item.transitionOut = transitionOut
       ? normalizeClipTransitionOutConfig({
+          effectPackageId: transitionOut.effectPackageId,
+          templateId: transitionOut.templateId,
+          packageVersion: transitionOut.packageVersion,
+          catalogVersion: transitionOut.catalogVersion,
           durationFrames: transitionOut.durationFrames,
-          assetId: transitionOut.assetId,
           params: transitionOut.params,
-          packagePayload: transitionOut.packagePayload,
+          ...(transitionOut.packagePayload ? { packagePayload: transitionOut.packagePayload } : {}),
         })
       : undefined
 
@@ -174,7 +177,10 @@ export function createUnifiedTimelineModule(registry: ModuleRegistry) {
 
     item.filterEffect = filterEffect
       ? normalizeClipFilterConfig({
-          assetId: filterEffect.assetId,
+          effectPackageId: filterEffect.effectPackageId,
+          templateId: filterEffect.templateId,
+          packageVersion: filterEffect.packageVersion,
+          catalogVersion: filterEffect.catalogVersion,
           intensity: filterEffect.intensity,
           params: filterEffect.params,
           packagePayload: filterEffect.packagePayload,

@@ -173,6 +173,7 @@ function isBaseEffectTemplateSourceData(value: unknown): value is BaseEffectTemp
 
   return value.type === 'effect-template'
     && typeof value.templateId === 'string'
+    && isOptionalString(value.packageVersion)
     && isOptionalString(value.catalogVersion)
 }
 

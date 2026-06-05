@@ -431,7 +431,6 @@ export function useHistoryOperations(
       currentTransitionOut,
       normalizedNextTransitionOut,
       unifiedTimelineModule,
-      unifiedMediaModule,
     )
     await unifiedHistoryModule.executeCommand(command)
   }

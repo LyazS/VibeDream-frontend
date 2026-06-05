@@ -5,7 +5,7 @@
 
       <FilterEffectDropZone
         :timeline-item-id="selectedTimelineItem.id"
-        :asset-id="currentAssetId"
+        :effect-package-id="currentEffectPackageId"
         @remove="void handleRemove()"
       />
 
@@ -15,7 +15,7 @@
         :label="t('properties.filter.intensity')"
         :state="getFilterChannelButtonState()"
         :tooltip="getFilterKeyframeTooltip()"
-        :disabled="!canOperateFilterNumbers"
+        :disabled="!canOperateFilterNumbers || !isFilterReady"
         :has-previous="hasPreviousFilterKeyframe()"
         :has-next="hasNextFilterKeyframe()"
         :value="filterConfig.intensity"
@@ -39,6 +39,7 @@ import { computed } from 'vue'
 import FilterEffectDropZone from '@/components/properties/groups/FilterEffectDropZone.vue'
 import KeyframedSliderField from '@/components/properties/common/KeyframedSliderField.vue'
 import { useAppI18n, useUnifiedFilterControls } from '@/core/composables'
+import { effectTemplateRegistry } from '@/core/effect-template/EffectTemplateRegistry'
 import { useUnifiedStore } from '@/core/unifiedStore'
 import type { UnifiedTimelineItemData } from '@/core/timelineitem/type'
 
@@ -74,7 +75,13 @@ const {
   currentFrame,
 })
 
-const currentAssetId = computed(() => filterEffect.value?.assetId)
+const currentEffectPackageId = computed(() => filterEffect.value?.effectPackageId)
+const isFilterReady = computed(() => {
+  if (!currentEffectPackageId.value) {
+    return false
+  }
+  return effectTemplateRegistry.getPackageState(currentEffectPackageId.value)?.status === 'ready'
+})
 
 async function handleRemove() {
   await cancelDeferredUpdates()

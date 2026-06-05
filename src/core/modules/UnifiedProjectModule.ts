@@ -10,6 +10,12 @@ import type { UnifiedMediaItemData } from '@/core/mediaitem/types'
 import { globalMetaFileManager } from '@/core/managers/media/globalMetaFileManager'
 import { globalMediaItemLoader } from '@/core/managers/media/MediaItemLoader'
 import { isEffectTemplateAsset, isMediaAsset } from '@/core/asset/types'
+import { effectTemplateRegistry } from '@/core/effect-template/EffectTemplateRegistry'
+import {
+  buildEffectPackageId,
+  parseEffectPackageId,
+  type EffectPackageIdentity,
+} from '@/core/effect-template/commonTypes'
 import { shouldRecoverMediaIndexing } from '@/core/jobs'
 import { useProjectThumbnailService } from '@/core/composables/useProjectThumbnailService'
 import { framesToSeconds } from '@/core/utils/timeUtils'
@@ -319,15 +325,18 @@ export function createUnifiedProjectModule(registry: ModuleRegistry) {
       updateLoadingProgress(t('project.progress.mediaManager'), 20)
       await globalMetaFileManager.initialize(projectId)
 
-      // 3. 🌟 阶段二：从 Meta 文件构建媒体项目（传入 projectTimeline）
+      // 3. 初始化 workspace 级效果模板 registry
+      await effectTemplateRegistry.initialize()
+
+      // 4. 🌟 阶段二：从 Meta 文件构建媒体项目（传入 projectTimeline）
       updateLoadingProgress(t('project.progress.rebuildMedia'), 50)
       await rebuildMediaItems(projectTimeline)
 
-      // 4. 恢复轨道状态
+      // 5. 恢复轨道状态
       updateLoadingProgress(t('project.progress.restoreTracks'), 70)
       await restoreTracks(projectTimeline.tracks)
 
-      // 5. 恢复时间轴项目状态
+      // 6. 恢复时间轴项目状态
       updateLoadingProgress(t('project.progress.restoreTimeline'), 90)
       await restoreTimelineItems(projectTimeline.timelineItems)
 
@@ -503,25 +512,6 @@ export function createUnifiedProjectModule(registry: ModuleRegistry) {
             continue
           }
 
-          if (
-            isEffectTemplateAsset(mediaItem) &&
-            ['pending', 'missing'].includes(mediaItem.templateStatus)
-          ) {
-            if (ensureEffectTemplateReadyForProjectLoad) {
-              void ensureEffectTemplateReadyForProjectLoad(mediaItem.id).catch((error) => {
-                console.error(
-                  `❌ [rebuildMediaItems] 恢复效果模板失败，已跳过: ${mediaItem.name}`,
-                  error,
-                )
-              })
-            } else {
-              console.warn(
-                `⚠️ [rebuildMediaItems] ensureEffectTemplateReady 未初始化，跳过恢复: ${mediaItem.name}`,
-              )
-            }
-            immediateCount++
-            continue
-          }
         }
 
         deferredCount++
@@ -712,6 +702,7 @@ export function createUnifiedProjectModule(registry: ModuleRegistry) {
       }
 
       timelineModule.refreshTransitionItems?.()
+      ensureTimelineEffectDependencies(timelineModule.timelineItems.value)
 
       console.log(`✅ 时间轴项目恢复完成: ${timelineModule.timelineItems.value.length}个项目`)
     } catch (error) {
@@ -816,4 +807,79 @@ function isRecoverableMediaIndexing(mediaItem: UnifiedMediaItemData): boolean {
   }
 
   return shouldRecoverMediaIndexing(mediaItem.metadata?.indexing)
+}
+
+function collectTimelineEffectDependencies(
+  timelineItems: UnifiedTimelineItemData[],
+): EffectPackageIdentity[] {
+  const unique = new Map<string, EffectPackageIdentity>()
+
+  for (const item of timelineItems) {
+    const transitionOut = item.transitionOut
+    if (transitionOut?.effectPackageId) {
+      const identity = normalizeEffectIdentity(
+        transitionOut.effectPackageId,
+        transitionOut.templateId,
+        transitionOut.packageVersion,
+        transitionOut.catalogVersion,
+      )
+      if (identity) {
+        unique.set(identity.effectPackageId, identity)
+      }
+    }
+
+    const filterEffect = item.filterEffect
+    if (filterEffect?.effectPackageId) {
+      const identity = normalizeEffectIdentity(
+        filterEffect.effectPackageId,
+        filterEffect.templateId,
+        filterEffect.packageVersion,
+        filterEffect.catalogVersion,
+      )
+      if (identity) {
+        unique.set(identity.effectPackageId, identity)
+      }
+    }
+  }
+
+  return Array.from(unique.values())
+}
+
+function normalizeEffectIdentity(
+  effectPackageId: string,
+  templateId: string,
+  packageVersion: string,
+  catalogVersion: string,
+): EffectPackageIdentity | null {
+  try {
+    if (effectPackageId) {
+      const parsed = parseEffectPackageId(effectPackageId)
+      return {
+        ...parsed,
+        catalogVersion: catalogVersion || parsed.catalogVersion,
+      }
+    }
+    if (!templateId || !packageVersion || !catalogVersion) {
+      return null
+    }
+    const effectType = effectPackageId.startsWith('filter/') ? 'filter' : 'transition'
+    return {
+      ...parseEffectPackageId(buildEffectPackageId(effectType, templateId, packageVersion)),
+      catalogVersion,
+    }
+  } catch {
+    return null
+  }
+}
+
+function ensureTimelineEffectDependencies(timelineItems: UnifiedTimelineItemData[]): void {
+  const dependencies = collectTimelineEffectDependencies(timelineItems)
+  for (const dependency of dependencies) {
+    void effectTemplateRegistry.ensureReady(dependency).catch((error) => {
+      console.error(
+        `❌ [UnifiedProjectModule] 恢复效果包失败: ${dependency.effectPackageId}`,
+        error,
+      )
+    })
+  }
 }

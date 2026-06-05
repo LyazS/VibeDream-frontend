@@ -84,6 +84,10 @@ export interface AssetDragData extends BaseDragData {
   mediaType?: MediaTypeOrUnknown
   effectType?: EffectType
   templatePayload?: AnyEffectPackagePayload | unknown
+  effectPackageId?: string
+  templateId?: string
+  packageVersion?: string
+  catalogVersion?: string
   type?: 'media-item' // 兼容旧代码
 }
 

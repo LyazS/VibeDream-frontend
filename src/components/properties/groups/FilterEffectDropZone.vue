@@ -13,9 +13,11 @@
     <template v-if="currentAsset">
       <div class="filter-drop-zone__header">
         <div>
-        <div class="filter-drop-zone__title">{{ currentAsset.name }}</div>
+        <div class="filter-drop-zone__title">
+          {{ currentAsset.meta?.name.zh || currentAsset.meta?.name.en || currentAsset.templateId }}
+        </div>
         <div class="filter-drop-zone__meta">
-          {{ currentAsset.templateStatus === 'ready' ? t('properties.filter.ready') : currentAsset.templateStatus }}
+          {{ currentAsset.status === 'ready' ? t('properties.filter.ready') : currentAsset.status }}
         </div>
       </div>
       <button type="button" class="filter-drop-zone__remove" @click="emit('remove')">
@@ -37,13 +39,13 @@
 import { computed, ref } from 'vue'
 import { IconComponents, getEffectTypeIcon } from '@/constants/iconComponents'
 import { useAppI18n } from '@/core/composables/useI18n'
+import { effectTemplateRegistry } from '@/core/effect-template/EffectTemplateRegistry'
 import { useUnifiedStore } from '@/core/unifiedStore'
 import { DropTargetType, type ClipFilterDropTargetInfo } from '@/core/types/drag'
-import { isEffectTemplateAsset } from '@/core/asset/types'
 
 interface Props {
   timelineItemId: string
-  assetId?: string
+  effectPackageId?: string
 }
 
 const props = defineProps<Props>()
@@ -56,8 +58,9 @@ const { t } = useAppI18n()
 const isDragActive = ref(false)
 
 const currentAsset = computed(() => {
-  const asset = props.assetId ? unifiedStore.getAsset(props.assetId) : null
-  return isEffectTemplateAsset(asset) ? asset : null
+  return props.effectPackageId
+    ? effectTemplateRegistry.getPackageState(props.effectPackageId)
+    : null
 })
 
 const targetInfo = computed<ClipFilterDropTargetInfo>(() => ({
