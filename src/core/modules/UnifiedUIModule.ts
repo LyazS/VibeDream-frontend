@@ -4,6 +4,7 @@ import { MODULE_NAMES } from './ModuleRegistry'
 import type { UnifiedDirectoryModule } from './UnifiedDirectoryModule'
 import type { CharacterDirectory } from '@/core/directory/types'
 import type { FileData } from '@/core/datasource/providers/ai-generation/types'
+import type { CommonEffectType } from '@/core/effect-template/commonTypes'
 
 export type PropertyTabKey = 'basic' | 'transition' | 'mask' | 'filter' | 'animation'
 export type LibrarySectionKey = 'media' | 'transition' | 'filter'
@@ -30,6 +31,7 @@ export function createUnifiedUIModule(registry: ModuleRegistry): {
   isChatPanelVisible: Ref<boolean>
   aiPanelActiveTab: Ref<'ai-generate' | 'agent' | 'character-editor'>
   librarySection: Ref<LibrarySectionKey>
+  effectTemplateCategorySelection: Ref<Record<CommonEffectType, string>>
   activePropertyTab: Ref<PropertyTabKey>
   characterEditorState: Ref<CharacterEditorState>
 
@@ -42,6 +44,7 @@ export function createUnifiedUIModule(registry: ModuleRegistry): {
   // AI 面板状态管理方法
   setChatPanelVisible: (visible: boolean) => void
   setLibrarySection: (section: LibrarySectionKey) => void
+  setEffectTemplateCategory: (effectType: CommonEffectType, categoryKey: string) => void
   setActivePropertyTab: (tab: PropertyTabKey) => void
 
   // 角色编辑器方法
@@ -61,6 +64,10 @@ export function createUnifiedUIModule(registry: ModuleRegistry): {
 
   // 素材区当前激活的一级分区
   const librarySection = ref<LibrarySectionKey>('media')
+  const effectTemplateCategorySelection = ref<Record<CommonEffectType, string>>({
+    transition: 'all',
+    filter: 'all',
+  })
 
   // 属性面板当前激活的标签页
   const activePropertyTab = ref<PropertyTabKey>('basic')
@@ -137,6 +144,13 @@ export function createUnifiedUIModule(registry: ModuleRegistry): {
     librarySection.value = section
   }
 
+  function setEffectTemplateCategory(effectType: CommonEffectType, categoryKey: string): void {
+    effectTemplateCategorySelection.value = {
+      ...effectTemplateCategorySelection.value,
+      [effectType]: categoryKey || 'all',
+    }
+  }
+
   function setActivePropertyTab(tab: PropertyTabKey): void {
     activePropertyTab.value = tab
   }
@@ -191,6 +205,7 @@ export function createUnifiedUIModule(registry: ModuleRegistry): {
     isChatPanelVisible,
     aiPanelActiveTab,
     librarySection,
+    effectTemplateCategorySelection,
     activePropertyTab,
 
     // 角色编辑器状态
@@ -205,6 +220,7 @@ export function createUnifiedUIModule(registry: ModuleRegistry): {
     // AI 面板状态管理方法
     setChatPanelVisible,
     setLibrarySection,
+    setEffectTemplateCategory,
     setActivePropertyTab,
 
     // 角色编辑器方法

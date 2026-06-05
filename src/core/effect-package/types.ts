@@ -1,4 +1,8 @@
-import type { LocalizedTagList, LocalizedText } from '@/core/effect-template/catalogTypes'
+import type {
+  EffectTemplateCategory,
+  LocalizedTagList,
+  LocalizedText,
+} from '@/core/effect-template/catalogTypes'
 
 export type EffectPackageParameterType = 'number' | 'boolean' | 'color' | 'vec2'
 export type FilterSupportedMediaType = 'video' | 'image'
@@ -29,6 +33,7 @@ export interface EffectPackageParameterDefinition {
 
 export interface EffectPackageManifestSnapshot {
   name: LocalizedText
+  category: EffectTemplateCategory
   summary: LocalizedText
   tags: LocalizedTagList
   cover?: string | null
@@ -39,6 +44,7 @@ interface EffectPackageManifestBase {
   packageId: string
   version: string
   name: LocalizedText
+  category: EffectTemplateCategory
   summary: LocalizedText
   tags: LocalizedTagList
   cover?: string | null

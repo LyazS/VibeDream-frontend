@@ -4,6 +4,7 @@ import { effectPackageRegistry } from '@/core/effect-package/EffectPackageRegist
 import type { LoadedEffectPackage } from '@/core/effect-package/types'
 import type {
   CommonEffectCatalog,
+  EffectTemplateCategory,
   CommonEffectIndexEntry,
   CommonEffectIndexFile,
   CommonEffectTemplateMeta,
@@ -66,6 +67,24 @@ function toLocalizedTagList(value: unknown): { zh: string[]; en: string[] } {
     }
   }
   return { zh: [], en: [] }
+}
+
+function toCategory(
+  value: unknown,
+  fallbackKey = 'uncategorized',
+): EffectTemplateCategory {
+  if (isRecord(value)) {
+    const key = String(value.key ?? fallbackKey).trim() || fallbackKey
+    return {
+      key,
+      label: toLocalizedText(value.label),
+    }
+  }
+  const normalized = String(value ?? fallbackKey).trim() || fallbackKey
+  return {
+    key: normalized,
+    label: { zh: normalized, en: normalized },
+  }
 }
 
 function normalizeProgress(phase: EffectInstallPhase): number {
@@ -285,6 +304,7 @@ export class EffectTemplateRegistry {
       packageVersion: identity.packageVersion,
       catalogVersion: identity.catalogVersion,
       name: item.name,
+      category: item.category,
       summary: item.summary,
       tags: item.tags,
       coverUrl: item.cover_url ?? '',
@@ -615,6 +635,7 @@ export class EffectTemplateRegistry {
       packageVersion: String(raw.packageVersion ?? identity.packageVersion),
       catalogVersion: String(raw.catalogVersion ?? identity.catalogVersion),
       name: toLocalizedText(raw.name),
+      category: toCategory(raw.category),
       summary: toLocalizedText(raw.summary),
       tags: toLocalizedTagList(raw.tags),
       coverUrl: String(raw.coverUrl ?? ''),

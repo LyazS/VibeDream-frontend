@@ -34,6 +34,10 @@ export function createDefaultClipFilterConfig(): ClipFilterConfig {
       defaultParams: {},
       manifestSnapshot: {
         name: { zh: '', en: '' },
+        category: {
+          key: '',
+          label: { zh: '', en: '' },
+        },
         summary: { zh: '', en: '' },
         tags: { zh: [], en: [] },
         cover: null,

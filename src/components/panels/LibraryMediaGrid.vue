@@ -500,22 +500,6 @@ const currentMenuItems = computed((): MenuItem[] => {
             },
           },
           {
-            label: t('media.createTransitionAsset'),
-            icon: IconComponents.EFFECT_TRANSITION,
-            onClick: () => {
-              openTransitionTemplatePicker()
-              showContextMenu.value = false
-            },
-          },
-          {
-            label: t('media.createFilterAsset'),
-            icon: IconComponents.EFFECT_FILTER,
-            onClick: () => {
-              openFilterTemplatePicker()
-              showContextMenu.value = false
-            },
-          },
-          {
             label: t('media.pasteImport'),
             icon: IconComponents.CLIPBOARD,
             onClick: handlePasteFromClipboard,
@@ -1411,14 +1395,6 @@ async function addMediaItem(file: File): Promise<void> {
   } catch (error) {
     console.error(t('media.fileProcessFailed', { name: file.name }), error)
   }
-}
-
-function openTransitionTemplatePicker(): void {
-  unifiedStore.setLibrarySection('transition')
-}
-
-function openFilterTemplatePicker(): void {
-  unifiedStore.setLibrarySection('filter')
 }
 
 // ==================== 取消功能 ====================

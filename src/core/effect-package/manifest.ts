@@ -35,6 +35,26 @@ function normalizeLocalizedTags(value: unknown): { zh: string[]; en: string[] } 
   return { zh: [], en: [] }
 }
 
+function normalizeCategory(
+  value: unknown,
+  fallbackKey: string,
+): { key: string; label: { zh: string; en: string } } {
+  if (typeof value === 'object' && value && !Array.isArray(value)) {
+    const record = value as Record<string, unknown>
+    const key = String(record.key ?? fallbackKey).trim() || fallbackKey
+    return {
+      key,
+      label: normalizeLocalizedText(record.label, key),
+    }
+  }
+
+  const normalized = String(value ?? fallbackKey).trim() || fallbackKey
+  return {
+    key: normalized,
+    label: { zh: normalized, en: normalized },
+  }
+}
+
 function normalizePath(path: string): string {
   return path.replace(/^\.?\//, '').replace(/\\/g, '/')
 }
@@ -183,6 +203,7 @@ export function normalizeManifest(raw: unknown): EffectPackageManifest {
     packageId,
     version,
     name: normalizeLocalizedText(payload.name, packageId),
+    category: normalizeCategory(payload.category, packageId),
     summary: normalizeLocalizedText(payload.summary, ''),
     tags: normalizeLocalizedTags(payload.tags),
     cover: payload.cover ? normalizePath(String(payload.cover)) : null,
@@ -253,6 +274,7 @@ export function buildTransitionPackagePayload(
     defaultParams: resolveDefaultParams(manifest.parameters),
     manifestSnapshot: {
       name: manifest.name,
+      category: manifest.category,
       summary: manifest.summary,
       tags: manifest.tags,
       cover: manifest.cover ?? null,
@@ -281,6 +303,7 @@ export function buildFilterPackagePayload(
     defaultParams: resolveDefaultParams(manifest.parameters),
     manifestSnapshot: {
       name: manifest.name,
+      category: manifest.category,
       summary: manifest.summary,
       tags: manifest.tags,
       cover: manifest.cover ?? null,

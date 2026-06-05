@@ -1,54 +1,106 @@
 <template>
-  <div class="effect-template-library">
-    <div class="effect-template-library__toolbar">
-      <input
-        v-model="search"
-        class="effect-template-library__search"
-        :placeholder="effectType === 'transition' ? '搜索转场' : '搜索滤镜'"
+  <LibrarySidebarShell>
+    <template #sidebar>
+      <EffectTemplateCategoryTabs
+        :tabs="categoryTabs"
+        :active-key="activeCategoryKey"
+        @select="handleCategorySelect"
       />
-    </div>
+    </template>
 
-    <div class="effect-template-library__grid">
-      <button
-        v-for="item in filteredItems"
-        :key="item.effectPackageId"
-        class="effect-template-card"
-        :class="`effect-template-card--${item.status}`"
-        :draggable="item.status === 'ready' || item.status === 'installed'"
-        @click="void handleCardClick(item)"
-        @dragstart="handleDragStart($event, item)"
-      >
-        <div class="effect-template-card__icon">
-          <component
-            :is="effectType === 'transition' ? IconComponents.TOOLS_FILL : IconComponents.SPARKLING"
-            size="22px"
+    <div class="effect-template-library">
+      <div class="effect-template-library__toolbar">
+        <label class="effect-template-library__search">
+          <component :is="IconComponents.SEARCH" size="16px" />
+          <input
+            v-model="search"
+            :placeholder="searchPlaceholder"
           />
-        </div>
-        <div class="effect-template-card__body">
-          <div class="effect-template-card__title">{{ item.displayName }}</div>
-          <div class="effect-template-card__meta">
-            <span>{{ item.packageVersion }}</span>
-            <span>{{ item.status }}</span>
+        </label>
+      </div>
+
+      <div v-if="filteredItems.length === 0" class="effect-template-library__empty">
+        <component :is="IconComponents.EMPTY" size="24px" />
+        <p>{{ emptyTitle }}</p>
+      </div>
+
+      <div
+        v-if="unifiedStore.viewMode !== 'list'"
+        class="effect-template-library__grid"
+        :class="`effect-template-library__grid--${unifiedStore.viewMode}`"
+      >
+        <button
+          v-for="item in filteredItems"
+          :key="item.effectPackageId"
+          class="effect-template-item"
+          :class="{
+            'is-clickable': canInstall(item),
+            'is-draggable': canDrag(item),
+          }"
+          :draggable="canDrag(item)"
+          @click="void handleItemClick(item)"
+          @dragstart="handleDragStart($event, item)"
+        >
+          <div class="effect-template-item__icon" :class="`effect-template-item__icon--${props.effectType}`">
+            <component :is="getEffectTypeIcon(props.effectType)" size="24px" />
+            <div
+              class="effect-template-item__status"
+              :class="`effect-template-item__status--${getStatusTone(item)}`"
+            >
+              <component
+                :is="getStatusIcon(item)"
+                size="12px"
+                :class="{ 'effect-template-item__status-icon--spin': getStatusTone(item) === 'processing' }"
+              />
+            </div>
           </div>
-          <div v-if="item.summary" class="effect-template-card__summary">{{ item.summary }}</div>
-          <div class="effect-template-card__tags">
-            <span v-for="tag in item.tags.slice(0, 3)" :key="tag" class="effect-template-card__tag">
-              {{ tag }}
-            </span>
+          <div class="effect-template-item__name">{{ item.displayName }}</div>
+        </button>
+      </div>
+
+      <div v-else class="effect-template-library__list">
+        <button
+          v-for="item in filteredItems"
+          :key="item.effectPackageId"
+          class="effect-template-list-item"
+          :class="{
+            'is-clickable': canInstall(item),
+            'is-draggable': canDrag(item),
+          }"
+          :draggable="canDrag(item)"
+          @click="void handleItemClick(item)"
+          @dragstart="handleDragStart($event, item)"
+        >
+          <div class="effect-template-list-item__icon" :class="`effect-template-list-item__icon--${props.effectType}`">
+            <component :is="getEffectTypeIcon(props.effectType)" size="18px" />
+            <div
+              class="effect-template-item__status"
+              :class="`effect-template-item__status--${getStatusTone(item)}`"
+            >
+              <component
+                :is="getStatusIcon(item)"
+                size="12px"
+                :class="{ 'effect-template-item__status-icon--spin': getStatusTone(item) === 'processing' }"
+              />
+            </div>
           </div>
-        </div>
-      </button>
+          <div class="effect-template-list-item__name">{{ item.displayName }}</div>
+        </button>
+      </div>
     </div>
-  </div>
+  </LibrarySidebarShell>
 </template>
 
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
-import { IconComponents } from '@/constants/iconComponents'
+import LibrarySidebarShell from './LibrarySidebarShell.vue'
+import EffectTemplateCategoryTabs from './EffectTemplateCategoryTabs.vue'
+import { IconComponents, getEffectTypeIcon } from '@/constants/iconComponents'
 import { effectTemplateRegistry } from '@/core/effect-template/EffectTemplateRegistry'
-import type { CommonEffectType } from '@/core/effect-template/commonTypes'
+import type { CommonEffectType, CommonEffectTemplateStatus } from '@/core/effect-template/commonTypes'
 import { DragSourceType, type MediaItemDragData } from '@/core/types/drag'
 import { useUnifiedStore } from '@/core/unifiedStore'
+import { useAppI18n } from '@/core/composables/useI18n'
 
 interface Props {
   effectType: CommonEffectType
@@ -59,16 +111,26 @@ interface DisplayItem {
   templateId: string
   packageVersion: string
   catalogVersion: string
-  status: string
+  status: CommonEffectTemplateStatus
   displayName: string
-  summary: string
-  tags: string[]
+  searchTokens: string[]
+  categoryKey: string
+  categoryLabel: string
   durationFrames?: number
 }
 
 const props = defineProps<Props>()
 const unifiedStore = useUnifiedStore()
+const { t, locale } = useAppI18n()
 const search = ref('')
+
+const searchPlaceholder = computed(() =>
+  props.effectType === 'transition' ? '搜索转场模板' : '搜索滤镜模板',
+)
+
+const emptyTitle = computed(() =>
+  search.value.trim() ? '没有找到匹配的模板' : '当前分类下还没有模板',
+)
 
 async function refresh(): Promise<void> {
   await effectTemplateRegistry.loadCatalog(props.effectType)
@@ -85,42 +147,131 @@ watch(() => props.effectType, () => {
 const items = computed<DisplayItem[]>(() =>
   effectTemplateRegistry
     .listStatesByType(props.effectType)
-    .map((state) => ({
-      effectPackageId: state.effectPackageId,
-      templateId: state.templateId,
-      packageVersion: state.packageVersion,
-      catalogVersion: state.catalogVersion,
-      status: state.status,
-      displayName:
-        state.meta?.name.zh ||
-        state.meta?.name.en ||
-        state.templateId,
-      summary: state.meta?.summary.zh || state.meta?.summary.en || '',
-      tags: state.meta?.tags.zh?.length ? state.meta.tags.zh : (state.meta?.tags.en || []),
-      durationFrames: state.meta?.transitionDurationFrames,
-    })),
+    .map((state) => {
+      const localizedTags = state.meta?.tags.zh?.length ? state.meta.tags.zh : (state.meta?.tags.en || [])
+      const categoryLabel = locale.value === 'zh-CN'
+        ? (state.meta?.category.label.zh || state.meta?.category.label.en || state.meta?.category.key || '')
+        : (state.meta?.category.label.en || state.meta?.category.label.zh || state.meta?.category.key || '')
+
+      return {
+        effectPackageId: state.effectPackageId,
+        templateId: state.templateId,
+        packageVersion: state.packageVersion,
+        catalogVersion: state.catalogVersion,
+        status: state.status,
+        displayName:
+          state.meta?.name.zh ||
+          state.meta?.name.en ||
+          state.templateId,
+        searchTokens: [
+          state.meta?.name.zh || '',
+          state.meta?.name.en || '',
+          state.meta?.summary.zh || '',
+          state.meta?.summary.en || '',
+          categoryLabel,
+          ...localizedTags,
+        ],
+        categoryKey: state.meta?.category.key || 'uncategorized',
+        categoryLabel,
+        durationFrames: state.meta?.transitionDurationFrames,
+      }
+    })
+    .sort((a, b) => a.displayName.localeCompare(b.displayName, locale.value === 'zh-CN' ? 'zh-CN' : 'en')),
 )
+
+const categoryTabs = computed(() => {
+  const unique = new Map<string, string>()
+  for (const item of items.value) {
+    if (!unique.has(item.categoryKey)) {
+      unique.set(item.categoryKey, item.categoryLabel || item.categoryKey)
+    }
+  }
+
+  return [
+    {
+      key: 'all',
+      label: t('media.all'),
+      icon: IconComponents.GRID,
+    },
+    ...Array.from(unique.entries())
+      .sort((a, b) => a[1].localeCompare(b[1], locale.value === 'zh-CN' ? 'zh-CN' : 'en'))
+      .map(([key, label]) => ({
+        key,
+        label,
+        icon: getEffectTypeIcon(props.effectType),
+      })),
+  ]
+})
+
+const activeCategoryKey = computed(() =>
+  unifiedStore.effectTemplateCategorySelection[props.effectType] || 'all',
+)
+
+watch(categoryTabs, (tabs) => {
+  if (!tabs.some((tab) => tab.key === activeCategoryKey.value)) {
+    unifiedStore.setEffectTemplateCategory(props.effectType, 'all')
+  }
+}, { immediate: true })
 
 const filteredItems = computed(() => {
   const keyword = search.value.trim().toLowerCase()
-  if (!keyword) {
-    return items.value
-  }
 
-  return items.value.filter((item) =>
-    item.displayName.toLowerCase().includes(keyword)
-    || item.summary.toLowerCase().includes(keyword)
-    || item.tags.some((tag) => tag.toLowerCase().includes(keyword)),
-  )
+  return items.value.filter((item) => {
+    if (activeCategoryKey.value !== 'all' && item.categoryKey !== activeCategoryKey.value) {
+      return false
+    }
+
+    if (!keyword) {
+      return true
+    }
+
+    return item.searchTokens.some((token) => token.toLowerCase().includes(keyword))
+  })
 })
 
-async function handleCardClick(item: DisplayItem): Promise<void> {
-  if (
-    item.status === 'ready'
-    || item.status === 'installed'
-    || item.status === 'installing'
-    || item.status === 'loading'
-  ) {
+function handleCategorySelect(categoryKey: string): void {
+  unifiedStore.setEffectTemplateCategory(props.effectType, categoryKey)
+}
+
+function canDrag(item: DisplayItem): boolean {
+  return item.status === 'ready' || item.status === 'installed'
+}
+
+function canInstall(item: DisplayItem): boolean {
+  return item.status === 'remote' || item.status === 'error' || item.status === 'missing'
+}
+
+function getStatusTone(item: DisplayItem): 'processing' | 'error' | 'idle' {
+  if (item.status === 'error' || item.status === 'missing') {
+    return 'error'
+  }
+  if (item.status === 'installing' || item.status === 'loading') {
+    return 'processing'
+  }
+  return 'idle'
+}
+
+function getStatusIcon(item: DisplayItem) {
+  switch (item.status) {
+    case 'remote':
+      return IconComponents.DOWNLOAD
+    case 'installing':
+    case 'loading':
+      return IconComponents.LOADING
+    case 'error':
+    case 'missing':
+      return IconComponents.WARNING
+    case 'installed':
+      return IconComponents.SAVE
+    case 'ready':
+      return IconComponents.CHECK
+    default:
+      return IconComponents.SPARKLING
+  }
+}
+
+async function handleItemClick(item: DisplayItem): Promise<void> {
+  if (!canInstall(item)) {
     return
   }
 
@@ -137,7 +288,7 @@ async function handleCardClick(item: DisplayItem): Promise<void> {
 }
 
 function handleDragStart(event: DragEvent, item: DisplayItem): void {
-  if (!event.dataTransfer || (item.status !== 'ready' && item.status !== 'installed')) {
+  if (!event.dataTransfer || !canDrag(item)) {
     event.preventDefault()
     return
   }
@@ -166,104 +317,258 @@ function handleDragStart(event: DragEvent, item: DisplayItem): void {
   height: 100%;
   display: flex;
   flex-direction: column;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.02), transparent);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.02), transparent),
+    var(--color-bg-secondary);
 }
 
 .effect-template-library__toolbar {
+  display: flex;
+  align-items: center;
   padding: 10px;
   border-bottom: 1px solid var(--color-border-primary);
+  background: var(--color-bg-tertiary);
 }
 
 .effect-template-library__search {
-  width: 100%;
+  flex: 1;
+  min-width: 0;
   height: 34px;
   border: 1px solid var(--color-border-secondary);
   border-radius: 10px;
-  background: var(--color-bg-tertiary);
+  background: var(--color-bg-secondary);
+  color: var(--color-text-secondary);
+  padding: 0 10px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.effect-template-library__search input {
+  flex: 1;
+  min-width: 0;
+  background: transparent;
+  border: none;
   color: var(--color-text-primary);
-  padding: 0 12px;
   outline: none;
+}
+
+.effect-template-library__empty {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 10px;
+  color: var(--color-text-secondary);
+}
+
+.effect-template-library__empty p {
+  margin: 0;
 }
 
 .effect-template-library__grid {
   flex: 1;
   overflow: auto;
-  padding: 12px;
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
-  gap: 12px;
+  align-content: start;
+  padding: var(--spacing-sm);
 }
 
-.effect-template-card {
-  border: 1px solid var(--color-border-secondary);
-  border-radius: 14px;
-  background: var(--color-bg-tertiary);
-  color: inherit;
-  text-align: left;
-  padding: 14px;
+.effect-template-library__grid--large-icon {
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: var(--spacing-md);
+}
+
+.effect-template-library__grid--medium-icon {
+  grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+  gap: var(--spacing-sm);
+}
+
+.effect-template-library__grid--small-icon {
+  grid-template-columns: repeat(auto-fill, minmax(70px, 1fr));
+  gap: var(--spacing-xs);
+}
+
+.effect-template-item {
+  border: 1px solid transparent;
+  border-radius: var(--border-radius-small);
+  background: transparent;
+  color: var(--color-text-primary);
   display: flex;
-  gap: 12px;
+  flex-direction: column;
+  align-items: center;
+  padding: 4px;
+  cursor: default;
+  transition: all var(--transition-fast);
+}
+
+.effect-template-item.is-clickable,
+.effect-template-item.is-draggable {
   cursor: pointer;
 }
 
-.effect-template-card--installing {
-  cursor: default;
+.effect-template-item:hover {
+  background-color: rgba(255, 255, 255, 0.05);
 }
 
-.effect-template-card__icon {
-  width: 42px;
-  height: 42px;
-  border-radius: 12px;
+.effect-template-item__icon {
+  width: 64px;
+  height: 64px;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: color-mix(in srgb, var(--color-accent-primary) 18%, transparent);
+  margin-bottom: 4px;
+  border-radius: 10px;
+  position: relative;
 }
 
-.effect-template-card__body {
-  min-width: 0;
-  flex: 1;
+.effect-template-library__grid--large-icon .effect-template-item__icon {
+  width: 120px;
+  height: 120px;
 }
 
-.effect-template-card__title {
-  font-size: 13px;
-  font-weight: 600;
+.effect-template-library__grid--medium-icon .effect-template-item__icon {
+  width: 80px;
+  height: 80px;
+}
+
+.effect-template-library__grid--small-icon .effect-template-item__icon {
+  width: 48px;
+  height: 48px;
+}
+
+.effect-template-item__icon--transition {
+  background: linear-gradient(135deg, rgba(255, 173, 66, 0.18), rgba(255, 110, 64, 0.08));
+  border: 1px solid rgba(255, 173, 66, 0.22);
+  color: #ffb36b;
+}
+
+.effect-template-item__icon--filter {
+  background: linear-gradient(135deg, rgba(102, 191, 255, 0.18), rgba(32, 114, 255, 0.08));
+  border: 1px solid rgba(102, 191, 255, 0.22);
+  color: #86caff;
+}
+
+.effect-template-item__name {
+  width: 100%;
+  max-width: 90px;
+  padding: 2px;
+  border-radius: 2px;
+  text-align: center;
+  font-size: var(--font-size-xs);
+  line-height: 1.2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.effect-template-library__grid--large-icon .effect-template-item__name {
+  max-width: 130px;
+  font-size: var(--font-size-sm);
+}
+
+.effect-template-library__grid--small-icon .effect-template-item__name {
+  max-width: 60px;
+}
+
+.effect-template-item__status {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 18px;
+  height: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: rgba(15, 15, 15, 0.72);
+  color: var(--color-text-secondary);
+  backdrop-filter: blur(4px);
+}
+
+.effect-template-item__status--processing {
+  color: #ffcf9a;
+}
+
+.effect-template-item__status--error {
+  color: #ff9e9e;
+}
+
+.effect-template-item__status--idle {
   color: var(--color-text-primary);
 }
 
-.effect-template-card__meta,
-.effect-template-card__summary {
-  margin-top: 6px;
-  font-size: 12px;
-  color: var(--color-text-secondary);
+.effect-template-item__status-icon--spin {
+  animation: effect-template-spin 1s linear infinite;
 }
 
-.effect-template-card__meta {
+.effect-template-library__list {
+  flex: 1;
+  overflow: auto;
   display: flex;
-  gap: 8px;
+  flex-direction: column;
+  padding: var(--spacing-sm);
+  gap: 2px;
 }
 
-.effect-template-card__tags {
-  margin-top: 8px;
+.effect-template-list-item {
+  border: 1px solid transparent;
+  border-radius: var(--border-radius-small);
+  background: transparent;
+  color: var(--color-text-primary);
+  display: grid;
+  grid-template-columns: 40px 1fr;
+  align-items: center;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-xs) var(--spacing-sm);
+  cursor: default;
+  transition: all var(--transition-fast);
+}
+
+.effect-template-list-item.is-clickable,
+.effect-template-list-item.is-draggable {
+  cursor: pointer;
+}
+
+.effect-template-list-item:hover {
+  background-color: rgba(255, 255, 255, 0.05);
+}
+
+.effect-template-list-item__icon {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
   display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
+  align-items: center;
+  justify-content: center;
+  position: relative;
 }
 
-.effect-template-card__tag {
-  font-size: 11px;
-  padding: 2px 8px;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.06);
-  color: var(--color-text-secondary);
+.effect-template-list-item__icon--transition {
+  background: linear-gradient(135deg, rgba(255, 173, 66, 0.18), rgba(255, 110, 64, 0.08));
+  color: #ffb36b;
 }
 
-.effect-template-card--error,
-.effect-template-card--missing {
-  border-color: rgba(255, 107, 107, 0.45);
+.effect-template-list-item__icon--filter {
+  background: linear-gradient(135deg, rgba(102, 191, 255, 0.18), rgba(32, 114, 255, 0.08));
+  color: #86caff;
 }
 
-.effect-template-card--ready {
-  border-color: rgba(74, 222, 128, 0.35);
+.effect-template-list-item__name {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-align: left;
+  font-size: var(--font-size-base);
+}
+
+@keyframes effect-template-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
 }
 </style>

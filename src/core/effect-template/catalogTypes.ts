@@ -8,6 +8,11 @@ export interface LocalizedTagList {
   en: string[]
 }
 
+export interface EffectTemplateCategory {
+  key: string
+  label: LocalizedText
+}
+
 export interface TransitionCatalogVersionResponse {
   catalog_version: string
   updated_at: string | null
@@ -18,6 +23,7 @@ export interface BaseTemplateSummary {
   id: string
   package_version: string
   name: LocalizedText
+  category: EffectTemplateCategory
   summary: LocalizedText
   tags: LocalizedTagList
   cover_url: string | null
@@ -38,6 +44,7 @@ export interface EffectTemplatePackageManifestBase {
   packageId: string
   version: string
   name: LocalizedText
+  category: EffectTemplateCategory
   summary: LocalizedText
   tags: LocalizedTagList
   cover: string | null
@@ -113,6 +120,7 @@ export interface CommonEffectTemplateMeta {
   packageVersion: string
   catalogVersion: string
   name: LocalizedText
+  category: EffectTemplateCategory
   summary: LocalizedText
   tags: LocalizedTagList
   coverUrl: string
