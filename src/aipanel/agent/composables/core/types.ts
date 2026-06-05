@@ -20,7 +20,10 @@ export interface AddMediaToTimelineOperation extends BaseOperationConfig {
   params: {
     mediaItemId: string
     trackId: string
-    timelineStart: string // 时间轴开始位置（时间码）
+    timelineStart: string // 时间轴开始时间（必需，格式 HH:MM:SS+FF）
+    timelineEnd: string // 时间轴结束时间（必需，格式 HH:MM:SS+FF）
+    clipStart: string // 素材裁剪开始时间（必需，格式 HH:MM:SS+FF）
+    clipEnd: string // 素材裁剪结束时间（必需，格式 HH:MM:SS+FF）
   }
 }
 

@@ -423,6 +423,29 @@ export class CommandFactory {
       throw new Error('素材时长信息不可用，请等待解析完成')
     }
 
+    const timelineStartFrames = this.timecodeToFrames(params.timelineStart)
+    const timelineEndFrames = this.timecodeToFrames(params.timelineEnd)
+    const clipStartFrames = this.timecodeToFrames(params.clipStart)
+    const clipEndFrames = this.timecodeToFrames(params.clipEnd)
+
+    if (timelineStartFrames >= timelineEndFrames) {
+      throw new Error('timelineStart 必须小于 timelineEnd')
+    }
+
+    if (clipStartFrames >= clipEndFrames) {
+      throw new Error('clipStart 必须小于 clipEnd')
+    }
+
+    if (clipEndFrames > availableDuration) {
+      throw new Error('clipEnd 超出素材时长范围')
+    }
+
+    const timelineDuration = timelineEndFrames - timelineStartFrames
+    const clipDuration = clipEndFrames - clipStartFrames
+    if (timelineDuration !== clipDuration) {
+      throw new Error('timeline 时长必须与 clip 时长一致')
+    }
+
     // 获取原始分辨率
     let originalResolution: { width: number; height: number } | null = null
     if (MediaItemQueries.isVideo(mediaItem)) {
@@ -434,9 +457,6 @@ export class CommandFactory {
     // 创建默认配置
     const config = this.createDefaultTimelineItemConfig(mediaItem.mediaType, originalResolution)
 
-    // 时间码转帧
-    const positionFrames = this.timecodeToFrames(params.timelineStart)
-
     // 创建时间轴项目数据
     const timelineItemData: UnifiedTimelineItemData = {
       id: generateTimelineItemId(),
@@ -444,10 +464,10 @@ export class CommandFactory {
       trackId: params.trackId,
       mediaType: mediaItem.mediaType,
       timeRange: {
-        timelineStartTime: positionFrames,
-        timelineEndTime: positionFrames + availableDuration,
-        clipStartTime: 0,
-        clipEndTime: availableDuration,
+        timelineStartTime: timelineStartFrames,
+        timelineEndTime: timelineEndFrames,
+        clipStartTime: clipStartFrames,
+        clipEndTime: clipEndFrames,
       },
       config: config,
       animation: undefined,

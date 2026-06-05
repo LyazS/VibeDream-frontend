@@ -130,11 +130,16 @@ export class ConfigValidator {
       throw new Error('trackId 不能为空且必须是字符串')
     }
 
-    if (!params.timelineStart || typeof params.timelineStart !== 'string') {
-      throw new Error('timelineStart 不能为空且必须是字符串')
+    const requiredParams = ['timelineStart', 'timelineEnd', 'clipStart', 'clipEnd']
+    for (const param of requiredParams) {
+      if (!params[param]) {
+        throw new Error(`${param} 是必需参数`)
+      }
+      if (typeof params[param] !== 'string') {
+        throw new Error(`${param} 必须是字符串`)
+      }
+      this.validateTimecode(params[param])
     }
-
-    this.validateTimecode(params.timelineStart)
   }
 
   /**

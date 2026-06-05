@@ -67,8 +67,18 @@ const buildAPI = () => {
   return {
     // === 时间轴操作 ===
 
-    addMediaToTimeline: (mediaItemId: string, trackId: string, timelineStart: string) => {
-      const result = { type: 'addMediaToTimeline', params: { mediaItemId, trackId, timelineStart } }
+    addMediaToTimeline: (
+      mediaItemId: string,
+      trackId: string,
+      timelineStart: string,
+      timelineEnd: string,
+      clipStart: string,
+      clipEnd: string
+    ) => {
+      const result = {
+        type: 'addMediaToTimeline',
+        params: { mediaItemId, trackId, timelineStart, timelineEnd, clipStart, clipEnd }
+      }
       operations.push(result)
       return result
     },
