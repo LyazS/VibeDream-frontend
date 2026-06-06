@@ -17,7 +17,14 @@ export { RemoveTimelineItemCommand } from './RemoveTimelineItemCommand' // ok
 export { RemoveASRRequestCommand } from './RemoveASRRequestCommand'
 export { StartASRRequestCommand } from './StartASRRequestCommand'
 export { MoveTimelineItemCommand } from './MoveTimelineItemCommand' // ok
-export { UpdateTransformCommand } from './UpdateTransformCommand' // -
+export {
+  UpdateVisualTransformCommand,
+  type VisualTransformUpdate,
+} from './UpdateVisualTransformCommand'
+export {
+  UpdateAudioPropertiesCommand,
+  type AudioPropertyUpdate,
+} from './UpdateAudioPropertiesCommand'
 export { SplitTimelineItemCommand } from './SplitTimelineItemCommand' // ok
 export { AddTrackCommand } from './AddTrackCommand' // ok
 export { RenameTrackCommand } from './RenameTrackCommand' // ok

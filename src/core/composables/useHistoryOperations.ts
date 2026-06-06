@@ -1,10 +1,5 @@
 import type { MediaType } from '@/core'
-import type {
-  UnifiedTimelineItemData,
-  VideoMediaConfig,
-  AudioMediaConfig,
-  BlendMode,
-} from '@/core/timelineitem'
+import type { UnifiedTimelineItemData, VideoMediaConfig, AudioMediaConfig } from '@/core/timelineitem'
 import type { UnifiedTimeRange } from '@/core/types/timeRange'
 import type { UnifiedTrackType, UnifiedTrackData } from '@/core/track/TrackTypes'
 import type {
@@ -21,7 +16,10 @@ import {
   RemoveASRRequestCommand,
   StartASRRequestCommand,
   MoveTimelineItemCommand,
-  UpdateTransformCommand,
+  UpdateVisualTransformCommand,
+  UpdateAudioPropertiesCommand,
+  type VisualTransformUpdate,
+  type AudioPropertyUpdate,
   UpdateTransitionOutCommand,
   UpdateFilterEffectCommand,
   SplitTimelineItemCommand,
@@ -71,19 +69,8 @@ import {
 } from '@/core/timelineitem/filter'
 import { RENDERER_FPS } from '@/core/mediabunny/constant'
 
-// 变换属性类型定义
-interface TransformProperties {
-  x?: number
-  y?: number
-  width?: number
-  height?: number
-  rotation?: number
-  opacity?: number
-  blendMode?: BlendMode
-  duration?: number // 时长（帧数）
-  playbackRate?: number // 倍速
-  volume?: number // 音量（0-1之间）
-  isMuted?: boolean // 静音状态
+interface PlaybackRateUpdate {
+  playbackRate: number
 }
 
 /**
@@ -104,85 +91,64 @@ export function useHistoryOperations(
   /**
    * 检查变换属性是否有实际变化
    */
-  function checkTransformChanges(
-    oldTransform: TransformProperties,
-    newTransform: TransformProperties,
+  function hasVisualTransformChanges(
+    oldTransform: VisualTransformUpdate,
+    newTransform: VisualTransformUpdate,
   ): boolean {
-    // 检查位置变化
     if (
-      (newTransform.x !== undefined && oldTransform.x !== undefined) ||
-      (newTransform.y !== undefined && oldTransform.y !== undefined)
-    ) {
-      const xChanged =
-        newTransform.x !== undefined &&
-        oldTransform.x !== undefined &&
-        Math.abs(oldTransform.x - newTransform.x) > 0.1
-      const yChanged =
-        newTransform.y !== undefined &&
-        oldTransform.y !== undefined &&
-        Math.abs(oldTransform.y - newTransform.y) > 0.1
-      if (xChanged || yChanged) return true
-    }
-
-    // 检查大小变化
+      newTransform.x !== undefined &&
+      oldTransform.x !== undefined &&
+      Math.abs(oldTransform.x - newTransform.x) > 0.1
+    ) return true
     if (
-      (newTransform.width !== undefined && oldTransform.width !== undefined) ||
-      (newTransform.height !== undefined && oldTransform.height !== undefined)
-    ) {
-      const widthChanged =
-        newTransform.width !== undefined &&
-        oldTransform.width !== undefined &&
-        Math.abs(oldTransform.width - newTransform.width) > 0.1
-      const heightChanged =
-        newTransform.height !== undefined &&
-        oldTransform.height !== undefined &&
-        Math.abs(oldTransform.height - newTransform.height) > 0.1
-      if (widthChanged || heightChanged) return true
-    }
-
-    // 检查旋转变化
-    if (newTransform.rotation !== undefined && oldTransform.rotation !== undefined) {
-      const rotationChanged = Math.abs(oldTransform.rotation - newTransform.rotation) > 0.001 // 约0.06度
-      if (rotationChanged) return true
-    }
-
-    // 检查透明度变化
-    if (newTransform.opacity !== undefined && oldTransform.opacity !== undefined) {
-      const opacityChanged = Math.abs(oldTransform.opacity - newTransform.opacity) > 0.001
-      if (opacityChanged) return true
-    }
-
-    if (newTransform.blendMode !== undefined && oldTransform.blendMode !== undefined) {
-      const blendModeChanged = oldTransform.blendMode !== newTransform.blendMode
-      if (blendModeChanged) return true
-    }
-
-    // 检查时长变化
-    if (newTransform.duration !== undefined && oldTransform.duration !== undefined) {
-      const durationChanged = Math.abs(oldTransform.duration - newTransform.duration) > 0
-      if (durationChanged) return true
-    }
-
-    // 检查倍速变化
-    if (newTransform.playbackRate !== undefined && oldTransform.playbackRate !== undefined) {
-      const playbackRateChanged =
-        Math.abs(oldTransform.playbackRate - newTransform.playbackRate) >= 0.01 // 0.01倍速误差容忍
-      if (playbackRateChanged) return true
-    }
-
-    // 检查音量变化
-    if (newTransform.volume !== undefined && oldTransform.volume !== undefined) {
-      const volumeChanged = Math.abs(oldTransform.volume - newTransform.volume) >= 0.01 // 0.01音量误差容忍
-      if (volumeChanged) return true
-    }
-
-    // 检查静音状态变化
-    if (newTransform.isMuted !== undefined && oldTransform.isMuted !== undefined) {
-      const muteChanged = oldTransform.isMuted !== newTransform.isMuted
-      if (muteChanged) return true
-    }
-
+      newTransform.y !== undefined &&
+      oldTransform.y !== undefined &&
+      Math.abs(oldTransform.y - newTransform.y) > 0.1
+    ) return true
+    if (
+      newTransform.width !== undefined &&
+      oldTransform.width !== undefined &&
+      Math.abs(oldTransform.width - newTransform.width) > 0.1
+    ) return true
+    if (
+      newTransform.height !== undefined &&
+      oldTransform.height !== undefined &&
+      Math.abs(oldTransform.height - newTransform.height) > 0.1
+    ) return true
+    if (
+      newTransform.rotation !== undefined &&
+      oldTransform.rotation !== undefined &&
+      Math.abs(oldTransform.rotation - newTransform.rotation) > 0.001
+    ) return true
+    if (
+      newTransform.opacity !== undefined &&
+      oldTransform.opacity !== undefined &&
+      Math.abs(oldTransform.opacity - newTransform.opacity) > 0.001
+    ) return true
+    if (
+      newTransform.blendMode !== undefined &&
+      oldTransform.blendMode !== undefined &&
+      oldTransform.blendMode !== newTransform.blendMode
+    ) return true
     return false
+  }
+
+  function hasAudioPropertyChanges(
+    oldValues: AudioPropertyUpdate,
+    newValues: AudioPropertyUpdate,
+  ): boolean {
+    return (
+      oldValues.isMuted !== undefined &&
+      newValues.isMuted !== undefined &&
+      oldValues.isMuted !== newValues.isMuted
+    )
+  }
+
+  function hasPlaybackRateChanges(
+    oldValue: PlaybackRateUpdate,
+    newValue: PlaybackRateUpdate,
+  ): boolean {
+    return Math.abs(oldValue.playbackRate - newValue.playbackRate) >= 0.01
   }
 
   function getEditableTimelineItemOrWarn(
@@ -310,91 +276,125 @@ export function useHistoryOperations(
    * @param timelineItemId 要更新的时间轴项目ID
    * @param newTransform 新的变换属性
    */
-  async function updateTimelineItemTransformWithHistory(
+  async function updateVisualTransformWithHistory(
     timelineItemId: string,
-    newTransform: TransformProperties,
+    newTransform: VisualTransformUpdate,
   ) {
-    const timelineItem = getEditableTimelineItemOrWarn(timelineItemId, '更新变换属性')
+    const timelineItem = getEditableTimelineItemOrWarn(timelineItemId, '更新视觉属性')
     if (!timelineItem) {
       return
     }
 
-    // 获取当前的变换属性（类型安全版本）
-    const oldTransform: TransformProperties = {}
-
-    // 检查是否具有视觉属性
-    if (TimelineItemQueries.hasVisualProperties(timelineItem)) {
-      const config = timelineItem.config as VideoMediaConfig
-      if (newTransform.x !== undefined) {
-        oldTransform.x = config.x
-      }
-      if (newTransform.y !== undefined) {
-        oldTransform.y = config.y
-      }
-      if (newTransform.width !== undefined) {
-        oldTransform.width = config.width
-      }
-      if (newTransform.height !== undefined) {
-        oldTransform.height = config.height
-      }
-      if (newTransform.rotation !== undefined) {
-        oldTransform.rotation = config.rotation
-      }
-      if (newTransform.opacity !== undefined) {
-        oldTransform.opacity = config.opacity
-      }
-      if (newTransform.blendMode !== undefined) {
-        oldTransform.blendMode = config.blendMode
-      }
-    }
-
-    if (newTransform.duration !== undefined) {
-      // 计算当前时长（帧数）
-      const timeRange = timelineItem.timeRange
-      const currentDurationFrames = timeRange.timelineEndTime - timeRange.timelineStartTime
-      oldTransform.duration = currentDurationFrames
-    }
-
-    if (newTransform.playbackRate !== undefined) {
-      // 获取当前倍速（对视频和音频有效）
-      oldTransform.playbackRate = 1
-      if (
-        TimelineItemQueries.isVideoTimelineItem(timelineItem) ||
-        TimelineItemQueries.isAudioTimelineItem(timelineItem)
-      ) {
-        // 使用 timeRange 计算 playbackRate
-        // playbackRate = (clipEndTime - clipStartTime) / (timelineEndTime - timelineStartTime)
-        const timeRange = timelineItem.timeRange
-        const clipDuration = timeRange.clipEndTime - timeRange.clipStartTime
-        const timelineDuration = timeRange.timelineEndTime - timeRange.timelineStartTime
-        if (timelineDuration > 0) {
-          oldTransform.playbackRate = clipDuration / timelineDuration
-        }
-      }
-    }
-
-    // 检查是否具有音频属性
-    if (TimelineItemQueries.hasAudioProperties(timelineItem)) {
-      const config = timelineItem.config as AudioMediaConfig
-      if (newTransform.volume !== undefined) {
-        oldTransform.volume = config.volume ?? 1
-      }
-      if (newTransform.isMuted !== undefined) {
-        oldTransform.isMuted = config.isMuted ?? false
-      }
-    }
-
-    // 检查是否有实际变化
-    const hasChanges = checkTransformChanges(oldTransform, newTransform)
-    if (!hasChanges) {
-      console.log('⚠️ 变换属性没有变化，跳过更新操作')
+    if (!TimelineItemQueries.hasVisualProperties(timelineItem)) {
+      console.warn(`⚠️ 时间轴项目不支持视觉属性更新: ${timelineItemId}`)
       return
     }
 
-    const command = new UpdateTransformCommand(
+    const config = timelineItem.config as VideoMediaConfig
+    const oldTransform: VisualTransformUpdate = {}
+
+    if (newTransform.x !== undefined) oldTransform.x = config.x
+    if (newTransform.y !== undefined) oldTransform.y = config.y
+    if (newTransform.width !== undefined) oldTransform.width = config.width
+    if (newTransform.height !== undefined) oldTransform.height = config.height
+    if (newTransform.rotation !== undefined) oldTransform.rotation = config.rotation
+    if (newTransform.opacity !== undefined) oldTransform.opacity = config.opacity
+    if (newTransform.blendMode !== undefined) oldTransform.blendMode = config.blendMode
+
+    if (!hasVisualTransformChanges(oldTransform, newTransform)) {
+      console.log('⚠️ 视觉属性没有变化，跳过更新操作')
+      return
+    }
+
+    const command = new UpdateVisualTransformCommand(
       timelineItemId,
       oldTransform,
       newTransform,
+      unifiedTimelineModule,
+      unifiedMediaModule,
+    )
+    await unifiedHistoryModule.executeCommand(command)
+  }
+
+  async function updateAudioPropertiesWithHistory(
+    timelineItemId: string,
+    newValues: AudioPropertyUpdate,
+  ) {
+    const timelineItem = getEditableTimelineItemOrWarn(timelineItemId, '更新音频属性')
+    if (!timelineItem) {
+      return
+    }
+
+    if (!TimelineItemQueries.hasAudioProperties(timelineItem)) {
+      console.warn(`⚠️ 时间轴项目不支持音频属性更新: ${timelineItemId}`)
+      return
+    }
+
+    const config = timelineItem.config as AudioMediaConfig
+    const oldValues: AudioPropertyUpdate = {}
+
+    if (newValues.isMuted !== undefined) {
+      oldValues.isMuted = config.isMuted ?? false
+    }
+
+    if (!hasAudioPropertyChanges(oldValues, newValues)) {
+      console.log('⚠️ 音频属性没有变化，跳过更新操作')
+      return
+    }
+
+    const command = new UpdateAudioPropertiesCommand(
+      timelineItemId,
+      oldValues,
+      newValues,
+      unifiedTimelineModule,
+      unifiedMediaModule,
+    )
+    await unifiedHistoryModule.executeCommand(command)
+  }
+
+  async function updatePlaybackRateWithHistory(
+    timelineItemId: string,
+    newPlaybackRate: number,
+  ) {
+    const timelineItem = getEditableTimelineItemOrWarn(timelineItemId, '更新播放速度')
+    if (!timelineItem) {
+      return
+    }
+
+    const oldValue: PlaybackRateUpdate = { playbackRate: 1 }
+    if (
+      TimelineItemQueries.isVideoTimelineItem(timelineItem) ||
+      TimelineItemQueries.isAudioTimelineItem(timelineItem)
+    ) {
+      const timeRange = timelineItem.timeRange
+      const clipDuration = timeRange.clipEndTime - timeRange.clipStartTime
+      const timelineDuration = timeRange.timelineEndTime - timeRange.timelineStartTime
+      if (timelineDuration > 0) {
+        oldValue.playbackRate = clipDuration / timelineDuration
+      }
+    }
+
+    const newValue: PlaybackRateUpdate = { playbackRate: newPlaybackRate }
+    if (!hasPlaybackRateChanges(oldValue, newValue)) {
+      console.log('⚠️ 播放速度没有变化，跳过更新操作')
+      return
+    }
+
+    const timeRange = timelineItem.timeRange
+    const clipDurationFrames = timeRange.clipEndTime - timeRange.clipStartTime
+    const targetPlaybackRate = Math.max(0.1, Math.min(100, newPlaybackRate))
+    const newTimelineDurationFrames = Math.max(1, Math.round(clipDurationFrames / targetPlaybackRate))
+    const newTimeRange: UnifiedTimeRange = {
+      timelineStartTime: timeRange.timelineStartTime,
+      timelineEndTime: timeRange.timelineStartTime + newTimelineDurationFrames,
+      clipStartTime: timeRange.clipStartTime,
+      clipEndTime: timeRange.clipEndTime,
+    }
+
+    const command = new ResizeTimelineItemCommand(
+      timelineItemId,
+      timeRange,
+      newTimeRange,
       unifiedTimelineModule,
       unifiedMediaModule,
     )
@@ -1343,7 +1343,9 @@ export function useHistoryOperations(
     removeTimelineItemWithHistory,
     startASRRequestWithHistory,
     moveTimelineItemWithHistory,
-    updateTimelineItemTransformWithHistory,
+    updateVisualTransformWithHistory,
+    updateAudioPropertiesWithHistory,
+    updatePlaybackRateWithHistory,
     updateTransitionOutWithHistory,
     updateFilterEffectWithHistory,
     commitFilterEffectWithHistory,

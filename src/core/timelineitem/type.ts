@@ -70,17 +70,18 @@ export interface TimelineItemProvenance {
 // ==================== 配置类型映射 ====================
 
 /**
- * 变换数据接口。
+ * 视觉属性 patch。
  *
  * 视觉坐标语义：
  * - x/y 以画布中心为原点
  * - y > 0 表示向上
  */
-export type TransformData = Partial<VisualProps> & Partial<AudioProps>
-export type TransformDataEx = TransformData & {
-  duration?: number // 时长（帧数）- 用于时间轴项目时长调整
-  playbackRate?: number
-}
+export type VisualPropPatch = Partial<VisualProps>
+
+/**
+ * 音频属性 patch。
+ */
+export type AudioPropPatch = Partial<AudioProps>
 
 // ==================== 统一时间轴项目运行时数据接口 ====================
 /**

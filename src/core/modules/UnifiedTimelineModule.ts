@@ -1,15 +1,16 @@
 import { ref } from 'vue'
 import { cleanupTimelineItemBunny } from '@/core/bunnyUtils/timelineItemSetup'
-import type { UnifiedTimelineItemData, TransformData } from '@/core/timelineitem/type'
+import type {
+  UnifiedTimelineItemData,
+  VisualPropPatch,
+  AudioPropPatch,
+} from '@/core/timelineitem/type'
 import { TimelineItemQueries } from '@/core/timelineitem/queries'
 import type { MediaType } from '@/core/mediaitem/types'
 import type { UnifiedTimeRange } from '@/core/types/timeRange'
 import { ModuleRegistry, MODULE_NAMES } from './ModuleRegistry'
 import type { UnifiedSelectionModule } from './UnifiedSelectionModule'
 
-import { isVideoTimelineItem } from '@/core/timelineitem/queries'
-import { adjustKeyframesForDurationChange } from '@/core/utils/unifiedKeyframeUtils'
-import { hasAnimation } from '@/core/utils/unifiedKeyframeUtils'
 import { TimelineItemFactory } from '../timelineitem'
 import {
   normalizeClipTransitionOutConfig,
@@ -207,97 +208,66 @@ export function createUnifiedTimelineModule(registry: ModuleRegistry) {
       .filter((overlay): overlay is TimelineTransitionOverlayViewModel => overlay !== null)
   }
 
-  /**
-   * 更新UnifiedTimelineItem的变换属性
-   * 直接设置到 item.config 中，不设置到 sprite
-   */
-  function updateTimelineItemTransform(timelineItemId: string, transform: TransformData) {
+  function setTimelineItemVisualPropsForCmd(
+    timelineItemId: string,
+    patch: VisualPropPatch,
+  ) {
     const item = getReadyTimelineItem(timelineItemId)
     if (!item) return
 
-    // hasVisualProperties 类型守卫确保了 config 具有视觉属性
-    if (TimelineItemQueries.hasVisualProperties(item)) {
-      const config = item.config
-
-      // 直接更新 config 中的属性
-      if (transform.x !== undefined) {
-        config.x = transform.x
-      }
-      if (transform.y !== undefined) {
-        config.y = transform.y
-      }
-      if (transform.width !== undefined) {
-        config.width = transform.width
-      }
-      if (transform.height !== undefined) {
-        config.height = transform.height
-      }
-      if (transform.rotation !== undefined) {
-        config.rotation = transform.rotation
-      }
-      if (transform.opacity !== undefined) {
-        config.opacity = transform.opacity
-      }
-      if (transform.blendMode !== undefined) {
-        config.blendMode = transform.blendMode
-      }
+    if (!TimelineItemQueries.hasVisualProperties(item)) {
+      return
     }
 
-    // 处理音频属性（对视频和音频有效）
-    if (TimelineItemQueries.hasAudioProperties(item)) {
-      const config = item.config
+    const config = item.config
 
-      if (transform.volume !== undefined) {
-        config.volume = transform.volume
-      }
-      if (transform.isMuted !== undefined) {
-        config.isMuted = transform.isMuted
-      }
+    if (patch.x !== undefined) {
+      config.x = patch.x
+    }
+    if (patch.y !== undefined) {
+      config.y = patch.y
+    }
+    if (patch.width !== undefined) {
+      config.width = patch.width
+    }
+    if (patch.height !== undefined) {
+      config.height = patch.height
+    }
+    if (patch.rotation !== undefined) {
+      config.rotation = patch.rotation
+    }
+    if (patch.opacity !== undefined) {
+      config.opacity = patch.opacity
+    }
+    if (patch.blendMode !== undefined) {
+      config.blendMode = patch.blendMode
+    }
+    if (patch.proportionalScale !== undefined) {
+      config.proportionalScale = patch.proportionalScale
+    }
+    if (patch.mask !== undefined) {
+      config.mask = patch.mask
     }
   }
 
-  /**
-   * 更新时间轴项目播放速度
-   * @param timelineItemId 时间轴项目ID
-   * @param newRate 新的播放速度
-   */
-  function updateTimelineItemPlaybackRate(timelineItemId: string, newRate: number) {
-    const item = getTimelineItem(timelineItemId)
-    if (item) {
-      // 确保播放速度在合理范围内（扩展到0.1-100倍）
-      const clampedRate = Math.max(0.1, Math.min(100, newRate))
+  function setTimelineItemAudioPropsForCmd(
+    timelineItemId: string,
+    patch: AudioPropPatch,
+  ) {
+    const item = getReadyTimelineItem(timelineItemId)
+    if (!item) return
 
-      // 🎯 关键帧位置调整：在更新播放速度之前计算时长变化
-      let oldDurationFrames = 0
-      let newDurationFrames = 0
+    if (!TimelineItemQueries.hasAudioProperties(item)) {
+      return
+    }
 
-      if (isVideoTimelineItem(item)) {
-        const clipDurationFrames = item.timeRange.clipEndTime - item.timeRange.clipStartTime
-        oldDurationFrames = item.timeRange.timelineEndTime - item.timeRange.timelineStartTime
-        newDurationFrames = Math.round(clipDurationFrames / clampedRate)
+    const config = item.config
 
-        // 如果有关键帧，先调整位置
-        if (hasAnimation(item)) {
-          adjustKeyframesForDurationChange(item, oldDurationFrames, newDurationFrames)
-          console.log('🎬 [Playback Rate] Keyframes adjusted for speed change:', {
-            oldRate: clampedRate,
-            newRate: clampedRate,
-            oldDuration: oldDurationFrames,
-            newDuration: newDurationFrames,
-          })
-        }
-      }
-
-      // 🎯 直接计算新的时间范围并使用 TimelineItemFactory.setTimeRange 设置
-      const clipDurationFrames = item.timeRange.clipEndTime - item.timeRange.clipStartTime
-      const newTimelineDurationFrames = Math.round(clipDurationFrames / clampedRate)
-      const newTimelineEndTime = item.timeRange.timelineStartTime + newTimelineDurationFrames
-
-      TimelineItemFactory.setTimeRange(item, {
-        timelineEndTime: newTimelineEndTime,
-      })
-
-      refreshTransitionItems()
+    if (patch.volume !== undefined) {
+      config.volume = patch.volume
+    }
+    if (patch.isMuted !== undefined) {
+      config.isMuted = patch.isMuted
     }
   }
 
@@ -313,8 +283,8 @@ export function createUnifiedTimelineModule(registry: ModuleRegistry) {
     getTimelineItem,
     getReadyTimelineItem,
     updateTimelineItemPosition,
-    updateTimelineItemTransform,
-    updateTimelineItemPlaybackRate,
+    setTimelineItemVisualPropsForCmd,
+    setTimelineItemAudioPropsForCmd,
     setTimelineItemTimeRangeForCmd,
     setTimelineItemTransitionOutForCmd,
     setTimelineItemFilterEffectForCmd,

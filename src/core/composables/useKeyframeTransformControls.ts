@@ -286,7 +286,7 @@ export function useUnifiedKeyframeTransformControls(
   const setBlendModeDirectly = async (nextBlendMode: BlendMode) => {
     const item = selectedTimelineItem.value
     if (!item || !canOperateTransforms.value) return
-    await unifiedStore.updateTimelineItemTransformWithHistory(item.id, { blendMode: nextBlendMode })
+    await unifiedStore.updateVisualTransformWithHistory(item.id, { blendMode: nextBlendMode })
   }
 
   const setVolume = async (nextVolume: number) => {

@@ -18,7 +18,8 @@ import { MoveTrackCommand } from '@/core/modules/commands/MoveTrackCommand'
 import { ToggleTrackMuteCommand } from '@/core/modules/commands/ToggleTrackMuteCommand'
 import { ToggleTrackVisibilityCommand } from '@/core/modules/commands/ToggleTrackVisibilityCommand'
 import { ToggleProportionalScaleCommand } from '@/core/modules/commands/ToggleProportionalScaleCommand'
-import { UpdateTransformCommand } from '@/core/modules/commands/UpdateTransformCommand'
+import { UpdateVisualTransformCommand } from '@/core/modules/commands/UpdateVisualTransformCommand'
+import { UpdateAudioPropertiesCommand } from '@/core/modules/commands/UpdateAudioPropertiesCommand'
 import { SplitTimelineItemCommand } from '@/core/modules/commands/SplitTimelineItemCommand'
 import type { MediaType } from '@/core/mediaitem/types'
 import type { UnifiedTimelineItemData } from '@/core/timelineitem/type'
@@ -767,11 +768,10 @@ export class CommandFactory {
       throw new Error(`时间轴项目不存在: ${params.itemId}`)
     }
 
-    // 保存原始值
-    const oldValues: Record<string, unknown> = {}
-
-    // 构建新值对象，只包含提供的参数
-    const newValues: Record<string, unknown> = {}
+    const oldVisualValues: Record<string, unknown> = {}
+    const newVisualValues: Record<string, unknown> = {}
+    const oldAudioValues: Record<string, unknown> = {}
+    const newAudioValues: Record<string, unknown> = {}
 
     // 视觉属性（仅对 video、image、text 类型有效）
     if (hasVisualProperties(timelineItem)) {
@@ -802,63 +802,96 @@ export class CommandFactory {
       }
 
       if (params.x !== undefined) {
-        oldValues.x = config.x
-        newValues.x = params.x
+        oldVisualValues.x = config.x
+        newVisualValues.x = params.x
       }
       if (params.y !== undefined) {
-        oldValues.y = config.y
-        newValues.y = params.y
+        oldVisualValues.y = config.y
+        newVisualValues.y = params.y
       }
       if (params.width !== undefined) {
-        oldValues.width = config.width
-        newValues.width = params.width
+        oldVisualValues.width = config.width
+        newVisualValues.width = params.width
       }
       if (params.height !== undefined) {
-        oldValues.height = config.height
-        newValues.height = params.height
+        oldVisualValues.height = config.height
+        newVisualValues.height = params.height
       }
       if (params.rotation !== undefined) {
-        oldValues.rotation = config.rotation
-        newValues.rotation = params.rotation
+        oldVisualValues.rotation = config.rotation
+        newVisualValues.rotation = params.rotation
       }
       if (params.opacity !== undefined) {
-        oldValues.opacity = config.opacity
-        newValues.opacity = params.opacity
+        oldVisualValues.opacity = config.opacity
+        newVisualValues.opacity = params.opacity
+      }
+      if (params.blendMode !== undefined) {
+        oldVisualValues.blendMode = config.blendMode
+        newVisualValues.blendMode = params.blendMode
       }
     }
 
-    // 音频属性（仅对 video 和 audio 类型有效）
     if (hasAudioProperties(timelineItem)) {
       const config = timelineItem.config
 
-      if (params.volume !== undefined) {
-        oldValues.volume = config.volume
-        newValues.volume = params.volume
-      }
       if (params.isMuted !== undefined) {
-        oldValues.isMuted = config.isMuted
-        newValues.isMuted = params.isMuted
+        oldAudioValues.isMuted = config.isMuted
+        newAudioValues.isMuted = params.isMuted
       }
-    }
-
-    // 获取模块引用
-    const timelineModule = {
-      updateTimelineItemTransform: unifiedStore.updateTimelineItemTransform.bind(unifiedStore),
-      updateTimelineItemPlaybackRate:
-        unifiedStore.updateTimelineItemPlaybackRate.bind(unifiedStore),
-      getTimelineItem: (id: string) => unifiedStore.getTimelineItem(id),
-      setTimelineItemTimeRangeForCmd:
-        unifiedStore.setTimelineItemTimeRangeForCmd.bind(unifiedStore),
     }
 
     const mediaModule = this.getMediaModule()
+    const baseTimelineModule = {
+      getTimelineItem: (id: string) => unifiedStore.getTimelineItem(id),
+    }
 
-    // 创建命令
-    return new UpdateTransformCommand(
+    if (params.playbackRate !== undefined) {
+      const timeRange = timelineItem.timeRange
+      const clipDuration = timeRange.clipEndTime - timeRange.clipStartTime
+      const clampedRate = Math.max(0.1, Math.min(100, params.playbackRate))
+      const newTimelineDuration = Math.max(1, Math.round(clipDuration / clampedRate))
+      const newTimeRange: UnifiedTimeRange = {
+        timelineStartTime: timeRange.timelineStartTime,
+        timelineEndTime: timeRange.timelineStartTime + newTimelineDuration,
+        clipStartTime: timeRange.clipStartTime,
+        clipEndTime: timeRange.clipEndTime,
+      }
+      return new ResizeTimelineItemCommand(
+        params.itemId,
+        timeRange,
+        newTimeRange,
+        {
+          getTimelineItem: baseTimelineModule.getTimelineItem,
+          setTimelineItemTimeRangeForCmd:
+            unifiedStore.setTimelineItemTimeRangeForCmd.bind(unifiedStore),
+        },
+        mediaModule,
+      )
+    }
+
+    if (Object.keys(newAudioValues).length > 0) {
+      return new UpdateAudioPropertiesCommand(
+        params.itemId,
+        oldAudioValues,
+        newAudioValues,
+        {
+          ...baseTimelineModule,
+          setTimelineItemAudioPropsForCmd:
+            unifiedStore.setTimelineItemAudioPropsForCmd.bind(unifiedStore),
+        },
+        mediaModule,
+      )
+    }
+
+    return new UpdateVisualTransformCommand(
       params.itemId,
-      oldValues,
-      newValues,
-      timelineModule,
+      oldVisualValues,
+      newVisualValues,
+      {
+        ...baseTimelineModule,
+        setTimelineItemVisualPropsForCmd:
+          unifiedStore.setTimelineItemVisualPropsForCmd.bind(unifiedStore),
+      },
       mediaModule,
     )
   }

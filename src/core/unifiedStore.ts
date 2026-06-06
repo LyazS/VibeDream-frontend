@@ -395,8 +395,9 @@ export const useUnifiedStore = defineStore('unified', () => {
     removeTimelineItemWithHistory: historyOperations.removeTimelineItemWithHistory,
     startASRRequestWithHistory: historyOperations.startASRRequestWithHistory,
     moveTimelineItemWithHistory: historyOperations.moveTimelineItemWithHistory,
-    updateTimelineItemTransformWithHistory:
-      historyOperations.updateTimelineItemTransformWithHistory,
+    updateVisualTransformWithHistory: historyOperations.updateVisualTransformWithHistory,
+    updateAudioPropertiesWithHistory: historyOperations.updateAudioPropertiesWithHistory,
+    updatePlaybackRateWithHistory: historyOperations.updatePlaybackRateWithHistory,
     updateTransitionOutWithHistory: historyOperations.updateTransitionOutWithHistory,
     updateFilterEffectWithHistory: historyOperations.updateFilterEffectWithHistory,
     commitFilterEffectWithHistory: historyOperations.commitFilterEffectWithHistory,
@@ -514,8 +515,10 @@ export const useUnifiedStore = defineStore('unified', () => {
     getTimelineItem: unifiedTimelineModule.getTimelineItem,
     getReadyTimelineItem: unifiedTimelineModule.getReadyTimelineItem,
     updateTimelineItemPosition: unifiedTimelineModule.updateTimelineItemPosition,
-    updateTimelineItemTransform: unifiedTimelineModule.updateTimelineItemTransform,
-    updateTimelineItemPlaybackRate: unifiedTimelineModule.updateTimelineItemPlaybackRate,
+    setTimelineItemVisualPropsForCmd:
+      unifiedTimelineModule.setTimelineItemVisualPropsForCmd,
+    setTimelineItemAudioPropsForCmd:
+      unifiedTimelineModule.setTimelineItemAudioPropsForCmd,
     setTimelineItemTimeRangeForCmd: unifiedTimelineModule.setTimelineItemTimeRangeForCmd,
     setTimelineItemTransitionOutForCmd:
       unifiedTimelineModule.setTimelineItemTransitionOutForCmd,

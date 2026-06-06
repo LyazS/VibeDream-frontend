@@ -8,8 +8,8 @@ export type {
   // 核心数据类型
   UnifiedTimelineItemData,
   TimelineItemStatus,
-  TransformData,
-  TransformDataEx,
+  VisualPropPatch,
+  AudioPropPatch,
   BlendMode,
   VideoMediaConfig,
   AudioMediaConfig,

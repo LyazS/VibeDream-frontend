@@ -184,6 +184,7 @@ export interface UpdateTimelineItemOperation extends BaseOperationConfig {
     height?: number // 高度，提供时会自动根据原始宽高比计算宽度
     rotation?: number // 旋转角度（弧度）
     opacity?: number // 透明度 (0-1)
+    blendMode?: string // 混合模式
     proportionalScale?: boolean // 等比缩放状态
     // 音频属性（可选）
     volume?: number // 音量 (0-1)

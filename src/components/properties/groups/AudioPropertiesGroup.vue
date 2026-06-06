@@ -130,7 +130,7 @@ const toggleMute = async () => {
   
   const newMutedState = !config.isMuted
   
-  await unifiedStore.updateTimelineItemTransformWithHistory(
+  await unifiedStore.updateAudioPropertiesWithHistory(
     props.selectedTimelineItem.id,
     { isMuted: newMutedState }
   )

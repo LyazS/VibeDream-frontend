@@ -131,7 +131,8 @@ export {
   // 时间轴项目类型定义
   type UnifiedTimelineItemData,
   type TimelineItemStatus,
-  type TransformData,
+  type VisualPropPatch,
+  type AudioPropPatch,
 
   // 工厂函数集合
   TimelineItemFactory,
