@@ -16,6 +16,13 @@ interface MaskKeyframeActionsOptions extends UnifiedMaskKeyframeControlsOptions 
   canOperateMaskNumbers: ComputedRef<boolean>
 }
 
+function throwClipPropertyPhase0Todo(action: string): never {
+  throw new Error(
+    `[ClipProperty Phase 0 TODO] 属性区入口 "${action}" 仍在 mask controls 内部实现提交分流，` +
+      '需先收敛到统一的属性提交入口后再恢复。',
+  )
+}
+
 export function useMaskKeyframeActions(options: MaskKeyframeActionsOptions) {
   const { selectedTimelineItem, currentFrame, unifiedStore, canOperateMaskNumbers } = options
   const { t } = useAppI18n()
@@ -56,30 +63,35 @@ export function useMaskKeyframeActions(options: MaskKeyframeActionsOptions) {
   }
 
   async function setMaskProperty(path: MaskPropertyPath, value: number) {
+    throwClipPropertyPhase0Todo(`mask.property.set.${path}`)
     const item = selectedTimelineItem.value
     if (!item) return
     await unifiedStore.updatePropertyWithHistory(item.id, currentFrame.value, path, value)
   }
 
   async function setEnabled(value: boolean) {
+    throwClipPropertyPhase0Todo(`mask.enabled.set.${String(value)}`)
     const item = selectedTimelineItem.value
     if (!item) return
     await unifiedStore.updateMaskWithHistory(item.id, currentFrame.value, { type: 'set-enabled', value })
   }
 
   async function setType(value: MaskType) {
+    throwClipPropertyPhase0Todo(`mask.type.set.${value}`)
     const item = selectedTimelineItem.value
     if (!item) return
     await unifiedStore.updateMaskWithHistory(item.id, currentFrame.value, { type: 'set-type', value })
   }
 
   async function setInverted(value: boolean) {
+    throwClipPropertyPhase0Todo(`mask.inverted.set.${String(value)}`)
     const item = selectedTimelineItem.value
     if (!item) return
     await unifiedStore.updateMaskWithHistory(item.id, currentFrame.value, { type: 'set-inverted', value })
   }
 
   async function toggleMaskKeyframe(channel: MaskChannelKey) {
+    throwClipPropertyPhase0Todo(`mask.keyframe.toggle.${channel}`)
     const item = selectedTimelineItem.value
     if (!item) return
     await unifiedStore.toggleKeyframeWithHistory(item.id, currentFrame.value, channel)

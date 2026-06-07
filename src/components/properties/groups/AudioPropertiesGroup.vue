@@ -94,6 +94,13 @@ const {
 
 const audioButtonState = computed(() => getChannelButtonState('audio.volume'))
 
+function throwClipPropertyPhase0Todo(action: string): never {
+  throw new Error(
+    `[ClipProperty Phase 0 TODO] 属性区入口 "${action}" 仍在组件内部实现提交分流或直写预处理，` +
+      '需先收敛到统一的属性提交入口后再恢复。',
+  )
+}
+
 const getAnimatedLabelClass = (state: string) => ({
   'animated-property-label': state !== 'none',
   'animated-property-label--on-keyframe': state === 'on-keyframe',
@@ -116,6 +123,7 @@ const updateVolume = async (newVolume: number) => {
 
 // 切换静音（不使用关键帧系统）
 const toggleMute = async () => {
+  throwClipPropertyPhase0Todo('audio.toggleMute')
   if (!props.selectedTimelineItem || !hasAudioProperties(props.selectedTimelineItem)) return
   
   const config = props.selectedTimelineItem.config

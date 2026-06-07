@@ -27,6 +27,13 @@ function cloneFilterConfig(config?: ClipFilterConfig): ClipFilterConfig | undefi
   return config ? normalizeClipFilterConfig(config) : undefined
 }
 
+function throwClipPropertyPhase0Todo(action: string): never {
+  throw new Error(
+    `[ClipProperty Phase 0 TODO] 属性区入口 "${action}" 仍在 deferred 交互层内部实现属性提交分流，` +
+      '需先收敛到统一的属性提交入口后再恢复。',
+  )
+}
+
 export function cancelFilterDeferredInteractionByTimelineItemId(timelineItemId: string) {
   activeInteractionCancels.get(timelineItemId)?.()
 }
@@ -104,6 +111,7 @@ export function useFilterDeferredInteraction(options: FilterDeferredInteractionO
   }
 
   function applyFilterDeferredPatch(patch: FilterDeferredPatch) {
+    throwClipPropertyPhase0Todo('filter.deferred.applyPatch')
     const item = selectedTimelineItem.value
     if (!item || !item.filterEffect || !canOperateFilterNumbers.value) return
 
@@ -127,6 +135,7 @@ export function useFilterDeferredInteraction(options: FilterDeferredInteractionO
   }
 
   async function commitDeferredUpdates() {
+    throwClipPropertyPhase0Todo('filter.deferred.commit')
     const item = getActiveItem()
     const timelineItemId = activeTimelineItemId.value
     if (!timelineItemId || !item) return
@@ -194,6 +203,7 @@ export function useFilterDeferredInteraction(options: FilterDeferredInteractionO
   }
 
   async function setFilterIntensityDirect(value: number) {
+    throwClipPropertyPhase0Todo('filter.intensity.direct')
     const item = selectedTimelineItem.value
     if (!item || !item.filterEffect || !canOperateFilterNumbers.value) return
 

@@ -20,6 +20,13 @@ interface FilterKeyframeActionsOptions extends UnifiedFilterControlsOptions {
 
 const FILTER_CHANNEL: FilterChannelKey = 'filter.intensity'
 
+function throwClipPropertyPhase0Todo(action: string): never {
+  throw new Error(
+    `[ClipProperty Phase 0 TODO] 属性区入口 "${action}" 仍在 filter controls 内部实现提交分流，` +
+      '需先收敛到统一的属性提交入口后再恢复。',
+  )
+}
+
 export function useFilterKeyframeActions(options: FilterKeyframeActionsOptions) {
   const { selectedTimelineItem, currentFrame, unifiedStore, canOperateFilterNumbers } = options
   const { t } = useAppI18n()
@@ -60,6 +67,7 @@ export function useFilterKeyframeActions(options: FilterKeyframeActionsOptions) 
   }
 
   async function toggleFilterKeyframe(channel: FilterChannelKey = FILTER_CHANNEL) {
+    throwClipPropertyPhase0Todo(`filter.keyframe.toggle.${channel}`)
     const item = selectedTimelineItem.value
     if (!item) return
     await unifiedStore.toggleKeyframeWithHistory(item.id, currentFrame.value, channel)

@@ -15,6 +15,13 @@ interface MaskDeferredInteractionOptions extends UnifiedMaskKeyframeControlsOpti
   canOperateMaskNumbers: ComputedRef<boolean>
 }
 
+function throwClipPropertyPhase0Todo(action: string): never {
+  throw new Error(
+    `[ClipProperty Phase 0 TODO] 属性区入口 "${action}" 仍在 deferred 交互层内部实现属性提交分流，` +
+      '需先收敛到统一的属性提交入口后再恢复。',
+  )
+}
+
 function getGroupPatchFromMaskPath(path: keyof MaskDeferredPatch, value: number) {
   switch (path) {
     case 'mask.centerX':
@@ -53,6 +60,7 @@ export function useMaskDeferredInteraction(options: MaskDeferredInteractionOptio
   }
 
   function applyMaskDeferredPatch(patch: MaskDeferredPatch) {
+    throwClipPropertyPhase0Todo('mask.deferred.applyPatch')
     const item = selectedTimelineItem.value
     if (!item || !canOperateMaskNumbers.value) return
     beginMaskInteraction()
@@ -65,6 +73,7 @@ export function useMaskDeferredInteraction(options: MaskDeferredInteractionOptio
   }
 
   async function commitMaskInteraction() {
+    throwClipPropertyPhase0Todo('mask.deferred.commit')
     const item = selectedTimelineItem.value
     if (!item || !session.isActive) return
     const patches = session.commit(item)

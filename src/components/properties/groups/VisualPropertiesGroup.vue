@@ -163,7 +163,7 @@
         :precision="1"
         slider-class="rotation-slider"
         @slider-input="setRotationDeferred"
-        @slider-change="commitDeferredUpdates"
+        @slider-change="commitRotationDeferredUpdate"
         @number-change="setRotationDirectly"
         @previous="goToPreviousChannelKeyframe('transform.rotation')"
         @toggle="toggleChannelKeyframe('transform.rotation')"
@@ -245,6 +245,7 @@ const {
   toggleProportionalScale,
   setRotationDeferred,
   setOpacityDeferred,
+  commitRotationDeferredUpdate,
   commitDeferredUpdates,
 
   // 直接更新方法（用于 NumberInput）

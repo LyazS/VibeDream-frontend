@@ -420,6 +420,13 @@ const props = defineProps<Props>()
 const { t } = useAppI18n()
 const unifiedStore = useUnifiedStore()
 
+function throwClipPropertyPhase0Todo(action: string): never {
+  throw new Error(
+    `[ClipProperty Phase 0 TODO] 属性区入口 "${action}" 仍在 TextPropertiesGroup 内部实现提交分流或样式组装，` +
+      '需先收敛到统一的属性提交入口后再恢复。',
+  )
+}
+
 // 获取禁用状态（当播放头不在播放范围内时禁用）
 const { canOperateTransforms } = useUnifiedKeyframeTransformControls({
   selectedTimelineItem: computed(() => props.selectedTimelineItem),
@@ -511,6 +518,7 @@ const textAlignOptions = [
 
 // 更新文本内容
 const updateTextContent = async (event: Event) => {
+  throwClipPropertyPhase0Todo('text.content.update')
   const target = event.target as HTMLTextAreaElement
   const textValue = target.value.trim()
 
@@ -528,6 +536,7 @@ const updateTextContent = async (event: Event) => {
 
 // 更新文本样式
 const updateTextStyle = async (styleUpdates: Partial<TextStyleConfig> = {}) => {
+  throwClipPropertyPhase0Todo('text.style.update')
   if (!props.selectedTimelineItem || !isTextTimelineItem(props.selectedTimelineItem)) {
     return
   }

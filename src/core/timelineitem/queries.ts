@@ -14,6 +14,8 @@ import { TimelineStatusDisplayUtils } from '@/core/timelineitem/statusdisplayuti
 import { useUnifiedStore } from '@/core/unifiedStore'
 import { supportsClipTransitionOut as itemSupportsClipTransitionOut } from '@/core/timelineitem/transition'
 import { supportsClipFilter as itemSupportsClipFilter } from '@/core/timelineitem/filter'
+import { getTransformRotationOverlay } from '@/core/render-state'
+import { transformRotationSchema } from '@/core/property-schema'
 
 // ==================== 类型守卫函数 ====================
 
@@ -180,7 +182,16 @@ export function getErrorInfo(data: UnifiedTimelineItemData<MediaType>): {
 export function getRenderConfig<T extends MediaType>(
   item: UnifiedTimelineItemData<T>
 ): GetConfigs<T> {
-  return item.runtime.renderConfig || item.config
+  const renderConfig = item.runtime.renderConfig || item.config
+  const rotationOverlay = getTransformRotationOverlay(item.id)
+  if (!rotationOverlay || !hasVisualProperties(item)) {
+    return renderConfig
+  }
+
+  return {
+    ...renderConfig,
+    [transformRotationSchema.valueFields[0]]: rotationOverlay.rotation,
+  } as GetConfigs<T>
 }
 
 export function getRenderFilterEffect(

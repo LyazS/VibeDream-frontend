@@ -34,11 +34,11 @@ function createKeyframeValueAlias<G extends AnimationGroupId>(
   } as AnimateKeyframe<MediaType, G>
 }
 
-function getRelativeFrame(item: UnifiedTimelineItemData<MediaType>, absoluteFrame: number) {
+export function getRelativeFrame(item: UnifiedTimelineItemData<MediaType>, absoluteFrame: number) {
   return Math.max(0, absoluteFrame - item.timeRange.timelineStartTime)
 }
 
-function getPosition(item: UnifiedTimelineItemData<MediaType>, relativeFrame: number) {
+export function getPosition(item: UnifiedTimelineItemData<MediaType>, relativeFrame: number) {
   const duration = Math.max(1, item.timeRange.timelineEndTime - item.timeRange.timelineStartTime)
   return relativeFrame / duration
 }

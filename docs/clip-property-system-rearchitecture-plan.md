@@ -553,7 +553,8 @@ async function updatePropertyWithHistory(...) {
 
 ## 9. 迁移阶段规划
 
-建议按 5 个阶段推进。
+建议按 5 个阶段推进，但真正开始实施时，不应先铺完整通用骨架，而应先做一个可运行的最小切片。  
+本方案建议以 `transform.x` 作为首个试点属性，用它验证统一属性入口、变更计划、history 执行、渲染读取这条主链路。
 
 ### 阶段 0：冻结扩散
 
@@ -578,12 +579,59 @@ async function updatePropertyWithHistory(...) {
 - 因此，本阶段完成后仍可能保留非 UI 路径的直接写 `config` 逻辑
 - 这类遗留路径不视为阶段 0 阻塞项，但属性区 UI 不得再直接触达这些分散路径
 
-### 阶段 1：建立新骨架
+### 阶段 1：`transform.x` 最小试点
 
 目标：
 
-- 引入 schema / mutation / render-state / interaction-session 基础目录与接口
-- 建立可以独立工作的最小闭环
+- 不追求一次建立完整通用骨架
+- 只打通 `transform.x` 的最小闭环
+- 用真实属性验证新骨架的抽象是否成立
+
+范围约束：
+
+- 只支持 `transform.x`
+- 只支持 direct commit
+- 只支持属性面板中的 number input
+- 不处理 defer / slider dragging / preview overlay
+- 不处理 `transform.y`、`size`、`rotation`、`opacity`
+- 不处理 `audio`、`filter`、`mask`、`text`
+- 不做完整批量属性接口
+
+核心目标链路：
+
+`属性面板 X 输入 -> 统一属性入口 -> PropertyMutationService -> ChangePlan -> ApplyChangePlanCommand -> 渲染读取`
+
+建议产物：
+
+- 最小 `ClipPropertyPath` 定义，首版只包含 `transform.x`
+- 最小 `PropertyChangeIntent`
+- 最小 `ChangePlan`
+- 最小 `ChangeOperation`
+- `transform.x` 的首个 property schema
+- 只支持本试点的 `PropertyMutationService.plan(...)`
+- 只支持本试点 operation 的 `ApplyChangePlanCommand`
+
+完成标准：
+
+- 修改 `X` 数字输入可以正确生效
+- 在存在和不存在关键帧的情况下行为正确
+- undo / redo 正常
+- 属性区入口不再自己决定写 `config` 还是 `animation`
+- 这条链路可以作为后续 `transform.y` 的复制模板
+
+阶段边界说明：
+
+- 本阶段的重点是验证“通用骨架最小切片是否成立”，不是追求一次性抽象完所有属性
+- 骨架的接口命名应保持通用，但实现范围必须刻意绑定到一个真实属性
+- 如果 `transform.x` 无法顺利跑通，说明骨架抽象本身仍不成立，不应继续横向扩展
+
+### 阶段 2：建立可扩展骨架
+
+目标：
+
+- 将阶段 1 证明可行的实现抽象为可扩展骨架
+- 扩展 schema / mutation / history transaction / render-state 的通用能力
+- 为后续属性迁移建立稳定模板
 
 产物：
 
@@ -592,10 +640,11 @@ async function updatePropertyWithHistory(...) {
 - `history/ApplyChangePlanCommand.ts`
 - `render-state/RenderStateResolver.ts`
 - runtime 新增 deferred 字段
+- 对 `transform.y` / `transform.size` 等相邻属性的可复制支持模式
 
-这一阶段的完成标准不是“新旧并存”，而是“可以开始整段替换旧路径”。
+这一阶段的完成标准不是“抽象看起来完整”，而是“可以低风险复制到第二个、第三个属性”。
 
-### 阶段 2：渲染态与 defer 脱钩持久模型
+### 阶段 3：渲染态与 defer 脱钩持久模型
 
 目标：
 
@@ -613,7 +662,7 @@ async function updatePropertyWithHistory(...) {
 - `setTimelineItemFilterEffectForCmd()` 不再被用作 defer 预览通道
 - 所有 defer 渲染统一改为基于 transient overlay
 
-### 阶段 3：迁移属性提交入口
+### 阶段 4：迁移属性提交入口
 
 目标：
 
@@ -634,21 +683,11 @@ async function updatePropertyWithHistory(...) {
 - `useHistoryOperations` 不再做属性分流
 - 旧属性更新入口被替换或删除
 
-### 阶段 4：收缩命令体系
+### 阶段 5：收缩命令体系与清理旧入口
 
 目标：
 
 - 用通用 transaction command 完整替换属性专用命令
-
-完成标准：
-
-- 新代码只依赖 `ApplyChangePlanCommand`
-- 旧 `Update*Command` 已删除
-
-### 阶段 5：清理旧入口
-
-目标：
-
 - 删除剩余旧属性系统代码
 - 删除直接修改 `config` 的旧逻辑
 - 删除旧 defer 回滚逻辑
@@ -662,22 +701,24 @@ async function updatePropertyWithHistory(...) {
 
 ## 10. 第一阶段落地范围
 
-建议第一阶段只做基础设施，不碰所有业务 UI。
+建议第一阶段只做 `transform.x` 的真实试点，不做完整基础设施铺设。
 
 ### 10.1 建议实际提交内容
 
-1. 新增 `clip-property-system-rearchitecture-plan.md`
-2. 在 `UnifiedTimelineItemRuntime` 中新增 deferred 字段
-3. 新建 `property-schema/` 与最小注册表
-4. 新建 `render-state/RenderStateResolver.ts`
-5. 新建 `history/ApplyChangePlanCommand.ts`
-6. 新建 `property-mutation/PropertyMutationService.ts`
-7. 让 `queries.ts` 支持读取 `deferredRender*`
+1. 在文档中明确 `Phase 1: transform.x pilot` 的范围和边界
+2. 新建最小 `property-schema/`，首版只注册 `transform.x`
+3. 新建最小 `property-mutation/PropertyMutationService.ts`
+4. 新建最小 `history/ApplyChangePlanCommand.ts`
+5. 从属性区 `transform.x` 的 number input 接入统一属性入口
+6. 保持现有渲染读取路径可工作，不强制本阶段引入完整 `RenderStateResolver`
 
 ### 10.2 第一阶段不要做的事
 
+- 不要先把所有 schema 字段设计完整
+- 不要先把 `storage kind` / `deferred mode` / `batch intents` 一次定义到位
 - 不要马上删除所有旧命令
 - 不要一次性替换所有属性面板
+- 不要同时改 defer、slider、preview drag
 - 不要同时改 timeline 结构命令
 - 不要在第一阶段重写导出器
 
@@ -694,12 +735,12 @@ async function updatePropertyWithHistory(...) {
 
 建议对以下场景建立回归测试：
 
-- transform 拖动预览 / commit / cancel
-- filter intensity 拖动预览 / commit / cancel
-- mask 数值属性拖动预览 / commit / cancel
-- text 内容更新与撤销
-- 关键帧属性修改与播放头外禁止修改
-- undo / redo 后渲染态恢复
+- `transform.x` 在无关键帧情况下的直接修改
+- `transform.x` 在有关键帧情况下的直接修改
+- `transform.x` 在播放头不允许编辑时的禁止修改
+- `transform.x` 的 undo / redo
+
+在阶段 3 之前，不要求把 defer 相关场景纳入本轮最小试点回归范围。
 
 ### 11.3 验证方式
 
@@ -713,16 +754,17 @@ async function updatePropertyWithHistory(...) {
 
 推荐按下面顺序推进：
 
-1. 先做状态模型与渲染态基础设施。
-2. 再迁移 defer。
-3. 再迁移属性提交路径。
-4. 最后收缩命令和删除旧逻辑。
+1. 先做 `transform.x` 的最小试点。
+2. 再把试点沉淀为可扩展骨架。
+3. 再迁移 defer。
+4. 再迁移其他属性提交路径。
+5. 最后收缩命令和删除旧逻辑。
 
 原因：
 
-- `defer` 是当前最脏的路径，也是对渲染最敏感的路径
-- 如果先收命令不收 defer，系统仍会继续污染持久模型
-- 只有 render state 建好之后，交互态才能安全脱离持久态
+- 如果一开始就铺完整骨架，很容易做成脱离真实属性的抽象设计
+- `transform.x` 是最小真题，能最早暴露 schema、mutation、history 边界是否合理
+- `defer` 是复杂路径，应放在最小提交链路验证通过之后处理
 
 ## 13. 最终目标架构图
 

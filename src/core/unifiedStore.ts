@@ -421,6 +421,7 @@ export const useUnifiedStore = defineStore('unified', () => {
     deleteKeyframeWithHistory: historyOperations.deleteKeyframeWithHistory,
     updatePropertyWithHistory: historyOperations.updatePropertyWithHistory,
     updateMaskWithHistory: historyOperations.updateMaskWithHistory,
+    applyChangePlanWithHistory: historyOperations.applyChangePlanWithHistory,
     updateAnimationGroupValueWithHistory: historyOperations.updateAnimationGroupValueWithHistory,
     updateAnimationGroupsBatchWithHistory: historyOperations.updateAnimationGroupsBatchWithHistory,
     clearAllKeyframesWithHistory: historyOperations.clearAllKeyframesWithHistory,

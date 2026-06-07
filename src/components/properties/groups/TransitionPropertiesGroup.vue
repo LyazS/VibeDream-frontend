@@ -50,6 +50,13 @@ const props = defineProps<Props>()
 const { t } = useAppI18n()
 const unifiedStore = useUnifiedStore()
 
+function throwClipPropertyPhase0Todo(action: string): never {
+  throw new Error(
+    `[ClipProperty Phase 0 TODO] 属性区入口 "${action}" 仍在 TransitionPropertiesGroup 内部实现提交分流，` +
+      '需先收敛到统一的属性提交入口后再恢复。',
+  )
+}
+
 const transitionConfig = computed(() =>
   normalizeClipTransitionOutConfig(props.selectedTimelineItem?.transitionOut),
 )
@@ -108,6 +115,7 @@ const statusText = computed(() => {
 async function updateTransition(nextPatch: {
   durationFrames?: number
 }) {
+  throwClipPropertyPhase0Todo('transition.update')
   if (!props.selectedTimelineItem) return
 
   unifiedStore.pause()

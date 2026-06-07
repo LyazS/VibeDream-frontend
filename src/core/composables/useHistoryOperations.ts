@@ -31,6 +31,7 @@ import {
   ToggleTrackMuteCommand,
   SelectTimelineSelectionsCommand,
 } from '@/core/modules/commands/timelineCommands'
+import { ApplyChangePlanCommand } from '@/core/modules/commands/ApplyChangePlanCommand'
 import { BatchAutoArrangeTrackCommand } from '@/core/modules/commands/batchCommands'
 import { MoveTrackCommand } from '@/core/modules/commands/MoveTrackCommand'
 import { TimelineItemQueries } from '@/core/timelineitem/'
@@ -68,6 +69,7 @@ import {
   normalizeClipFilterConfig,
 } from '@/core/timelineitem/filter'
 import { RENDERER_FPS } from '@/core/mediabunny/constant'
+import type { ChangePlan } from '@/core/property-mutation'
 
 interface PlaybackRateUpdate {
   playbackRate: number
@@ -1124,6 +1126,32 @@ export function useHistoryOperations(
     }
   }
 
+  async function applyChangePlanWithHistory(plan: ChangePlan) {
+    const targetItemIds = new Set(plan.operations.map((operation) => operation.timelineItemId))
+    for (const timelineItemId of targetItemIds) {
+      if (!getEditableTimelineItemOrWarn(timelineItemId, '应用属性修改计划')) {
+        return
+      }
+    }
+
+    try {
+      const command = new ApplyChangePlanCommand(
+        plan,
+        unifiedTimelineModule,
+        {
+          seekTo: (nextFrame: number) => {
+            console.log('🔍 属性修改计划播放头控制:', nextFrame)
+          },
+        },
+      )
+
+      await unifiedHistoryModule.executeCommand(command)
+    } catch (error) {
+      console.error('❌ [useHistoryOperations] 属性修改计划执行失败:', error)
+      throw error
+    }
+  }
+
   async function updateAnimationGroupsBatchWithHistory(
     timelineItemId: string,
     frame: number,
@@ -1369,6 +1397,7 @@ export function useHistoryOperations(
     updateMaskWithHistory,
     clearAllKeyframesWithHistory,
     toggleKeyframeWithHistory,
+    applyChangePlanWithHistory,
     updateAnimationGroupValueWithHistory,
     updateAnimationGroupsBatchWithHistory,
     toggleProportionalScaleWithHistory,
