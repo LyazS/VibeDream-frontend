@@ -26,38 +26,6 @@
       </div>
     </n-scrollbar>
 
-    <n-scrollbar v-else-if="selectedEffectTemplateAsset" class="properties-scroll-area">
-      <div class="effect-template-properties">
-        <div class="properties-section">
-          <h3 class="section-title">{{ t('properties.mediaItem.basicInfo') }}</h3>
-          <div class="info-row">
-            <span class="info-label">{{ t('properties.mediaItem.name') }}</span>
-            <span class="info-value">{{ selectedEffectTemplateAsset.name }}</span>
-          </div>
-          <div class="info-row">
-            <span class="info-label">{{ t('properties.mediaItem.type') }}</span>
-            <span class="info-value">{{ getLibraryAssetTypeLabel(selectedEffectTemplateAsset) }}</span>
-          </div>
-          <div class="info-row">
-            <span class="info-label">{{ t('properties.mediaItem.createdAt') }}</span>
-            <span class="info-value">{{ formatDate(selectedEffectTemplateAsset.createdAt) }}</span>
-          </div>
-        </div>
-
-        <div class="properties-section">
-          <h3 class="section-title">{{ t('properties.mediaItem.statusInfo') }}</h3>
-          <div class="info-row">
-            <span class="info-label">{{ t('properties.transition.status') }}</span>
-            <span class="info-value">{{ getEffectTemplateStatusText(selectedEffectTemplateAsset.templateStatus) }}</span>
-          </div>
-          <div class="info-row">
-            <span class="info-label">Template ID</span>
-            <span class="info-value">{{ selectedEffectTemplateAsset.source.templateId || '-' }}</span>
-          </div>
-        </div>
-      </div>
-    </n-scrollbar>
-
     <!-- 时间轴多选状态 -->
     <n-scrollbar v-else-if="multiSelectInfo" class="properties-scroll-area">
       <div class="multi-select-state">
@@ -182,11 +150,7 @@ import MaskPropertiesGroup from '@/components/properties/groups/MaskPropertiesGr
 import TransitionPropertiesGroup from '@/components/properties/groups/TransitionPropertiesGroup.vue'
 import FilterPropertiesGroup from '@/components/properties/groups/FilterPropertiesGroup.vue'
 import { parseTimelineSelectionId } from '@/core/types/timelineSelection'
-import {
-  isEffectTemplateAsset,
-  type EffectTemplateStatus,
-  type UnifiedLibraryAssetData,
-} from '@/core/asset/types'
+import type { UnifiedMediaItemData } from '@/core/mediaitem/types'
 
 const unifiedStore = useUnifiedStore()
 const { t } = useAppI18n()
@@ -238,23 +202,17 @@ const selectedTransitionTimelineItem = computed(() => {
 })
 
 // 选中的媒体项目
-const selectedLibraryAsset = computed(() => {
+const selectedLibraryAsset = computed<UnifiedMediaItemData | null>(() => {
   if (unifiedStore.isLibraryAssetMultiSelectMode) return null
 
   const selectedId = unifiedStore.selectedLibraryAssetId
   if (!selectedId) return null
 
-  return unifiedStore.getAsset(selectedId) || null
+  return unifiedStore.getMediaItem(selectedId) || null
 })
 
 const selectedMediaItem = computed(() => {
-  const asset = selectedLibraryAsset.value
-  return asset && !isEffectTemplateAsset(asset) ? asset : null
-})
-
-const selectedEffectTemplateAsset = computed(() => {
-  const asset = selectedLibraryAsset.value
-  return asset && isEffectTemplateAsset(asset) ? asset : null
+  return selectedLibraryAsset.value
 })
 
 // 当前播放帧数
@@ -315,7 +273,7 @@ const mediaMultiSelectInfo = computed(() => {
   return {
     count: selectedIds.size,
     items: Array.from(selectedIds)
-      .map((id) => unifiedStore.getAsset(id))
+      .map((id) => unifiedStore.getMediaItem(id))
       .filter(Boolean),
   }
 })
@@ -334,41 +292,8 @@ const getItemDisplayName = (item: any) => {
   }
 }
 
-function getLibraryAssetTypeLabel(asset: UnifiedLibraryAssetData): string {
-  if (isEffectTemplateAsset(asset)) {
-    switch (asset.effectType) {
-      case 'transition':
-        return t('properties.tabs.transition')
-      case 'filter':
-        return t('properties.tabs.filter')
-      case 'animation':
-        return t('properties.tabs.animation')
-      default:
-        return t('properties.mediaTypes.unknown')
-    }
-  }
-
+function getLibraryAssetTypeLabel(asset: UnifiedMediaItemData): string {
   return t('properties.mediaTypes.' + (asset.mediaType || 'unknown'))
-}
-
-function getEffectTemplateStatusText(status: EffectTemplateStatus): string {
-  switch (status) {
-    case 'pending':
-    case 'asyncprocessing':
-      return t('media.effectTemplateDownloading')
-    case 'decoding':
-      return t('media.effectTemplateInstalling')
-    case 'error':
-      return t('media.effectTemplateFailed')
-    case 'cancelled':
-      return t('media.badge.cancelled')
-    case 'missing':
-      return t('media.effectTemplateMissing')
-    case 'ready':
-      return 'Ready'
-    default:
-      return status
-  }
 }
 
 function formatDate(value: string): string {
@@ -447,10 +372,6 @@ watch(propertyTabs, (tabs) => {
 /* 媒体属性内容 */
 .media-properties-content {
   padding: 0;
-}
-
-.effect-template-properties {
-  padding: var(--spacing-md) var(--spacing-lg);
 }
 
 .properties-section + .properties-section {

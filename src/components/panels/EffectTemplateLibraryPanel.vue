@@ -45,7 +45,10 @@
             <component :is="getEffectTypeIcon(props.effectType)" size="24px" />
             <div
               class="effect-template-item__status"
-              :class="`effect-template-item__status--${getStatusTone(item)}`"
+              :class="[
+                `effect-template-item__status--${getStatusTone(item)}`,
+                `effect-template-item__status--${item.status}`,
+              ]"
             >
               <component
                 :is="getStatusIcon(item)"
@@ -75,7 +78,10 @@
             <component :is="getEffectTypeIcon(props.effectType)" size="18px" />
             <div
               class="effect-template-item__status"
-              :class="`effect-template-item__status--${getStatusTone(item)}`"
+              :class="[
+                `effect-template-item__status--${getStatusTone(item)}`,
+                `effect-template-item__status--${item.status}`,
+              ]"
             >
               <component
                 :is="getStatusIcon(item)"
@@ -262,7 +268,6 @@ function getStatusIcon(item: DisplayItem) {
     case 'missing':
       return IconComponents.WARNING
     case 'installed':
-      return IconComponents.SAVE
     case 'ready':
       return IconComponents.CHECK
     default:
@@ -497,6 +502,17 @@ function handleDragStart(event: DragEvent, item: DisplayItem): void {
 
 .effect-template-item__status--idle {
   color: var(--color-text-primary);
+}
+
+.effect-template-item__status--ready::after {
+  content: '';
+  position: absolute;
+  left: 5px;
+  right: 5px;
+  bottom: 4px;
+  height: 1px;
+  border-radius: 999px;
+  background: currentColor;
 }
 
 .effect-template-item__status-icon--spin {

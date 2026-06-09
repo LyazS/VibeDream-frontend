@@ -44,6 +44,10 @@ export class FolderTargetHandler implements DropTargetHandler {
       case DragSourceType.ASSET:
       case DragSourceType.MEDIA_ITEM: {
         const mediaData = dragData as MediaItemDragData
+        if (mediaData.assetKind !== 'media') {
+          return false
+        }
+
         // 检查是否拖拽到同一个文件夹
         if (mediaData.sourceFolderId === folderTargetInfo.targetId) {
           return false
@@ -76,6 +80,9 @@ export class FolderTargetHandler implements DropTargetHandler {
     switch (dragData.sourceType) {
       case DragSourceType.ASSET:
       case DragSourceType.MEDIA_ITEM:
+        if ((dragData as MediaItemDragData).assetKind !== 'media') {
+          return { success: false }
+        }
         return this.handleMediaItemDrop(dragData as MediaItemDragData, targetInfo)
 
       case DragSourceType.FOLDER:

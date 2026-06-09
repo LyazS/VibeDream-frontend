@@ -363,7 +363,6 @@ export const useUnifiedStore = defineStore('unified', () => {
   unifiedProjectModule.setEffectTemplateReadyEnsurer(ensureEffectTemplateReady)
   unifiedProjectModule.setTimelineItemResolvedEnsurer(ensureTimelineItemResolved)
   unifiedDirectoryModule.setMediaReadyEnsurer(ensureMediaReady)
-  unifiedDirectoryModule.setEffectTemplateReadyEnsurer(ensureEffectTemplateReady)
 
   // 创建历史记录操作模块
   const historyOperations = useHistoryOperations(
@@ -451,6 +450,7 @@ export const useUnifiedStore = defineStore('unified', () => {
     addMediaItem: unifiedMediaModule.addMediaItem,
     removeMediaItem: unifiedMediaModule.removeMediaItem,
     getMediaItem: unifiedMediaModule.getMediaItem,
+    getMediaAsset: unifiedMediaModule.getMediaAsset,
     addAsset: unifiedMediaModule.addAsset,
     removeAsset: unifiedMediaModule.removeAsset,
     getAsset: unifiedMediaModule.getAsset,

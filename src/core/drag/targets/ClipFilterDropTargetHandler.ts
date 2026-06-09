@@ -16,6 +16,35 @@ import { isFilterPackagePayload } from '@/core/effect-package/types'
 import { effectTemplateRegistry } from '@/core/effect-template/EffectTemplateRegistry'
 import { cancelFilterDeferredInteractionByTimelineItemId } from '@/core/composables/useUnifiedFilterControls'
 
+function isFilterTemplateDragData(dragData: UnifiedDragData): dragData is MediaItemDragData {
+  if (dragData.sourceType !== DragSourceType.ASSET && dragData.sourceType !== DragSourceType.MEDIA_ITEM) {
+    return false
+  }
+
+  const mediaData = dragData as MediaItemDragData
+  if (mediaData.assetKind !== 'effect-template' || mediaData.effectType !== 'filter') {
+    return false
+  }
+
+  return isFilterPackagePayload(mediaData.templatePayload)
+    || Boolean(
+      mediaData.effectPackageId
+      && mediaData.templateId
+      && mediaData.packageVersion
+      && mediaData.catalogVersion,
+    )
+}
+
+function canResolveFilterPackage(mediaData: MediaItemDragData): boolean {
+  if (isFilterPackagePayload(mediaData.templatePayload)) {
+    return true
+  }
+
+  const effectPackageId = mediaData.effectPackageId ?? mediaData.assetId
+  const state = effectTemplateRegistry.getPackageState(effectPackageId)
+  return state?.status === 'ready' || state?.status === 'installed' || state?.status === 'loading'
+}
+
 export class ClipFilterDropTargetHandler implements DropTargetHandler {
   readonly targetType: DropTargetType = TargetType.CLIP_FILTER_DROPZONE
 
@@ -25,14 +54,7 @@ export class ClipFilterDropTargetHandler implements DropTargetHandler {
   ) {}
 
   canAccept(dragData: UnifiedDragData): boolean {
-    if (dragData.sourceType !== DragSourceType.ASSET && dragData.sourceType !== DragSourceType.MEDIA_ITEM) {
-      return false
-    }
-
-    const mediaData = dragData as MediaItemDragData
-    return mediaData.assetKind === 'effect-template'
-      && mediaData.effectType === 'filter'
-      && isFilterPackagePayload(mediaData.templatePayload)
+    return isFilterTemplateDragData(dragData)
   }
 
   handleDragOver(_event: DragEvent, dragData: UnifiedDragData, targetInfo: DropTargetInfo): boolean {
@@ -46,8 +68,7 @@ export class ClipFilterDropTargetHandler implements DropTargetHandler {
     }
 
     const mediaData = dragData as MediaItemDragData
-    const effectPackageId = mediaData.effectPackageId ?? mediaData.assetId
-    return effectTemplateRegistry.getPackageState(effectPackageId)?.status === 'ready'
+    return canResolveFilterPackage(mediaData)
   }
 
   async handleDrop(
@@ -70,14 +91,20 @@ export class ClipFilterDropTargetHandler implements DropTargetHandler {
       return { success: false }
     }
 
-    const templatePayload = mediaData.templatePayload
+    const effectPackageId = mediaData.effectPackageId ?? mediaData.assetId
+    let templatePayload = mediaData.templatePayload
     if (!isFilterPackagePayload(templatePayload)) {
-      return { success: false, error: '滤镜素材缺少有效 package 配置' }
+      try {
+        await effectTemplateRegistry.ensureReady(effectPackageId)
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error)
+        return { success: false, error: message }
+      }
+      templatePayload = effectTemplateRegistry.getReadyPackage(effectPackageId)?.payload
     }
 
-    const effectPackageId = mediaData.effectPackageId ?? ''
-    if (effectTemplateRegistry.getPackageState(effectPackageId)?.status !== 'ready') {
-      return { success: false, error: '滤镜素材尚未就绪' }
+    if (!isFilterPackagePayload(templatePayload)) {
+      return { success: false, error: '滤镜素材缺少有效 package 配置' }
     }
 
     const store = useUnifiedStore()

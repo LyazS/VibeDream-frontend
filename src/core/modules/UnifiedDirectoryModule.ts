@@ -21,7 +21,6 @@ import { DirectoryType } from '@/core/directory/types'
 import { ClipboardOperation as ClipboardOp } from '@/core/directory/types'
 import { ModuleRegistry, MODULE_NAMES } from './ModuleRegistry'
 import type { UnifiedMediaModule } from './UnifiedMediaModule'
-import { isEffectTemplateAsset } from '@/core/asset/types'
 
 /**
  * 统一目录模块（简化版）
@@ -32,7 +31,6 @@ export function createUnifiedDirectoryModule(registry: ModuleRegistry) {
   // 通过注册中心获取依赖模块
   const mediaModule = registry.get<UnifiedMediaModule>(MODULE_NAMES.MEDIA)
   let ensureMediaReadyForLazyLoad: ((mediaId: string) => Promise<unknown>) | null = null
-  let ensureEffectTemplateReadyForLazyLoad: ((assetId: string) => Promise<unknown>) | null = null
 
   // ==================== 状态定义 ====================
 
@@ -83,10 +81,6 @@ export function createUnifiedDirectoryModule(registry: ModuleRegistry) {
    */
   function setMediaReadyEnsurer(ensurer: (mediaId: string) => Promise<unknown>): void {
     ensureMediaReadyForLazyLoad = ensurer
-  }
-
-  function setEffectTemplateReadyEnsurer(ensurer: (assetId: string) => Promise<unknown>): void {
-    ensureEffectTemplateReadyForLazyLoad = ensurer
   }
 
   /**
@@ -207,18 +201,21 @@ export function createUnifiedDirectoryModule(registry: ModuleRegistry) {
     const dir = directories.value.get(dirId)
     if (!dir) return false
 
+    const asset = mediaModule.getMediaAsset(assetId)
+    if (!asset) {
+      console.warn(`⚠️ [addAssetToDirectory] 普通素材目录只接受媒体资产，已跳过: ${assetId}`)
+      return false
+    }
+
     if (!dir.assetIds.includes(assetId)) {
       dir.assetIds.push(assetId)
 
       // 🆕 增加引用计数（仅在需要时）
       if (updateRefCount) {
-        const asset = mediaModule.getAsset(assetId)
-        if (asset) {
-          asset.runtime.refCount = (asset.runtime.refCount || 0) + 1
-          console.log(
-            `📊 [addAssetToDirectory] 素材 ${asset.name} 引用计数: ${asset.runtime.refCount}`,
-          )
-        }
+        asset.runtime.refCount = (asset.runtime.refCount || 0) + 1
+        console.log(
+          `📊 [addAssetToDirectory] 素材 ${asset.name} 引用计数: ${asset.runtime.refCount}`,
+        )
       }
 
       return true
@@ -246,7 +243,7 @@ export function createUnifiedDirectoryModule(registry: ModuleRegistry) {
 
       // 🆕 减少引用计数（仅在需要时）
       if (updateRefCount) {
-        const asset = mediaModule.getAsset(assetId)
+        const asset = mediaModule.getMediaAsset(assetId)
         if (asset && asset.runtime.refCount !== undefined) {
           asset.runtime.refCount--
 
@@ -402,26 +399,6 @@ export function createUnifiedDirectoryModule(registry: ModuleRegistry) {
         return
       }
 
-      const asset = mediaModule.getAsset(assetId)
-      if (
-        asset &&
-        isEffectTemplateAsset(asset) &&
-        ['pending', 'missing'].includes(asset.templateStatus)
-      ) {
-        if (ensureEffectTemplateReadyForLazyLoad) {
-          void ensureEffectTemplateReadyForLazyLoad(asset.id).catch((error) => {
-            console.error(
-              `❌ [DirectoryModule] 懒加载效果模板失败，已跳过: ${asset.name}`,
-              error,
-            )
-          })
-        } else {
-          console.warn(
-            `⚠️ [DirectoryModule] ensureEffectTemplateReady 未初始化，跳过懒加载效果模板: ${asset.name}`,
-          )
-        }
-        startedCount++
-      }
     }
 
     // 处理当前目录的资产项
@@ -1006,7 +983,7 @@ export function createUnifiedDirectoryModule(registry: ModuleRegistry) {
 
       // 步骤3: 检查并删除引用计数为0的素材
       for (const mediaId of allMediaIds) {
-        const asset = mediaModule.getAsset(mediaId)
+        const asset = mediaModule.getMediaAsset(mediaId)
         if (asset && asset.runtime.refCount === 0) {
           console.log(`🗑️ [deleteDirectory] 删除引用计数为0的素材: ${asset.name}`)
           await mediaModule.removeAsset(mediaId)
@@ -1078,7 +1055,7 @@ export function createUnifiedDirectoryModule(registry: ModuleRegistry) {
       return { success: false, deletedFile: false, error: '目录不存在' }
     }
 
-    const mediaItem = mediaModule.getAsset(mediaId)
+    const mediaItem = mediaModule.getMediaAsset(mediaId)
 
     try {
       // 如果资产不存在，直接从目录移除该无效引用（不更新引用计数）
@@ -1099,7 +1076,7 @@ export function createUnifiedDirectoryModule(registry: ModuleRegistry) {
       }
 
       // 步骤2: 检查引用计数，如果为0则删除素材文件
-      const updatedMediaItem = mediaModule.getAsset(mediaId)
+      const updatedMediaItem = mediaModule.getMediaAsset(mediaId)
       let deletedFile = false
 
       if (updatedMediaItem && updatedMediaItem.runtime.refCount === 0) {
@@ -1148,7 +1125,6 @@ export function createUnifiedDirectoryModule(registry: ModuleRegistry) {
     getCharacterDirectory, // 🆕 新增获取角色文件夹方法
     isCharacterDirectory, // 🆕 新增类型守卫方法
     setMediaReadyEnsurer,
-    setEffectTemplateReadyEnsurer,
     addAssetToDirectory,
     removeAssetFromDirectory,
     getDirectoryContent,

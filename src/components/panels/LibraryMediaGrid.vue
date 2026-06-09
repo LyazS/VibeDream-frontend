@@ -63,32 +63,8 @@
 
             <!-- 资产项目 -->
             <template v-else>
-              <div
-                class="item-icon media-icon"
-                :class="{ 'template-icon': isEffectTemplateAssetItem(item.id) }"
-              >
-                <template v-if="isEffectTemplateAssetItem(item.id)">
-                  <div class="effect-template-thumbnail">
-                    <component :is="getEffectTemplateItemIcon(item.id)" size="28px" />
-                    <div
-                      v-if="hasEffectTemplateStatusIndicator(item.id)"
-                      class="effect-template-status-indicator"
-                      :class="`effect-template-status-indicator--${getEffectTemplateStatusTone(item.id)}`"
-                    >
-                      <component
-                        :is="getEffectTemplateStatusIcon(item.id)"
-                        size="12px"
-                        :class="{
-                          'effect-template-status-indicator__icon--spin':
-                            getEffectTemplateStatusTone(item.id) === 'processing',
-                        }"
-                      />
-                    </div>
-                  </div>
-                </template>
-                <template v-else>
-                  <MediaItemThumbnail :media-id="item.id" />
-                </template>
+              <div class="item-icon media-icon">
+                <MediaItemThumbnail :media-id="item.id" />
               </div>
             </template>
           </div>
@@ -98,7 +74,7 @@
             {{
               item.type === 'directory'
                 ? getDirectory(item.id)?.name || ''
-                : getAsset(item.id)?.name || ''
+                : getMediaItem(item.id)?.name || ''
             }}
           </div>
         </div>
@@ -140,14 +116,7 @@
               <FolderIcon :folder-id="item.id" size="20px" :is-list-view="true" />
             </template>
             <template v-else>
-              <template v-if="isEffectTemplateAssetItem(item.id)">
-                <div class="effect-template-list-icon">
-                  <component :is="getEffectTemplateItemIcon(item.id)" size="18px" />
-                </div>
-              </template>
-              <template v-else>
-                <MediaItemThumbnail :media-id="item.id" />
-              </template>
+              <MediaItemThumbnail :media-id="item.id" />
             </template>
           </div>
 
@@ -156,7 +125,7 @@
             {{
               item.type === 'directory'
                 ? getDirectory(item.id)?.name || ''
-                : getAsset(item.id)?.name || ''
+                : getMediaItem(item.id)?.name || ''
             }}
           </div>
 
@@ -266,7 +235,7 @@ import { DataSourceFactory } from '@/core'
 import { generateMediaId, extractExtension } from '@/core/utils/idGenerator'
 import { ContentType, AITaskType } from '@/core/datasource/providers/ai-generation/AIGenerationSource'
 import { SourceOrigin } from '@/core/datasource/core/BaseDataSource'
-import { IconComponents, getEffectTypeIcon } from '@/constants/iconComponents'
+import { IconComponents } from '@/constants/iconComponents'
 import {
   ContextMenu,
   ContextMenuItem,
@@ -279,8 +248,6 @@ import MediaItemThumbnail from '@/components/panels/MediaItemThumbnail.vue'
 import MediaPreviewModal from '@/components/modals/MediaPreviewModal.vue'
 import FolderIcon from '@/components/utils/FolderIcon.vue'
 import LibraryBreadcrumb from './LibraryBreadcrumb.vue'
-import type { UnifiedLibraryAssetData } from '@/core/asset/types'
-import { isEffectTemplateAsset, isMediaAsset } from '@/core/asset/types'
 import { globalMetaFileManager } from '@/core/managers/media/globalMetaFileManager'
 import { resetAIGeneratedMediaForRetry } from '@/core/jobs'
 
@@ -399,11 +366,11 @@ function sortItems(items: DisplayItem[]): DisplayItem[] {
         const nameA =
           a.type === 'directory'
             ? (getDirectory(a.id)?.name || '').toLowerCase()
-            : (getAsset(a.id)?.name || '').toLowerCase()
+            : (getMediaItem(a.id)?.name || '').toLowerCase()
         const nameB =
           b.type === 'directory'
             ? (getDirectory(b.id)?.name || '').toLowerCase()
-            : (getAsset(b.id)?.name || '').toLowerCase()
+            : (getMediaItem(b.id)?.name || '').toLowerCase()
         comparison = nameA.localeCompare(nameB, 'zh-CN')
         break
       }
@@ -412,11 +379,11 @@ function sortItems(items: DisplayItem[]): DisplayItem[] {
         const dateA =
           a.type === 'directory'
             ? getDirectory(a.id)?.createdAt || ''
-            : getAsset(a.id)?.createdAt || ''
+            : getMediaItem(a.id)?.createdAt || ''
         const dateB =
           b.type === 'directory'
             ? getDirectory(b.id)?.createdAt || ''
-            : getAsset(b.id)?.createdAt || ''
+            : getMediaItem(b.id)?.createdAt || ''
         comparison = dateA.localeCompare(dateB)
         break
       }
@@ -433,8 +400,8 @@ function sortItems(items: DisplayItem[]): DisplayItem[] {
           comparison = typeA.localeCompare(typeB)
           // 如果类型相同，按名称排序
           if (comparison === 0) {
-            const nameA = (getAsset(a.id)?.name || '').toLowerCase()
-            const nameB = (getAsset(b.id)?.name || '').toLowerCase()
+            const nameA = (getMediaItem(a.id)?.name || '').toLowerCase()
+            const nameB = (getMediaItem(b.id)?.name || '').toLowerCase()
             comparison = nameA.localeCompare(nameB, 'zh-CN')
           }
         }
@@ -704,7 +671,7 @@ const currentMenuItems = computed((): MenuItem[] => {
             },
           ] satisfies MenuItem[])
         : []),
-      ...(isMediaAsset(getAsset(target.id)) || isEffectTemplateAsset(getAsset(target.id))
+      ...(getMediaItem(target.id)
         ? ([
             { type: 'separator' as const },
             {
@@ -745,10 +712,6 @@ function getMediaItem(id: string): UnifiedMediaItemData | undefined {
   return unifiedStore.getMediaItem(id)
 }
 
-function getAsset(id: string): UnifiedLibraryAssetData | undefined {
-  return unifiedStore.getAsset(id)
-}
-
 // 获取图标大小（返回像素值）
 function getIconSize() {
   switch (unifiedStore.viewMode) {
@@ -764,21 +727,8 @@ function getIconSize() {
 }
 
 function getAssetTypeLabel(assetId: string): string {
-  const asset = getAsset(assetId)
+  const asset = getMediaItem(assetId)
   if (!asset) return t('media.unknown')
-
-  if (isEffectTemplateAsset(asset)) {
-    const effectLabel =
-      asset.effectType === 'transition'
-        ? t('media.effectTypeTransition')
-        : asset.effectType === 'filter'
-          ? t('media.effectTypeFilter')
-          : asset.effectType
-    if (asset.templateStatus !== 'ready') {
-      return `${effectLabel} / ${getEffectTemplateStatusLabel(assetId)}`
-    }
-    return effectLabel
-  }
 
   switch (asset.mediaType) {
     case 'video':
@@ -793,96 +743,15 @@ function getAssetTypeLabel(assetId: string): string {
 }
 
 function getAssetSortKey(assetId: string): string {
-  const asset = getAsset(assetId)
+  const asset = getMediaItem(assetId)
   if (!asset) return 'unknown'
-  return isEffectTemplateAsset(asset) ? `effect-${asset.effectType}` : `media-${asset.mediaType}`
-}
-
-function isEffectTemplateAssetItem(assetId: string): boolean {
-  return isEffectTemplateAsset(getAsset(assetId))
-}
-
-function getEffectTemplateItemIcon(assetId: string) {
-  const asset = getAsset(assetId)
-  if (!asset || !isEffectTemplateAsset(asset)) {
-    return IconComponents.SPARKLING
-  }
-
-  return getEffectTypeIcon(asset.effectType)
-}
-
-function getEffectTemplateStatusLabel(assetId: string): string {
-  const asset = getAsset(assetId)
-  if (!asset || !isEffectTemplateAsset(asset)) {
-    return ''
-  }
-
-  switch (asset.templateStatus) {
-    case 'pending':
-    case 'asyncprocessing':
-      return t('media.effectTemplateDownloading')
-    case 'decoding':
-      return t('media.effectTemplateInstalling')
-    case 'error':
-      return t('media.effectTemplateFailed')
-    case 'cancelled':
-      return t('media.badge.cancelled')
-    case 'missing':
-      return t('media.effectTemplateMissing')
-    default:
-      return ''
-  }
-}
-
-function hasEffectTemplateStatusIndicator(assetId: string): boolean {
-  const asset = getAsset(assetId)
-  return Boolean(asset && isEffectTemplateAsset(asset) && asset.templateStatus !== 'ready')
-}
-
-function getEffectTemplateStatusIcon(assetId: string) {
-  const asset = getAsset(assetId)
-  if (!asset || !isEffectTemplateAsset(asset)) {
-    return IconComponents.SPARKLING
-  }
-
-  switch (asset.templateStatus) {
-    case 'pending':
-      return IconComponents.TIME
-    case 'asyncprocessing':
-    case 'decoding':
-      return IconComponents.LOADING
-    case 'cancelled':
-      return IconComponents.CLOSE
-    case 'error':
-    case 'missing':
-      return IconComponents.WARNING
-    default:
-      return getEffectTypeIcon(asset.effectType)
-  }
-}
-
-function getEffectTemplateStatusTone(assetId: string): 'processing' | 'error' | 'idle' {
-  const asset = getAsset(assetId)
-  if (!asset || !isEffectTemplateAsset(asset)) {
-    return 'idle'
-  }
-
-  if (asset.templateStatus === 'error' || asset.templateStatus === 'missing') {
-    return 'error'
-  }
-
-  if (asset.templateStatus !== 'ready') {
-    return 'processing'
-  }
-
-  return 'idle'
+  return `media-${asset.mediaType}`
 }
 
 // 检查媒体项是否可拖拽
 function isMediaItemDraggable(mediaId: string): boolean {
-  const mediaItem = getAsset(mediaId)
+  const mediaItem = getMediaItem(mediaId)
   if (!mediaItem) return false
-  if (isEffectTemplateAsset(mediaItem)) return mediaItem.templateStatus === 'ready'
   return mediaItem.mediaType !== 'unknown' && (mediaItem.duration || 0) > 0
 }
 
@@ -916,13 +785,9 @@ function onItemDoubleClick(item: DisplayItem): void {
       unifiedStore.navigateToDir(item.id) // 普通文件夹导航
     }
   } else {
-    const asset = getAsset(item.id)
+    const asset = getMediaItem(item.id)
     if (!asset) {
       unifiedStore.messageError(t('media.mediaNotFound'))
-      return
-    }
-
-    if (isEffectTemplateAsset(asset)) {
       return
     }
 
@@ -1005,7 +870,7 @@ function handleItemDragStart(event: DragEvent, item: DisplayItem): void {
 
 // 处理媒体项拖拽
 function handleMediaItemDrag(event: DragEvent, item: DisplayItem): void {
-  const asset = getAsset(item.id)
+  const asset = getMediaItem(item.id)
   if (!asset) return
 
   // 获取源处理器
@@ -1204,7 +1069,7 @@ function startRename(item: DisplayItem): void {
     const dir = getDirectory(item.id)
     renameCurrentName.value = dir?.name || ''
   } else {
-    const asset = getAsset(item.id)
+    const asset = getMediaItem(item.id)
     renameCurrentName.value = asset?.name || ''
   }
 
@@ -1406,11 +1271,6 @@ async function addMediaItem(file: File): Promise<void> {
 function canCancel(item: DisplayItem): boolean {
   if (item.type !== 'asset') return false
 
-  const effectAsset = getAsset(item.id)
-  if (effectAsset && isEffectTemplateAsset(effectAsset)) {
-    return ['pending', 'asyncprocessing', 'decoding'].includes(effectAsset.templateStatus)
-  }
-
   const mediaItem = getMediaItem(item.id)
   if (!mediaItem) return false
 
@@ -1425,29 +1285,6 @@ function canCancel(item: DisplayItem): boolean {
  */
 async function handleCancelTask(): Promise<void> {
   if (!contextMenuTarget.value || contextMenuTarget.value.type !== 'asset') return
-
-  const effectAsset = getAsset(contextMenuTarget.value.id)
-  if (effectAsset && isEffectTemplateAsset(effectAsset)) {
-    showContextMenu.value = false
-
-    try {
-      const success = await unifiedStore.cancelTemplateProcessing(effectAsset.id)
-
-      if (success) {
-        unifiedStore.messageSuccess(t('media.cancelSuccess', { name: effectAsset.name }))
-      } else {
-        unifiedStore.messageWarning(t('media.cancelFailed', { name: effectAsset.name }))
-      }
-    } catch (error) {
-      console.error('取消效果素材下载失败:', error)
-      unifiedStore.messageError(
-        t('media.cancelFailed', {
-          name: effectAsset.name,
-        }),
-      )
-    }
-    return
-  }
 
   const mediaItem = getMediaItem(contextMenuTarget.value.id)
   if (!mediaItem) return
@@ -1481,11 +1318,6 @@ async function handleCancelTask(): Promise<void> {
 function canRetry(item: DisplayItem): boolean {
   if (item.type !== 'asset') return false
 
-  const effectAsset = getAsset(item.id)
-  if (effectAsset && isEffectTemplateAsset(effectAsset)) {
-    return ['error', 'cancelled', 'missing'].includes(effectAsset.templateStatus)
-  }
-
   const mediaItem = getMediaItem(item.id)
   if (!mediaItem) return false
 
@@ -1503,24 +1335,6 @@ function canRetry(item: DisplayItem): boolean {
  */
 async function handleRetry(): Promise<void> {
   if (!contextMenuTarget.value || contextMenuTarget.value.type !== 'asset') return
-
-  const effectAsset = getAsset(contextMenuTarget.value.id)
-  if (effectAsset && isEffectTemplateAsset(effectAsset)) {
-    showContextMenu.value = false
-
-    try {
-      await unifiedStore.retryTemplateProcessing(effectAsset.id)
-      unifiedStore.messageSuccess(t('media.retryStarted', { name: effectAsset.name }))
-    } catch (error) {
-      console.error('重试效果素材下载失败:', error)
-      unifiedStore.messageError(
-        t('media.retryFailed', {
-          error: error instanceof Error ? error.message : '未知错误',
-        }),
-      )
-    }
-    return
-  }
 
   const mediaItem = getMediaItem(contextMenuTarget.value.id)
   if (!mediaItem) return
@@ -1619,7 +1433,7 @@ async function retryAIGeneration(mediaItem: UnifiedMediaItemData): Promise<void>
 function removeAssetItem(mediaId: string): void {
   if (!currentDir.value) return
 
-  const mediaItem = getAsset(mediaId)
+  const mediaItem = getMediaItem(mediaId)
 
   // 如果资产不存在，直接移除无效引用
   if (!mediaItem) {
@@ -2218,64 +2032,4 @@ async function handleBatchDelete(): Promise<void> {
   text-overflow: ellipsis;
 }
 
-.template-icon {
-  background: linear-gradient(135deg, rgba(255, 173, 66, 0.18), rgba(255, 110, 64, 0.08));
-  border: 1px solid rgba(255, 173, 66, 0.22);
-}
-
-.effect-template-thumbnail {
-  position: relative;
-  width: 100%;
-  height: 100%;
-  min-height: 72px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: #ffb36b;
-}
-
-.effect-template-status-indicator {
-  position: absolute;
-  top: 6px;
-  right: 6px;
-  width: 18px;
-  height: 18px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 999px;
-  background: rgba(15, 15, 15, 0.72);
-  color: var(--color-text-secondary);
-  backdrop-filter: blur(4px);
-}
-
-.effect-template-status-indicator--processing {
-  color: #ffcf9a;
-}
-
-.effect-template-status-indicator--error {
-  color: #ff9e9e;
-}
-
-.effect-template-status-indicator__icon--spin {
-  animation: effect-template-spin 1s linear infinite;
-}
-
-@keyframes effect-template-spin {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-.effect-template-list-icon {
-  width: 100%;
-  height: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: #ffb36b;
-}
 </style>

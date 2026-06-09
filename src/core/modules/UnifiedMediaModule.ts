@@ -20,6 +20,7 @@ import type { PreparedMediaFile } from '@/core/datasource/core/BaseDataSourcePro
 import { globalMetaFileManager } from '@/core/managers/media/globalMetaFileManager'
 import type {
   EffectTemplateAssetData,
+  MediaLibraryAssetData,
   UnifiedLibraryAssetData,
 } from '@/core/asset/types'
 import {
@@ -228,6 +229,10 @@ export function createUnifiedMediaModule(registry: ModuleRegistry) {
       return undefined
     }
     return mediaItems.value.find((item: UnifiedMediaItemData) => item.id === mediaItemId)
+  }
+
+  function getMediaAsset(assetId: string | null): MediaLibraryAssetData | undefined {
+    return getMediaItem(assetId) as MediaLibraryAssetData | undefined
   }
 
   function getAsset(assetId: string | null): UnifiedLibraryAssetData | undefined {
@@ -632,6 +637,7 @@ export function createUnifiedMediaModule(registry: ModuleRegistry) {
     addMediaItem,
     removeMediaItem,
     getMediaItem,
+    getMediaAsset,
     updateMediaItemName,
     updateMediaItem,
     updateMediaItemMetadata,
