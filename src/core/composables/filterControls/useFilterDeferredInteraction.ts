@@ -1,12 +1,13 @@
 import { computed, onBeforeUnmount, ref, watch, type ComputedRef } from 'vue'
-import type { ClipFilterConfig } from '@/core/filter/types'
-import { areClipFilterConfigsEqual, normalizeClipFilterConfig } from '@/core/timelineitem/filter'
+import { propertyMutationCommitter } from '@/core/property-system'
+import {
+  clearFilterIntensityOverlay,
+  getFilterIntensityOverlay,
+  setFilterIntensityOverlay,
+} from '@/core/property-system/render-state'
 import { TimelineItemQueries } from '@/core/timelineitem/queries'
 import type { useUnifiedStore } from '@/core/unifiedStore'
-import { AnimationSession } from '@/core/animation/session'
-import { getKeyframeButtonState } from '@/core/utils/unifiedKeyframeUtils'
 import type {
-  FilterDeferredPatch,
   FilterTimelineItem,
   UnifiedFilterControlsOptions,
 } from './types'
@@ -19,20 +20,6 @@ interface FilterDeferredInteractionOptions extends UnifiedFilterControlsOptions 
 }
 
 const activeInteractionCancels = new Map<string, () => void>()
-const FILTER_CHANNEL = 'filter.intensity' as const
-
-type FilterInteractionMode = 'static' | 'animated' | null
-
-function cloneFilterConfig(config?: ClipFilterConfig): ClipFilterConfig | undefined {
-  return config ? normalizeClipFilterConfig(config) : undefined
-}
-
-function throwClipPropertyPhase0Todo(action: string): never {
-  throw new Error(
-    `[ClipProperty Phase 0 TODO] 属性区入口 "${action}" 仍在 deferred 交互层内部实现属性提交分流，` +
-      '需先收敛到统一的属性提交入口后再恢复。',
-  )
-}
 
 export function cancelFilterDeferredInteractionByTimelineItemId(timelineItemId: string) {
   activeInteractionCancels.get(timelineItemId)?.()
@@ -42,11 +29,6 @@ export function useFilterDeferredInteraction(options: FilterDeferredInteractionO
   const { selectedTimelineItem, currentFrame, unifiedStore, canOperateFilterNumbers } = options
 
   const activeTimelineItemId = ref<string | null>(null)
-  const interactionMode = ref<FilterInteractionMode>(null)
-  const originalFilterEffect = ref<ClipFilterConfig | undefined>(undefined)
-  const originalRenderFilterEffect = ref<ClipFilterConfig | undefined>(undefined)
-  const draftFilterEffect = ref<ClipFilterConfig | undefined>(undefined)
-  const animationSession = new AnimationSession()
 
   const isActive = computed(() => activeTimelineItemId.value !== null)
 
@@ -61,10 +43,6 @@ export function useFilterDeferredInteraction(options: FilterDeferredInteractionO
     }
   }
 
-  function syncRuntimeFilterEffect(item: FilterTimelineItem, filterEffect?: ClipFilterConfig) {
-    item.runtime.renderFilterEffect = cloneFilterConfig(filterEffect)
-  }
-
   function getActiveItem() {
     const timelineItemId = activeTimelineItemId.value
     if (!timelineItemId) {
@@ -74,17 +52,7 @@ export function useFilterDeferredInteraction(options: FilterDeferredInteractionO
   }
 
   function resetInteractionState() {
-    interactionMode.value = null
     activeTimelineItemId.value = null
-    originalFilterEffect.value = undefined
-    originalRenderFilterEffect.value = undefined
-    draftFilterEffect.value = undefined
-  }
-
-  function getCurrentInteractionMode(item: FilterTimelineItem): Exclude<FilterInteractionMode, null> {
-    return getKeyframeButtonState(item, currentFrame.value, FILTER_CHANNEL) === 'none'
-      ? 'static'
-      : 'animated'
   }
 
   function beginFilterInteraction(item: FilterTimelineItem) {
@@ -98,98 +66,50 @@ export function useFilterDeferredInteraction(options: FilterDeferredInteractionO
 
     void unifiedStore.pause()
     activeTimelineItemId.value = item.id
-    interactionMode.value = getCurrentInteractionMode(item)
-    originalFilterEffect.value = cloneFilterConfig(item.filterEffect)
-    originalRenderFilterEffect.value = cloneFilterConfig(TimelineItemQueries.getRenderFilterEffect(item))
-    draftFilterEffect.value = cloneFilterConfig(item.filterEffect)
-
-    if (interactionMode.value === 'animated') {
-      animationSession.begin(item)
-    }
-
     registerCancelCallback(item.id)
   }
 
-  function applyFilterDeferredPatch(patch: FilterDeferredPatch) {
-    throwClipPropertyPhase0Todo('filter.deferred.applyPatch')
+  function getCommitContext(item: FilterTimelineItem) {
+    return {
+      item,
+      frame: currentFrame.value,
+      applyChangePlan: unifiedStore.applyChangePlanWithHistory,
+    }
+  }
+
+  function setFilterIntensityDeferred(value: number) {
     const item = selectedTimelineItem.value
     if (!item || !item.filterEffect || !canOperateFilterNumbers.value) return
 
     beginFilterInteraction(item)
-
-    if (interactionMode.value === 'animated') {
-      if (typeof patch.intensity === 'number') {
-        animationSession.apply(item, currentFrame.value, FILTER_CHANNEL, {
-          intensity: patch.intensity,
-        })
-        draftFilterEffect.value = cloneFilterConfig(item.filterEffect)
-        syncRuntimeFilterEffect(item, item.filterEffect)
-      }
-      return
-    }
-
-    const base = draftFilterEffect.value ?? normalizeClipFilterConfig(item.filterEffect)
-    const nextFilterEffect = normalizeClipFilterConfig({ ...base, ...patch })
-    draftFilterEffect.value = nextFilterEffect
-    unifiedStore.setTimelineItemFilterEffectForCmd(item.id, nextFilterEffect)
+    setFilterIntensityOverlay(item.id, value)
   }
 
   async function commitDeferredUpdates() {
-    throwClipPropertyPhase0Todo('filter.deferred.commit')
     const item = getActiveItem()
     const timelineItemId = activeTimelineItemId.value
     if (!timelineItemId || !item) return
 
-    if (interactionMode.value === 'animated') {
-      const patches = animationSession.commit(item)
-      syncRuntimeFilterEffect(item, originalRenderFilterEffect.value)
-      unregisterCancelCallback(timelineItemId)
-      resetInteractionState()
-
-      const patch = patches[FILTER_CHANNEL]
-      if (patch && Object.keys(patch).length > 0) {
-        await unifiedStore.updateAnimationGroupValueWithHistory(
-          timelineItemId,
-          currentFrame.value,
-          FILTER_CHANNEL,
-          patch as { intensity: number },
-        )
-      }
-      return
-    }
-
-    const previousFilterEffect = cloneFilterConfig(originalFilterEffect.value)
-    const nextFilterEffect = cloneFilterConfig(draftFilterEffect.value)
+    const overlay = getFilterIntensityOverlay(timelineItemId)
+    const nextIntensity = overlay?.intensity ?? TimelineItemQueries.getRenderFilterEffect(item)?.intensity
 
     unregisterCancelCallback(timelineItemId)
     resetInteractionState()
 
-    if (areClipFilterConfigsEqual(previousFilterEffect, nextFilterEffect)) {
-      unifiedStore.setTimelineItemFilterEffectForCmd(timelineItemId, previousFilterEffect)
+    if (typeof nextIntensity !== 'number' || !Number.isFinite(nextIntensity)) {
+      clearFilterIntensityOverlay(timelineItemId)
       return
     }
 
-    await unifiedStore.commitFilterEffectWithHistory(
-      timelineItemId,
-      previousFilterEffect,
-      nextFilterEffect,
-    )
+    await propertyMutationCommitter.commitDirect(getCommitContext(item), 'filter.intensity', nextIntensity)
+    clearFilterIntensityOverlay(timelineItemId)
   }
 
   function cancelDeferredUpdatesSync() {
     const timelineItemId = activeTimelineItemId.value
-    const item = getActiveItem()
     if (!timelineItemId) return
 
-    if (interactionMode.value === 'animated') {
-      if (item) {
-        animationSession.cancel(item)
-        syncRuntimeFilterEffect(item, originalRenderFilterEffect.value)
-      }
-    } else {
-      unifiedStore.setTimelineItemFilterEffectForCmd(timelineItemId, originalFilterEffect.value)
-    }
-
+    clearFilterIntensityOverlay(timelineItemId)
     unregisterCancelCallback(timelineItemId)
     resetInteractionState()
   }
@@ -198,31 +118,12 @@ export function useFilterDeferredInteraction(options: FilterDeferredInteractionO
     cancelDeferredUpdatesSync()
   }
 
-  function setFilterIntensityDeferred(value: number) {
-    applyFilterDeferredPatch({ intensity: value })
-  }
-
   async function setFilterIntensityDirect(value: number) {
-    throwClipPropertyPhase0Todo('filter.intensity.direct')
     const item = selectedTimelineItem.value
     if (!item || !item.filterEffect || !canOperateFilterNumbers.value) return
 
-    if (getKeyframeButtonState(item, currentFrame.value, FILTER_CHANNEL) === 'none') {
-      await cancelDeferredUpdates()
-      await unifiedStore.updateFilterEffectWithHistory(item.id, {
-        ...normalizeClipFilterConfig(item.filterEffect),
-        intensity: value,
-      })
-      return
-    }
-
     await cancelDeferredUpdates()
-    await unifiedStore.updateAnimationGroupValueWithHistory(
-      item.id,
-      currentFrame.value,
-      FILTER_CHANNEL,
-      { intensity: value },
-    )
+    await propertyMutationCommitter.commitDirect(getCommitContext(item), 'filter.intensity', value)
   }
 
   watch(
@@ -241,7 +142,6 @@ export function useFilterDeferredInteraction(options: FilterDeferredInteractionO
   return {
     isFilterInteractionActive: isActive,
     beginFilterInteraction,
-    applyFilterDeferredPatch,
     setFilterIntensityDeferred,
     setFilterIntensityDirect,
     commitDeferredUpdates,

@@ -15,6 +15,7 @@ import { useUnifiedStore } from '@/core/unifiedStore'
 import { supportsClipTransitionOut as itemSupportsClipTransitionOut } from '@/core/timelineitem/transition'
 import { supportsClipFilter as itemSupportsClipFilter } from '@/core/timelineitem/filter'
 import {
+  getFilterIntensityOverlay,
   getAudioVolumeOverlay,
   getTransformOpacityOverlay,
   getTransformPositionOverlay,
@@ -23,11 +24,13 @@ import {
 } from '@/core/property-system/render-state'
 import {
   audioVolumeSchema,
+  filterIntensitySchema,
   transformOpacitySchema,
   transformPositionSchema,
   transformRotationSchema,
   transformSizeSchema,
 } from '@/core/property-system/schema'
+import { normalizeClipFilterConfig } from '@/core/timelineitem/filter'
 
 // ==================== 类型守卫函数 ====================
 
@@ -260,7 +263,17 @@ export function getRenderFilterEffect(
     return undefined
   }
 
-  return item.runtime.renderFilterEffect || item.filterEffect
+  const renderFilterEffect = item.runtime.renderFilterEffect || item.filterEffect
+  const filterIntensityOverlay = getFilterIntensityOverlay(item.id)
+
+  if (!filterIntensityOverlay) {
+    return renderFilterEffect
+  }
+
+  return normalizeClipFilterConfig({
+    ...renderFilterEffect,
+    [filterIntensitySchema.valueFields[0]]: filterIntensityOverlay.intensity,
+  })
 }
 
 // ==================== 导出查询工具集合 ====================

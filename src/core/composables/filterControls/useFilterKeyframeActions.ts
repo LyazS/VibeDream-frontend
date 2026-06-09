@@ -1,5 +1,7 @@
 import type { ComputedRef } from 'vue'
 import { useAppI18n } from '@/core/composables/useI18n'
+import { propertyMutationCommitter } from '@/core/property-system'
+import { clearFilterIntensityOverlay } from '@/core/property-system/render-state'
 import type { useUnifiedStore } from '@/core/unifiedStore'
 import {
   getKeyframeButtonState,
@@ -20,16 +22,17 @@ interface FilterKeyframeActionsOptions extends UnifiedFilterControlsOptions {
 
 const FILTER_CHANNEL: FilterChannelKey = 'filter.intensity'
 
-function throwClipPropertyPhase0Todo(action: string): never {
-  throw new Error(
-    `[ClipProperty Phase 0 TODO] 属性区入口 "${action}" 仍在 filter controls 内部实现提交分流，` +
-      '需先收敛到统一的属性提交入口后再恢复。',
-  )
-}
-
 export function useFilterKeyframeActions(options: FilterKeyframeActionsOptions) {
   const { selectedTimelineItem, currentFrame, unifiedStore, canOperateFilterNumbers } = options
   const { t } = useAppI18n()
+
+  function getCommitContext(item: NonNullable<typeof selectedTimelineItem.value>) {
+    return {
+      item,
+      frame: currentFrame.value,
+      applyChangePlan: unifiedStore.applyChangePlanWithHistory,
+    }
+  }
 
   function getFilterChannelButtonState(channel: FilterChannelKey = FILTER_CHANNEL) {
     const item = selectedTimelineItem.value
@@ -67,10 +70,10 @@ export function useFilterKeyframeActions(options: FilterKeyframeActionsOptions) 
   }
 
   async function toggleFilterKeyframe(channel: FilterChannelKey = FILTER_CHANNEL) {
-    throwClipPropertyPhase0Todo(`filter.keyframe.toggle.${channel}`)
     const item = selectedTimelineItem.value
-    if (!item) return
-    await unifiedStore.toggleKeyframeWithHistory(item.id, currentFrame.value, channel)
+    if (!item || !canOperateFilterNumbers.value) return
+    clearFilterIntensityOverlay(item.id)
+    await propertyMutationCommitter.toggleKeyframe(getCommitContext(item), channel)
   }
 
   function goToPreviousFilterKeyframe(channel: FilterChannelKey = FILTER_CHANNEL) {

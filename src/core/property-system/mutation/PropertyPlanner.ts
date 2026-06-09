@@ -7,6 +7,7 @@ import type {
 } from './types'
 import {
   audioVolumeSchema,
+  filterIntensitySchema,
   transformOpacitySchema,
   type AnimatablePropertySchema,
   transformPositionSchema,
@@ -41,6 +42,7 @@ export class PropertyPlanner {
     if (propertyId === transformPositionSchema.propertyId) return transformPositionSchema
     if (propertyId === transformSizeSchema.propertyId) return transformSizeSchema
     if (propertyId === transformOpacitySchema.propertyId) return transformOpacitySchema
+    if (propertyId === filterIntensitySchema.propertyId) return filterIntensitySchema
     if (propertyId === audioVolumeSchema.propertyId) return audioVolumeSchema
     return null
   }
@@ -66,6 +68,7 @@ export class PropertyPlanner {
             timelineItemId: intent.timelineItemId,
             frame: intent.frame,
             groupId,
+            target: schema.target,
             patch: nextPatch,
           },
         ],
@@ -204,6 +207,15 @@ export class PropertyPlanner {
       } as Partial<AnimationGroupValueMap[typeof schema.animationGroupId]>
     }
 
+    if (schema.propertyId === 'filter.intensity') {
+      if (typeof intent.value !== 'number' || !Number.isFinite(intent.value)) {
+        throw new Error('filter.intensity requires a finite numeric value')
+      }
+      return {
+        intensity: Math.min(1, Math.max(0, intent.value)),
+      } as Partial<AnimationGroupValueMap[typeof schema.animationGroupId]>
+    }
+
     if (schema.propertyId === 'transform.position') {
       if (!this.isFiniteNumberRecord(intent.value, schema.valueFields)) {
         throw new Error('transform.position requires finite numeric x/y patch values')
@@ -226,6 +238,7 @@ export class PropertyPlanner {
     if (schema.propertyId === 'transform.position') return '位置'
     if (schema.propertyId === 'transform.size') return '尺寸'
     if (schema.propertyId === 'transform.opacity') return '混合强度'
+    if (schema.propertyId === 'filter.intensity') return '滤镜强度'
     if (schema.propertyId === 'audio.volume') return '音量'
     return schema.propertyId
   }

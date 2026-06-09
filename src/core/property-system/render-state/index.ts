@@ -1,4 +1,9 @@
 export {
+  clearFilterIntensityOverlay,
+  getFilterIntensityOverlay,
+  setFilterIntensityOverlay,
+} from './filterOverlay'
+export {
   clearTransformPositionOverlay,
   getTransformPositionOverlay,
   setTransformPositionOverlay,

@@ -1,6 +1,7 @@
 import { generateCommandId } from '@/core/utils/idGenerator'
 import type { SimpleCommand } from '@/core/modules/commands/types'
-import type { ChangePlan } from '@/core/property-system'
+import type { ChangePlan, ChangeOperation } from '@/core/property-system'
+import type { UnifiedTimelineItemData } from '@/core/timelineitem/type'
 import type {
   KeyframeSnapshot,
   PlaybackControls,
@@ -14,10 +15,12 @@ import {
 } from './keyframes/shared'
 import {
   ensureTrack,
+  getCurrentGroupValue,
   removeEmptyTrack,
   sortGroupKeyframes,
 } from '@/core/animation/engine'
 import { applyAnimationToConfig } from '@/core/utils/animationInterpolation'
+import { normalizeClipFilterConfig } from '@/core/timelineitem/filter'
 
 export class ApplyChangePlanCommand implements SimpleCommand {
   public readonly id: string
@@ -59,7 +62,7 @@ export class ApplyChangePlanCommand implements SimpleCommand {
       }
 
       if (operation.kind === 'no-animation-group-patch') {
-        Object.assign(item.config, operation.patch)
+        this.applyStaticPatch(item, operation)
       } else if (operation.kind === 'visual-config-patch') {
         Object.assign(item.config, operation.patch)
       } else if (operation.kind === 'audio-config-patch') {
@@ -72,11 +75,11 @@ export class ApplyChangePlanCommand implements SimpleCommand {
         }
         keyframe.value = operation.value as never
         keyframe.properties = operation.value as never
-        Object.assign(item.config, operation.value)
+        this.applyAnimatedValue(item, operation.groupId, operation.frame, operation.value)
       } else if (operation.kind === 'animation-keyframe-create') {
         ensureTrack(item, operation.groupId).keyframes.push(operation.keyframe as never)
         sortGroupKeyframes(item, operation.groupId)
-        Object.assign(item.config, operation.keyframe.value)
+        this.applyAnimatedValue(item, operation.groupId, operation.frame, operation.keyframe.value)
       } else if (operation.kind === 'animation-keyframe-delete') {
         const track = ensureTrack(item, operation.groupId)
         track.keyframes = track.keyframes.filter((entry) => entry.frame !== operation.relativeFrame)
@@ -114,6 +117,52 @@ export class ApplyChangePlanCommand implements SimpleCommand {
   private getRefreshFrame(timelineItemId: string): number | null {
     const operation = this.plan.operations.find((entry) => entry.timelineItemId === timelineItemId)
     return operation && 'frame' in operation ? operation.frame : null
+  }
+
+  private applyStaticPatch(
+    item: UnifiedTimelineItemData,
+    operation: Extract<ChangeOperation, { kind: 'no-animation-group-patch' }>,
+  ): void {
+    if (operation.target === 'config') {
+      Object.assign(item.config, operation.patch)
+      return
+    }
+
+    if (operation.target === 'filterEffect') {
+      if (!item.filterEffect) {
+        throw new Error(`滤镜效果不存在，无法更新属性: ${operation.timelineItemId}`)
+      }
+      const nextFilterEffect = normalizeClipFilterConfig({
+        ...item.filterEffect,
+        ...operation.patch,
+      })
+      item.filterEffect = nextFilterEffect
+      item.runtime.renderFilterEffect = nextFilterEffect
+      return
+    }
+  }
+
+  private applyAnimatedValue(
+    item: UnifiedTimelineItemData,
+    groupId: Parameters<typeof getCurrentGroupValue>[2],
+    frame: number,
+    fallbackValue: object,
+  ): void {
+    if (groupId === 'filter.intensity') {
+      if (!item.filterEffect) {
+        throw new Error(`滤镜效果不存在，无法更新属性: ${item.id}`)
+      }
+      const currentValue = getCurrentGroupValue(item, frame, groupId)
+      const nextFilterEffect = normalizeClipFilterConfig({
+        ...item.filterEffect,
+        ...(currentValue as object),
+      })
+      item.filterEffect = nextFilterEffect
+      item.runtime.renderFilterEffect = nextFilterEffect
+      return
+    }
+
+    Object.assign(item.config, fallbackValue)
   }
 
   get isDisposed(): boolean {

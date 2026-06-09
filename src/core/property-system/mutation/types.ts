@@ -5,6 +5,7 @@ import type {
   AnimationGroupValueMap,
   VisualProps,
 } from '@/core/timelineitem/bunnytype'
+import type { AnimatablePropertyTarget } from '@/core/property-system/schema'
 import type { MediaType } from '@/core/mediaitem'
 import type { UnifiedTimelineItemData } from '@/core/timelineitem'
 
@@ -13,6 +14,7 @@ export type AnimatablePropertyId =
   | 'transform.position'
   | 'transform.size'
   | 'transform.opacity'
+  | 'filter.intensity'
   | 'audio.volume'
 
 export type ConfigPropertyId =
@@ -46,6 +48,7 @@ export interface NoAnimationGroupPatchOperation<G extends AnimationGroupId = Ani
   timelineItemId: string
   frame: number
   groupId: G
+  target: AnimatablePropertyTarget
   patch: Partial<AnimationGroupValueMap[G]>
 }
 
