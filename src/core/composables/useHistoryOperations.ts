@@ -274,7 +274,11 @@ export function useHistoryOperations(
   }
 
   /**
-   * 带历史记录的更新变换属性方法（增强版）
+   * 带历史记录的更新变换属性方法（旧直写路径）。
+   *
+   * @deprecated 属性面板中的 transform 属性已迁移到
+   * `propertyMutationCommitter -> applyChangePlanWithHistory`。新代码不要再调用本方法，
+   * 避免绕过 PropertyPlanner 的 static/keyframe 写入策略。仅保留给尚未迁移的历史调用兜底。
    * @param timelineItemId 要更新的时间轴项目ID
    * @param newTransform 新的变换属性
    */
@@ -318,6 +322,13 @@ export function useHistoryOperations(
     await unifiedHistoryModule.executeCommand(command)
   }
 
+  /**
+   * 带历史记录的更新音频属性方法（旧直写路径）。
+   *
+   * @deprecated 属性面板中的 audio.volume / audio.isMuted 已迁移到
+   * `propertyMutationCommitter -> applyChangePlanWithHistory`。新代码不要再调用本方法，
+   * 避免继续扩散绕过 ChangePlan 的音频属性写入。
+   */
   async function updateAudioPropertiesWithHistory(
     timelineItemId: string,
     newValues: AudioPropertyUpdate,
@@ -1089,11 +1100,15 @@ export function useHistoryOperations(
   }
 
   /**
-   * 带历史记录的更新关键帧属性方法
+   * 带历史记录的更新动画组值方法（旧动画组入口）。
+   *
+   * @deprecated transform/audio.volume 等已迁移属性不要再直接调用本方法；
+   * 请通过 `propertyMutationCommitter` 或显式 `ChangePlan` 提交。当前仅作为
+   * filter/mask 等未迁移属性域的过渡兼容入口。
    * @param timelineItemId 时间轴项目ID
    * @param frame 帧数
-   * @param property 属性名
-   * @param value 新值
+   * @param groupId 动画组ID
+   * @param patch 动画组 patch
    */
   async function updateAnimationGroupValueWithHistory<G extends AnimationGroupId>(
     timelineItemId: string,
@@ -1152,6 +1167,13 @@ export function useHistoryOperations(
     }
   }
 
+  /**
+   * 带历史记录的批量更新动画组方法（旧动画组入口）。
+   *
+   * @deprecated 新属性提交不要继续使用本方法组合动画组命令；需要单步 undo 的组合提交
+   * 应创建一个 `ChangePlan` 并通过 `propertyMutationCommitter.commitChangePlan()` 提交。
+   * 当前仅保留给 mask 等未迁移属性域过渡使用。
+   */
   async function updateAnimationGroupsBatchWithHistory(
     timelineItemId: string,
     frame: number,
@@ -1187,6 +1209,12 @@ export function useHistoryOperations(
     }
   }
 
+  /**
+   * 带历史记录的更新关键帧属性方法（旧 property string 入口）。
+   *
+   * @deprecated 新属性不要再通过字符串 property 路径提交。已迁移属性请走
+   * `propertyMutationCommitter`；未迁移的 filter/mask 可暂时保留使用，迁移完成后删除。
+   */
   async function updatePropertyWithHistory(
     timelineItemId: string,
     frame: number,
@@ -1245,6 +1273,12 @@ export function useHistoryOperations(
     }
   }
 
+  /**
+   * 带历史记录的更新蒙版方法（旧 mask 专用入口）。
+   *
+   * @deprecated mask 属性域尚未迁入 property-system，当前仅作为过渡入口保留。
+   * 新增 mask 属性能力时不要继续扩展本入口，应优先按 ChangePlan 路径迁移。
+   */
   async function updateMaskWithHistory(
     timelineItemId: string,
     frame: number,

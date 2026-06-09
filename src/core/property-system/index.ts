@@ -2,6 +2,10 @@ export {
   PropertyPlanner,
   propertyPlanner,
 } from './mutation'
+export {
+  PropertyMutationCommitter,
+  propertyMutationCommitter,
+} from './commit'
 export type {
   AudioConfigPatchOperation,
   AnimatablePropertyId,
@@ -15,3 +19,6 @@ export type {
   PropertyPlanIntent,
   VisualConfigPatchOperation,
 } from './mutation'
+export type {
+  PropertyMutationCommitContext,
+} from './commit'

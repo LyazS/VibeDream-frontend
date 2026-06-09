@@ -395,6 +395,8 @@ export const useUnifiedStore = defineStore('unified', () => {
     removeTimelineItemWithHistory: historyOperations.removeTimelineItemWithHistory,
     startASRRequestWithHistory: historyOperations.startASRRequestWithHistory,
     moveTimelineItemWithHistory: historyOperations.moveTimelineItemWithHistory,
+    // @deprecated 旧属性直写入口。transform/audio 属性新代码应走
+    // propertyMutationCommitter -> applyChangePlanWithHistory。
     updateVisualTransformWithHistory: historyOperations.updateVisualTransformWithHistory,
     updateAudioPropertiesWithHistory: historyOperations.updateAudioPropertiesWithHistory,
     updatePlaybackRateWithHistory: historyOperations.updatePlaybackRateWithHistory,
@@ -419,6 +421,8 @@ export const useUnifiedStore = defineStore('unified', () => {
     // 关键帧历史记录方法
     createKeyframeWithHistory: historyOperations.createKeyframeWithHistory,
     deleteKeyframeWithHistory: historyOperations.deleteKeyframeWithHistory,
+    // @deprecated 旧 property string / mask / animation-group 入口。
+    // 新属性迁移应优先使用 propertyMutationCommitter 或显式 ChangePlan。
     updatePropertyWithHistory: historyOperations.updatePropertyWithHistory,
     updateMaskWithHistory: historyOperations.updateMaskWithHistory,
     applyChangePlanWithHistory: historyOperations.applyChangePlanWithHistory,

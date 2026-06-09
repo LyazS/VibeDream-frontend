@@ -13,7 +13,7 @@ import { isPlayheadInTimelineItem } from '@/core/utils/timelineSearchUtils'
 import { normalizeAngle } from '@/core/utils/rotationTransform'
 import type { BlendMode } from '@/core/timelineitem'
 import { isBlendMode } from '@/core/timelineitem'
-import { propertyPlanner, type ChangeOperation } from '@/core/property-system'
+import { propertyMutationCommitter, type ChangeOperation } from '@/core/property-system'
 import {
   clearAudioVolumeOverlay,
   clearTransformOpacityOverlay,
@@ -52,6 +52,14 @@ export function useUnifiedKeyframeTransformControls(
 ) {
   const { selectedTimelineItem, currentFrame } = options
   const unifiedStore = useUnifiedStore()
+
+  function getCommitContext(item: UnifiedTimelineItemData) {
+    return {
+      item,
+      frame: currentFrame.value,
+      applyChangePlan: unifiedStore.applyChangePlanWithHistory,
+    }
+  }
 
   const canOperateTransforms = computed(() => {
     if (!selectedTimelineItem.value) return false
@@ -168,56 +176,28 @@ export function useUnifiedKeyframeTransformControls(
     if (groupId === 'audio.volume') {
       const item = selectedTimelineItem.value
       if (!item || !canOperateTransforms.value) return
-      const plan = propertyPlanner.plan({
-        kind: 'keyframe-toggle',
-        propertyId: 'audio.volume',
-        timelineItemId: item.id,
-        frame: currentFrame.value,
-        item,
-      })
-      await unifiedStore.applyChangePlanWithHistory(plan)
+      await propertyMutationCommitter.toggleKeyframe(getCommitContext(item), 'audio.volume')
       return
     }
 
     if (groupId === 'transform.opacity') {
       const item = selectedTimelineItem.value
       if (!item || !canOperateTransforms.value) return
-      const plan = propertyPlanner.plan({
-        kind: 'keyframe-toggle',
-        propertyId: 'transform.opacity',
-        timelineItemId: item.id,
-        frame: currentFrame.value,
-        item,
-      })
-      await unifiedStore.applyChangePlanWithHistory(plan)
+      await propertyMutationCommitter.toggleKeyframe(getCommitContext(item), 'transform.opacity')
       return
     }
 
     if (groupId === 'transform.size') {
       const item = selectedTimelineItem.value
       if (!item || !canOperateTransforms.value) return
-      const plan = propertyPlanner.plan({
-        kind: 'keyframe-toggle',
-        propertyId: 'transform.size',
-        timelineItemId: item.id,
-        frame: currentFrame.value,
-        item,
-      })
-      await unifiedStore.applyChangePlanWithHistory(plan)
+      await propertyMutationCommitter.toggleKeyframe(getCommitContext(item), 'transform.size')
       return
     }
 
     if (groupId === 'transform.position') {
       const item = selectedTimelineItem.value
       if (!item || !canOperateTransforms.value) return
-      const plan = propertyPlanner.plan({
-        kind: 'keyframe-toggle',
-        propertyId: 'transform.position',
-        timelineItemId: item.id,
-        frame: currentFrame.value,
-        item,
-      })
-      await unifiedStore.applyChangePlanWithHistory(plan)
+      await propertyMutationCommitter.toggleKeyframe(getCommitContext(item), 'transform.position')
       return
     }
 
@@ -225,14 +205,7 @@ export function useUnifiedKeyframeTransformControls(
       const item = selectedTimelineItem.value
       if (!item || !canOperateTransforms.value) return
       clearTransformRotationOverlay(item.id)
-      const plan = propertyPlanner.plan({
-        kind: 'keyframe-toggle',
-        propertyId: 'transform.rotation',
-        timelineItemId: item.id,
-        frame: currentFrame.value,
-        item,
-      })
-      await unifiedStore.applyChangePlanWithHistory(plan)
+      await propertyMutationCommitter.toggleKeyframe(getCommitContext(item), 'transform.rotation')
       return
     }
 
@@ -259,15 +232,7 @@ export function useUnifiedKeyframeTransformControls(
     const item = selectedTimelineItem.value
     if (!item || !canOperateTransforms.value) return
     const nextRotation = typeof nextValue === 'number' ? normalizeAngle(nextValue) : rotation.value
-    const plan = propertyPlanner.plan({
-      kind: 'direct',
-      propertyId: 'transform.rotation',
-      timelineItemId: item.id,
-      frame: currentFrame.value,
-      value: nextRotation,
-      item,
-    })
-    await unifiedStore.applyChangePlanWithHistory(plan)
+    await propertyMutationCommitter.commitDirect(getCommitContext(item), 'transform.rotation', nextRotation)
     clearTransformRotationOverlay(item.id)
   }
 
@@ -286,15 +251,7 @@ export function useUnifiedKeyframeTransformControls(
       return
     }
 
-    const plan = propertyPlanner.plan({
-      kind: 'direct',
-      propertyId: 'transform.position',
-      timelineItemId: item.id,
-      frame: currentFrame.value,
-      value: { [axis]: resolvedValue },
-      item,
-    })
-    await unifiedStore.applyChangePlanWithHistory(plan)
+    await propertyMutationCommitter.commitDirect(getCommitContext(item), 'transform.position', { [axis]: resolvedValue })
     clearTransformPositionOverlay(item.id)
   }
 
@@ -310,15 +267,7 @@ export function useUnifiedKeyframeTransformControls(
     const y = positionOverlay.y ?? currentRenderConfig?.y
     if (!isFiniteNumber(x) || !isFiniteNumber(y)) return
 
-    const plan = propertyPlanner.plan({
-      kind: 'direct',
-      propertyId: 'transform.position',
-      timelineItemId: item.id,
-      frame: currentFrame.value,
-      value: { x, y },
-      item,
-    })
-    await unifiedStore.applyChangePlanWithHistory(plan)
+    await propertyMutationCommitter.commitDirect(getCommitContext(item), 'transform.position', { x, y })
     clearTransformPositionOverlay(item.id)
   }
 
@@ -349,15 +298,7 @@ export function useUnifiedKeyframeTransformControls(
           ? getScaledSizeFromHeight(resolvedValue)
           : { height: resolvedValue }
 
-    const plan = propertyPlanner.plan({
-      kind: 'direct',
-      propertyId: 'transform.size',
-      timelineItemId: item.id,
-      frame: currentFrame.value,
-      value: patch,
-      item,
-    })
-    await unifiedStore.applyChangePlanWithHistory(plan)
+    await propertyMutationCommitter.commitDirect(getCommitContext(item), 'transform.size', patch)
     clearTransformSizeOverlay(item.id)
   }
 
@@ -374,15 +315,7 @@ export function useUnifiedKeyframeTransformControls(
 
     if (!isFiniteNumber(nextOpacity)) return
 
-    const plan = propertyPlanner.plan({
-      kind: 'direct',
-      propertyId: 'transform.opacity',
-      timelineItemId: item.id,
-      frame: currentFrame.value,
-      value: nextOpacity,
-      item,
-    })
-    await unifiedStore.applyChangePlanWithHistory(plan)
+    await propertyMutationCommitter.commitDirect(getCommitContext(item), 'transform.opacity', nextOpacity)
     clearTransformOpacityOverlay(item.id)
   }
 
@@ -399,15 +332,7 @@ export function useUnifiedKeyframeTransformControls(
 
     if (!isFiniteNumber(nextVolume)) return
 
-    const plan = propertyPlanner.plan({
-      kind: 'direct',
-      propertyId: 'audio.volume',
-      timelineItemId: item.id,
-      frame: currentFrame.value,
-      value: nextVolume,
-      item,
-    })
-    await unifiedStore.applyChangePlanWithHistory(plan)
+    await propertyMutationCommitter.commitDirect(getCommitContext(item), 'audio.volume', nextVolume)
     clearAudioVolumeOverlay(item.id)
   }
 
@@ -431,14 +356,11 @@ export function useUnifiedKeyframeTransformControls(
       const width = sizeOverlay.width ?? currentRenderConfig?.width
       const height = sizeOverlay.height ?? currentRenderConfig?.height
       if (isFiniteNumber(width) && isFiniteNumber(height)) {
-        const sizePlan = propertyPlanner.plan({
-          kind: 'direct',
-          propertyId: 'transform.size',
-          timelineItemId: item.id,
-          frame: currentFrame.value,
-          value: { width, height },
-          item,
-        })
+        const sizePlan = propertyMutationCommitter.createDirectPlan(
+          getCommitContext(item),
+          'transform.size',
+          { width, height },
+        )
         operations.push(...sizePlan.operations)
       }
     }
@@ -447,21 +369,18 @@ export function useUnifiedKeyframeTransformControls(
       const x = positionOverlay.x ?? currentRenderConfig?.x
       const y = positionOverlay.y ?? currentRenderConfig?.y
       if (isFiniteNumber(x) && isFiniteNumber(y)) {
-        const positionPlan = propertyPlanner.plan({
-          kind: 'direct',
-          propertyId: 'transform.position',
-          timelineItemId: item.id,
-          frame: currentFrame.value,
-          value: { x, y },
-          item,
-        })
+        const positionPlan = propertyMutationCommitter.createDirectPlan(
+          getCommitContext(item),
+          'transform.position',
+          { x, y },
+        )
         operations.push(...positionPlan.operations)
       }
     }
 
     if (operations.length === 0) return
 
-    await unifiedStore.applyChangePlanWithHistory({
+    await propertyMutationCommitter.commitChangePlan(getCommitContext(item), {
       propertyId: 'transform.size',
       description: '修改尺寸和位置',
       operations,
@@ -473,15 +392,7 @@ export function useUnifiedKeyframeTransformControls(
   async function setPositionPatchDirectly(value: Record<string, number>) {
     const item = selectedTimelineItem.value
     if (!item || !canOperateTransforms.value) return
-    const plan = propertyPlanner.plan({
-      kind: 'direct',
-      propertyId: 'transform.position',
-      timelineItemId: item.id,
-      frame: currentFrame.value,
-      value,
-      item,
-    })
-    await unifiedStore.applyChangePlanWithHistory(plan)
+    await propertyMutationCommitter.commitDirect(getCommitContext(item), 'transform.position', value)
   }
 
   const setTransformPositionDeferred = (x: number, y: number) => {
@@ -583,29 +494,13 @@ export function useUnifiedKeyframeTransformControls(
   const setSizeDirectly = async (width: number, height: number) => {
     const item = selectedTimelineItem.value
     if (!item || !canOperateTransforms.value) return
-    const plan = propertyPlanner.plan({
-      kind: 'direct',
-      propertyId: 'transform.size',
-      timelineItemId: item.id,
-      frame: currentFrame.value,
-      value: { width, height },
-      item,
-    })
-    await unifiedStore.applyChangePlanWithHistory(plan)
+    await propertyMutationCommitter.commitDirect(getCommitContext(item), 'transform.size', { width, height })
   }
 
   const setSizePatchDirectly = async (value: Record<string, number>) => {
     const item = selectedTimelineItem.value
     if (!item || !canOperateTransforms.value) return
-    const plan = propertyPlanner.plan({
-      kind: 'direct',
-      propertyId: 'transform.size',
-      timelineItemId: item.id,
-      frame: currentFrame.value,
-      value,
-      item,
-    })
-    await unifiedStore.applyChangePlanWithHistory(plan)
+    await propertyMutationCommitter.commitDirect(getCommitContext(item), 'transform.size', value)
   }
 
   const setWidthDirectly = async (width: number) => {
@@ -652,29 +547,17 @@ export function useUnifiedKeyframeTransformControls(
     const item = selectedTimelineItem.value
     if (!item || !canOperateTransforms.value) return
     clearTransformRotationOverlay(item.id)
-    const plan = propertyPlanner.plan({
-      kind: 'direct',
-      propertyId: 'transform.rotation',
-      timelineItemId: item.id,
-      frame: currentFrame.value,
-      value: normalizeAngle(nextRotation),
-      item,
-    })
-    await unifiedStore.applyChangePlanWithHistory(plan)
+    await propertyMutationCommitter.commitDirect(
+      getCommitContext(item),
+      'transform.rotation',
+      normalizeAngle(nextRotation),
+    )
   }
 
   const setOpacityDirectly = async (nextOpacity: number) => {
     const item = selectedTimelineItem.value
     if (!item || !canOperateTransforms.value) return
-    const plan = propertyPlanner.plan({
-      kind: 'direct',
-      propertyId: 'transform.opacity',
-      timelineItemId: item.id,
-      frame: currentFrame.value,
-      value: nextOpacity,
-      item,
-    })
-    await unifiedStore.applyChangePlanWithHistory(plan)
+    await propertyMutationCommitter.commitDirect(getCommitContext(item), 'transform.opacity', nextOpacity)
   }
 
   const setBlendModeDirectly = async (nextBlendMode: BlendMode) => {
@@ -682,7 +565,7 @@ export function useUnifiedKeyframeTransformControls(
     if (!item || !canOperateTransforms.value || !TimelineItemQueries.hasVisualProperties(item)) return
     if (!isBlendMode(nextBlendMode)) return
 
-    await unifiedStore.applyChangePlanWithHistory({
+    await propertyMutationCommitter.commitConfigPatch(getCommitContext(item), {
       propertyId: 'transform.blendMode',
       description: '修改混合模式',
       operations: [
@@ -699,22 +582,14 @@ export function useUnifiedKeyframeTransformControls(
   const setVolume = async (nextVolume: number) => {
     const item = selectedTimelineItem.value
     if (!item || !canOperateTransforms.value) return
-    const plan = propertyPlanner.plan({
-      kind: 'direct',
-      propertyId: 'audio.volume',
-      timelineItemId: item.id,
-      frame: currentFrame.value,
-      value: nextVolume,
-      item,
-    })
-    await unifiedStore.applyChangePlanWithHistory(plan)
+    await propertyMutationCommitter.commitDirect(getCommitContext(item), 'audio.volume', nextVolume)
   }
 
   const setMutedDirectly = async (nextMuted: boolean) => {
     const item = selectedTimelineItem.value
     if (!item || !canOperateTransforms.value || !TimelineItemQueries.hasAudioProperties(item)) return
 
-    await unifiedStore.applyChangePlanWithHistory({
+    await propertyMutationCommitter.commitConfigPatch(getCommitContext(item), {
       propertyId: 'audio.isMuted',
       description: nextMuted ? '静音音频' : '取消静音音频',
       operations: [
@@ -746,19 +621,16 @@ export function useUnifiedKeyframeTransformControls(
       const currentWidth = displayWidth.value
       const sizePatch = getScaledSizeFromWidth(currentWidth)
       if (typeof sizePatch.height === 'number') {
-        const sizePlan = propertyPlanner.plan({
-          kind: 'direct',
-          propertyId: 'transform.size',
-          timelineItemId: item.id,
-          frame: currentFrame.value,
-          value: sizePatch,
-          item,
-        })
+        const sizePlan = propertyMutationCommitter.createDirectPlan(
+          getCommitContext(item),
+          'transform.size',
+          sizePatch,
+        )
         operations.push(...sizePlan.operations)
       }
     }
 
-    await unifiedStore.applyChangePlanWithHistory({
+    await propertyMutationCommitter.commitConfigPatch(getCommitContext(item), {
       propertyId: 'transform.proportionalScale',
       description: `${nextProportionalScale ? '开启' : '关闭'}等比缩放`,
       operations,
