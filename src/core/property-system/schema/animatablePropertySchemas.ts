@@ -1,16 +1,22 @@
-import type { AnimationGroupId } from '@/core/timelineitem/bunnytype'
+import type { PropertyAnimationGroupId } from '@/core/timelineitem/bunnytype'
 import type { AnimatablePropertyId } from '@/core/property-system/mutation/types'
 
 export type AnimatablePropertyTarget = 'config' | 'filterEffect'
+export type PropertyValueKind = 'number' | 'boolean' | 'color' | 'vec2'
 
 export interface AnimatablePropertySchema {
   propertyId: AnimatablePropertyId
-  animationGroupId: AnimationGroupId
+  animationGroupId?: PropertyAnimationGroupId
   target: AnimatablePropertyTarget
   valueFields: readonly string[]
+  valueKind: PropertyValueKind
   supportsDirectCommit: boolean
   supportsKeyframeToggle: boolean
   supportsTransientOverlay: boolean
+  label?: string
+  min?: number
+  max?: number
+  step?: number
 }
 
 export const transformRotationSchema: AnimatablePropertySchema = {
@@ -18,6 +24,7 @@ export const transformRotationSchema: AnimatablePropertySchema = {
   animationGroupId: 'transform.rotation',
   target: 'config',
   valueFields: ['rotation'],
+  valueKind: 'number',
   supportsDirectCommit: true,
   supportsKeyframeToggle: true,
   supportsTransientOverlay: true,
@@ -28,6 +35,7 @@ export const transformPositionSchema: AnimatablePropertySchema = {
   animationGroupId: 'transform.position',
   target: 'config',
   valueFields: ['x', 'y'],
+  valueKind: 'vec2',
   supportsDirectCommit: true,
   supportsKeyframeToggle: true,
   supportsTransientOverlay: true,
@@ -38,6 +46,7 @@ export const transformSizeSchema: AnimatablePropertySchema = {
   animationGroupId: 'transform.size',
   target: 'config',
   valueFields: ['width', 'height'],
+  valueKind: 'vec2',
   supportsDirectCommit: true,
   supportsKeyframeToggle: true,
   supportsTransientOverlay: true,
@@ -48,6 +57,7 @@ export const transformOpacitySchema: AnimatablePropertySchema = {
   animationGroupId: 'transform.opacity',
   target: 'config',
   valueFields: ['opacity'],
+  valueKind: 'number',
   supportsDirectCommit: true,
   supportsKeyframeToggle: true,
   supportsTransientOverlay: true,
@@ -58,6 +68,7 @@ export const filterIntensitySchema: AnimatablePropertySchema = {
   animationGroupId: 'filter.intensity',
   target: 'filterEffect',
   valueFields: ['intensity'],
+  valueKind: 'number',
   supportsDirectCommit: true,
   supportsKeyframeToggle: true,
   supportsTransientOverlay: true,
@@ -68,6 +79,7 @@ export const audioVolumeSchema: AnimatablePropertySchema = {
   animationGroupId: 'audio.volume',
   target: 'config',
   valueFields: ['volume'],
+  valueKind: 'number',
   supportsDirectCommit: true,
   supportsKeyframeToggle: true,
   supportsTransientOverlay: true,

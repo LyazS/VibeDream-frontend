@@ -8,3 +8,11 @@ export {
   type AnimatablePropertySchema,
   type AnimatablePropertyTarget,
 } from './animatablePropertySchemas'
+export {
+  DynamicFilterParameterSchemaProvider,
+  PropertySchemaResolver,
+  StaticPropertySchemaProvider,
+  propertySchemaResolver,
+  type PropertySchemaContext,
+  type PropertySchemaProvider,
+} from './resolver'

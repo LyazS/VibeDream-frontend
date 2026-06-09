@@ -7,6 +7,8 @@ import {
   type AnimationGroupId,
   type AnimationGroupTrack,
   type AnimationGroupValueMap,
+  type PropertyAnimationGroupId,
+  type PropertyAnimationValueByGroup,
   type GetAnimation,
 } from '@/core/timelineitem/bunnytype'
 import { AnimationRegistry } from './registry'
@@ -14,14 +16,16 @@ import { AnimationRegistry } from './registry'
 export type AnimationButtonState = 'none' | 'on-keyframe' | 'between-keyframes'
 export type AnimationSetResult = 'no-animation' | 'updated-keyframe' | 'created-keyframe'
 
-function cloneValue<G extends AnimationGroupId>(value: AnimationGroupValueMap[G]): AnimationGroupValueMap[G] {
-  return { ...(value as Record<string, unknown>) } as AnimationGroupValueMap[G]
+function cloneValue<G extends PropertyAnimationGroupId>(
+  value: PropertyAnimationValueByGroup<G>,
+): PropertyAnimationValueByGroup<G> {
+  return { ...(value as Record<string, unknown>) } as PropertyAnimationValueByGroup<G>
 }
 
-function createKeyframeValueAlias<G extends AnimationGroupId>(
+function createKeyframeValueAlias<G extends PropertyAnimationGroupId>(
   frame: number,
   position: number,
-  value: AnimationGroupValueMap[G],
+  value: PropertyAnimationValueByGroup<G>,
 ): AnimateKeyframe<MediaType, G> {
   const payload = cloneValue(value)
   return {
@@ -53,7 +57,7 @@ export function initializeAnimation(item: UnifiedTimelineItemData<MediaType>): v
   }
 }
 
-export function getTrack<G extends AnimationGroupId>(
+export function getTrack<G extends PropertyAnimationGroupId>(
   item: UnifiedTimelineItemData<MediaType>,
   groupId: G,
 ): AnimationGroupTrack<MediaType, G> | undefined {
@@ -63,7 +67,7 @@ export function getTrack<G extends AnimationGroupId>(
   > | undefined
 }
 
-export function ensureTrack<G extends AnimationGroupId>(
+export function ensureTrack<G extends PropertyAnimationGroupId>(
   item: UnifiedTimelineItemData<MediaType>,
   groupId: G,
 ): AnimationGroupTrack<MediaType, G> {
@@ -84,9 +88,9 @@ export function ensureTrack<G extends AnimationGroupId>(
 
 export function sortGroupKeyframes(
   item: UnifiedTimelineItemData<MediaType>,
-  groupId?: AnimationGroupId,
+  groupId?: PropertyAnimationGroupId,
 ): void {
-  const sortTrack = (track?: AnimationGroupTrack<MediaType, AnimationGroupId>) => {
+  const sortTrack = (track?: AnimationGroupTrack<MediaType, PropertyAnimationGroupId>) => {
     track?.keyframes.sort((a, b) => a.frame - b.frame)
   }
 
@@ -96,17 +100,17 @@ export function sortGroupKeyframes(
     return
   }
   for (const track of Object.values(item.animation.groups) as Array<
-    AnimationGroupTrack<MediaType, AnimationGroupId> | undefined
+    AnimationGroupTrack<MediaType, PropertyAnimationGroupId> | undefined
   >) {
     sortTrack(track)
   }
 }
 
-export function removeEmptyTrack(item: UnifiedTimelineItemData<MediaType>, groupId: AnimationGroupId): void {
+export function removeEmptyTrack(item: UnifiedTimelineItemData<MediaType>, groupId: PropertyAnimationGroupId): void {
   if (!item.animation?.groups) return
   const track = (item.animation.groups as Record<string, any>)[groupId] as AnimationGroupTrack<
     MediaType,
-    AnimationGroupId
+    PropertyAnimationGroupId
   > | undefined
   const groups = item.animation.groups as Record<string, unknown>
   if (track && track.keyframes.length === 0) {
@@ -117,13 +121,16 @@ export function removeEmptyTrack(item: UnifiedTimelineItemData<MediaType>, group
   }
 }
 
-export function getSupportedAnimationGroups(item: UnifiedTimelineItemData<MediaType>): AnimationGroupId[] {
-  return AnimationRegistry.list()
+export function getSupportedAnimationGroups(item: UnifiedTimelineItemData<MediaType>): PropertyAnimationGroupId[] {
+  const staticGroups = AnimationRegistry.list()
     .filter((definition) => definition.supports(item))
     .map((definition) => definition.id)
+  const dynamicGroups = Object.keys(item.animation?.groups ?? {})
+    .filter((groupId) => groupId.startsWith('filter.param.')) as PropertyAnimationGroupId[]
+  return [...new Set([...staticGroups, ...dynamicGroups])]
 }
 
-export function createGroupKeyframe<G extends AnimationGroupId>(
+export function createGroupKeyframe<G extends PropertyAnimationGroupId>(
   item: UnifiedTimelineItemData<MediaType>,
   absoluteFrame: number,
   rawGroupId: G | AnimationChannelKey,
@@ -132,7 +139,7 @@ export function createGroupKeyframe<G extends AnimationGroupId>(
   if (!groupId) {
     throw new Error(`未知动画组: ${String(rawGroupId)}`)
   }
-  const baseValue = getCurrentGroupValue(item, absoluteFrame, groupId) as AnimationGroupValueMap[G]
+  const baseValue = getCurrentGroupValue(item, absoluteFrame, groupId) as PropertyAnimationValueByGroup<G>
   const relativeFrame = getRelativeFrame(item, absoluteFrame)
   return createKeyframeValueAlias(relativeFrame, getPosition(item, relativeFrame), baseValue) as AnimateKeyframe<
     MediaType,
@@ -144,7 +151,7 @@ export function findKeyframeAtFrame(
   item: UnifiedTimelineItemData<MediaType>,
   absoluteFrame: number,
   rawGroupId: AnimationChannelKey,
-): AnimateKeyframe<MediaType, AnimationGroupId> | undefined {
+): AnimateKeyframe<MediaType, PropertyAnimationGroupId> | undefined {
   const groupId = normalizeAnimationGroupId(rawGroupId)
   if (!groupId) return undefined
   const relativeFrame = getRelativeFrame(item, absoluteFrame)
@@ -231,15 +238,15 @@ export function getNextKeyframeFrame(
   return Math.min(...frames) + item.timeRange.timelineStartTime
 }
 
-export function getCurrentGroupValue<G extends AnimationGroupId>(
+export function getCurrentGroupValue<G extends PropertyAnimationGroupId>(
   item: UnifiedTimelineItemData<MediaType>,
   absoluteFrame: number,
   groupId: G,
-): AnimationGroupValueMap[G] {
+): PropertyAnimationValueByGroup<G> {
   const definition = AnimationRegistry.get(groupId)
   const track = getTrack(item, groupId)
   if (!track || track.keyframes.length === 0) {
-    return cloneValue(definition.getBaseValue(item)) as AnimationGroupValueMap[G]
+    return cloneValue(definition.getBaseValue(item)) as PropertyAnimationValueByGroup<G>
   }
 
   const relativeFrame = getRelativeFrame(item, absoluteFrame)
@@ -259,31 +266,31 @@ export function getCurrentGroupValue<G extends AnimationGroupId>(
     const t = (relativeFrame - before.frame) / span
     return definition.interpolate(before.value, after.value, t)
   }
-  if (before) return cloneValue(before.value) as AnimationGroupValueMap[G]
-  if (after) return cloneValue(after.value) as AnimationGroupValueMap[G]
-  return cloneValue(definition.getBaseValue(item)) as AnimationGroupValueMap[G]
+  if (before) return cloneValue(before.value) as PropertyAnimationValueByGroup<G>
+  if (after) return cloneValue(after.value) as PropertyAnimationValueByGroup<G>
+  return cloneValue(definition.getBaseValue(item)) as PropertyAnimationValueByGroup<G>
 }
 
-export function setStaticGroupValue<G extends AnimationGroupId>(
+export function setStaticGroupValue<G extends PropertyAnimationGroupId>(
   item: UnifiedTimelineItemData<MediaType>,
   groupId: G,
-  patch: Partial<AnimationGroupValueMap[G]>,
+  patch: Partial<PropertyAnimationValueByGroup<G>>,
 ): void {
   AnimationRegistry.get(groupId).applyValue(item, patch)
 }
 
-function mergeGroupValue<G extends AnimationGroupId>(
-  base: AnimationGroupValueMap[G],
-  patch: Partial<AnimationGroupValueMap[G]>,
-): AnimationGroupValueMap[G] {
-  return { ...base, ...patch } as AnimationGroupValueMap[G]
+function mergeGroupValue<G extends PropertyAnimationGroupId>(
+  base: PropertyAnimationValueByGroup<G>,
+  patch: Partial<PropertyAnimationValueByGroup<G>>,
+): PropertyAnimationValueByGroup<G> {
+  return { ...base, ...patch } as PropertyAnimationValueByGroup<G>
 }
 
-export function setGroupValue<G extends AnimationGroupId>(
+export function setGroupValue<G extends PropertyAnimationGroupId>(
   item: UnifiedTimelineItemData<MediaType>,
   absoluteFrame: number,
   rawGroupId: G | AnimationChannelKey,
-  patch: Partial<AnimationGroupValueMap[G]>,
+  patch: Partial<PropertyAnimationValueByGroup<G>>,
 ): AnimationSetResult {
   const groupId = normalizeAnimationGroupId(rawGroupId)
   if (!groupId) {
@@ -292,7 +299,7 @@ export function setGroupValue<G extends AnimationGroupId>(
 
   const buttonState = getKeyframeButtonState(item, absoluteFrame, groupId)
   if (buttonState === 'none') {
-    setStaticGroupValue(item, groupId, patch as Partial<AnimationGroupValueMap[typeof groupId]>)
+    setStaticGroupValue(item, groupId, patch as Partial<PropertyAnimationValueByGroup<typeof groupId>>)
     return 'no-animation'
   }
 
@@ -304,8 +311,8 @@ export function setGroupValue<G extends AnimationGroupId>(
     if (keyframe) {
       const nextValue = mergeGroupValue(
         keyframe.value as any,
-        patch as Partial<AnimationGroupValueMap[typeof groupId]>,
-      ) as AnimationGroupValueMap[typeof groupId]
+        patch as Partial<PropertyAnimationValueByGroup<typeof groupId>>,
+      ) as PropertyAnimationValueByGroup<typeof groupId>
       keyframe.value = nextValue as any
       keyframe.properties = keyframe.value
       setStaticGroupValue(item, groupId, nextValue)
@@ -314,7 +321,7 @@ export function setGroupValue<G extends AnimationGroupId>(
   }
 
   const current = getCurrentGroupValue(item, absoluteFrame, groupId)
-  const nextValue = mergeGroupValue(current, patch as Partial<AnimationGroupValueMap[typeof groupId]>)
+  const nextValue = mergeGroupValue(current, patch as Partial<PropertyAnimationValueByGroup<typeof groupId>>)
   const nextKeyframe = createKeyframeValueAlias(
     relativeFrame,
     getPosition(item, relativeFrame),
@@ -369,7 +376,7 @@ export function adjustGroupKeyframesForDurationChange(
 ): void {
   if (!item.animation?.groups) return
   for (const track of Object.values(item.animation.groups) as Array<
-    AnimationGroupTrack<MediaType, AnimationGroupId> | undefined
+    AnimationGroupTrack<MediaType, PropertyAnimationGroupId> | undefined
   >) {
     if (!track) continue
     track.keyframes = track.keyframes

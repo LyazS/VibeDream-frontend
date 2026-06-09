@@ -1,7 +1,10 @@
 import type { ComputedRef } from 'vue'
 import { useAppI18n } from '@/core/composables/useI18n'
 import { propertyMutationCommitter } from '@/core/property-system'
-import { clearFilterIntensityOverlay } from '@/core/property-system/render-state'
+import {
+  clearFilterIntensityOverlay,
+  clearFilterParamOverlay,
+} from '@/core/property-system/render-state'
 import type { useUnifiedStore } from '@/core/unifiedStore'
 import {
   getKeyframeButtonState,
@@ -72,7 +75,11 @@ export function useFilterKeyframeActions(options: FilterKeyframeActionsOptions) 
   async function toggleFilterKeyframe(channel: FilterChannelKey = FILTER_CHANNEL) {
     const item = selectedTimelineItem.value
     if (!item || !canOperateFilterNumbers.value) return
-    clearFilterIntensityOverlay(item.id)
+    if (channel === 'filter.intensity') {
+      clearFilterIntensityOverlay(item.id)
+    } else {
+      clearFilterParamOverlay(item.id, channel.slice('filter.param.'.length))
+    }
     await propertyMutationCommitter.toggleKeyframe(getCommitContext(item), channel)
   }
 

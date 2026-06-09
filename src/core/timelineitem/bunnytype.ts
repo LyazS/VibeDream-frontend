@@ -75,6 +75,12 @@ export interface FilterIntensityValue {
   intensity: number
 }
 
+export type DynamicFilterParamAnimationGroupId = `filter.param.${string}`
+
+export interface DynamicFilterParamNumberValue {
+  value: number
+}
+
 export type AnimationGroupValueMap = {
   'transform.position': PositionAnimatableProps
   'transform.size': SizeAnimatableProps
@@ -94,9 +100,17 @@ export type AnimationGroupValueMap = {
 }
 
 export type AnimationGroupId = keyof AnimationGroupValueMap
-export type AnimationChannelKey = AnimationGroupId
+export type DynamicAnimationGroupId = DynamicFilterParamAnimationGroupId
+export type PropertyAnimationGroupId = AnimationGroupId | DynamicAnimationGroupId
+export type AnimationChannelKey = PropertyAnimationGroupId
 
-export function normalizeAnimationGroupId(groupId: AnimationChannelKey): AnimationGroupId {
+export function isDynamicFilterParamAnimationGroupId(
+  groupId: string,
+): groupId is DynamicFilterParamAnimationGroupId {
+  return groupId.startsWith('filter.param.')
+}
+
+export function normalizeAnimationGroupId(groupId: AnimationChannelKey): PropertyAnimationGroupId {
   return groupId
 }
 
@@ -105,22 +119,24 @@ export interface EasingSpec {
 }
 
 export type AnimationValueByGroup<G extends AnimationGroupId> = AnimationGroupValueMap[G]
+export type PropertyAnimationValueByGroup<G extends PropertyAnimationGroupId> =
+  G extends AnimationGroupId ? AnimationGroupValueMap[G] : DynamicFilterParamNumberValue
 
 export interface AnimateKeyframe<
   T extends MediaType,
-  G extends AnimationGroupId = AnimationGroupId,
+  G extends PropertyAnimationGroupId = AnimationGroupId,
 > {
   position: number
   frame: number
   cachedFrame: number
-  value: AnimationValueByGroup<G>
+  value: PropertyAnimationValueByGroup<G>
   easing?: EasingSpec
-  properties: AnimationValueByGroup<G>
+  properties: PropertyAnimationValueByGroup<G>
 }
 
 export interface AnimationGroupTrack<
   T extends MediaType,
-  G extends AnimationGroupId = AnimationGroupId,
+  G extends PropertyAnimationGroupId = AnimationGroupId,
 > {
   groupId: G
   strategyKey: G

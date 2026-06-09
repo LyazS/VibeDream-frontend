@@ -2,8 +2,11 @@ import { computed, onBeforeUnmount, ref, watch, type ComputedRef } from 'vue'
 import { propertyMutationCommitter } from '@/core/property-system'
 import {
   clearFilterIntensityOverlay,
+  clearFilterParamOverlay,
   getFilterIntensityOverlay,
+  getFilterParamOverlay,
   setFilterIntensityOverlay,
+  setFilterParamOverlay,
 } from '@/core/property-system/render-state'
 import { TimelineItemQueries } from '@/core/timelineitem/queries'
 import type { useUnifiedStore } from '@/core/unifiedStore'
@@ -29,6 +32,7 @@ export function useFilterDeferredInteraction(options: FilterDeferredInteractionO
   const { selectedTimelineItem, currentFrame, unifiedStore, canOperateFilterNumbers } = options
 
   const activeTimelineItemId = ref<string | null>(null)
+  const activeFilterParamKeys = ref(new Set<string>())
 
   const isActive = computed(() => activeTimelineItemId.value !== null)
 
@@ -53,6 +57,7 @@ export function useFilterDeferredInteraction(options: FilterDeferredInteractionO
 
   function resetInteractionState() {
     activeTimelineItemId.value = null
+    activeFilterParamKeys.value = new Set()
   }
 
   function beginFilterInteraction(item: FilterTimelineItem) {
@@ -85,6 +90,15 @@ export function useFilterDeferredInteraction(options: FilterDeferredInteractionO
     setFilterIntensityOverlay(item.id, value)
   }
 
+  function setFilterParamDeferred(parameterKey: string, value: number) {
+    const item = selectedTimelineItem.value
+    if (!item || !item.filterEffect || !canOperateFilterNumbers.value) return
+
+    beginFilterInteraction(item)
+    activeFilterParamKeys.value = new Set(activeFilterParamKeys.value).add(parameterKey)
+    setFilterParamOverlay(item.id, parameterKey, value)
+  }
+
   async function commitDeferredUpdates() {
     const item = getActiveItem()
     const timelineItemId = activeTimelineItemId.value
@@ -92,17 +106,27 @@ export function useFilterDeferredInteraction(options: FilterDeferredInteractionO
 
     const overlay = getFilterIntensityOverlay(timelineItemId)
     const nextIntensity = overlay?.intensity ?? TimelineItemQueries.getRenderFilterEffect(item)?.intensity
+    const filterParamOverlay = getFilterParamOverlay(timelineItemId)
+    const paramEntries = [...activeFilterParamKeys.value]
+      .map((parameterKey) => [parameterKey, filterParamOverlay?.params[parameterKey]] as const)
+      .filter((entry): entry is readonly [string, number] =>
+        typeof entry[1] === 'number' && Number.isFinite(entry[1]),
+      )
 
     unregisterCancelCallback(timelineItemId)
     resetInteractionState()
 
-    if (typeof nextIntensity !== 'number' || !Number.isFinite(nextIntensity)) {
+    if (typeof nextIntensity === 'number' && Number.isFinite(nextIntensity) && overlay) {
+      await propertyMutationCommitter.commitDirect(getCommitContext(item), 'filter.intensity', nextIntensity)
       clearFilterIntensityOverlay(timelineItemId)
-      return
     }
 
-    await propertyMutationCommitter.commitDirect(getCommitContext(item), 'filter.intensity', nextIntensity)
+    for (const [parameterKey, value] of paramEntries) {
+      await propertyMutationCommitter.commitDirect(getCommitContext(item), `filter.param.${parameterKey}`, value)
+    }
+
     clearFilterIntensityOverlay(timelineItemId)
+    clearFilterParamOverlay(timelineItemId)
   }
 
   function cancelDeferredUpdatesSync() {
@@ -110,6 +134,7 @@ export function useFilterDeferredInteraction(options: FilterDeferredInteractionO
     if (!timelineItemId) return
 
     clearFilterIntensityOverlay(timelineItemId)
+    clearFilterParamOverlay(timelineItemId)
     unregisterCancelCallback(timelineItemId)
     resetInteractionState()
   }
@@ -124,6 +149,14 @@ export function useFilterDeferredInteraction(options: FilterDeferredInteractionO
 
     await cancelDeferredUpdates()
     await propertyMutationCommitter.commitDirect(getCommitContext(item), 'filter.intensity', value)
+  }
+
+  async function setFilterParamDirect(parameterKey: string, value: number) {
+    const item = selectedTimelineItem.value
+    if (!item || !item.filterEffect || !canOperateFilterNumbers.value) return
+
+    await cancelDeferredUpdates()
+    await propertyMutationCommitter.commitDirect(getCommitContext(item), `filter.param.${parameterKey}`, value)
   }
 
   watch(
@@ -144,6 +177,8 @@ export function useFilterDeferredInteraction(options: FilterDeferredInteractionO
     beginFilterInteraction,
     setFilterIntensityDeferred,
     setFilterIntensityDirect,
+    setFilterParamDeferred,
+    setFilterParamDirect,
     commitDeferredUpdates,
     cancelDeferredUpdates,
   }

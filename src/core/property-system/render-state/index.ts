@@ -1,7 +1,11 @@
 export {
+  clearFilterOverlays,
   clearFilterIntensityOverlay,
+  clearFilterParamOverlay,
   getFilterIntensityOverlay,
+  getFilterParamOverlay,
   setFilterIntensityOverlay,
+  setFilterParamOverlay,
 } from './filterOverlay'
 export {
   clearTransformPositionOverlay,

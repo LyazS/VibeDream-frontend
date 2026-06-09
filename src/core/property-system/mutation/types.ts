@@ -3,11 +3,15 @@ import type {
   AudioProps,
   AnimationGroupId,
   AnimationGroupValueMap,
+  PropertyAnimationGroupId,
+  PropertyAnimationValueByGroup,
   VisualProps,
 } from '@/core/timelineitem/bunnytype'
 import type { AnimatablePropertyTarget } from '@/core/property-system/schema'
 import type { MediaType } from '@/core/mediaitem'
 import type { UnifiedTimelineItemData } from '@/core/timelineitem'
+
+export type DynamicFilterParamPropertyId = `filter.param.${string}`
 
 export type AnimatablePropertyId =
   | 'transform.rotation'
@@ -15,6 +19,7 @@ export type AnimatablePropertyId =
   | 'transform.size'
   | 'transform.opacity'
   | 'filter.intensity'
+  | DynamicFilterParamPropertyId
   | 'audio.volume'
 
 export type ConfigPropertyId =
@@ -43,13 +48,18 @@ export interface PropertyKeyframeTogglePlanIntent {
 
 export type PropertyPlanIntent = DirectPropertyPlanIntent | PropertyKeyframeTogglePlanIntent
 
-export interface NoAnimationGroupPatchOperation<G extends AnimationGroupId = AnimationGroupId> {
+export type FilterEffectPatch = {
+  intensity?: number
+  params?: Record<string, unknown>
+}
+
+export interface NoAnimationGroupPatchOperation<G extends PropertyAnimationGroupId = PropertyAnimationGroupId> {
   kind: 'no-animation-group-patch'
   timelineItemId: string
   frame: number
-  groupId: G
+  groupId?: G
   target: AnimatablePropertyTarget
-  patch: Partial<AnimationGroupValueMap[G]>
+  patch: G extends AnimationGroupId ? Partial<AnimationGroupValueMap[G]> | FilterEffectPatch : FilterEffectPatch
 }
 
 export interface VisualConfigPatchOperation {
@@ -66,16 +76,16 @@ export interface AudioConfigPatchOperation {
   patch: Partial<AudioProps>
 }
 
-export interface AnimationKeyframeUpdateOperation<G extends AnimationGroupId = AnimationGroupId> {
+export interface AnimationKeyframeUpdateOperation<G extends PropertyAnimationGroupId = PropertyAnimationGroupId> {
   kind: 'animation-keyframe-update'
   timelineItemId: string
   frame: number
   groupId: G
   relativeFrame: number
-  value: AnimationGroupValueMap[G]
+  value: PropertyAnimationValueByGroup<G>
 }
 
-export interface AnimationKeyframeCreateOperation<G extends AnimationGroupId = AnimationGroupId> {
+export interface AnimationKeyframeCreateOperation<G extends PropertyAnimationGroupId = PropertyAnimationGroupId> {
   kind: 'animation-keyframe-create'
   timelineItemId: string
   frame: number
@@ -83,7 +93,7 @@ export interface AnimationKeyframeCreateOperation<G extends AnimationGroupId = A
   keyframe: AnimateKeyframe<MediaType, G>
 }
 
-export interface AnimationKeyframeDeleteOperation<G extends AnimationGroupId = AnimationGroupId> {
+export interface AnimationKeyframeDeleteOperation<G extends PropertyAnimationGroupId = PropertyAnimationGroupId> {
   kind: 'animation-keyframe-delete'
   timelineItemId: string
   frame: number

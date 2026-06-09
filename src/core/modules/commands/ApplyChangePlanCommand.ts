@@ -21,6 +21,8 @@ import {
 } from '@/core/animation/engine'
 import { applyAnimationToConfig } from '@/core/utils/animationInterpolation'
 import { normalizeClipFilterConfig } from '@/core/timelineitem/filter'
+import { AnimationRegistry } from '@/core/animation/registry'
+import type { PropertyAnimationGroupId } from '@/core/timelineitem/bunnytype'
 
 export class ApplyChangePlanCommand implements SimpleCommand {
   public readonly id: string
@@ -132,9 +134,17 @@ export class ApplyChangePlanCommand implements SimpleCommand {
       if (!item.filterEffect) {
         throw new Error(`滤镜效果不存在，无法更新属性: ${operation.timelineItemId}`)
       }
+      const filterEffectPatch = operation.patch as {
+        intensity?: number
+        params?: Record<string, unknown>
+      }
       const nextFilterEffect = normalizeClipFilterConfig({
         ...item.filterEffect,
-        ...operation.patch,
+        ...filterEffectPatch,
+        params: {
+          ...item.filterEffect.params,
+          ...(filterEffectPatch.params ?? {}),
+        },
       })
       item.filterEffect = nextFilterEffect
       item.runtime.renderFilterEffect = nextFilterEffect
@@ -144,21 +154,17 @@ export class ApplyChangePlanCommand implements SimpleCommand {
 
   private applyAnimatedValue(
     item: UnifiedTimelineItemData,
-    groupId: Parameters<typeof getCurrentGroupValue>[2],
+    groupId: PropertyAnimationGroupId,
     frame: number,
     fallbackValue: object,
   ): void {
-    if (groupId === 'filter.intensity') {
+    const definition = AnimationRegistry.get(groupId)
+    if (definition.scope === 'filter') {
       if (!item.filterEffect) {
         throw new Error(`滤镜效果不存在，无法更新属性: ${item.id}`)
       }
       const currentValue = getCurrentGroupValue(item, frame, groupId)
-      const nextFilterEffect = normalizeClipFilterConfig({
-        ...item.filterEffect,
-        ...(currentValue as object),
-      })
-      item.filterEffect = nextFilterEffect
-      item.runtime.renderFilterEffect = nextFilterEffect
+      definition.applyValue(item, currentValue as never)
       return
     }
 

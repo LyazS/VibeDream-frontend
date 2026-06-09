@@ -50,7 +50,7 @@ implements SimpleCommand {
       await showUserWarning('无法更新动画', '播放头不在当前片段内。')
       throw new Error('播放头不在当前clip时间范围内，无法更新动画组')
     }
-    setGroupValue(item, this.frame, this.groupId, this.patch)
+    setGroupValue(item, this.frame, this.groupId, this.patch as never)
     this.playbackControls?.seekTo(this.frame)
   }
 

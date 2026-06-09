@@ -1,6 +1,6 @@
 import type { MediaType } from '@/core/mediaitem'
 import type { UnifiedTimelineItemData } from '@/core/timelineitem/type'
-import type { AnimationGroupId, GetConfigs } from '@/core/timelineitem/bunnytype'
+import type { GetConfigs, PropertyAnimationGroupId } from '@/core/timelineitem/bunnytype'
 import type { ClipFilterConfig } from '@/core/filter/types'
 import { normalizeMaskConfig } from '@/core/timelineitem/mask'
 import { normalizeClipFilterConfig } from '@/core/timelineitem/filter'
@@ -9,6 +9,11 @@ import {
   getCurrentGroupValue,
   getSupportedAnimationGroups,
 } from '@/core/animation/engine'
+import {
+  getFilterIntensityOverlay,
+  getFilterParamOverlay,
+} from '@/core/property-system/render-state'
+import { filterIntensitySchema } from '@/core/property-system/schema'
 
 export function createBaseRenderConfig(item: UnifiedTimelineItemData<MediaType>) {
   const baseConfig = { ...item.config }
@@ -29,7 +34,7 @@ export function createBaseRenderFilterEffect(
   return item.filterEffect ? normalizeClipFilterConfig(item.filterEffect) : undefined
 }
 
-function getActiveAnimationGroups(item: UnifiedTimelineItemData<MediaType>): AnimationGroupId[] {
+function getActiveAnimationGroups(item: UnifiedTimelineItemData<MediaType>): PropertyAnimationGroupId[] {
   if (!item.animation?.groups) return []
   return getSupportedAnimationGroups(item).filter((groupId) => {
     const definition = AnimationRegistry.get(groupId)
@@ -92,7 +97,24 @@ export function resolveRenderFilterEffectAtFrame(
     )
   }
 
-  return normalizeClipFilterConfig(mutableFilterEffect as Partial<ClipFilterConfig>)
+  const resolvedFilterEffect = normalizeClipFilterConfig(mutableFilterEffect as Partial<ClipFilterConfig>)
+  const filterIntensityOverlay = getFilterIntensityOverlay(item.id)
+  const filterParamOverlay = getFilterParamOverlay(item.id)
+
+  if (!filterIntensityOverlay && !filterParamOverlay) {
+    return resolvedFilterEffect
+  }
+
+  return normalizeClipFilterConfig({
+    ...resolvedFilterEffect,
+    ...(filterIntensityOverlay
+      ? { [filterIntensitySchema.valueFields[0]]: filterIntensityOverlay.intensity }
+      : {}),
+    params: {
+      ...resolvedFilterEffect.params,
+      ...(filterParamOverlay?.params ?? {}),
+    },
+  })
 }
 
 export function applyAnimationToConfig(

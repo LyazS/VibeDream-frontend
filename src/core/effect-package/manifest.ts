@@ -7,6 +7,17 @@ import type {
   TransitionPackagePayload,
 } from '@/core/effect-package/types'
 
+const EFFECT_PACKAGE_PARAMETER_KEY_PATTERN = /^[A-Za-z_][A-Za-z0-9_]*$/
+const RESERVED_EFFECT_PACKAGE_PARAMETER_KEYS = new Set([
+  'intensity',
+  'params',
+  'packagePayload',
+  'effectPackageId',
+  'templateId',
+  'packageVersion',
+  'catalogVersion',
+])
+
 function normalizeLocalizedText(value: unknown, fallback: string): { zh: string; en: string } {
   if (typeof value === 'object' && value && !Array.isArray(value)) {
     const record = value as Record<string, unknown>
@@ -179,6 +190,13 @@ export function normalizeManifest(raw: unknown): EffectPackageManifest {
 
   const parameters: Record<string, EffectPackageParameterDefinition> = {}
   for (const [key, value] of Object.entries(parametersRaw)) {
+    if (!EFFECT_PACKAGE_PARAMETER_KEY_PATTERN.test(key)) {
+      throw new Error(`effect package parameter key 非法: ${key}`)
+    }
+    if (RESERVED_EFFECT_PACKAGE_PARAMETER_KEYS.has(key)) {
+      throw new Error(`effect package parameter key 使用了保留字段: ${key}`)
+    }
+
     if (typeof value !== 'object' || value === null || Array.isArray(value)) {
       continue
     }

@@ -16,6 +16,7 @@ import { supportsClipTransitionOut as itemSupportsClipTransitionOut } from '@/co
 import { supportsClipFilter as itemSupportsClipFilter } from '@/core/timelineitem/filter'
 import {
   getFilterIntensityOverlay,
+  getFilterParamOverlay,
   getAudioVolumeOverlay,
   getTransformOpacityOverlay,
   getTransformPositionOverlay,
@@ -265,14 +266,21 @@ export function getRenderFilterEffect(
 
   const renderFilterEffect = item.runtime.renderFilterEffect || item.filterEffect
   const filterIntensityOverlay = getFilterIntensityOverlay(item.id)
+  const filterParamOverlay = getFilterParamOverlay(item.id)
 
-  if (!filterIntensityOverlay) {
+  if (!filterIntensityOverlay && !filterParamOverlay) {
     return renderFilterEffect
   }
 
   return normalizeClipFilterConfig({
     ...renderFilterEffect,
-    [filterIntensitySchema.valueFields[0]]: filterIntensityOverlay.intensity,
+    ...(filterIntensityOverlay
+      ? { [filterIntensitySchema.valueFields[0]]: filterIntensityOverlay.intensity }
+      : {}),
+    params: {
+      ...renderFilterEffect.params,
+      ...(filterParamOverlay?.params ?? {}),
+    },
   })
 }
 

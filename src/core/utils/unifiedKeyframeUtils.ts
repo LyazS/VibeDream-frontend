@@ -6,7 +6,7 @@ import {
   normalizeAnimationGroupId,
   type AnimateKeyframe,
   type AnimationChannelKey,
-  type AnimationGroupId,
+  type PropertyAnimationGroupId,
 } from '@/core/timelineitem/bunnytype'
 import {
   clearAllAnimationGroups,
@@ -64,7 +64,7 @@ export function createChannelKeyframe(
   item: UnifiedTimelineItemData,
   absoluteFrame: number,
   channel: AnimationChannelKey,
-): AnimateKeyframe<MediaType, AnimationGroupId> {
+): AnimateKeyframe<MediaType, PropertyAnimationGroupId> {
   return createGroupKeyframe(item as UnifiedTimelineItemData<MediaType>, absoluteFrame, channel)
 }
 
@@ -85,7 +85,7 @@ export function isCurrentFrameOnKeyframe(
       isGroupCurrentFrameOnKeyframe(
         item as UnifiedTimelineItemData<MediaType>,
         absoluteFrame,
-        groupId as AnimationGroupId,
+        groupId as PropertyAnimationGroupId,
       ),
     )
   }
@@ -126,7 +126,7 @@ export function findKeyframeAtFrame(
   item: UnifiedTimelineItemData,
   absoluteFrame: number,
   channel: AnimationChannelKey,
-): AnimateKeyframe<MediaType, AnimationGroupId> | undefined {
+): AnimateKeyframe<MediaType, PropertyAnimationGroupId> | undefined {
   return findGroupKeyframeAtFrame(item as UnifiedTimelineItemData<MediaType>, absoluteFrame, channel)
 }
 

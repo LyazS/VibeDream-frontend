@@ -2,8 +2,13 @@ import type { MediaType } from '@/core/mediaitem'
 import type { UnifiedTimelineItemData } from '@/core/timelineitem/type'
 import {
   ALL_ANIMATION_GROUPS,
+  isDynamicFilterParamAnimationGroupId,
   type AnimationGroupId,
   type AnimationGroupValueMap,
+  type DynamicFilterParamAnimationGroupId,
+  type DynamicFilterParamNumberValue,
+  type PropertyAnimationGroupId,
+  type PropertyAnimationValueByGroup,
 } from '@/core/timelineitem/bunnytype'
 import { TimelineItemQueries } from '@/core/timelineitem/queries'
 import {
@@ -30,25 +35,25 @@ import { normalizeClipFilterConfig } from '@/core/timelineitem/filter'
 
 export type AnimationScope = 'transform' | 'audio' | 'mask' | 'filter'
 
-export interface AnimationGroupDefinition<G extends AnimationGroupId = AnimationGroupId> {
+export interface AnimationGroupDefinition<G extends PropertyAnimationGroupId = AnimationGroupId> {
   id: G
   scope: AnimationScope
   supports: (item: UnifiedTimelineItemData<MediaType>) => boolean
   isEnabled: (item: UnifiedTimelineItemData<MediaType>) => boolean
-  getBaseValue: (item: UnifiedTimelineItemData<MediaType>) => AnimationGroupValueMap[G] | any
+  getBaseValue: (item: UnifiedTimelineItemData<MediaType>) => PropertyAnimationValueByGroup<G> | any
   applyValue: (
     item: UnifiedTimelineItemData<MediaType>,
-    value: Partial<AnimationGroupValueMap[G]> | Record<string, number>,
+    value: Partial<PropertyAnimationValueByGroup<G>> | Record<string, number>,
   ) => void
   applyValueToConfig: (
     config: Record<string, unknown>,
-    value: AnimationGroupValueMap[G] | Record<string, number>,
+    value: PropertyAnimationValueByGroup<G> | Record<string, number>,
   ) => void
   interpolate: (
-    from: AnimationGroupValueMap[G] | Record<string, number>,
-    to: AnimationGroupValueMap[G] | Record<string, number>,
+    from: PropertyAnimationValueByGroup<G> | Record<string, number>,
+    to: PropertyAnimationValueByGroup<G> | Record<string, number>,
     t: number,
-  ) => AnimationGroupValueMap[G] | any
+  ) => PropertyAnimationValueByGroup<G> | any
   uiMeta: {
     order: number
     allowDeferred: boolean
@@ -81,6 +86,71 @@ function getVisualConfigRecord(item: UnifiedTimelineItemData<MediaType>): Record
 
 function getFilterConfigRecord(item: UnifiedTimelineItemData<MediaType>) {
   return TimelineItemQueries.getRenderFilterEffect(item)
+}
+
+function getFilterParamKey(groupId: DynamicFilterParamAnimationGroupId): string {
+  return groupId.slice('filter.param.'.length)
+}
+
+function normalizeDynamicFilterParamValue(value: unknown, fallback = 0): number {
+  return typeof value === 'number' && Number.isFinite(value) ? value : fallback
+}
+
+function createDynamicFilterParamDefinition(
+  groupId: DynamicFilterParamAnimationGroupId,
+): AnimationGroupDefinition<DynamicFilterParamAnimationGroupId> {
+  const parameterKey = getFilterParamKey(groupId)
+  return {
+    id: groupId,
+    scope: 'filter',
+    supports: (item) => TimelineItemQueries.supportsClipFilter(item),
+    isEnabled: (item) =>
+      TimelineItemQueries.supportsClipFilter(item) &&
+      Boolean(item.filterEffect?.packagePayload.parameterSchema[parameterKey]?.type === 'number'),
+    getBaseValue: (item): DynamicFilterParamNumberValue => {
+      const filterEffect = getFilterConfigRecord(item)
+      const currentValue = filterEffect?.params[parameterKey]
+      const defaultValue = filterEffect?.packagePayload.defaultParams[parameterKey]
+      return {
+        value: normalizeDynamicFilterParamValue(currentValue, normalizeDynamicFilterParamValue(defaultValue)),
+      }
+    },
+    applyValue: (item, value) => {
+      if (!TimelineItemQueries.supportsClipFilter(item) || !item.filterEffect) return
+      const nextValue = normalizeDynamicFilterParamValue(
+        (value as Partial<DynamicFilterParamNumberValue>).value,
+        normalizeDynamicFilterParamValue(item.filterEffect.params[parameterKey]),
+      )
+      const nextFilterEffect = normalizeClipFilterConfig({
+        ...item.filterEffect,
+        params: {
+          ...item.filterEffect.params,
+          [parameterKey]: nextValue,
+        },
+      })
+      item.filterEffect = nextFilterEffect
+      item.runtime.renderFilterEffect = nextFilterEffect
+    },
+    applyValueToConfig: (config, value) => {
+      const nextValue = normalizeDynamicFilterParamValue((value as DynamicFilterParamNumberValue).value)
+      const currentParams = (
+        typeof config.params === 'object' && config.params && !Array.isArray(config.params)
+          ? config.params
+          : {}
+      ) as Record<string, unknown>
+      const nextFilterEffect = normalizeClipFilterConfig({
+        ...(config as Record<string, unknown>),
+        params: {
+          ...currentParams,
+          [parameterKey]: nextValue,
+        },
+      })
+      Object.assign(config, nextFilterEffect)
+    },
+    interpolate: interpolateNumericRecord,
+    uiMeta: { order: 56, allowDeferred: true, allowNavigation: true },
+    historyMeta: { description: `修改滤镜参数 ${parameterKey} 关键帧` },
+  }
 }
 
 function getMaskTextureSizeFromConfig(config: Record<string, unknown>) {
@@ -451,8 +521,11 @@ const animationGroupDefinitions: {
 
 export const AnimationRegistry = {
   ids: ALL_ANIMATION_GROUPS,
-  get<G extends AnimationGroupId>(groupId: G): AnimationGroupDefinition<G> {
-    return animationGroupDefinitions[groupId]
+  get<G extends PropertyAnimationGroupId>(groupId: G): AnimationGroupDefinition<G> {
+    if (isDynamicFilterParamAnimationGroupId(groupId)) {
+      return createDynamicFilterParamDefinition(groupId) as AnimationGroupDefinition<G>
+    }
+    return animationGroupDefinitions[groupId as AnimationGroupId] as AnimationGroupDefinition<G>
   },
   list(): AnimationGroupDefinition[] {
     return ALL_ANIMATION_GROUPS.map((groupId) => animationGroupDefinitions[groupId]) as any

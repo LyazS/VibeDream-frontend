@@ -22,3 +22,8 @@ export type {
 export type {
   PropertyMutationCommitContext,
 } from './commit'
+export {
+  propertySchemaResolver,
+  type PropertySchemaContext,
+  type PropertySchemaProvider,
+} from './schema'

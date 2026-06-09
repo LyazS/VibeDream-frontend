@@ -41,7 +41,7 @@ export class AnimationSession {
     rawGroupId: G | AnimationChannelKey,
     patch: Partial<AnimationGroupValueMap[G]>,
   ) {
-    const groupId = normalizeAnimationGroupId(rawGroupId)
+    const groupId = normalizeAnimationGroupId(rawGroupId) as G
     if (!groupId) return
     this.begin(item)
     const previous = this.state.pendingPatches[groupId] ?? {}
@@ -49,7 +49,7 @@ export class AnimationSession {
       ...(previous as Record<string, number>),
       ...(patch as Record<string, number>),
     }
-    setGroupValue(item, frame, groupId, patch)
+    setGroupValue(item, frame, groupId, patch as never)
   }
 
   restore(item: UnifiedTimelineItemData<MediaType>) {
