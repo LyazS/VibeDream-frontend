@@ -2,7 +2,7 @@ import { computed, type Ref } from 'vue'
 import { useUnifiedStore } from '@/core/unifiedStore'
 import type { UnifiedTimelineItemData } from '@/core/timelineitem'
 import { TimelineItemQueries } from '@/core/timelineitem/queries'
-import type { AnimationChannelKey, AnimationGroupId } from '@/core/timelineitem/bunnytype'
+import type { AnimationChannelKey } from '@/core/timelineitem/bunnytype'
 import {
   getKeyframeButtonState,
   getKeyframeUIState,
@@ -12,11 +12,24 @@ import {
 import { isPlayheadInTimelineItem } from '@/core/utils/timelineSearchUtils'
 import { normalizeAngle } from '@/core/utils/rotationTransform'
 import type { BlendMode } from '@/core/timelineitem'
-import { propertyMutationService, type ChangeOperation } from '@/core/property-mutation'
+import { isBlendMode } from '@/core/timelineitem'
+import { propertyPlanner, type ChangeOperation } from '@/core/property-system'
 import {
+  clearAudioVolumeOverlay,
+  clearTransformOpacityOverlay,
+  clearTransformPositionOverlay,
   clearTransformRotationOverlay,
+  clearTransformSizeOverlay,
+  getAudioVolumeOverlay,
+  getTransformOpacityOverlay,
+  getTransformPositionOverlay,
+  getTransformSizeOverlay,
+  setAudioVolumeOverlay,
+  setTransformOpacityOverlay,
+  setTransformPositionOverlay,
   setTransformRotationOverlay,
-} from '@/core/render-state'
+  setTransformSizeOverlay,
+} from '@/core/property-system/render-state'
 
 interface UnifiedKeyframeTransformControlsOptions {
   selectedTimelineItem: Ref<UnifiedTimelineItemData | null>
@@ -28,6 +41,10 @@ function throwClipPropertyPhase0Todo(action: string): never {
     `[ClipProperty Phase 0 TODO] 属性区入口 "${action}" 仍在 useUnifiedKeyframeTransformControls 内部实现提交分流，` +
       '需先收敛到统一的属性提交入口后再恢复。',
   )
+}
+
+function isFiniteNumber(value: unknown): value is number {
+  return typeof value === 'number' && Number.isFinite(value)
 }
 
 export function useUnifiedKeyframeTransformControls(
@@ -78,17 +95,13 @@ export function useUnifiedKeyframeTransformControls(
   const volume = computed(() => (renderConfig.value as any)?.volume ?? 1)
   const elementWidth = computed(() => getOriginalDimensions().width)
   const elementHeight = computed(() => getOriginalDimensions().height)
-  const proportionalScale = computed({
-    get: () =>
-      Boolean(
-        selectedTimelineItem.value &&
-        TimelineItemQueries.hasVisualProperties(selectedTimelineItem.value) &&
-        selectedTimelineItem.value.config.proportionalScale,
-      ),
-    set: (value) => {
-      throwClipPropertyPhase0Todo(`transform.proportionalScale.setter.${String(value)}`)
-    },
-  })
+  const proportionalScale = computed(() =>
+    Boolean(
+      selectedTimelineItem.value &&
+      TimelineItemQueries.hasVisualProperties(selectedTimelineItem.value) &&
+      selectedTimelineItem.value.config.proportionalScale,
+    ),
+  )
   function getScaledSizeFromWidth(nextWidth: number): Record<string, number> {
     const { width: originalWidth, height: originalHeight } = getOriginalDimensions()
     if (originalWidth <= 0 || originalHeight <= 0) {
@@ -152,10 +165,38 @@ export function useUnifiedKeyframeTransformControls(
   }
 
   const toggleChannelKeyframe = async (groupId: AnimationChannelKey) => {
+    if (groupId === 'audio.volume') {
+      const item = selectedTimelineItem.value
+      if (!item || !canOperateTransforms.value) return
+      const plan = propertyPlanner.plan({
+        kind: 'keyframe-toggle',
+        propertyId: 'audio.volume',
+        timelineItemId: item.id,
+        frame: currentFrame.value,
+        item,
+      })
+      await unifiedStore.applyChangePlanWithHistory(plan)
+      return
+    }
+
+    if (groupId === 'transform.opacity') {
+      const item = selectedTimelineItem.value
+      if (!item || !canOperateTransforms.value) return
+      const plan = propertyPlanner.plan({
+        kind: 'keyframe-toggle',
+        propertyId: 'transform.opacity',
+        timelineItemId: item.id,
+        frame: currentFrame.value,
+        item,
+      })
+      await unifiedStore.applyChangePlanWithHistory(plan)
+      return
+    }
+
     if (groupId === 'transform.size') {
       const item = selectedTimelineItem.value
       if (!item || !canOperateTransforms.value) return
-      const plan = propertyMutationService.plan({
+      const plan = propertyPlanner.plan({
         kind: 'keyframe-toggle',
         propertyId: 'transform.size',
         timelineItemId: item.id,
@@ -169,7 +210,7 @@ export function useUnifiedKeyframeTransformControls(
     if (groupId === 'transform.position') {
       const item = selectedTimelineItem.value
       if (!item || !canOperateTransforms.value) return
-      const plan = propertyMutationService.plan({
+      const plan = propertyPlanner.plan({
         kind: 'keyframe-toggle',
         propertyId: 'transform.position',
         timelineItemId: item.id,
@@ -184,7 +225,7 @@ export function useUnifiedKeyframeTransformControls(
       const item = selectedTimelineItem.value
       if (!item || !canOperateTransforms.value) return
       clearTransformRotationOverlay(item.id)
-      const plan = propertyMutationService.plan({
+      const plan = propertyPlanner.plan({
         kind: 'keyframe-toggle',
         propertyId: 'transform.rotation',
         timelineItemId: item.id,
@@ -214,16 +255,11 @@ export function useUnifiedKeyframeTransformControls(
     }
   }
 
-  async function commitDeferredUpdates() {
-    throwClipPropertyPhase0Todo('transform.deferred.commit')
-  }
-
   async function commitRotationDeferredUpdate(nextValue?: number) {
     const item = selectedTimelineItem.value
     if (!item || !canOperateTransforms.value) return
     const nextRotation = typeof nextValue === 'number' ? normalizeAngle(nextValue) : rotation.value
-    clearTransformRotationOverlay(item.id)
-    const plan = propertyMutationService.plan({
+    const plan = propertyPlanner.plan({
       kind: 'direct',
       propertyId: 'transform.rotation',
       timelineItemId: item.id,
@@ -232,33 +268,249 @@ export function useUnifiedKeyframeTransformControls(
       item,
     })
     await unifiedStore.applyChangePlanWithHistory(plan)
+    clearTransformRotationOverlay(item.id)
   }
 
-  function applyDeferredPatch<G extends AnimationGroupId>(
-    groupId: G,
-    patch: Record<string, number>,
-  ) {
-    throwClipPropertyPhase0Todo(`transform.deferred.applyPatch.${groupId}`)
+  async function commitPositionDeferredUpdate(axis: 'x' | 'y', nextValue?: number) {
+    const item = selectedTimelineItem.value
+    if (!item || !canOperateTransforms.value) return
+
+    const positionOverlay = getTransformPositionOverlay(item.id)
+    const currentRenderConfig = renderConfig.value as { x?: number; y?: number } | null
+    const resolvedValue =
+      typeof nextValue === 'number'
+        ? nextValue
+        : positionOverlay?.[axis] ?? currentRenderConfig?.[axis]
+
+    if (!isFiniteNumber(resolvedValue)) {
+      return
+    }
+
+    const plan = propertyPlanner.plan({
+      kind: 'direct',
+      propertyId: 'transform.position',
+      timelineItemId: item.id,
+      frame: currentFrame.value,
+      value: { [axis]: resolvedValue },
+      item,
+    })
+    await unifiedStore.applyChangePlanWithHistory(plan)
+    clearTransformPositionOverlay(item.id)
   }
 
-  async function updateGroupDirect<G extends AnimationGroupId>(
-    groupId: G,
-    patch: Record<string, number>,
+  async function commitTransformPositionDeferredUpdate() {
+    const item = selectedTimelineItem.value
+    if (!item || !canOperateTransforms.value) return
+
+    const positionOverlay = getTransformPositionOverlay(item.id)
+    if (!positionOverlay) return
+
+    const currentRenderConfig = renderConfig.value as { x?: number; y?: number } | null
+    const x = positionOverlay.x ?? currentRenderConfig?.x
+    const y = positionOverlay.y ?? currentRenderConfig?.y
+    if (!isFiniteNumber(x) || !isFiniteNumber(y)) return
+
+    const plan = propertyPlanner.plan({
+      kind: 'direct',
+      propertyId: 'transform.position',
+      timelineItemId: item.id,
+      frame: currentFrame.value,
+      value: { x, y },
+      item,
+    })
+    await unifiedStore.applyChangePlanWithHistory(plan)
+    clearTransformPositionOverlay(item.id)
+  }
+
+  async function commitSizeDeferredUpdate(
+    axis: 'width' | 'height',
+    nextValue?: number,
   ) {
-    throwClipPropertyPhase0Todo(`transform.direct.updateGroup.${groupId}`)
+    const item = selectedTimelineItem.value
+    if (!item || !canOperateTransforms.value) return
+
+    const sizeOverlay = getTransformSizeOverlay(item.id)
+    const currentRenderConfig = renderConfig.value as { width?: number; height?: number } | null
+    const resolvedValue =
+      typeof nextValue === 'number'
+        ? nextValue
+        : sizeOverlay?.[axis] ?? currentRenderConfig?.[axis]
+
+    if (!isFiniteNumber(resolvedValue)) {
+      return
+    }
+
+    const patch =
+      axis === 'width'
+        ? proportionalScale.value
+          ? getScaledSizeFromWidth(resolvedValue)
+          : { width: resolvedValue }
+        : proportionalScale.value
+          ? getScaledSizeFromHeight(resolvedValue)
+          : { height: resolvedValue }
+
+    const plan = propertyPlanner.plan({
+      kind: 'direct',
+      propertyId: 'transform.size',
+      timelineItemId: item.id,
+      frame: currentFrame.value,
+      value: patch,
+      item,
+    })
+    await unifiedStore.applyChangePlanWithHistory(plan)
+    clearTransformSizeOverlay(item.id)
+  }
+
+  async function commitOpacityDeferredUpdate(nextValue?: number) {
+    const item = selectedTimelineItem.value
+    if (!item || !canOperateTransforms.value) return
+
+    const opacityOverlay = getTransformOpacityOverlay(item.id)
+    const currentRenderConfig = renderConfig.value as { opacity?: number } | null
+    const nextOpacity =
+      typeof nextValue === 'number'
+        ? nextValue
+        : opacityOverlay?.opacity ?? currentRenderConfig?.opacity
+
+    if (!isFiniteNumber(nextOpacity)) return
+
+    const plan = propertyPlanner.plan({
+      kind: 'direct',
+      propertyId: 'transform.opacity',
+      timelineItemId: item.id,
+      frame: currentFrame.value,
+      value: nextOpacity,
+      item,
+    })
+    await unifiedStore.applyChangePlanWithHistory(plan)
+    clearTransformOpacityOverlay(item.id)
+  }
+
+  async function commitVolumeDeferredUpdate(nextValue?: number) {
+    const item = selectedTimelineItem.value
+    if (!item || !canOperateTransforms.value) return
+
+    const volumeOverlay = getAudioVolumeOverlay(item.id)
+    const currentRenderConfig = renderConfig.value as { volume?: number } | null
+    const nextVolume =
+      typeof nextValue === 'number'
+        ? nextValue
+        : volumeOverlay?.volume ?? currentRenderConfig?.volume
+
+    if (!isFiniteNumber(nextVolume)) return
+
+    const plan = propertyPlanner.plan({
+      kind: 'direct',
+      propertyId: 'audio.volume',
+      timelineItemId: item.id,
+      frame: currentFrame.value,
+      value: nextVolume,
+      item,
+    })
+    await unifiedStore.applyChangePlanWithHistory(plan)
+    clearAudioVolumeOverlay(item.id)
+  }
+
+  async function commitTransformGeometryDeferredUpdate() {
+    const item = selectedTimelineItem.value
+    if (!item || !canOperateTransforms.value) return
+
+    const sizeOverlay = getTransformSizeOverlay(item.id)
+    const positionOverlay = getTransformPositionOverlay(item.id)
+    if (!sizeOverlay && !positionOverlay) return
+
+    const currentRenderConfig = renderConfig.value as {
+      x?: number
+      y?: number
+      width?: number
+      height?: number
+    } | null
+    const operations: ChangeOperation[] = []
+
+    if (sizeOverlay) {
+      const width = sizeOverlay.width ?? currentRenderConfig?.width
+      const height = sizeOverlay.height ?? currentRenderConfig?.height
+      if (isFiniteNumber(width) && isFiniteNumber(height)) {
+        const sizePlan = propertyPlanner.plan({
+          kind: 'direct',
+          propertyId: 'transform.size',
+          timelineItemId: item.id,
+          frame: currentFrame.value,
+          value: { width, height },
+          item,
+        })
+        operations.push(...sizePlan.operations)
+      }
+    }
+
+    if (positionOverlay) {
+      const x = positionOverlay.x ?? currentRenderConfig?.x
+      const y = positionOverlay.y ?? currentRenderConfig?.y
+      if (isFiniteNumber(x) && isFiniteNumber(y)) {
+        const positionPlan = propertyPlanner.plan({
+          kind: 'direct',
+          propertyId: 'transform.position',
+          timelineItemId: item.id,
+          frame: currentFrame.value,
+          value: { x, y },
+          item,
+        })
+        operations.push(...positionPlan.operations)
+      }
+    }
+
+    if (operations.length === 0) return
+
+    await unifiedStore.applyChangePlanWithHistory({
+      propertyId: 'transform.size',
+      description: '修改尺寸和位置',
+      operations,
+    })
+    clearTransformSizeOverlay(item.id)
+    clearTransformPositionOverlay(item.id)
+  }
+
+  async function setPositionPatchDirectly(value: Record<string, number>) {
+    const item = selectedTimelineItem.value
+    if (!item || !canOperateTransforms.value) return
+    const plan = propertyPlanner.plan({
+      kind: 'direct',
+      propertyId: 'transform.position',
+      timelineItemId: item.id,
+      frame: currentFrame.value,
+      value,
+      item,
+    })
+    await unifiedStore.applyChangePlanWithHistory(plan)
   }
 
   const setTransformPositionDeferred = (x: number, y: number) => {
-    applyDeferredPatch('transform.position', { x, y })
+    const item = selectedTimelineItem.value
+    if (!item || !canOperateTransforms.value) return
+    setTransformPositionOverlay(item.id, { x, y })
+  }
+
+  const setTransformXDeferred = (x: number) => {
+    const item = selectedTimelineItem.value
+    if (!item || !canOperateTransforms.value) return
+    setTransformPositionOverlay(item.id, { x })
+  }
+
+  const setTransformYDeferred = (y: number) => {
+    const item = selectedTimelineItem.value
+    if (!item || !canOperateTransforms.value) return
+    setTransformPositionOverlay(item.id, { y })
   }
 
   const setTransformSizeDeferred = (width: number, height: number, x?: number, y?: number) => {
-    applyDeferredPatch('transform.size', { width, height })
+    const item = selectedTimelineItem.value
+    if (!item || !canOperateTransforms.value) return
+    setTransformSizeOverlay(item.id, { width, height })
     if (typeof x === 'number' || typeof y === 'number') {
       const positionPatch: Record<string, number> = {}
       if (typeof x === 'number') positionPatch.x = x
       if (typeof y === 'number') positionPatch.y = y
-      applyDeferredPatch('transform.position', positionPatch)
+      setTransformPositionOverlay(item.id, positionPatch)
     }
   }
 
@@ -272,62 +524,66 @@ export function useUnifiedKeyframeTransformControls(
     setTransformRotationDeferred(nextRotation)
   }
 
+  const commitTransformXDeferredUpdate = async (x: number) => {
+    await commitPositionDeferredUpdate('x', x)
+  }
+
+  const commitTransformYDeferredUpdate = async (y: number) => {
+    await commitPositionDeferredUpdate('y', y)
+  }
+
   const setWidthDeferred = (width: number) => {
+    const item = selectedTimelineItem.value
+    if (!item || !canOperateTransforms.value) return
     if (proportionalScale.value) {
-      applyDeferredPatch('transform.size', getScaledSizeFromWidth(width))
+      setTransformSizeOverlay(item.id, getScaledSizeFromWidth(width))
       return
     }
-    applyDeferredPatch('transform.size', { width })
+    setTransformSizeOverlay(item.id, { width })
   }
 
   const setHeightDeferred = (height: number) => {
+    const item = selectedTimelineItem.value
+    if (!item || !canOperateTransforms.value) return
     if (proportionalScale.value) {
-      applyDeferredPatch('transform.size', getScaledSizeFromHeight(height))
+      setTransformSizeOverlay(item.id, getScaledSizeFromHeight(height))
       return
     }
-    applyDeferredPatch('transform.size', { height })
+    setTransformSizeOverlay(item.id, { height })
+  }
+
+  const commitWidthDeferredUpdate = async (width: number) => {
+    await commitSizeDeferredUpdate('width', width)
+  }
+
+  const commitHeightDeferredUpdate = async (height: number) => {
+    await commitSizeDeferredUpdate('height', height)
   }
 
   const setOpacityDeferred = (nextOpacity: number) => {
-    applyDeferredPatch('transform.opacity', { opacity: nextOpacity })
+    const item = selectedTimelineItem.value
+    if (!item || !canOperateTransforms.value) return
+    setTransformOpacityOverlay(item.id, nextOpacity)
   }
 
   const updateVolumeDeferred = (nextVolume: number) => {
-    applyDeferredPatch('audio.volume', { volume: nextVolume })
+    const item = selectedTimelineItem.value
+    if (!item || !canOperateTransforms.value) return
+    setAudioVolumeOverlay(item.id, nextVolume)
   }
 
   const setTransformXDirectly = async (x: number) => {
-    const item = selectedTimelineItem.value
-    if (!item || !canOperateTransforms.value) return
-    const plan = propertyMutationService.plan({
-      kind: 'direct',
-      propertyId: 'transform.position',
-      timelineItemId: item.id,
-      frame: currentFrame.value,
-      value: { x },
-      item,
-    })
-    await unifiedStore.applyChangePlanWithHistory(plan)
+    await setPositionPatchDirectly({ x })
   }
 
   const setTransformYDirectly = async (y: number) => {
-    const item = selectedTimelineItem.value
-    if (!item || !canOperateTransforms.value) return
-    const plan = propertyMutationService.plan({
-      kind: 'direct',
-      propertyId: 'transform.position',
-      timelineItemId: item.id,
-      frame: currentFrame.value,
-      value: { y },
-      item,
-    })
-    await unifiedStore.applyChangePlanWithHistory(plan)
+    await setPositionPatchDirectly({ y })
   }
 
   const setSizeDirectly = async (width: number, height: number) => {
     const item = selectedTimelineItem.value
     if (!item || !canOperateTransforms.value) return
-    const plan = propertyMutationService.plan({
+    const plan = propertyPlanner.plan({
       kind: 'direct',
       propertyId: 'transform.size',
       timelineItemId: item.id,
@@ -341,7 +597,7 @@ export function useUnifiedKeyframeTransformControls(
   const setSizePatchDirectly = async (value: Record<string, number>) => {
     const item = selectedTimelineItem.value
     if (!item || !canOperateTransforms.value) return
-    const plan = propertyMutationService.plan({
+    const plan = propertyPlanner.plan({
       kind: 'direct',
       propertyId: 'transform.size',
       timelineItemId: item.id,
@@ -368,11 +624,35 @@ export function useUnifiedKeyframeTransformControls(
     await setSizePatchDirectly({ height })
   }
 
+  const applyScalePreset = async (mode: 'fit' | 'fill') => {
+    if (elementWidth.value <= 0 || elementHeight.value <= 0) return
+
+    const canvasWidth = unifiedStore.videoResolution.width
+    const canvasHeight = unifiedStore.videoResolution.height
+    const scale =
+      mode === 'fit'
+        ? Math.min(canvasWidth / elementWidth.value, canvasHeight / elementHeight.value)
+        : Math.max(canvasWidth / elementWidth.value, canvasHeight / elementHeight.value)
+
+    await setSizeDirectly(
+      Math.round(elementWidth.value * scale),
+      Math.round(elementHeight.value * scale),
+    )
+  }
+
+  const fitToCanvas = async () => {
+    await applyScalePreset('fit')
+  }
+
+  const fillCanvas = async () => {
+    await applyScalePreset('fill')
+  }
+
   const setRotationDirectly = async (nextRotation: number) => {
     const item = selectedTimelineItem.value
     if (!item || !canOperateTransforms.value) return
     clearTransformRotationOverlay(item.id)
-    const plan = propertyMutationService.plan({
+    const plan = propertyPlanner.plan({
       kind: 'direct',
       propertyId: 'transform.rotation',
       timelineItemId: item.id,
@@ -384,15 +664,68 @@ export function useUnifiedKeyframeTransformControls(
   }
 
   const setOpacityDirectly = async (nextOpacity: number) => {
-    await updateGroupDirect('transform.opacity', { opacity: nextOpacity })
+    const item = selectedTimelineItem.value
+    if (!item || !canOperateTransforms.value) return
+    const plan = propertyPlanner.plan({
+      kind: 'direct',
+      propertyId: 'transform.opacity',
+      timelineItemId: item.id,
+      frame: currentFrame.value,
+      value: nextOpacity,
+      item,
+    })
+    await unifiedStore.applyChangePlanWithHistory(plan)
   }
 
   const setBlendModeDirectly = async (nextBlendMode: BlendMode) => {
-    throwClipPropertyPhase0Todo(`transform.blendMode.direct.${nextBlendMode}`)
+    const item = selectedTimelineItem.value
+    if (!item || !canOperateTransforms.value || !TimelineItemQueries.hasVisualProperties(item)) return
+    if (!isBlendMode(nextBlendMode)) return
+
+    await unifiedStore.applyChangePlanWithHistory({
+      propertyId: 'transform.blendMode',
+      description: '修改混合模式',
+      operations: [
+        {
+          kind: 'visual-config-patch',
+          timelineItemId: item.id,
+          frame: currentFrame.value,
+          patch: { blendMode: nextBlendMode },
+        },
+      ],
+    })
   }
 
   const setVolume = async (nextVolume: number) => {
-    await updateGroupDirect('audio.volume', { volume: nextVolume })
+    const item = selectedTimelineItem.value
+    if (!item || !canOperateTransforms.value) return
+    const plan = propertyPlanner.plan({
+      kind: 'direct',
+      propertyId: 'audio.volume',
+      timelineItemId: item.id,
+      frame: currentFrame.value,
+      value: nextVolume,
+      item,
+    })
+    await unifiedStore.applyChangePlanWithHistory(plan)
+  }
+
+  const setMutedDirectly = async (nextMuted: boolean) => {
+    const item = selectedTimelineItem.value
+    if (!item || !canOperateTransforms.value || !TimelineItemQueries.hasAudioProperties(item)) return
+
+    await unifiedStore.applyChangePlanWithHistory({
+      propertyId: 'audio.isMuted',
+      description: nextMuted ? '静音音频' : '取消静音音频',
+      operations: [
+        {
+          kind: 'audio-config-patch',
+          timelineItemId: item.id,
+          frame: currentFrame.value,
+          patch: { isMuted: nextMuted },
+        },
+      ],
+    })
   }
 
   const toggleProportionalScale = async () => {
@@ -413,7 +746,7 @@ export function useUnifiedKeyframeTransformControls(
       const currentWidth = displayWidth.value
       const sizePatch = getScaledSizeFromWidth(currentWidth)
       if (typeof sizePatch.height === 'number') {
-        const sizePlan = propertyMutationService.plan({
+        const sizePlan = propertyPlanner.plan({
           kind: 'direct',
           propertyId: 'transform.size',
           timelineItemId: item.id,
@@ -426,18 +759,44 @@ export function useUnifiedKeyframeTransformControls(
     }
 
     await unifiedStore.applyChangePlanWithHistory({
-      propertyId: 'transform.size',
+      propertyId: 'transform.proportionalScale',
       description: `${nextProportionalScale ? '开启' : '关闭'}等比缩放`,
       operations,
     })
   }
 
   const alignHorizontal = async (mode: 'left' | 'center' | 'right') => {
-    throwClipPropertyPhase0Todo(`transform.alignHorizontal.${mode}`)
+    const item = selectedTimelineItem.value
+    const currentRenderConfig = renderConfig.value as { width?: number } | null
+    if (!item || !canOperateTransforms.value || !currentRenderConfig) return
+
+    const canvasWidth = unifiedStore.videoResolution.width
+    const itemWidth = currentRenderConfig.width ?? 0
+    const targetX =
+      mode === 'left'
+        ? -canvasWidth / 2 + itemWidth / 2
+        : mode === 'right'
+          ? canvasWidth / 2 - itemWidth / 2
+          : 0
+
+    await setPositionPatchDirectly({ x: targetX })
   }
 
   const alignVertical = async (mode: 'top' | 'middle' | 'bottom') => {
-    throwClipPropertyPhase0Todo(`transform.alignVertical.${mode}`)
+    const item = selectedTimelineItem.value
+    const currentRenderConfig = renderConfig.value as { height?: number } | null
+    if (!item || !canOperateTransforms.value || !currentRenderConfig) return
+
+    const canvasHeight = unifiedStore.videoResolution.height
+    const itemHeight = currentRenderConfig.height ?? 0
+    const targetY =
+      mode === 'top'
+        ? canvasHeight / 2 - itemHeight / 2
+        : mode === 'bottom'
+          ? -canvasHeight / 2 + itemHeight / 2
+          : 0
+
+    await setPositionPatchDirectly({ y: targetY })
   }
 
   return {
@@ -454,6 +813,8 @@ export function useUnifiedKeyframeTransformControls(
     elementWidth,
     elementHeight,
     setTransformPositionDeferred,
+    setTransformXDeferred,
+    setTransformYDeferred,
     setTransformSizeDeferred,
     setTransformRotationDeferred,
     setWidthDeferred,
@@ -461,17 +822,27 @@ export function useUnifiedKeyframeTransformControls(
     setRotationDeferred,
     setOpacityDeferred,
     updateVolumeDeferred,
-    commitDeferredUpdates,
+    commitTransformXDeferredUpdate,
+    commitTransformYDeferredUpdate,
+    commitWidthDeferredUpdate,
+    commitHeightDeferredUpdate,
+    commitTransformPositionDeferredUpdate,
+    commitTransformGeometryDeferredUpdate,
     commitRotationDeferredUpdate,
+    commitOpacityDeferredUpdate,
+    commitVolumeDeferredUpdate,
     setTransformXDirectly,
     setTransformYDirectly,
     setWidthDirectly,
     setHeightDirectly,
     setSizeDirectly,
+    fitToCanvas,
+    fillCanvas,
     setRotationDirectly,
     setOpacityDirectly,
     setBlendModeDirectly,
     setVolume,
+    setMutedDirectly,
     toggleProportionalScale,
     alignHorizontal,
     alignVertical,

@@ -11,8 +11,10 @@
           :max="firstMax"
           :step="step"
           :precision="precision"
+          :realtime="true"
           :placeholder="firstPlaceholder"
-          @change="(value) => $emit('first-change', value)"
+          @input="emitFirstInput"
+          @change="emitFirstChange"
         />
       </div>
       <div class="position-input-group">
@@ -24,8 +26,10 @@
           :max="secondMax"
           :step="step"
           :precision="precision"
+          :realtime="true"
           :placeholder="secondPlaceholder"
-          @change="(value) => $emit('second-change', value)"
+          @input="emitSecondInput"
+          @change="emitSecondChange"
         />
       </div>
       <KeyframeNavButtons
@@ -71,13 +75,31 @@ const props = withDefaults(defineProps<{
   secondPlaceholder: undefined,
 })
 
-defineEmits<{
+const emit = defineEmits<{
+  (e: 'first-input', value: number): void
+  (e: 'second-input', value: number): void
   (e: 'first-change', value: number): void
   (e: 'second-change', value: number): void
   (e: 'previous'): void
   (e: 'toggle'): void
   (e: 'next'): void
 }>()
+
+function emitFirstInput(value: number) {
+  emit('first-input', value)
+}
+
+function emitSecondInput(value: number) {
+  emit('second-input', value)
+}
+
+function emitFirstChange(value: number) {
+  emit('first-change', value)
+}
+
+function emitSecondChange(value: number) {
+  emit('second-change', value)
+}
 
 const labelClass = computed(() => ({
   'animated-property-label': props.state !== 'none',

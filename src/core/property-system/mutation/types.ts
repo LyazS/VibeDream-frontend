@@ -1,5 +1,6 @@
 import type {
   AnimateKeyframe,
+  AudioProps,
   AnimationGroupId,
   AnimationGroupValueMap,
   VisualProps,
@@ -7,29 +8,41 @@ import type {
 import type { MediaType } from '@/core/mediaitem'
 import type { UnifiedTimelineItemData } from '@/core/timelineitem'
 
-export type ClipPropertyId = 'transform.rotation' | 'transform.position' | 'transform.size'
+export type AnimatablePropertyId =
+  | 'transform.rotation'
+  | 'transform.position'
+  | 'transform.size'
+  | 'transform.opacity'
+  | 'audio.volume'
 
-export interface DirectPropertyMutationIntent<TValue = unknown> {
+export type ConfigPropertyId =
+  | 'transform.blendMode'
+  | 'transform.proportionalScale'
+  | 'audio.isMuted'
+
+export type ChangePlanPropertyId = AnimatablePropertyId | ConfigPropertyId
+
+export interface DirectPropertyPlanIntent<TValue = unknown> {
   kind: 'direct'
-  propertyId: ClipPropertyId
+  propertyId: AnimatablePropertyId
   timelineItemId: string
   frame: number
   value: TValue
   item: UnifiedTimelineItemData<MediaType>
 }
 
-export interface PropertyKeyframeToggleIntent {
+export interface PropertyKeyframeTogglePlanIntent {
   kind: 'keyframe-toggle'
-  propertyId: ClipPropertyId
+  propertyId: AnimatablePropertyId
   timelineItemId: string
   frame: number
   item: UnifiedTimelineItemData<MediaType>
 }
 
-export type PropertyMutationIntent = DirectPropertyMutationIntent | PropertyKeyframeToggleIntent
+export type PropertyPlanIntent = DirectPropertyPlanIntent | PropertyKeyframeTogglePlanIntent
 
-export interface AnimationGroupPatchOperation<G extends AnimationGroupId = AnimationGroupId> {
-  kind: 'static-config-patch'
+export interface NoAnimationGroupPatchOperation<G extends AnimationGroupId = AnimationGroupId> {
+  kind: 'no-animation-group-patch'
   timelineItemId: string
   frame: number
   groupId: G
@@ -41,6 +54,13 @@ export interface VisualConfigPatchOperation {
   timelineItemId: string
   frame: number
   patch: Partial<VisualProps>
+}
+
+export interface AudioConfigPatchOperation {
+  kind: 'audio-config-patch'
+  timelineItemId: string
+  frame: number
+  patch: Partial<AudioProps>
 }
 
 export interface AnimationKeyframeUpdateOperation<G extends AnimationGroupId = AnimationGroupId> {
@@ -69,14 +89,15 @@ export interface AnimationKeyframeDeleteOperation<G extends AnimationGroupId = A
 }
 
 export type ChangeOperation =
-  | AnimationGroupPatchOperation
+  | NoAnimationGroupPatchOperation
   | VisualConfigPatchOperation
+  | AudioConfigPatchOperation
   | AnimationKeyframeUpdateOperation
   | AnimationKeyframeCreateOperation
   | AnimationKeyframeDeleteOperation
 
 export interface ChangePlan {
-  propertyId: ClipPropertyId
+  propertyId: ChangePlanPropertyId
   description: string
   operations: ChangeOperation[]
 }

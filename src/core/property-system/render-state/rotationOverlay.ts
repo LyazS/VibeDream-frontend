@@ -1,6 +1,6 @@
 import { reactive } from 'vue'
 import { normalizeAngle } from '@/core/utils/rotationTransform'
-import { transformRotationSchema } from '@/core/property-schema'
+import { transformRotationSchema } from '@/core/property-system/schema'
 
 interface RotationOverlayEntry {
   rotation: number

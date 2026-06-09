@@ -157,7 +157,9 @@ const {
   setTransformPositionDeferred,
   setTransformSizeDeferred,
   setTransformRotationDeferred,
-  commitDeferredUpdates,
+  commitTransformPositionDeferredUpdate,
+  commitTransformGeometryDeferredUpdate,
+  commitRotationDeferredUpdate,
 } = useUnifiedKeyframeTransformControls({
   selectedTimelineItem: selectedItem,
   currentFrame,
@@ -405,7 +407,7 @@ function handleDragMove(event: MouseEvent) {
 async function handleDragEnd(_event: MouseEvent) {
   if (!dragState.value.isDragging) return
 
-  await commitDeferredUpdates()
+  await commitTransformPositionDeferredUpdate()
   dragState.value.isDragging = false
 
   window.removeEventListener('mousemove', handleGlobalMouseMove)
@@ -492,7 +494,7 @@ function handleScaleMove(event: MouseEvent) {
 async function handleScaleEnd(_event: MouseEvent) {
   if (!scaleState.value.isScaling) return
 
-  await commitDeferredUpdates()
+  await commitTransformGeometryDeferredUpdate()
   scaleState.value.isScaling = false
 
   window.removeEventListener('mousemove', handleGlobalScaleMove)
@@ -559,7 +561,7 @@ function handleRotateMove(event: MouseEvent) {
 async function handleRotateEnd(_event: MouseEvent) {
   if (!rotationState.value.isRotating) return
 
-  await commitDeferredUpdates()
+  await commitRotationDeferredUpdate()
   rotationState.value.isRotating = false
 
   window.removeEventListener('mousemove', handleGlobalRotateMove)

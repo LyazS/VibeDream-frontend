@@ -14,8 +14,20 @@ import { TimelineStatusDisplayUtils } from '@/core/timelineitem/statusdisplayuti
 import { useUnifiedStore } from '@/core/unifiedStore'
 import { supportsClipTransitionOut as itemSupportsClipTransitionOut } from '@/core/timelineitem/transition'
 import { supportsClipFilter as itemSupportsClipFilter } from '@/core/timelineitem/filter'
-import { getTransformRotationOverlay } from '@/core/render-state'
-import { transformRotationSchema } from '@/core/property-schema'
+import {
+  getAudioVolumeOverlay,
+  getTransformOpacityOverlay,
+  getTransformPositionOverlay,
+  getTransformRotationOverlay,
+  getTransformSizeOverlay,
+} from '@/core/property-system/render-state'
+import {
+  audioVolumeSchema,
+  transformOpacitySchema,
+  transformPositionSchema,
+  transformRotationSchema,
+  transformSizeSchema,
+} from '@/core/property-system/schema'
 
 // ==================== 类型守卫函数 ====================
 
@@ -183,14 +195,61 @@ export function getRenderConfig<T extends MediaType>(
   item: UnifiedTimelineItemData<T>
 ): GetConfigs<T> {
   const renderConfig = item.runtime.renderConfig || item.config
+  const positionOverlay = getTransformPositionOverlay(item.id)
+  const sizeOverlay = getTransformSizeOverlay(item.id)
   const rotationOverlay = getTransformRotationOverlay(item.id)
-  if (!rotationOverlay || !hasVisualProperties(item)) {
+  const opacityOverlay = getTransformOpacityOverlay(item.id)
+  const volumeOverlay = getAudioVolumeOverlay(item.id)
+  if (
+    !positionOverlay &&
+    !sizeOverlay &&
+    !rotationOverlay &&
+    !opacityOverlay &&
+    !volumeOverlay
+  ) {
     return renderConfig
   }
 
+  const visualRenderConfig = hasVisualProperties(item)
+    ? (renderConfig as typeof renderConfig & {
+        x: number
+        y: number
+        width: number
+        height: number
+        rotation: number
+        opacity: number
+      })
+    : null
+
   return {
     ...renderConfig,
-    [transformRotationSchema.valueFields[0]]: rotationOverlay.rotation,
+    ...(positionOverlay && visualRenderConfig
+      ? {
+          [transformPositionSchema.valueFields[0]]: positionOverlay.x ?? visualRenderConfig.x,
+          [transformPositionSchema.valueFields[1]]: positionOverlay.y ?? visualRenderConfig.y,
+        }
+      : {}),
+    ...(sizeOverlay && visualRenderConfig
+      ? {
+          [transformSizeSchema.valueFields[0]]: sizeOverlay.width ?? visualRenderConfig.width,
+          [transformSizeSchema.valueFields[1]]: sizeOverlay.height ?? visualRenderConfig.height,
+        }
+      : {}),
+    ...(rotationOverlay && visualRenderConfig
+      ? {
+          [transformRotationSchema.valueFields[0]]: rotationOverlay.rotation,
+        }
+      : {}),
+    ...(opacityOverlay && visualRenderConfig
+      ? {
+          [transformOpacitySchema.valueFields[0]]: opacityOverlay.opacity,
+        }
+      : {}),
+    ...(volumeOverlay && hasAudioProperties(item)
+      ? {
+          [audioVolumeSchema.valueFields[0]]: volumeOverlay.volume,
+        }
+      : {}),
   } as GetConfigs<T>
 }
 

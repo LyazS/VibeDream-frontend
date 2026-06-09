@@ -69,7 +69,7 @@ import {
   normalizeClipFilterConfig,
 } from '@/core/timelineitem/filter'
 import { RENDERER_FPS } from '@/core/mediabunny/constant'
-import type { ChangePlan } from '@/core/property-mutation'
+import type { ChangePlan } from '@/core/property-system'
 
 interface PlaybackRateUpdate {
   playbackRate: number

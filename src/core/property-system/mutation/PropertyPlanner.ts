@@ -1,16 +1,18 @@
 import { normalizeAngle } from '@/core/utils/rotationTransform'
 import type {
   ChangePlan,
-  DirectPropertyMutationIntent,
-  PropertyKeyframeToggleIntent,
-  PropertyMutationIntent,
+  DirectPropertyPlanIntent,
+  PropertyKeyframeTogglePlanIntent,
+  PropertyPlanIntent,
 } from './types'
 import {
-  type ClipPropertySchema,
+  audioVolumeSchema,
+  transformOpacitySchema,
+  type AnimatablePropertySchema,
   transformPositionSchema,
   transformRotationSchema,
   transformSizeSchema,
-} from '@/core/property-schema'
+} from '@/core/property-system/schema'
 import {
   findKeyframeAtFrame,
   getCurrentGroupValue,
@@ -20,11 +22,11 @@ import {
 } from '@/core/animation/engine'
 import type { AnimationGroupValueMap } from '@/core/timelineitem/bunnytype'
 
-export class PropertyMutationService {
-  plan(intent: PropertyMutationIntent): ChangePlan {
+export class PropertyPlanner {
+  plan(intent: PropertyPlanIntent): ChangePlan {
     const schema = this.getSchema(intent.propertyId)
     if (!schema) {
-      throw new Error(`Unsupported property mutation: ${intent.propertyId}`)
+      throw new Error(`Unsupported property plan: ${intent.propertyId}`)
     }
 
     if (intent.kind === 'direct') {
@@ -34,14 +36,16 @@ export class PropertyMutationService {
     return this.planKeyframeToggle(intent, schema)
   }
 
-  private getSchema(propertyId: PropertyMutationIntent['propertyId']): ClipPropertySchema | null {
+  private getSchema(propertyId: PropertyPlanIntent['propertyId']): AnimatablePropertySchema | null {
     if (propertyId === transformRotationSchema.propertyId) return transformRotationSchema
     if (propertyId === transformPositionSchema.propertyId) return transformPositionSchema
     if (propertyId === transformSizeSchema.propertyId) return transformSizeSchema
+    if (propertyId === transformOpacitySchema.propertyId) return transformOpacitySchema
+    if (propertyId === audioVolumeSchema.propertyId) return audioVolumeSchema
     return null
   }
 
-  private planDirect(intent: DirectPropertyMutationIntent, schema: ClipPropertySchema): ChangePlan {
+  private planDirect(intent: DirectPropertyPlanIntent, schema: AnimatablePropertySchema): ChangePlan {
     if (!schema.supportsDirectCommit) {
       throw new Error(`Direct commit is not supported: ${intent.propertyId}`)
     }
@@ -58,7 +62,7 @@ export class PropertyMutationService {
         description: `修改${descriptionTarget}`,
         operations: [
           {
-            kind: 'static-config-patch',
+            kind: 'no-animation-group-patch',
             timelineItemId: intent.timelineItemId,
             frame: intent.frame,
             groupId,
@@ -119,7 +123,7 @@ export class PropertyMutationService {
     }
   }
 
-  private planKeyframeToggle(intent: PropertyKeyframeToggleIntent, schema: ClipPropertySchema): ChangePlan {
+  private planKeyframeToggle(intent: PropertyKeyframeTogglePlanIntent, schema: AnimatablePropertySchema): ChangePlan {
     if (!schema.supportsKeyframeToggle) {
       throw new Error(`Keyframe toggle is not supported: ${intent.propertyId}`)
     }
@@ -170,8 +174,8 @@ export class PropertyMutationService {
   }
 
   private normalizeDirectValue(
-    intent: DirectPropertyMutationIntent,
-    schema: ClipPropertySchema,
+    intent: DirectPropertyPlanIntent,
+    schema: AnimatablePropertySchema,
   ): Partial<AnimationGroupValueMap[typeof schema.animationGroupId]> {
     if (schema.propertyId === 'transform.rotation') {
       if (typeof intent.value !== 'number' || !Number.isFinite(intent.value)) {
@@ -179,6 +183,24 @@ export class PropertyMutationService {
       }
       return {
         rotation: normalizeAngle(intent.value),
+      } as Partial<AnimationGroupValueMap[typeof schema.animationGroupId]>
+    }
+
+    if (schema.propertyId === 'transform.opacity') {
+      if (typeof intent.value !== 'number' || !Number.isFinite(intent.value)) {
+        throw new Error('transform.opacity requires a finite numeric value')
+      }
+      return {
+        opacity: Math.min(1, Math.max(0, intent.value)),
+      } as Partial<AnimationGroupValueMap[typeof schema.animationGroupId]>
+    }
+
+    if (schema.propertyId === 'audio.volume') {
+      if (typeof intent.value !== 'number' || !Number.isFinite(intent.value)) {
+        throw new Error('audio.volume requires a finite numeric value')
+      }
+      return {
+        volume: Math.min(1, Math.max(0, intent.value)),
       } as Partial<AnimationGroupValueMap[typeof schema.animationGroupId]>
     }
 
@@ -199,10 +221,12 @@ export class PropertyMutationService {
     throw new Error(`Unsupported direct value normalization: ${schema.propertyId}`)
   }
 
-  private getDescriptionTarget(schema: ClipPropertySchema): string {
+  private getDescriptionTarget(schema: AnimatablePropertySchema): string {
     if (schema.propertyId === 'transform.rotation') return '旋转'
     if (schema.propertyId === 'transform.position') return '位置'
     if (schema.propertyId === 'transform.size') return '尺寸'
+    if (schema.propertyId === 'transform.opacity') return '混合强度'
+    if (schema.propertyId === 'audio.volume') return '音量'
     return schema.propertyId
   }
 
@@ -216,4 +240,4 @@ export class PropertyMutationService {
   }
 }
 
-export const propertyMutationService = new PropertyMutationService()
+export const propertyPlanner = new PropertyPlanner()

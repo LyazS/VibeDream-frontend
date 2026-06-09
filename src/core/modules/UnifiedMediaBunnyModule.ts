@@ -461,12 +461,12 @@ export function createUnifiedMediaBunnyModule(
         selectedTimelineItemId === item.id &&
         TimelineItemQueries.hasVisualProperties(item) &&
         currentTime === item.timeRange.timelineEndTime
-      const visualFrame = shouldPreviewSelectedBoundaryFrame
+      const boundarySampleFrame = shouldPreviewSelectedBoundaryFrame
         ? Math.max(item.timeRange.timelineStartTime, item.timeRange.timelineEndTime - 1)
         : currentTime
 
-      // 应用动画插值到 config
-      applyAnimationToConfig(item, visualFrame)
+      // 属性动画允许在选中 clip 的尾部边界帧操作，视频采样仍取最后一个可解码帧。
+      applyAnimationToConfig(item, currentTime)
 
       // 处理视频/音频
       if (
@@ -494,7 +494,7 @@ export function createUnifiedMediaBunnyModule(
           playAudio &&
           !isTrackMuted &&
           !isItemMuted
-        const sampleFrame = shouldRenderSelectedVideoBoundaryFrame ? visualFrame : currentTime
+        const sampleFrame = shouldRenderSelectedVideoBoundaryFrame ? boundarySampleFrame : currentTime
 
         // 更新 clip 帧数据（不等待完成，使用 void）
         // 这里不等待，因此会后台执行，飞快地跳过这里，导致整个 updateClips 都会快速执行一遍

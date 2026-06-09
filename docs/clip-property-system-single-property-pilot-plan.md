@@ -79,7 +79,7 @@
 
 ### 3.4 抽象必须从真实成功路径中长出来
 
-任何 registry、schema、mutation service、render resolver、session 设计，都必须先服务于 `transform.rotation` 真实闭环，而不是先追求抽象完整度。
+任何 registry、schema、property planner、render resolver、session 设计，都必须先服务于 `transform.rotation` 真实闭环，而不是先追求抽象完整度。
 
 标准不是“类型设计看起来很优雅”，而是：
 
@@ -111,6 +111,17 @@
 - operation 形态是否稳定
 - command 边界是否清晰
 - render-state 是否能承接交互态
+
+当前代码组织已将本方案相关的 schema、mutation、render-state 收敛到统一目录：
+
+```text
+src/core/property-system/
+  mutation/
+  schema/
+  render-state/
+```
+
+其中 `schema / mutation / render-state` 仍然保持职责分层，目录合并只用于表达它们属于同一套 property system，而不是把三类职责揉成同一个模块。
 
 ## 5. 实施总策略
 
@@ -174,7 +185,7 @@
 
 链路范围：
 
-`属性面板旋转角度输入 -> 统一属性入口 -> PropertyMutationService -> ChangePlan -> ApplyChangePlanCommand -> 持久状态生效 -> 当前渲染结果正确`
+`属性面板旋转角度输入 -> 统一属性入口 -> PropertyPlanner -> ChangePlan -> ApplyChangePlanCommand -> 持久状态生效 -> 当前渲染结果正确`
 
 本阶段只解决最小主链路。
 
@@ -234,7 +245,7 @@
 这一阶段做的事情是从成功样板里反推出稳定抽象，包括但不限于：
 
 - property schema 最小稳定字段集
-- mutation service 的稳定输入输出
+- PropertyPlanner 的稳定输入输出
 - change plan / change operation 的稳定形态
 - render-state 中 overlay 的最小承载方式
 - `transform.rotation` 旧路径删除策略
@@ -257,8 +268,8 @@
 
 1. `transform.opacity`
 2. `transform.position`，作为一组同时覆盖 `x/y`（已先行完成组级验证）
-3. `transform.size`，作为一组同时覆盖 `width/height`（实施中）
-4. `transform.geometry`，在 `position` 和 `size` 都稳定后收敛 `x/y/width/height` 的联动入口
+3. `transform.size`，作为一组同时覆盖 `width/height`
+4. `transform.geometry`，用于画布控制点缩放时一次性提交 `position + size`
 
 原因：
 
@@ -280,26 +291,27 @@
 
 `transform.position` 阶段 4 子项完成状态：
 
-- X/Y 数字输入已接入 `PropertyMutationService.plan()` 的 `transform.position` direct intent
+- X/Y 数字输入已接入 `PropertyPlanner.plan()` 的 `transform.position` direct intent
+- X/Y 数字输入已接入 transient overlay，输入过程中只覆盖渲染读值，失焦 / change 时再提交
 - direct intent 支持 `{ x }`、`{ y }` 单字段 patch，并在 animation 写入时补齐完整 `{ x, y }` 组值
 - 无关键帧时写入静态 `config.x` / `config.y`
 - 当前帧命中 position keyframe 时，更新目标 keyframe 的完整 `{ x, y }` value / properties
 - 当前帧位于两个 position keyframe 之间时，基于当前插值值创建完整 `transform.position` 组关键帧
 - position keyframe toggle 已通过 `ChangePlan` 创建 / 删除 `transform.position` 组关键帧
+- 对齐按钮 `alignHorizontal` / `alignVertical` 已作为 position 派生操作接入 `transform.position` direct intent
+- 画布拖动已复用 position overlay 做预览，mouseup 时通过 `transform.position` direct intent 提交完整 `{ x, y }`
 - 用户已手动验证 position direct input、position keyframe toggle、组级 `{ x, y }` 写入、undo / redo 没有问题
 - 已回归 `transform.rotation` 的 direct input、slider commit、keyframe toggle、undo / redo，未发现 position 复制影响 rotation 样板路径
 
 暂不纳入本子项完成范围：
 
-- 对齐按钮 `alignHorizontal` / `alignVertical` 仍属于 position 派生操作，尚未接入新架构
-- position 没有 transient overlay / defer preview，本子项只验证 X/Y direct input 和 keyframe toggle
-- `transform.size`、`transform.opacity` 尚未作为阶段 4 子项完成迁移
+- 多选对齐、参考对象对齐等更复杂对齐语义尚未纳入；当前只支持单选 clip 对齐画布边界 / 中心
 
 `transform.size` 组级验证要求：
 
 - UI 可以由 width 或 height 单字段输入触发
 - mutation intent 可以是 `{ width }` 或 `{ height }` patch
-- 比例锁开启时，UI/composable 可以把单字段输入扩成 `{ width, height }` patch，但写入策略仍由 `PropertyMutationService.plan()` 决定
+- 比例锁开启时，UI/composable 可以把单字段输入扩成 `{ width, height }` patch，但写入策略仍由 `PropertyPlanner.plan()` 决定
 - 规划到 animation keyframe 时必须生成完整 `{ width, height }` value / properties
 - 无关键帧时允许只 patch 静态 `config.width` / `config.height`
 - 当前帧在 size keyframe 上时，必须 merge 当前 keyframe value 后更新完整组值
@@ -308,13 +320,36 @@
 
 `transform.size` 阶段 4 子项实施状态：
 
-- width/height 数字输入已接入 `PropertyMutationService.plan()` 的 `transform.size` direct intent
+- width/height 数字输入已接入 `PropertyPlanner.plan()` 的 `transform.size` direct intent
+- width/height 数字输入已接入 transient overlay，输入过程中只覆盖渲染读值，失焦 / change 时再提交
 - fit/fill 预设按钮已通过 `setSizeDirectly()` 进入 `transform.size` direct intent
 - size keyframe toggle 已通过 `ChangePlan` 创建 / 删除 `transform.size` 组关键帧
-- 比例锁开关已通过 `visual-config-patch` 写入 `config.proportionalScale`，用于支持 size 单字段测试
+- 比例锁开关已通过 `transform.proportionalScale` 的 `visual-config-patch` 写入 `config.proportionalScale`，用于支持 size 单字段测试
 - 开启比例锁时，会按当前 width 和原始宽高比生成一次 `transform.size` direct intent，同一个 `ChangePlan` 内完成开关与 height 同步
 - 比例锁开关不是 animation group，本阶段不把 `proportionalScale` 纳入关键帧组
-- size 没有 transient overlay / defer preview，本子项只验证 width/height direct input、fit/fill direct commit 和 keyframe toggle
+- 画布控制点缩放已复用 size overlay + position overlay 做预览，mouseup 时通过一个 `ChangePlan` 一次性提交 size 与 position，undo / redo 保持单步
+
+`transform.opacity` 阶段 4 子项实施状态：
+
+- 混合强度 slider 已接入 transient overlay，拖动过程中只覆盖渲染读值
+- slider change / 数字输入已接入 `PropertyPlanner.plan()` 的 `transform.opacity` direct intent
+- direct intent 会把 opacity clamp 到 `[0, 1]`
+- opacity keyframe toggle 已通过 `ChangePlan` 创建 / 删除 `transform.opacity` 关键帧
+- 当前帧命中 opacity keyframe 时，更新目标 keyframe 的完整 `{ opacity }` value / properties
+- 当前帧位于两个 opacity keyframe 之间时，基于当前插值值创建完整 `transform.opacity` 关键帧
+
+`transform.blendMode` 实施状态：
+
+- 混合模式不属于数值 animation group，不纳入 `PropertyPlanner` 的 animatable schema
+- 混合模式切换已通过 `visual-config-patch` 接入 `ChangePlan + history`
+- `ChangePlan.propertyId` 已扩展为可表达非动画 visual config 属性，例如 `transform.blendMode`
+
+`transform.geometry` 实施状态：
+
+- 当前只服务画布控制点缩放产生的 `{ width, height, x, y }` 联动提交
+- mousemove 阶段仍分别写 size overlay 与 position overlay
+- mouseup 阶段合并 `transform.size` 与 `transform.position` 的 operations，作为一个 `ChangePlan` 提交
+- 暂不新增独立 `transform.geometry` animation group，也不改变持久数据结构
 
 `runtime.renderConfig` 收敛状态：
 
@@ -346,6 +381,16 @@
 这里不要求完全按这个顺序执行，但要求遵守一个原则：
 
 **先从最接近现有样板的属性开始，不要同时开多个复杂域。**
+
+`audio.volume` 阶段 5 子项实施状态：
+
+- 音量 slider 已接入 transient overlay，拖动过程中只覆盖渲染读值
+- slider change / 数字输入已接入 `PropertyPlanner.plan()` 的 `audio.volume` direct intent
+- direct intent 会把 volume clamp 到 `[0, 1]`
+- audio volume keyframe toggle 已通过 `ChangePlan` 创建 / 删除 `audio.volume` 关键帧
+- 当前帧命中 volume keyframe 时，更新目标 keyframe 的完整 `{ volume }` value / properties
+- 当前帧位于两个 volume keyframe 之间时，基于当前插值值创建完整 `audio.volume` 关键帧
+- `isMuted` 不是 `audio.volume` animation group，不纳入关键帧；静音按钮已作为 `audio.isMuted` audio config patch 接入 `ChangePlan + history`
 
 完成标准：
 
@@ -399,7 +444,7 @@
 
 ### 8.1 Property Schema
 
-第一版只需要服务于 `transform.rotation`。
+第一版只需要服务于 `transform.rotation`。当前已扩展为 `src/core/property-system/schema/animatablePropertySchemas.ts` 中的 animatable property schema definitions，覆盖 `transform` 与 `audio.volume` 已迁移属性。
 
 要求：
 
@@ -413,7 +458,7 @@
 - 一次定义所有 deferred mode
 - 一次定义所有属性能力矩阵
 
-### 8.2 PropertyMutationService
+### 8.2 PropertyPlanner
 
 第一版只要能稳定把 `transform.rotation` intent 规划成可执行 plan。
 
@@ -453,17 +498,17 @@ render-state 的设计也必须遵守同样规则。
 
 当前 `transform.rotation` 的可复制样板由以下最小结构组成：
 
-- Property Schema：`transformRotationSchema`
+- Property Schema：`animatablePropertySchemas.ts` 中的 `transformRotationSchema`
   - `propertyId: 'transform.rotation'`
   - `animationGroupId: 'transform.rotation'`
   - `valueField: 'rotation'`
   - 能力开关只声明 direct commit、keyframe toggle、transient overlay
-- PropertyMutationService：统一 `plan(intent)` 入口
-  - `kind: 'direct'` 由规划阶段判断当前 animation 状态，并规划成 `static-config-patch` / `animation-keyframe-update` / `animation-keyframe-create`
+- PropertyPlanner：统一 `plan(intent)` 入口
+  - `kind: 'direct'` 由规划阶段判断当前 animation 状态，并规划成 `no-animation-group-patch` / `animation-keyframe-update` / `animation-keyframe-create`
   - `kind: 'keyframe-toggle'` 由规划阶段判断当前帧是否已有关键帧，并规划成 `animation-keyframe-create` / `animation-keyframe-delete`
   - 规划阶段负责 rotation 数值归一化、属性能力判断和持久写入策略选择
 - ApplyChangePlanCommand：只执行真实 operation
-  - `static-config-patch` 直接写 `item.config`
+  - `no-animation-group-patch` 直接写 `item.config`
   - `animation-keyframe-update` 直接更新目标 keyframe
   - `animation-keyframe-create` 直接创建目标 keyframe
   - `animation-keyframe-delete` 直接删除目标 keyframe

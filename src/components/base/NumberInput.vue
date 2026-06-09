@@ -58,6 +58,7 @@ interface Props {
 
 interface Emits {
   (e: 'update:modelValue', value: number): void
+  (e: 'input', value: number): void
   (e: 'change', value: number): void
 }
 
@@ -127,8 +128,8 @@ const handleInput = (event: Event) => {
     const value = parseFloat(input.value)
     if (!isNaN(value)) {
       const formatted = formatValue(value)
+      emit('input', formatted)
       emit('update:modelValue', formatted)
-      emit('change', formatted)
     }
   }
 }

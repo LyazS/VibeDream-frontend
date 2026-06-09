@@ -11,7 +11,7 @@
         <SliderInput
           :model-value="volume"
           @input="updateVolumeDeferred"
-          @change="commitDeferredUpdates"
+          @change="commitVolumeDeferredUpdate"
           :disabled="!canOperateTransforms"
           :min="0"
           :max="1"
@@ -20,7 +20,7 @@
         />
         <NumberInput
           :model-value="volume"
-          @change="updateVolume"
+          @change="setVolume"
           :disabled="!canOperateTransforms"
           :min="0"
           :max="1"
@@ -55,7 +55,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useAppI18n } from '@/core/composables/useI18n'
-import { useUnifiedStore } from '@/core/unifiedStore'
 import { hasAudioProperties } from '@/core/timelineitem/queries'
 import { useUnifiedKeyframeTransformControls } from '@/core/composables'
 import { IconComponents, getMuteIcon } from '@/constants/iconComponents'
@@ -71,12 +70,12 @@ interface Props {
 
 const props = defineProps<Props>()
 const { t } = useAppI18n()
-const unifiedStore = useUnifiedStore()
 
 // 使用关键帧控制器获取音量（支持关键帧动画）和禁用状态
 const {
   volume,
   setVolume,
+  setMutedDirectly,
   updateVolumeDeferred,
   canOperateTransforms,
   getChannelButtonState,
@@ -86,20 +85,13 @@ const {
   goToNextChannelKeyframe,
   toggleChannelKeyframe,
   getChannelKeyframeTooltip,
-  commitDeferredUpdates,
+  commitVolumeDeferredUpdate,
 } = useUnifiedKeyframeTransformControls({
   selectedTimelineItem: computed(() => props.selectedTimelineItem),
   currentFrame: computed(() => props.currentFrame),
 })
 
 const audioButtonState = computed(() => getChannelButtonState('audio.volume'))
-
-function throwClipPropertyPhase0Todo(action: string): never {
-  throw new Error(
-    `[ClipProperty Phase 0 TODO] 属性区入口 "${action}" 仍在组件内部实现提交分流或直写预处理，` +
-      '需先收敛到统一的属性提交入口后再恢复。',
-  )
-}
 
 const getAnimatedLabelClass = (state: string) => ({
   'animated-property-label': state !== 'none',
@@ -115,33 +107,9 @@ const isMuted = computed(() => {
   return props.selectedTimelineItem.config.isMuted ?? false
 })
 
-// 更新音量（使用关键帧系统）
-const updateVolume = async (newVolume: number) => {
-  const clampedVolume = Math.max(0, Math.min(1, newVolume))
-  setVolume(clampedVolume)
-}
-
 // 切换静音（不使用关键帧系统）
 const toggleMute = async () => {
-  throwClipPropertyPhase0Todo('audio.toggleMute')
-  if (!props.selectedTimelineItem || !hasAudioProperties(props.selectedTimelineItem)) return
-  
-  const config = props.selectedTimelineItem.config
-  
-  // 类型安全的属性访问和初始化
-  if (config.volume === undefined) {
-    config.volume = 1
-  }
-  if (config.isMuted === undefined) {
-    config.isMuted = false
-  }
-  
-  const newMutedState = !config.isMuted
-  
-  await unifiedStore.updateAudioPropertiesWithHistory(
-    props.selectedTimelineItem.id,
-    { isMuted: newMutedState }
-  )
+  await setMutedDirectly(!isMuted.value)
 }
 </script>
 

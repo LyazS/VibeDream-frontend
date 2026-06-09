@@ -1,6 +1,6 @@
 import { generateCommandId } from '@/core/utils/idGenerator'
 import type { SimpleCommand } from '@/core/modules/commands/types'
-import type { ChangePlan } from '@/core/property-mutation'
+import type { ChangePlan } from '@/core/property-system'
 import type {
   KeyframeSnapshot,
   PlaybackControls,
@@ -58,9 +58,11 @@ export class ApplyChangePlanCommand implements SimpleCommand {
         throw new Error('播放头不在当前clip时间范围内，无法更新属性')
       }
 
-      if (operation.kind === 'static-config-patch') {
+      if (operation.kind === 'no-animation-group-patch') {
         Object.assign(item.config, operation.patch)
       } else if (operation.kind === 'visual-config-patch') {
+        Object.assign(item.config, operation.patch)
+      } else if (operation.kind === 'audio-config-patch') {
         Object.assign(item.config, operation.patch)
       } else if (operation.kind === 'animation-keyframe-update') {
         const track = ensureTrack(item, operation.groupId)

@@ -23,8 +23,10 @@
         :precision="0"
         :first-placeholder="t('properties.transform.centerFor0')"
         :second-placeholder="t('properties.transform.centerFor0')"
-        @first-change="setTransformXDirectly"
-        @second-change="setTransformYDirectly"
+        @first-input="setTransformXDeferred"
+        @second-input="setTransformYDeferred"
+        @first-change="commitTransformXDeferredUpdate"
+        @second-change="commitTransformYDeferredUpdate"
         @previous="goToPreviousChannelKeyframe('transform.position')"
         @toggle="toggleChannelKeyframe('transform.position')"
         @next="goToNextChannelKeyframe('transform.position')"
@@ -127,8 +129,10 @@
         :second-max="sizeLimits.max"
         :step="1"
         :precision="0"
-        @first-change="setWidthDirectly"
-        @second-change="setHeightDirectly"
+        @first-input="setWidthDeferred"
+        @second-input="setHeightDeferred"
+        @first-change="commitWidthDeferredUpdate"
+        @second-change="commitHeightDeferredUpdate"
         @previous="goToPreviousChannelKeyframe('transform.size')"
         @toggle="toggleChannelKeyframe('transform.size')"
         @next="goToNextChannelKeyframe('transform.size')"
@@ -140,10 +144,10 @@
           {{ t('properties.transform.scalePresets') }}
         </label>
         <div class="scale-preset-controls">
-          <button @click="handleFitToCanvas" :disabled="!canOperateTransforms" class="preset-btn">
+          <button @click="fitToCanvas" :disabled="!canOperateTransforms" class="preset-btn">
             {{ t('properties.transform.fitToCanvas') }}
           </button>
-          <button @click="handleFillCanvas" :disabled="!canOperateTransforms" class="preset-btn">
+          <button @click="fillCanvas" :disabled="!canOperateTransforms" class="preset-btn">
             {{ t('properties.transform.fillCanvas') }}
           </button>
         </div>
@@ -198,7 +202,7 @@
         :precision="2"
         slider-class="opacity-slider"
         @slider-input="setOpacityDeferred"
-        @slider-change="commitDeferredUpdates"
+        @slider-change="commitOpacityDeferredUpdate"
         @number-change="setOpacityDirectly"
         @previous="goToPreviousChannelKeyframe('transform.opacity')"
         @toggle="toggleChannelKeyframe('transform.opacity')"
@@ -240,20 +244,27 @@ const {
   opacity,
   blendMode,
   proportionalScale,
-  elementWidth,
-  elementHeight,
   toggleProportionalScale,
   setRotationDeferred,
   setOpacityDeferred,
+  setWidthDeferred,
+  setHeightDeferred,
   commitRotationDeferredUpdate,
-  commitDeferredUpdates,
+  commitOpacityDeferredUpdate,
+  setTransformXDeferred,
+  setTransformYDeferred,
+  commitTransformXDeferredUpdate,
+  commitTransformYDeferredUpdate,
+  commitWidthDeferredUpdate,
+  commitHeightDeferredUpdate,
 
   // 直接更新方法（用于 NumberInput）
   setTransformXDirectly,
   setTransformYDirectly,
   setWidthDirectly,
   setHeightDirectly,
-  setSizeDirectly,
+  fitToCanvas,
+  fillCanvas,
   setRotationDirectly,
   setOpacityDirectly,
   setBlendModeDirectly,
@@ -302,52 +313,6 @@ const sizeLimits = computed(() => ({
   min: 1,
   max: Math.max(unifiedStore.videoResolution.width, unifiedStore.videoResolution.height) * 4,
 }))
-
-// 适应画布
-const handleFitToCanvas = async () => {
-  if (elementWidth.value <= 0 || elementHeight.value <= 0) {
-    console.warn('无法计算缩放：元素尺寸无效', { 
-      elementWidth: elementWidth.value, 
-      elementHeight: elementHeight.value 
-    })
-    return
-  }
-  
-  const canvasWidth = unifiedStore.videoResolution.width
-  const canvasHeight = unifiedStore.videoResolution.height
-  const scale = Math.min(canvasWidth / elementWidth.value, canvasHeight / elementHeight.value)
-  const targetWidth = Math.round(elementWidth.value * scale)
-  const targetHeight = Math.round(elementHeight.value * scale)
-  
-  console.log(
-    `适应画布：元素尺寸 ${elementWidth.value}x${elementHeight.value}, 画布尺寸 ${canvasWidth}x${canvasHeight}, 目标尺寸 ${targetWidth}x${targetHeight}`,
-  )
-
-  await setSizeDirectly(targetWidth, targetHeight)
-}
-
-// 填满画布
-const handleFillCanvas = async () => {
-  if (elementWidth.value <= 0 || elementHeight.value <= 0) {
-    console.warn('无法计算缩放：元素尺寸无效', { 
-      elementWidth: elementWidth.value, 
-      elementHeight: elementHeight.value 
-    })
-    return
-  }
-  
-  const canvasWidth = unifiedStore.videoResolution.width
-  const canvasHeight = unifiedStore.videoResolution.height
-  const scale = Math.max(canvasWidth / elementWidth.value, canvasHeight / elementHeight.value)
-  const targetWidth = Math.round(elementWidth.value * scale)
-  const targetHeight = Math.round(elementHeight.value * scale)
-  
-  console.log(
-    `填满画布：元素尺寸 ${elementWidth.value}x${elementHeight.value}, 画布尺寸 ${canvasWidth}x${canvasHeight}, 目标尺寸 ${targetWidth}x${targetHeight}`,
-  )
-
-  await setSizeDirectly(targetWidth, targetHeight)
-}
 
 const handleBlendModeChange = async (value: BlendMode) => {
   await setBlendModeDirectly(value)
