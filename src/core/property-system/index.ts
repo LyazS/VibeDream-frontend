@@ -13,6 +13,8 @@ export type {
   ChangePlan,
   ChangePlanPropertyId,
   ConfigPropertyId,
+  DirectPropertyBatchPlanEntry,
+  DirectPropertyBatchPlanIntent,
   DirectPropertyPlanIntent,
   NoAnimationGroupPatchOperation,
   PropertyKeyframeTogglePlanIntent,

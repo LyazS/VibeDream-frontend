@@ -4,6 +4,7 @@ import type {
   ChangeOperation,
   ChangePlan,
   ChangePlanPropertyId,
+  DirectPropertyBatchPlanEntry,
 } from '@/core/property-system/mutation'
 import type { MediaType } from '@/core/mediaitem'
 import type { UnifiedTimelineItemData } from '@/core/timelineitem'
@@ -28,6 +29,26 @@ export class PropertyMutationCommitter {
         frame: context.frame,
         value,
         item: context.item,
+      }),
+    )
+  }
+
+  async commitDirectBatch(
+    context: PropertyMutationCommitContext,
+    entries: DirectPropertyBatchPlanEntry[],
+    description?: string,
+  ): Promise<void> {
+    if (entries.length === 0) {
+      return
+    }
+
+    await context.applyChangePlan(
+      propertyPlanner.planDirectBatch({
+        timelineItemId: context.item.id,
+        frame: context.frame,
+        item: context.item,
+        entries,
+        description,
       }),
     )
   }

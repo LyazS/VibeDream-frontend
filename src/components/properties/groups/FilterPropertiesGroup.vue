@@ -45,9 +45,9 @@
           :has-previous="hasPreviousFilterKeyframe(getFilterParamChannel(schema))"
           :has-next="hasNextFilterKeyframe(getFilterParamChannel(schema))"
           :value="getFilterParamNumberValue(schema)"
-          :min="schema.min ?? 0"
-          :max="schema.max ?? 1"
-          :step="schema.step ?? 0.01"
+          :min="getRequiredNumberSchemaField(schema, 'min')"
+          :max="getRequiredNumberSchemaField(schema, 'max')"
+          :step="getRequiredNumberSchemaField(schema, 'step')"
           :precision="2"
           @slider-input="(value) => setFilterParamDeferred(getFilterParamKey(schema), value)"
           @slider-change="void commitDeferredUpdates()"
@@ -147,11 +147,18 @@ function getFilterParamNumberValue(schema: AnimatablePropertySchema): number {
   if (typeof currentValue === 'number' && Number.isFinite(currentValue)) {
     return currentValue
   }
-  const defaultValue = filterEffect.value?.packagePayload.defaultParams[parameterKey]
-  if (typeof defaultValue === 'number' && Number.isFinite(defaultValue)) {
-    return defaultValue
+  throw new Error(`滤镜参数不是有效数字: ${parameterKey}`)
+}
+
+function getRequiredNumberSchemaField(
+  schema: AnimatablePropertySchema,
+  field: 'min' | 'max' | 'step',
+): number {
+  const value = schema[field]
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
+    throw new Error(`滤镜参数 schema 缺少有效 ${field}: ${schema.propertyId}`)
   }
-  return schema.min ?? 0
+  return value
 }
 
 async function handleRemove() {

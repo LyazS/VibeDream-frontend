@@ -92,8 +92,11 @@ function getFilterParamKey(groupId: DynamicFilterParamAnimationGroupId): string 
   return groupId.slice('filter.param.'.length)
 }
 
-function normalizeDynamicFilterParamValue(value: unknown, fallback = 0): number {
-  return typeof value === 'number' && Number.isFinite(value) ? value : fallback
+function assertDynamicFilterParamNumber(value: unknown, parameterKey: string): number {
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
+    throw new Error(`滤镜参数不是有效数字: ${parameterKey}`)
+  }
+  return value
 }
 
 function createDynamicFilterParamDefinition(
@@ -109,17 +112,21 @@ function createDynamicFilterParamDefinition(
       Boolean(item.filterEffect?.packagePayload.parameterSchema[parameterKey]?.type === 'number'),
     getBaseValue: (item): DynamicFilterParamNumberValue => {
       const filterEffect = getFilterConfigRecord(item)
-      const currentValue = filterEffect?.params[parameterKey]
-      const defaultValue = filterEffect?.packagePayload.defaultParams[parameterKey]
+      if (!filterEffect) {
+        throw new Error(`滤镜效果不存在，无法读取动态参数: ${parameterKey}`)
+      }
+      const currentValue = filterEffect.params[parameterKey]
       return {
-        value: normalizeDynamicFilterParamValue(currentValue, normalizeDynamicFilterParamValue(defaultValue)),
+        value: assertDynamicFilterParamNumber(currentValue, parameterKey),
       }
     },
     applyValue: (item, value) => {
-      if (!TimelineItemQueries.supportsClipFilter(item) || !item.filterEffect) return
-      const nextValue = normalizeDynamicFilterParamValue(
+      if (!TimelineItemQueries.supportsClipFilter(item) || !item.filterEffect) {
+        throw new Error(`滤镜效果不存在，无法写入动态参数: ${parameterKey}`)
+      }
+      const nextValue = assertDynamicFilterParamNumber(
         (value as Partial<DynamicFilterParamNumberValue>).value,
-        normalizeDynamicFilterParamValue(item.filterEffect.params[parameterKey]),
+        parameterKey,
       )
       const nextFilterEffect = normalizeClipFilterConfig({
         ...item.filterEffect,
@@ -132,12 +139,11 @@ function createDynamicFilterParamDefinition(
       item.runtime.renderFilterEffect = nextFilterEffect
     },
     applyValueToConfig: (config, value) => {
-      const nextValue = normalizeDynamicFilterParamValue((value as DynamicFilterParamNumberValue).value)
-      const currentParams = (
-        typeof config.params === 'object' && config.params && !Array.isArray(config.params)
-          ? config.params
-          : {}
-      ) as Record<string, unknown>
+      const nextValue = assertDynamicFilterParamNumber((value as DynamicFilterParamNumberValue).value, parameterKey)
+      if (typeof config.params !== 'object' || !config.params || Array.isArray(config.params)) {
+        throw new Error(`滤镜参数容器非法，无法写入动态参数: ${parameterKey}`)
+      }
+      const currentParams = config.params as Record<string, unknown>
       const nextFilterEffect = normalizeClipFilterConfig({
         ...(config as Record<string, unknown>),
         params: {

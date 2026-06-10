@@ -1,5 +1,6 @@
 import { computed, onBeforeUnmount, ref, watch, type ComputedRef } from 'vue'
 import { propertyMutationCommitter } from '@/core/property-system'
+import type { DirectPropertyBatchPlanEntry } from '@/core/property-system'
 import {
   clearFilterIntensityOverlay,
   clearFilterParamOverlay,
@@ -116,13 +117,23 @@ export function useFilterDeferredInteraction(options: FilterDeferredInteractionO
     unregisterCancelCallback(timelineItemId)
     resetInteractionState()
 
+    const entries: DirectPropertyBatchPlanEntry[] = []
     if (typeof nextIntensity === 'number' && Number.isFinite(nextIntensity) && overlay) {
-      await propertyMutationCommitter.commitDirect(getCommitContext(item), 'filter.intensity', nextIntensity)
-      clearFilterIntensityOverlay(timelineItemId)
+      entries.push({
+        propertyId: 'filter.intensity',
+        value: nextIntensity,
+      })
     }
 
     for (const [parameterKey, value] of paramEntries) {
-      await propertyMutationCommitter.commitDirect(getCommitContext(item), `filter.param.${parameterKey}`, value)
+      entries.push({
+        propertyId: `filter.param.${parameterKey}`,
+        value,
+      })
+    }
+
+    if (entries.length > 0) {
+      await propertyMutationCommitter.commitDirectBatch(getCommitContext(item), entries, '修改滤镜参数')
     }
 
     clearFilterIntensityOverlay(timelineItemId)

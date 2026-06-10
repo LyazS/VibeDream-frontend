@@ -1,6 +1,8 @@
 import { normalizeAngle } from '@/core/utils/rotationTransform'
 import type {
   ChangePlan,
+  ChangeOperation,
+  DirectPropertyBatchPlanIntent,
   DirectPropertyPlanIntent,
   PropertyKeyframeTogglePlanIntent,
   PropertyPlanIntent,
@@ -35,49 +37,81 @@ export class PropertyPlanner {
     return this.planKeyframeToggle(intent, schema)
   }
 
+  planDirectBatch(intent: DirectPropertyBatchPlanIntent): ChangePlan {
+    const operations = intent.entries.flatMap((entry) => {
+      const schema = propertySchemaResolver.getSchema({
+        item: intent.item,
+        frame: intent.frame,
+      }, entry.propertyId)
+      if (!schema) {
+        throw new Error(`Unsupported property plan: ${entry.propertyId}`)
+      }
+
+      return this.createDirectOperations({
+        kind: 'direct',
+        propertyId: entry.propertyId,
+        timelineItemId: intent.timelineItemId,
+        frame: intent.frame,
+        value: entry.value,
+        item: intent.item,
+      }, schema)
+    })
+
+    return {
+      propertyId: 'filter.batch',
+      description: intent.description ?? '修改滤镜参数',
+      operations,
+    }
+  }
+
   private planDirect(intent: DirectPropertyPlanIntent, schema: AnimatablePropertySchema): ChangePlan {
+    const operations = this.createDirectOperations(intent, schema)
+    const descriptionTarget = this.getDescriptionTarget(schema)
+
+    return {
+      propertyId: schema.propertyId,
+      description: `修改${descriptionTarget}`,
+      operations,
+    }
+  }
+
+  private createDirectOperations(
+    intent: DirectPropertyPlanIntent,
+    schema: AnimatablePropertySchema,
+  ): ChangeOperation[] {
     if (!schema.supportsDirectCommit) {
       throw new Error(`Direct commit is not supported: ${intent.propertyId}`)
     }
 
     const nextStaticPatch = this.normalizeDirectPatchValue(intent, schema)
-    const descriptionTarget = this.getDescriptionTarget(schema)
     const groupId = schema.animationGroupId
 
     if (!groupId) {
-      return {
-        propertyId: schema.propertyId,
-        description: `修改${descriptionTarget}`,
-        operations: [
-          {
-            kind: 'no-animation-group-patch',
-            timelineItemId: intent.timelineItemId,
-            frame: intent.frame,
-            target: schema.target,
-            patch: nextStaticPatch,
-          },
-        ],
-      }
+      return [
+        {
+          kind: 'no-animation-group-patch',
+          timelineItemId: intent.timelineItemId,
+          frame: intent.frame,
+          target: schema.target,
+          patch: nextStaticPatch,
+        },
+      ]
     }
 
     const buttonState = getKeyframeButtonState(intent.item, intent.frame, groupId)
     const relativeFrame = getRelativeFrame(intent.item, intent.frame)
 
     if (buttonState === 'none') {
-      return {
-        propertyId: schema.propertyId,
-        description: `修改${descriptionTarget}`,
-        operations: [
-          {
-            kind: 'no-animation-group-patch',
-            timelineItemId: intent.timelineItemId,
-            frame: intent.frame,
-            groupId,
-            target: schema.target,
-            patch: nextStaticPatch,
-          },
-        ],
-      }
+      return [
+        {
+          kind: 'no-animation-group-patch',
+          timelineItemId: intent.timelineItemId,
+          frame: intent.frame,
+          groupId,
+          target: schema.target,
+          patch: nextStaticPatch,
+        },
+      ]
     }
 
     const nextKeyframePatch = this.normalizeKeyframePatchValue(intent, schema)
@@ -89,20 +123,16 @@ export class PropertyPlanner {
         ...baseValue,
         ...nextKeyframePatch,
       } as PropertyAnimationValueByGroup<typeof groupId>
-      return {
-        propertyId: schema.propertyId,
-        description: `修改${descriptionTarget}关键帧`,
-        operations: [
-          {
-            kind: 'animation-keyframe-update',
-            timelineItemId: intent.timelineItemId,
-            frame: intent.frame,
-            groupId,
-            relativeFrame,
-            value: nextValue,
-          },
-        ],
-      }
+      return [
+        {
+          kind: 'animation-keyframe-update',
+          timelineItemId: intent.timelineItemId,
+          frame: intent.frame,
+          groupId,
+          relativeFrame,
+          value: nextValue,
+        },
+      ]
     }
 
     const currentValue = getCurrentGroupValue(intent.item, intent.frame, groupId)
@@ -111,26 +141,22 @@ export class PropertyPlanner {
       ...nextKeyframePatch,
     } as PropertyAnimationValueByGroup<typeof groupId>
 
-    return {
-      propertyId: schema.propertyId,
-      description: `创建${descriptionTarget}关键帧`,
-      operations: [
-        {
-          kind: 'animation-keyframe-create',
-          timelineItemId: intent.timelineItemId,
-          frame: intent.frame,
-          groupId,
-          keyframe: {
-            position: getPosition(intent.item, relativeFrame),
-            frame: relativeFrame,
-            cachedFrame: relativeFrame,
-            value: keyframeValue,
-            properties: keyframeValue,
-            easing: { type: 'linear' },
-          },
+    return [
+      {
+        kind: 'animation-keyframe-create',
+        timelineItemId: intent.timelineItemId,
+        frame: intent.frame,
+        groupId,
+        keyframe: {
+          position: getPosition(intent.item, relativeFrame),
+          frame: relativeFrame,
+          cachedFrame: relativeFrame,
+          value: keyframeValue,
+          properties: keyframeValue,
+          easing: { type: 'linear' },
         },
-      ],
-    }
+      },
+    ]
   }
 
   private planKeyframeToggle(intent: PropertyKeyframeTogglePlanIntent, schema: AnimatablePropertySchema): ChangePlan {
@@ -190,6 +216,10 @@ export class PropertyPlanner {
     intent: DirectPropertyPlanIntent,
     schema: AnimatablePropertySchema,
   ): Record<string, unknown> {
+    if (schema.normalizeDirectValue) {
+      return schema.normalizeDirectValue(intent.value)
+    }
+
     if (schema.propertyId === 'transform.rotation') {
       if (typeof intent.value !== 'number' || !Number.isFinite(intent.value)) {
         throw new Error('transform.rotation requires a finite numeric value')
@@ -226,22 +256,6 @@ export class PropertyPlanner {
       }
     }
 
-    if (schema.propertyId.startsWith('filter.param.')) {
-      if (schema.valueKind !== 'number') {
-        throw new Error(`Unsupported filter parameter value kind: ${schema.propertyId}`)
-      }
-      if (typeof intent.value !== 'number' || !Number.isFinite(intent.value)) {
-        throw new Error(`${schema.propertyId} requires a finite numeric value`)
-      }
-
-      const parameterKey = schema.propertyId.slice('filter.param.'.length)
-      return {
-        params: {
-          [parameterKey]: this.clampNumber(intent.value, schema.min, schema.max),
-        },
-      }
-    }
-
     if (schema.propertyId === 'transform.position') {
       if (!this.isFiniteNumberRecord(intent.value, schema.valueFields)) {
         throw new Error('transform.position requires finite numeric x/y patch values')
@@ -263,13 +277,8 @@ export class PropertyPlanner {
     intent: DirectPropertyPlanIntent,
     schema: AnimatablePropertySchema,
   ): Record<string, unknown> {
-    if (schema.propertyId.startsWith('filter.param.')) {
-      if (typeof intent.value !== 'number' || !Number.isFinite(intent.value)) {
-        throw new Error(`${schema.propertyId} requires a finite numeric value`)
-      }
-      return {
-        value: this.clampNumber(intent.value, schema.min, schema.max),
-      }
+    if (schema.normalizeKeyframeValue) {
+      return schema.normalizeKeyframeValue(intent.value)
     }
 
     return this.normalizeDirectPatchValue(intent, schema)
@@ -284,17 +293,6 @@ export class PropertyPlanner {
     if (schema.propertyId.startsWith('filter.param.')) return schema.label ?? schema.propertyId
     if (schema.propertyId === 'audio.volume') return '音量'
     return schema.propertyId
-  }
-
-  private clampNumber(value: number, min?: number, max?: number): number {
-    let nextValue = value
-    if (typeof min === 'number' && Number.isFinite(min)) {
-      nextValue = Math.max(min, nextValue)
-    }
-    if (typeof max === 'number' && Number.isFinite(max)) {
-      nextValue = Math.min(max, nextValue)
-    }
-    return nextValue
   }
 
   private isFiniteNumberRecord(value: unknown, allowedFields: readonly string[]): value is Record<string, number> {

@@ -17,6 +17,8 @@ export interface AnimatablePropertySchema {
   min?: number
   max?: number
   step?: number
+  normalizeDirectValue?: (value: unknown) => Record<string, unknown>
+  normalizeKeyframeValue?: (value: unknown) => Record<string, unknown>
 }
 
 export const transformRotationSchema: AnimatablePropertySchema = {

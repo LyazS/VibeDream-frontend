@@ -1,6 +1,7 @@
 import type { MediaType } from '@/core/mediaitem'
 import type { EffectPackageParameterDefinition } from '@/core/effect-package/types'
 import type { UnifiedTimelineItemData } from '@/core/timelineitem'
+import type { DynamicFilterParamPropertyId } from '@/core/property-system/mutation'
 import { supportsClipFilter } from '@/core/timelineitem/filter'
 import {
   audioVolumeSchema,
@@ -89,9 +90,36 @@ export class DynamicFilterParameterSchemaProvider implements PropertySchemaProvi
     parameterKey: string,
     definition: EffectPackageParameterDefinition,
   ): AnimatablePropertySchema {
+    if (
+      typeof definition.default !== 'number' ||
+      !Number.isFinite(definition.default)
+    ) {
+      throw new Error(`filter number parameter 缺少有效默认值: ${parameterKey}`)
+    }
+    if (typeof definition.min !== 'number' || !Number.isFinite(definition.min)) {
+      throw new Error(`filter number parameter 缺少有效 min: ${parameterKey}`)
+    }
+    if (typeof definition.max !== 'number' || !Number.isFinite(definition.max)) {
+      throw new Error(`filter number parameter 缺少有效 max: ${parameterKey}`)
+    }
+    if (typeof definition.step !== 'number' || !Number.isFinite(definition.step)) {
+      throw new Error(`filter number parameter 缺少有效 step: ${parameterKey}`)
+    }
+
+    const propertyId = `${FILTER_PARAM_PROPERTY_PREFIX}${parameterKey}` as DynamicFilterParamPropertyId
+    const min = definition.min
+    const max = definition.max
+    const normalizeNumber = (value: unknown): number => {
+      if (typeof value !== 'number' || !Number.isFinite(value)) {
+        throw new Error(`${propertyId} requires a finite numeric value`)
+      }
+
+      return Math.min(max, Math.max(min, value))
+    }
+
     return {
-      propertyId: `${FILTER_PARAM_PROPERTY_PREFIX}${parameterKey}`,
-      animationGroupId: `${FILTER_PARAM_PROPERTY_PREFIX}${parameterKey}`,
+      propertyId,
+      animationGroupId: propertyId,
       target: 'filterEffect',
       valueFields: ['value'],
       valueKind: 'number',
@@ -102,6 +130,14 @@ export class DynamicFilterParameterSchemaProvider implements PropertySchemaProvi
       min: definition.min,
       max: definition.max,
       step: definition.step,
+      normalizeDirectValue: (value) => ({
+        params: {
+          [parameterKey]: normalizeNumber(value),
+        },
+      }),
+      normalizeKeyframeValue: (value) => ({
+        value: normalizeNumber(value),
+      }),
     }
   }
 

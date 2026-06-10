@@ -72,10 +72,28 @@ function normalizePath(path: string): string {
 
 function normalizeNumberArray(value: unknown, size: number): number[] {
   if (!Array.isArray(value) || value.length !== size) {
-    return new Array(size).fill(0)
+    throw new Error(`effect package 参数默认值必须是长度为 ${size} 的数字数组`)
   }
 
-  return value.map((item) => Number(item) || 0)
+  return value.map((item) => {
+    const numericValue = Number(item)
+    if (!Number.isFinite(numericValue)) {
+      throw new Error('effect package 参数默认值数组包含非法数字')
+    }
+    return numericValue
+  })
+}
+
+function normalizeOptionalFiniteNumber(value: unknown, fieldName: string): number | undefined {
+  if (value === undefined) {
+    return undefined
+  }
+
+  const numericValue = Number(value)
+  if (!Number.isFinite(numericValue)) {
+    throw new Error(`effect package parameter ${fieldName} 必须是有限数字`)
+  }
+  return numericValue
 }
 
 function parseHexColor(input: string): [number, number, number, number] {
@@ -198,21 +216,21 @@ export function normalizeManifest(raw: unknown): EffectPackageManifest {
     }
 
     if (typeof value !== 'object' || value === null || Array.isArray(value)) {
-      continue
+      throw new Error(`effect package parameter 定义非法: ${key}`)
     }
 
     const definition = value as Record<string, unknown>
     const type = String(definition.type ?? '').trim() as EffectPackageParameterDefinition['type']
     if (!['number', 'boolean', 'color', 'vec2'].includes(type)) {
-      continue
+      throw new Error(`effect package parameter type 非法: ${key}`)
     }
 
     parameters[key] = {
       type,
       default: definition.default,
-      min: definition.min === undefined ? undefined : Number(definition.min),
-      max: definition.max === undefined ? undefined : Number(definition.max),
-      step: definition.step === undefined ? undefined : Number(definition.step),
+      min: normalizeOptionalFiniteNumber(definition.min, `${key}.min`),
+      max: normalizeOptionalFiniteNumber(definition.max, `${key}.max`),
+      step: normalizeOptionalFiniteNumber(definition.step, `${key}.step`),
     }
   }
 
@@ -255,7 +273,10 @@ export function resolveDefaultParams(
     const value = definition.default
     switch (definition.type) {
       case 'number':
-        defaults[key] = Number(value ?? 0)
+        if (typeof value !== 'number' || !Number.isFinite(value)) {
+          throw new Error(`effect package number parameter 缺少有效默认值: ${key}`)
+        }
+        defaults[key] = value
         break
       case 'boolean':
         defaults[key] = Boolean(value)

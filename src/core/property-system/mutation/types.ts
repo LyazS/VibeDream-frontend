@@ -27,7 +27,7 @@ export type ConfigPropertyId =
   | 'transform.proportionalScale'
   | 'audio.isMuted'
 
-export type ChangePlanPropertyId = AnimatablePropertyId | ConfigPropertyId
+export type ChangePlanPropertyId = AnimatablePropertyId | ConfigPropertyId | 'filter.batch'
 
 export interface DirectPropertyPlanIntent<TValue = unknown> {
   kind: 'direct'
@@ -36,6 +36,19 @@ export interface DirectPropertyPlanIntent<TValue = unknown> {
   frame: number
   value: TValue
   item: UnifiedTimelineItemData<MediaType>
+}
+
+export interface DirectPropertyBatchPlanEntry<TValue = unknown> {
+  propertyId: AnimatablePropertyId
+  value: TValue
+}
+
+export interface DirectPropertyBatchPlanIntent {
+  timelineItemId: string
+  frame: number
+  item: UnifiedTimelineItemData<MediaType>
+  entries: DirectPropertyBatchPlanEntry[]
+  description?: string
 }
 
 export interface PropertyKeyframeTogglePlanIntent {
