@@ -204,6 +204,14 @@ export function useFilterDeferredInteraction(options: FilterDeferredInteractionO
     await propertyMutationCommitter.commitDirect(getCommitContext(item), `filter.param.${parameterKey}`, value)
   }
 
+  async function setFilterParamBooleanDirect(parameterKey: string, value: boolean) {
+    const item = selectedTimelineItem.value
+    if (!item || !item.filterEffect || !canOperateFilterNumbers.value) return
+
+    await cancelDeferredUpdates()
+    await propertyMutationCommitter.commitDirect(getCommitContext(item), `filter.param.${parameterKey}`, value)
+  }
+
   watch(
     () => selectedTimelineItem.value?.id ?? null,
     (nextItemId, previousItemId) => {
@@ -226,6 +234,7 @@ export function useFilterDeferredInteraction(options: FilterDeferredInteractionO
     setFilterParamDirect,
     setFilterParamVec2Deferred,
     setFilterParamVec2Direct,
+    setFilterParamBooleanDirect,
     commitDeferredUpdates,
     cancelDeferredUpdates,
   }

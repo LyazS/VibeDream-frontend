@@ -54,7 +54,7 @@ export class DynamicFilterParameterSchemaProvider implements PropertySchemaProvi
 
     const parameterKey = propertyId.slice(FILTER_PARAM_PROPERTY_PREFIX.length)
     const definition = this.getParameterDefinition(context, parameterKey)
-    if (!definition || (definition.type !== 'number' && definition.type !== 'vec2')) {
+    if (!definition || (definition.type !== 'number' && definition.type !== 'vec2' && definition.type !== 'boolean')) {
       return null
     }
 
@@ -69,7 +69,7 @@ export class DynamicFilterParameterSchemaProvider implements PropertySchemaProvi
     return Object.entries(context.item.filterEffect.packagePayload.parameterSchema)
       .filter(([key, definition]) =>
         this.isValidParameterKey(key) &&
-        (definition.type === 'number' || definition.type === 'vec2'),
+        (definition.type === 'number' || definition.type === 'vec2' || definition.type === 'boolean'),
       )
       .map(([key, definition]) => this.createParamSchema(key, definition))
   }
@@ -96,8 +96,31 @@ export class DynamicFilterParameterSchemaProvider implements PropertySchemaProvi
     if (definition.type === 'number') {
       return this.createNumberParamSchema(parameterKey, definition)
     }
+    if (definition.type === 'boolean') {
+      return this.createBooleanParamSchema(parameterKey)
+    }
 
     return this.createVec2ParamSchema(parameterKey, definition)
+  }
+
+  private createBooleanParamSchema(parameterKey: string): AnimatablePropertySchema {
+    const propertyId = `${FILTER_PARAM_PROPERTY_PREFIX}${parameterKey}` as DynamicFilterParamPropertyId
+
+    return {
+      propertyId,
+      target: 'filterEffect',
+      valueFields: ['value'],
+      valueKind: 'boolean',
+      supportsDirectCommit: true,
+      supportsKeyframeToggle: false,
+      supportsTransientOverlay: false,
+      label: parameterKey,
+      normalizeDirectValue: (value) => ({
+        params: {
+          [parameterKey]: Boolean(value),
+        },
+      }),
+    }
   }
 
   private createNumberParamSchema(

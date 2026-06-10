@@ -85,6 +85,25 @@
             @toggle="void toggleFilterKeyframe(getFilterParamChannel(schema))"
             @next="goToNextFilterKeyframe(getFilterParamChannel(schema))"
           />
+          <div
+            v-else-if="schema.valueKind === 'boolean'"
+            class="filter-properties-group__boolean-row"
+          >
+            <label
+              :for="`filter-param-${getFilterParamKey(schema)}`"
+              class="filter-properties-group__boolean-label"
+            >
+              {{ schema.label ?? schema.propertyId }}
+            </label>
+            <input
+              :id="`filter-param-${getFilterParamKey(schema)}`"
+              type="checkbox"
+              :checked="getFilterParamBooleanValue(schema)"
+              :disabled="!canOperateFilterNumbers || !isFilterReady"
+              class="filter-properties-group__boolean-input"
+              @change="handleFilterParamBooleanChange(schema, $event)"
+            />
+          </div>
         </template>
       </div>
     </div>
@@ -135,6 +154,7 @@ const {
   setFilterParamDirect,
   setFilterParamVec2Deferred,
   setFilterParamVec2Direct,
+  setFilterParamBooleanDirect,
   commitDeferredUpdates,
   cancelDeferredUpdates,
 } = useUnifiedFilterControls({
@@ -156,7 +176,7 @@ const dynamicFilterParamSchemas = computed(() => {
     })
     .filter((schema) =>
       schema.propertyId.startsWith('filter.param.') &&
-      (schema.valueKind === 'number' || schema.valueKind === 'vec2'),
+      (schema.valueKind === 'number' || schema.valueKind === 'vec2' || schema.valueKind === 'boolean'),
     )
 })
 const isFilterReady = computed(() => {
@@ -203,6 +223,11 @@ function getFilterParamVec2Value(schema: AnimatablePropertySchema): { x: number;
   throw new Error(`滤镜参数不是有效二维向量: ${parameterKey}`)
 }
 
+function getFilterParamBooleanValue(schema: AnimatablePropertySchema): boolean {
+  const parameterKey = getFilterParamKey(schema)
+  return Boolean(filterConfig.value.params[parameterKey])
+}
+
 function getNextFilterParamVec2Value(
   schema: AnimatablePropertySchema,
   axis: 'x' | 'y',
@@ -224,6 +249,15 @@ function getRequiredNumberSchemaField(
     throw new Error(`滤镜参数 schema 缺少有效 ${field}: ${schema.propertyId}`)
   }
   return value
+}
+
+function handleFilterParamBooleanChange(schema: AnimatablePropertySchema, event: Event) {
+  const target = event.target
+  if (!(target instanceof HTMLInputElement)) {
+    return
+  }
+
+  void setFilterParamBooleanDirect(getFilterParamKey(schema), target.checked)
 }
 
 async function handleRemove() {
@@ -253,6 +287,23 @@ async function handleRemove() {
   flex-direction: column;
   gap: var(--spacing-md);
   margin-top: var(--spacing-md);
+}
+
+.filter-properties-group__boolean-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--spacing-md);
+}
+
+.filter-properties-group__boolean-label {
+  font-size: 14px;
+  color: var(--lc-text-primary, #e5e7eb);
+}
+
+.filter-properties-group__boolean-input {
+  width: 16px;
+  height: 16px;
 }
 
 .filter-properties-group__slider-value {
