@@ -2,7 +2,7 @@ import type { PropertyAnimationGroupId } from '@/core/timelineitem/bunnytype'
 import type { AnimatablePropertyId } from '@/core/property-system/mutation/types'
 import { normalizeAngle } from '@/core/utils/rotationTransform'
 
-export type AnimatablePropertyTarget = 'config' | 'filterEffect'
+export type AnimatablePropertyTarget = 'config' | 'filterEffect' | 'maskConfig'
 export type PropertyValueKind = 'number' | 'boolean' | 'color' | 'vec2'
 
 export interface AnimatablePropertySchema {
@@ -132,5 +132,114 @@ export const audioVolumeSchema: AnimatablePropertySchema = {
   supportsTransientOverlay: true,
   normalizeDirectValue: (value) => ({
     volume: clamp(assertFiniteNumber(value, 'audio.volume'), 0, 1),
+  }),
+}
+
+export const maskCenterSchema: AnimatablePropertySchema = {
+  propertyId: 'mask.center',
+  animationGroupId: 'mask.center',
+  target: 'maskConfig',
+  valueFields: ['centerX', 'centerY'],
+  valueKind: 'vec2',
+  supportsDirectCommit: true,
+  supportsKeyframeToggle: true,
+  supportsTransientOverlay: true,
+  normalizeDirectValue: (value) =>
+    assertFiniteNumberRecord(value, ['centerX', 'centerY'], 'mask.center'),
+}
+
+export const maskRectangleSizeSchema: AnimatablePropertySchema = {
+  propertyId: 'mask.rectangle.size',
+  animationGroupId: 'mask.rectangle.size',
+  target: 'maskConfig',
+  valueFields: ['width', 'height'],
+  valueKind: 'vec2',
+  supportsDirectCommit: true,
+  supportsKeyframeToggle: true,
+  supportsTransientOverlay: true,
+  normalizeDirectValue: (value) =>
+    assertFiniteNumberRecord(value, ['width', 'height'], 'mask.rectangle.size'),
+}
+
+export const maskEllipseSizeSchema: AnimatablePropertySchema = {
+  propertyId: 'mask.ellipse.size',
+  animationGroupId: 'mask.ellipse.size',
+  target: 'maskConfig',
+  valueFields: ['ellipseWidth', 'ellipseHeight'],
+  valueKind: 'vec2',
+  supportsDirectCommit: true,
+  supportsKeyframeToggle: true,
+  supportsTransientOverlay: true,
+  normalizeDirectValue: (value) =>
+    assertFiniteNumberRecord(value, ['ellipseWidth', 'ellipseHeight'], 'mask.ellipse.size'),
+}
+
+export const maskRectangleCornerRadiusSchema: AnimatablePropertySchema = {
+  propertyId: 'mask.rectangle.cornerRadius',
+  animationGroupId: 'mask.rectangle.cornerRadius',
+  target: 'maskConfig',
+  valueFields: ['cornerRadius'],
+  valueKind: 'number',
+  supportsDirectCommit: true,
+  supportsKeyframeToggle: true,
+  supportsTransientOverlay: true,
+  normalizeDirectValue: (value) => ({
+    cornerRadius: clamp(assertFiniteNumber(value, 'mask.rectangle.cornerRadius'), 0, 1),
+  }),
+}
+
+export const maskFeatherSchema: AnimatablePropertySchema = {
+  propertyId: 'mask.feather',
+  animationGroupId: 'mask.feather',
+  target: 'maskConfig',
+  valueFields: ['outerRange'],
+  valueKind: 'number',
+  supportsDirectCommit: true,
+  supportsKeyframeToggle: true,
+  supportsTransientOverlay: true,
+  normalizeDirectValue: (value) => ({
+    outerRange: assertFiniteNumber(value, 'mask.feather'),
+  }),
+}
+
+export const maskIntensitySchema: AnimatablePropertySchema = {
+  propertyId: 'mask.intensity',
+  animationGroupId: 'mask.intensity',
+  target: 'maskConfig',
+  valueFields: ['decayRate'],
+  valueKind: 'number',
+  supportsDirectCommit: true,
+  supportsKeyframeToggle: true,
+  supportsTransientOverlay: true,
+  normalizeDirectValue: (value) => ({
+    decayRate: clamp(assertFiniteNumber(value, 'mask.intensity'), 0, 1),
+  }),
+}
+
+export const maskRotationSchema: AnimatablePropertySchema = {
+  propertyId: 'mask.rotation',
+  animationGroupId: 'mask.rotation',
+  target: 'maskConfig',
+  valueFields: ['rotation'],
+  valueKind: 'number',
+  supportsDirectCommit: true,
+  supportsKeyframeToggle: true,
+  supportsTransientOverlay: true,
+  normalizeDirectValue: (value) => ({
+    rotation: assertFiniteNumber(value, 'mask.rotation'),
+  }),
+}
+
+export const maskMirrorLengthSchema: AnimatablePropertySchema = {
+  propertyId: 'mask.mirror.length',
+  animationGroupId: 'mask.mirror.length',
+  target: 'maskConfig',
+  valueFields: ['length'],
+  valueKind: 'number',
+  supportsDirectCommit: true,
+  supportsKeyframeToggle: true,
+  supportsTransientOverlay: true,
+  normalizeDirectValue: (value) => ({
+    length: Math.max(0, assertFiniteNumber(value, 'mask.mirror.length')),
   }),
 }

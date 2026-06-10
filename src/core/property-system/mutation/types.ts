@@ -20,11 +20,22 @@ export type AnimatablePropertyId =
   | 'filter.intensity'
   | DynamicFilterParamPropertyId
   | 'audio.volume'
+  | 'mask.rotation'
+  | 'mask.center'
+  | 'mask.rectangle.size'
+  | 'mask.rectangle.cornerRadius'
+  | 'mask.ellipse.size'
+  | 'mask.mirror.length'
+  | 'mask.feather'
+  | 'mask.intensity'
 
 export type ConfigPropertyId =
   | 'transform.blendMode'
   | 'transform.proportionalScale'
   | 'audio.isMuted'
+  | 'mask.enabled'
+  | 'mask.type'
+  | 'mask.inverted'
 
 export type ChangePlanPropertyId = AnimatablePropertyId | ConfigPropertyId | 'filter.batch'
 

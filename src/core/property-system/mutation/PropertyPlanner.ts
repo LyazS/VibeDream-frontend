@@ -242,6 +242,14 @@ export class PropertyPlanner {
     if (schema.propertyId === 'filter.intensity') return '滤镜强度'
     if (isFilterParamPropertyId(schema.propertyId)) return schema.label ?? schema.propertyId
     if (schema.propertyId === 'audio.volume') return '音量'
+    if (schema.propertyId === 'mask.center') return '蒙版中心'
+    if (schema.propertyId === 'mask.rectangle.size') return '矩形蒙版尺寸'
+    if (schema.propertyId === 'mask.rectangle.cornerRadius') return '矩形蒙版圆角'
+    if (schema.propertyId === 'mask.ellipse.size') return '椭圆蒙版尺寸'
+    if (schema.propertyId === 'mask.mirror.length') return '镜像蒙版长度'
+    if (schema.propertyId === 'mask.feather') return '蒙版羽化'
+    if (schema.propertyId === 'mask.intensity') return '蒙版强度'
+    if (schema.propertyId === 'mask.rotation') return '蒙版旋转'
     return schema.propertyId
   }
 }

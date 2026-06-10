@@ -29,7 +29,7 @@ export function useUnifiedMaskKeyframeControls(
 
   return {
     ...maskState,
-    ...maskKeyframeActions,
     ...deferredInteraction,
+    ...maskKeyframeActions,
   }
 }

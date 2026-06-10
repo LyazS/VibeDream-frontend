@@ -22,16 +22,37 @@ import {
   getTransformPositionOverlay,
   getTransformRotationOverlay,
   getTransformSizeOverlay,
+  getMaskCenterOverlay,
+  getMaskFeatherOverlay,
+  getMaskIntensityOverlay,
+  getMaskEllipseSizeOverlay,
+  getMaskRectangleSizeOverlay,
+  getMaskRectangleCornerRadiusOverlay,
+  getMaskMirrorLengthOverlay,
+  getMaskRotationOverlay,
 } from '@/core/property-system/render-state'
 import {
   audioVolumeSchema,
   filterIntensitySchema,
+  maskCenterSchema,
+  maskFeatherSchema,
+  maskIntensitySchema,
+  maskEllipseSizeSchema,
+  maskMirrorLengthSchema,
+  maskRectangleCornerRadiusSchema,
+  maskRectangleSizeSchema,
   transformOpacitySchema,
   transformPositionSchema,
   transformRotationSchema,
   transformSizeSchema,
 } from '@/core/property-system/schema'
 import { normalizeClipFilterConfig } from '@/core/timelineitem/filter'
+import {
+  isEllipseMaskConfig,
+  isMirrorMaskConfig,
+  isRectangleMaskConfig,
+  normalizeMaskConfig,
+} from '@/core/timelineitem/mask'
 
 // ==================== 类型守卫函数 ====================
 
@@ -204,12 +225,28 @@ export function getRenderConfig<T extends MediaType>(
   const rotationOverlay = getTransformRotationOverlay(item.id)
   const opacityOverlay = getTransformOpacityOverlay(item.id)
   const volumeOverlay = getAudioVolumeOverlay(item.id)
+  const maskCenterOverlay = getMaskCenterOverlay(item.id)
+  const maskFeatherOverlay = getMaskFeatherOverlay(item.id)
+  const maskIntensityOverlay = getMaskIntensityOverlay(item.id)
+  const maskRectangleSizeOverlay = getMaskRectangleSizeOverlay(item.id)
+  const maskRectangleCornerRadiusOverlay = getMaskRectangleCornerRadiusOverlay(item.id)
+  const maskMirrorLengthOverlay = getMaskMirrorLengthOverlay(item.id)
+  const maskEllipseSizeOverlay = getMaskEllipseSizeOverlay(item.id)
+  const maskRotationOverlay = getMaskRotationOverlay(item.id)
   if (
     !positionOverlay &&
     !sizeOverlay &&
     !rotationOverlay &&
     !opacityOverlay &&
-    !volumeOverlay
+    !volumeOverlay &&
+    !maskCenterOverlay &&
+    !maskFeatherOverlay &&
+    !maskIntensityOverlay &&
+    !maskRectangleSizeOverlay &&
+    !maskRectangleCornerRadiusOverlay &&
+    !maskMirrorLengthOverlay &&
+    !maskEllipseSizeOverlay &&
+    !maskRotationOverlay
   ) {
     return renderConfig
   }
@@ -224,6 +261,13 @@ export function getRenderConfig<T extends MediaType>(
         opacity: number
       })
     : null
+  const normalizedMask =
+    visualRenderConfig
+      ? normalizeMaskConfig(
+          'mask' in renderConfig ? renderConfig.mask : undefined,
+          { width: visualRenderConfig.width, height: visualRenderConfig.height },
+        )
+      : null
 
   return {
     ...renderConfig,
@@ -252,6 +296,101 @@ export function getRenderConfig<T extends MediaType>(
     ...(volumeOverlay && hasAudioProperties(item)
       ? {
           [audioVolumeSchema.valueFields[0]]: volumeOverlay.volume,
+        }
+      : {}),
+    ...((maskCenterOverlay ||
+      maskRotationOverlay ||
+      maskFeatherOverlay ||
+      maskIntensityOverlay ||
+      maskRectangleSizeOverlay ||
+      maskRectangleCornerRadiusOverlay ||
+      maskMirrorLengthOverlay ||
+      maskEllipseSizeOverlay) && visualRenderConfig
+      ? {
+          mask: {
+            ...normalizedMask,
+            ...(maskCenterOverlay
+              ? {
+                  [maskCenterSchema.valueFields[0]]:
+                    maskCenterOverlay.centerX ?? normalizedMask?.centerX,
+                  [maskCenterSchema.valueFields[1]]:
+                    maskCenterOverlay.centerY ?? normalizedMask?.centerY,
+                }
+              : {}),
+            ...(maskRotationOverlay
+              ? {
+                  rotation: maskRotationOverlay.rotation,
+                }
+              : {}),
+            ...(maskFeatherOverlay
+              ? {
+                  [maskFeatherSchema.valueFields[0]]:
+                    maskFeatherOverlay.outerRange ?? normalizedMask?.falloff.outerRange,
+                  falloff: {
+                    ...normalizedMask?.falloff,
+                    [maskFeatherSchema.valueFields[0]]:
+                      maskFeatherOverlay.outerRange ?? normalizedMask?.falloff.outerRange,
+                  },
+                }
+              : {}),
+            ...(maskIntensityOverlay
+              ? {
+                  [maskIntensitySchema.valueFields[0]]:
+                    maskIntensityOverlay.decayRate ?? normalizedMask?.falloff.decayRate,
+                  falloff: {
+                    ...normalizedMask?.falloff,
+                    [maskIntensitySchema.valueFields[0]]:
+                      maskIntensityOverlay.decayRate ?? normalizedMask?.falloff.decayRate,
+                  },
+                }
+              : {}),
+            ...(maskRectangleSizeOverlay
+              ? {
+                  [maskRectangleSizeSchema.valueFields[0]]:
+                    maskRectangleSizeOverlay.width ??
+                    (normalizedMask && isRectangleMaskConfig(normalizedMask)
+                      ? normalizedMask.width
+                      : undefined),
+                  [maskRectangleSizeSchema.valueFields[1]]:
+                    maskRectangleSizeOverlay.height ??
+                    (normalizedMask && isRectangleMaskConfig(normalizedMask)
+                      ? normalizedMask.height
+                      : undefined),
+                }
+              : {}),
+            ...(maskRectangleCornerRadiusOverlay
+              ? {
+                  [maskRectangleCornerRadiusSchema.valueFields[0]]:
+                    maskRectangleCornerRadiusOverlay.cornerRadius ??
+                    (normalizedMask && isRectangleMaskConfig(normalizedMask)
+                      ? normalizedMask.cornerRadius
+                      : undefined),
+                }
+              : {}),
+            ...(maskMirrorLengthOverlay
+              ? {
+                  [maskMirrorLengthSchema.valueFields[0]]:
+                    maskMirrorLengthOverlay.length ??
+                    (normalizedMask && isMirrorMaskConfig(normalizedMask)
+                      ? normalizedMask.length
+                      : undefined),
+                }
+              : {}),
+            ...(maskEllipseSizeOverlay
+              ? {
+                  [maskEllipseSizeSchema.valueFields[0]]:
+                    maskEllipseSizeOverlay.ellipseWidth ??
+                    (normalizedMask && isEllipseMaskConfig(normalizedMask)
+                      ? normalizedMask.ellipseWidth
+                      : undefined),
+                  [maskEllipseSizeSchema.valueFields[1]]:
+                    maskEllipseSizeOverlay.ellipseHeight ??
+                    (normalizedMask && isEllipseMaskConfig(normalizedMask)
+                      ? normalizedMask.ellipseHeight
+                      : undefined),
+                }
+              : {}),
+          },
         }
       : {}),
   } as GetConfigs<T>

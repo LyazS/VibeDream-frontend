@@ -57,8 +57,10 @@
         :second-max="itemLocalSize.height / 2"
         :step="1"
         :precision="0"
-        @first-change="(value) => setMaskProperty('mask.centerX', value)"
-        @second-change="(value) => setMaskProperty('mask.centerY', value)"
+        @first-input="(value) => previewMaskCenterChange('centerX', value)"
+        @second-input="(value) => previewMaskCenterChange('centerY', value)"
+        @first-change="(value) => commitMaskCenterChange('centerX', value)"
+        @second-change="(value) => commitMaskCenterChange('centerY', value)"
         @previous="goToPreviousMaskKeyframe('mask.center')"
         @toggle="toggleMaskKeyframe('mask.center')"
         @next="goToNextMaskKeyframe('mask.center')"
@@ -77,7 +79,7 @@
         :step="1"
         :precision="0"
         @slider-input="setMaskRotationDeferred"
-        @slider-change="commitDeferredUpdates"
+        @slider-change="commitMaskRotationDeferredUpdate"
         @number-change="(value) => setMaskProperty('mask.rotation', value)"
         @previous="goToPreviousMaskKeyframe('mask.rotation')"
         @toggle="toggleMaskKeyframe('mask.rotation')"
@@ -97,7 +99,7 @@
         :step="1"
         :precision="0"
         @slider-input="setMaskOuterRangeDeferred"
-        @slider-change="commitDeferredUpdates"
+        @slider-change="commitMaskFeatherDeferredUpdate"
         @number-change="(value) => setMaskProperty('mask.outerRange', value)"
         @previous="goToPreviousMaskKeyframe('mask.feather')"
         @toggle="toggleMaskKeyframe('mask.feather')"
@@ -117,7 +119,7 @@
         :step="0.01"
         :precision="2"
         @slider-input="setMaskDecayRateDeferred"
-        @slider-change="commitDeferredUpdates"
+        @slider-change="commitMaskIntensityDeferredUpdate"
         @number-change="(value) => setMaskProperty('mask.decayRate', value)"
         @previous="goToPreviousMaskKeyframe('mask.intensity')"
         @toggle="toggleMaskKeyframe('mask.intensity')"
@@ -145,8 +147,10 @@
         :second-max="itemLocalSize.height"
         :step="1"
         :precision="0"
-        @first-change="(value) => setMaskProperty('mask.width', value)"
-        @second-change="(value) => setMaskProperty('mask.height', value)"
+        @first-input="(value) => previewRectangleMaskSizeChange('width', value)"
+        @second-input="(value) => previewRectangleMaskSizeChange('height', value)"
+        @first-change="(value) => commitRectangleMaskSizeChange('width', value)"
+        @second-change="(value) => commitRectangleMaskSizeChange('height', value)"
         @previous="goToPreviousMaskKeyframe('mask.rectangle.size')"
         @toggle="toggleMaskKeyframe('mask.rectangle.size')"
         @next="goToNextMaskKeyframe('mask.rectangle.size')"
@@ -164,8 +168,8 @@
         :max="1"
         :step="0.01"
         :precision="2"
-        @slider-input="setMaskCornerRadiusDeferred"
-        @slider-change="commitDeferredUpdates"
+        @slider-input="setMaskRectangleCornerRadiusDeferred"
+        @slider-change="commitMaskRectangleCornerRadiusDeferredUpdate"
         @number-change="(value) => setMaskProperty('mask.cornerRadius', value)"
         @previous="goToPreviousMaskKeyframe('mask.rectangle.cornerRadius')"
         @toggle="toggleMaskKeyframe('mask.rectangle.cornerRadius')"
@@ -193,8 +197,10 @@
         :second-max="itemLocalSize.height"
         :step="1"
         :precision="0"
-        @first-change="(value) => setMaskProperty('mask.ellipseWidth', value)"
-        @second-change="(value) => setMaskProperty('mask.ellipseHeight', value)"
+        @first-input="(value) => previewEllipseMaskSizeChange('ellipseWidth', value)"
+        @second-input="(value) => previewEllipseMaskSizeChange('ellipseHeight', value)"
+        @first-change="(value) => commitEllipseMaskSizeChange('ellipseWidth', value)"
+        @second-change="(value) => commitEllipseMaskSizeChange('ellipseHeight', value)"
         @previous="goToPreviousMaskKeyframe('mask.ellipse.size')"
         @toggle="toggleMaskKeyframe('mask.ellipse.size')"
         @next="goToNextMaskKeyframe('mask.ellipse.size')"
@@ -216,8 +222,8 @@
         :max="itemLocalSize.width"
         :step="1"
         :precision="0"
-        @slider-input="setMaskLengthDeferred"
-        @slider-change="commitDeferredUpdates"
+        @slider-input="setMaskMirrorLengthDeferred"
+        @slider-change="commitMaskMirrorLengthDeferredUpdate"
         @number-change="(value) => setMaskProperty('mask.length', value)"
         @previous="goToPreviousMaskKeyframe('mask.mirror.length')"
         @toggle="toggleMaskKeyframe('mask.mirror.length')"
@@ -265,19 +271,65 @@ const {
   setEnabled,
   setType,
   setInverted,
+  setMaskOuterRangeDeferred,
+  commitMaskFeatherDeferredUpdate,
+  setMaskDecayRateDeferred,
+  commitMaskIntensityDeferredUpdate,
+  setMaskCenterDeferred,
+  commitMaskCenterDeferredUpdate,
+  setMaskRectangleSizeDeferred,
+  commitMaskRectangleSizeDeferredUpdate,
+  setMaskEllipseSizeDeferred,
+  commitMaskEllipseSizeDeferredUpdate,
   toggleMaskKeyframe,
   setMaskRotationDeferred,
-  setMaskOuterRangeDeferred,
-  setMaskDecayRateDeferred,
-  setMaskCornerRadiusDeferred,
-  setMaskLengthDeferred,
-  commitDeferredUpdates,
+  commitMaskRotationDeferredUpdate,
+  setMaskRectangleCornerRadiusDeferred,
+  commitMaskRectangleCornerRadiusDeferredUpdate,
+  setMaskMirrorLengthDeferred,
+  commitMaskMirrorLengthDeferredUpdate,
   goToPreviousMaskKeyframe,
   goToNextMaskKeyframe,
 } = useUnifiedMaskKeyframeControls({
   selectedTimelineItem: computed(() => props.selectedTimelineItem),
   currentFrame: computed(() => props.currentFrame),
 })
+
+function previewMaskCenterChange(axis: 'centerX' | 'centerY', value: number) {
+  setMaskCenterDeferred(
+    axis === 'centerX' ? value : maskConfig.value.centerX,
+    axis === 'centerY' ? value : maskConfig.value.centerY,
+  )
+}
+
+async function commitMaskCenterChange(axis: 'centerX' | 'centerY', value: number) {
+  previewMaskCenterChange(axis, value)
+  await commitMaskCenterDeferredUpdate()
+}
+
+function previewRectangleMaskSizeChange(axis: 'width' | 'height', value: number) {
+  setMaskRectangleSizeDeferred(
+    axis === 'width' ? value : rectangleMaskConfig.value?.width ?? 0,
+    axis === 'height' ? value : rectangleMaskConfig.value?.height ?? 0,
+  )
+}
+
+async function commitRectangleMaskSizeChange(axis: 'width' | 'height', value: number) {
+  previewRectangleMaskSizeChange(axis, value)
+  await commitMaskRectangleSizeDeferredUpdate()
+}
+
+function previewEllipseMaskSizeChange(axis: 'ellipseWidth' | 'ellipseHeight', value: number) {
+  setMaskEllipseSizeDeferred(
+    axis === 'ellipseWidth' ? value : ellipseMaskConfig.value?.ellipseWidth ?? 0,
+    axis === 'ellipseHeight' ? value : ellipseMaskConfig.value?.ellipseHeight ?? 0,
+  )
+}
+
+async function commitEllipseMaskSizeChange(axis: 'ellipseWidth' | 'ellipseHeight', value: number) {
+  previewEllipseMaskSizeChange(axis, value)
+  await commitMaskEllipseSizeDeferredUpdate()
+}
 
 </script>
 

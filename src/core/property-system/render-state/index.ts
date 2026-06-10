@@ -32,3 +32,33 @@ export {
   getTransformSizeOverlay,
   setTransformSizeOverlay,
 } from './sizeOverlay'
+export {
+  clearMaskCenterOverlay,
+  getMaskCenterOverlay,
+  setMaskCenterOverlay,
+} from './maskCenterOverlay'
+export {
+  clearMaskRectangleSizeOverlay,
+  getMaskRectangleSizeOverlay,
+  setMaskRectangleSizeOverlay,
+  clearMaskEllipseSizeOverlay,
+  getMaskEllipseSizeOverlay,
+  setMaskEllipseSizeOverlay,
+} from './maskSizeOverlay'
+export {
+  clearMaskFeatherOverlay,
+  getMaskFeatherOverlay,
+  clearMaskIntensityOverlay,
+  getMaskIntensityOverlay,
+  clearMaskRectangleCornerRadiusOverlay,
+  getMaskRectangleCornerRadiusOverlay,
+  clearMaskMirrorLengthOverlay,
+  getMaskMirrorLengthOverlay,
+  setMaskFeatherOverlay,
+  setMaskIntensityOverlay,
+  setMaskMirrorLengthOverlay,
+  setMaskRectangleCornerRadiusOverlay,
+  clearMaskRotationOverlay,
+  getMaskRotationOverlay,
+  setMaskRotationOverlay,
+} from './maskOverlay'

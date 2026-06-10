@@ -1,8 +1,25 @@
-import type { ComputedRef } from 'vue'
+import { onBeforeUnmount, ref, watch, type ComputedRef } from 'vue'
 import type { useUnifiedStore } from '@/core/unifiedStore'
-import type { UnifiedTimelineItemData } from '@/core/timelineitem/type'
-import type { AnimationGroupId } from '@/core/timelineitem/bunnytype'
-import { AnimationSession } from '@/core/animation/session'
+import { propertyMutationCommitter } from '@/core/property-system'
+import type { DirectPropertyBatchPlanEntry } from '@/core/property-system'
+import {
+  clearMaskCenterOverlay,
+  clearMaskEllipseSizeOverlay,
+  clearMaskFeatherOverlay,
+  clearMaskIntensityOverlay,
+  clearMaskMirrorLengthOverlay,
+  clearMaskRectangleCornerRadiusOverlay,
+  clearMaskRectangleSizeOverlay,
+  clearMaskRotationOverlay,
+  setMaskCenterOverlay,
+  setMaskEllipseSizeOverlay,
+  setMaskFeatherOverlay,
+  setMaskIntensityOverlay,
+  setMaskMirrorLengthOverlay,
+  setMaskRectangleCornerRadiusOverlay,
+  setMaskRectangleSizeOverlay,
+  setMaskRotationOverlay,
+} from '@/core/property-system/render-state'
 import type {
   MaskDeferredPatch,
   UnifiedMaskKeyframeControlsOptions,
@@ -15,127 +32,226 @@ interface MaskDeferredInteractionOptions extends UnifiedMaskKeyframeControlsOpti
   canOperateMaskNumbers: ComputedRef<boolean>
 }
 
-function throwClipPropertyPhase0Todo(action: string): never {
-  throw new Error(
-    `[ClipProperty Phase 0 TODO] 属性区入口 "${action}" 仍在 deferred 交互层内部实现属性提交分流，` +
-      '需先收敛到统一的属性提交入口后再恢复。',
-  )
-}
-
-function getGroupPatchFromMaskPath(path: keyof MaskDeferredPatch, value: number) {
-  switch (path) {
-    case 'mask.centerX':
-      return { groupId: 'mask.center' as AnimationGroupId, patch: { centerX: value } }
-    case 'mask.centerY':
-      return { groupId: 'mask.center' as AnimationGroupId, patch: { centerY: value } }
-    case 'mask.rotation':
-      return { groupId: 'mask.rotation' as AnimationGroupId, patch: { rotation: value } }
-    case 'mask.outerRange':
-      return { groupId: 'mask.feather' as AnimationGroupId, patch: { outerRange: value } }
-    case 'mask.decayRate':
-      return { groupId: 'mask.intensity' as AnimationGroupId, patch: { decayRate: value } }
-    case 'mask.width':
-      return { groupId: 'mask.rectangle.size' as AnimationGroupId, patch: { width: value } }
-    case 'mask.height':
-      return { groupId: 'mask.rectangle.size' as AnimationGroupId, patch: { height: value } }
-    case 'mask.cornerRadius':
-      return { groupId: 'mask.rectangle.cornerRadius' as AnimationGroupId, patch: { cornerRadius: value } }
-    case 'mask.ellipseWidth':
-      return { groupId: 'mask.ellipse.size' as AnimationGroupId, patch: { ellipseWidth: value } }
-    case 'mask.ellipseHeight':
-      return { groupId: 'mask.ellipse.size' as AnimationGroupId, patch: { ellipseHeight: value } }
-    case 'mask.length':
-      return { groupId: 'mask.mirror.length' as AnimationGroupId, patch: { length: value } }
-  }
-}
-
 export function useMaskDeferredInteraction(options: MaskDeferredInteractionOptions) {
   const { selectedTimelineItem, currentFrame, unifiedStore, canOperateMaskNumbers } = options
-  const session = new AnimationSession()
+  const activeTimelineItemId = ref<string | null>(null)
+  const pendingPatch = ref<MaskDeferredPatch>({})
+
+  function getCommitContext(item: NonNullable<typeof selectedTimelineItem.value>) {
+    return {
+      item,
+      frame: currentFrame.value,
+      applyChangePlan: unifiedStore.applyChangePlanWithHistory,
+    }
+  }
+
+  function getActiveItem() {
+    const timelineItemId = activeTimelineItemId.value
+    if (!timelineItemId) return null
+    return unifiedStore.getTimelineItem(timelineItemId) ?? null
+  }
+
+  function resetInteractionState() {
+    activeTimelineItemId.value = null
+    pendingPatch.value = {}
+  }
+
+  function clearAllMaskOverlays(timelineItemId: string) {
+    clearMaskCenterOverlay(timelineItemId)
+    clearMaskRotationOverlay(timelineItemId)
+    clearMaskRectangleSizeOverlay(timelineItemId)
+    clearMaskEllipseSizeOverlay(timelineItemId)
+    clearMaskRectangleCornerRadiusOverlay(timelineItemId)
+    clearMaskMirrorLengthOverlay(timelineItemId)
+    clearMaskFeatherOverlay(timelineItemId)
+    clearMaskIntensityOverlay(timelineItemId)
+  }
+
+  function cancelMaskInteractionSync() {
+    const timelineItemId = activeTimelineItemId.value
+    if (!timelineItemId) return
+    clearAllMaskOverlays(timelineItemId)
+    resetInteractionState()
+  }
 
   function beginMaskInteraction() {
     const item = selectedTimelineItem.value
     if (!item || !canOperateMaskNumbers.value) return
-    session.begin(item)
+
+    if (activeTimelineItemId.value && activeTimelineItemId.value !== item.id) {
+      cancelMaskInteractionSync()
+    }
+
+    if (activeTimelineItemId.value === item.id) {
+      return
+    }
+
+    void unifiedStore.pause()
+    activeTimelineItemId.value = item.id
+    pendingPatch.value = {}
   }
 
   function applyMaskDeferredPatch(patch: MaskDeferredPatch) {
-    throwClipPropertyPhase0Todo('mask.deferred.applyPatch')
     const item = selectedTimelineItem.value
     if (!item || !canOperateMaskNumbers.value) return
+
     beginMaskInteraction()
-    for (const [path, value] of Object.entries(patch) as Array<[keyof MaskDeferredPatch, number]>) {
-      if (!Number.isFinite(value)) continue
-      const next = getGroupPatchFromMaskPath(path, value)
-      if (!next) continue
-      session.apply(item, currentFrame.value, next.groupId, next.patch as never)
+    pendingPatch.value = {
+      ...pendingPatch.value,
+      ...patch,
+    }
+
+    if ('mask.centerX' in patch || 'mask.centerY' in patch) {
+      const centerPatch: { centerX?: number; centerY?: number } = {}
+      if (typeof patch['mask.centerX'] === 'number') {
+        centerPatch.centerX = patch['mask.centerX']
+      }
+      if (typeof patch['mask.centerY'] === 'number') {
+        centerPatch.centerY = patch['mask.centerY']
+      }
+      setMaskCenterOverlay(item.id, centerPatch)
+    }
+
+    if (typeof patch['mask.rotation'] === 'number') {
+      setMaskRotationOverlay(item.id, patch['mask.rotation'])
+    }
+
+    if (typeof patch['mask.outerRange'] === 'number') {
+      setMaskFeatherOverlay(item.id, patch['mask.outerRange'])
+    }
+
+    if (typeof patch['mask.decayRate'] === 'number') {
+      setMaskIntensityOverlay(item.id, patch['mask.decayRate'])
+    }
+
+    if ('mask.width' in patch || 'mask.height' in patch) {
+      const sizePatch: { width?: number; height?: number } = {}
+      if (typeof patch['mask.width'] === 'number') {
+        sizePatch.width = patch['mask.width']
+      }
+      if (typeof patch['mask.height'] === 'number') {
+        sizePatch.height = patch['mask.height']
+      }
+      setMaskRectangleSizeOverlay(item.id, sizePatch)
+    }
+
+    if ('mask.ellipseWidth' in patch || 'mask.ellipseHeight' in patch) {
+      const sizePatch: { ellipseWidth?: number; ellipseHeight?: number } = {}
+      if (typeof patch['mask.ellipseWidth'] === 'number') {
+        sizePatch.ellipseWidth = patch['mask.ellipseWidth']
+      }
+      if (typeof patch['mask.ellipseHeight'] === 'number') {
+        sizePatch.ellipseHeight = patch['mask.ellipseHeight']
+      }
+      setMaskEllipseSizeOverlay(item.id, sizePatch)
+    }
+
+    if (typeof patch['mask.cornerRadius'] === 'number') {
+      setMaskRectangleCornerRadiusOverlay(item.id, patch['mask.cornerRadius'])
+    }
+
+    if (typeof patch['mask.length'] === 'number') {
+      setMaskMirrorLengthOverlay(item.id, patch['mask.length'])
     }
   }
 
   async function commitMaskInteraction() {
-    throwClipPropertyPhase0Todo('mask.deferred.commit')
-    const item = selectedTimelineItem.value
-    if (!item || !session.isActive) return
-    const patches = session.commit(item)
-    const updates = Object.entries(patches).map(([groupId, patch]) => ({
-      groupId: groupId as AnimationGroupId,
-      patch: patch as never,
-    }))
-    if (updates.length > 0) {
-      await unifiedStore.updateAnimationGroupsBatchWithHistory(item.id, currentFrame.value, updates)
+    const item = getActiveItem()
+    const timelineItemId = activeTimelineItemId.value
+    if (!timelineItemId || !item) return
+
+    const patch = pendingPatch.value
+    const entries: DirectPropertyBatchPlanEntry[] = []
+
+    if (typeof patch['mask.centerX'] === 'number' || typeof patch['mask.centerY'] === 'number') {
+      const value: { centerX?: number; centerY?: number } = {}
+      if (typeof patch['mask.centerX'] === 'number') {
+        value.centerX = patch['mask.centerX']
+      }
+      if (typeof patch['mask.centerY'] === 'number') {
+        value.centerY = patch['mask.centerY']
+      }
+      entries.push({ propertyId: 'mask.center', value })
     }
+
+    if (typeof patch['mask.rotation'] === 'number') {
+      entries.push({ propertyId: 'mask.rotation', value: patch['mask.rotation'] })
+    }
+
+    if (typeof patch['mask.width'] === 'number' || typeof patch['mask.height'] === 'number') {
+      const value: { width?: number; height?: number } = {}
+      if (typeof patch['mask.width'] === 'number') {
+        value.width = patch['mask.width']
+      }
+      if (typeof patch['mask.height'] === 'number') {
+        value.height = patch['mask.height']
+      }
+      entries.push({ propertyId: 'mask.rectangle.size', value })
+    }
+
+    if (typeof patch['mask.ellipseWidth'] === 'number' || typeof patch['mask.ellipseHeight'] === 'number') {
+      const value: { ellipseWidth?: number; ellipseHeight?: number } = {}
+      if (typeof patch['mask.ellipseWidth'] === 'number') {
+        value.ellipseWidth = patch['mask.ellipseWidth']
+      }
+      if (typeof patch['mask.ellipseHeight'] === 'number') {
+        value.ellipseHeight = patch['mask.ellipseHeight']
+      }
+      entries.push({ propertyId: 'mask.ellipse.size', value })
+    }
+
+    if (typeof patch['mask.cornerRadius'] === 'number') {
+      entries.push({
+        propertyId: 'mask.rectangle.cornerRadius',
+        value: patch['mask.cornerRadius'],
+      })
+    }
+
+    if (typeof patch['mask.length'] === 'number') {
+      entries.push({ propertyId: 'mask.mirror.length', value: patch['mask.length'] })
+    }
+
+    if (typeof patch['mask.outerRange'] === 'number') {
+      entries.push({ propertyId: 'mask.feather', value: patch['mask.outerRange'] })
+    }
+
+    if (typeof patch['mask.decayRate'] === 'number') {
+      entries.push({ propertyId: 'mask.intensity', value: patch['mask.decayRate'] })
+    }
+
+    clearAllMaskOverlays(timelineItemId)
+    resetInteractionState()
+
+    if (entries.length === 0) return
+
+    await propertyMutationCommitter.commitDirectBatch(
+      getCommitContext(item),
+      entries,
+      '修改蒙版属性',
+    )
   }
 
   async function cancelMaskInteraction() {
-    const item = selectedTimelineItem.value
-    if (!item || !session.isActive) return
-    session.cancel(item)
+    cancelMaskInteractionSync()
   }
 
-  function setMaskCenterDeferred(centerX: number, centerY: number) {
-    applyMaskDeferredPatch({ 'mask.centerX': centerX, 'mask.centerY': centerY })
-  }
+  watch(
+    () => selectedTimelineItem.value?.id ?? null,
+    (nextItemId, previousItemId) => {
+      if (previousItemId && previousItemId !== nextItemId) {
+        cancelMaskInteractionSync()
+      }
+    },
+  )
 
-  function setRectangleMaskSizeDeferred(width: number, height: number) {
-    applyMaskDeferredPatch({ 'mask.width': width, 'mask.height': height })
-  }
-
-  function setMaskRotationDeferred(value: number) {
-    applyMaskDeferredPatch({ 'mask.rotation': value })
-  }
-
-  function setMaskOuterRangeDeferred(value: number) {
-    applyMaskDeferredPatch({ 'mask.outerRange': value })
-  }
-
-  function setMaskDecayRateDeferred(value: number) {
-    applyMaskDeferredPatch({ 'mask.decayRate': value })
-  }
-
-  function setMaskCornerRadiusDeferred(value: number) {
-    applyMaskDeferredPatch({ 'mask.cornerRadius': value })
-  }
-
-  function setMaskLengthDeferred(value: number) {
-    applyMaskDeferredPatch({ 'mask.length': value })
-  }
-
-  async function commitDeferredUpdates() {
-    await commitMaskInteraction()
-  }
+  onBeforeUnmount(() => {
+    cancelMaskInteractionSync()
+  })
 
   return {
     beginMaskInteraction,
     applyMaskDeferredPatch,
     commitMaskInteraction,
     cancelMaskInteraction,
-    setMaskCenterDeferred,
-    setRectangleMaskSizeDeferred,
-    setMaskRotationDeferred,
-    setMaskOuterRangeDeferred,
-    setMaskDecayRateDeferred,
-    setMaskCornerRadiusDeferred,
-    setMaskLengthDeferred,
-    commitDeferredUpdates,
   }
 }

@@ -11,6 +11,14 @@ import {
 import {
   audioVolumeSchema,
   filterIntensitySchema,
+  maskCenterSchema,
+  maskFeatherSchema,
+  maskIntensitySchema,
+  maskEllipseSizeSchema,
+  maskRectangleCornerRadiusSchema,
+  maskRectangleSizeSchema,
+  maskMirrorLengthSchema,
+  maskRotationSchema,
   transformOpacitySchema,
   transformPositionSchema,
   transformRotationSchema,
@@ -37,6 +45,14 @@ export class StaticPropertySchemaProvider implements PropertySchemaProvider {
     transformOpacitySchema,
     filterIntensitySchema,
     audioVolumeSchema,
+    maskCenterSchema,
+    maskRectangleSizeSchema,
+    maskRectangleCornerRadiusSchema,
+    maskEllipseSizeSchema,
+    maskFeatherSchema,
+    maskIntensitySchema,
+    maskRotationSchema,
+    maskMirrorLengthSchema,
   ]
 
   getSchema(_context: PropertySchemaContext, propertyId: string): AnimatablePropertySchema | null {

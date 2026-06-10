@@ -130,6 +130,14 @@ export class ApplyChangePlanCommand implements SimpleCommand {
       return
     }
 
+    if (operation.target === 'maskConfig') {
+      if (!operation.groupId) {
+        throw new Error(`蒙版属性缺少动画组: ${operation.timelineItemId}`)
+      }
+      AnimationRegistry.get(operation.groupId).applyValue(item, operation.patch as never)
+      return
+    }
+
     if (operation.target === 'filterEffect') {
       if (!item.filterEffect) {
         throw new Error(`滤镜效果不存在，无法更新属性: ${operation.timelineItemId}`)
@@ -163,6 +171,12 @@ export class ApplyChangePlanCommand implements SimpleCommand {
       if (!item.filterEffect) {
         throw new Error(`滤镜效果不存在，无法更新属性: ${item.id}`)
       }
+      const currentValue = getCurrentGroupValue(item, frame, groupId)
+      definition.applyValue(item, currentValue as never)
+      return
+    }
+
+    if (definition.scope === 'mask') {
       const currentValue = getCurrentGroupValue(item, frame, groupId)
       definition.applyValue(item, currentValue as never)
       return
