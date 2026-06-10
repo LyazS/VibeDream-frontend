@@ -12,9 +12,11 @@ export type {
   DirectPropertyBatchPlanEntry,
   DirectPropertyBatchPlanIntent,
   DirectPropertyPlanIntent,
-  DynamicFilterParamPropertyId,
   NoAnimationGroupPatchOperation,
   PropertyKeyframeTogglePlanIntent,
   PropertyPlanIntent,
   VisualConfigPatchOperation,
 } from './types'
+export type {
+  DynamicFilterParamPropertyId,
+} from '@/core/property-system/schema/propertyIds'

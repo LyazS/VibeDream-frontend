@@ -8,10 +8,9 @@ import type {
   VisualProps,
 } from '@/core/timelineitem/bunnytype'
 import type { AnimatablePropertyTarget } from '@/core/property-system/schema'
+import type { DynamicFilterParamPropertyId } from '@/core/property-system/schema/propertyIds'
 import type { MediaType } from '@/core/mediaitem'
 import type { UnifiedTimelineItemData } from '@/core/timelineitem'
-
-export type DynamicFilterParamPropertyId = `filter.param.${string}`
 
 export type AnimatablePropertyId =
   | 'transform.rotation'

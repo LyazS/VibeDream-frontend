@@ -1,4 +1,5 @@
 import type { MediaType } from '@/core/mediaitem'
+import { isFilterParamPropertyId } from '@/core/property-system/schema/propertyIds'
 import type { TextStyleConfig } from './texttype'
 import type { BlendMode } from './blendMode'
 import type {
@@ -116,7 +117,7 @@ export type AnimationChannelKey = PropertyAnimationGroupId
 export function isDynamicFilterParamAnimationGroupId(
   groupId: string,
 ): groupId is DynamicFilterParamAnimationGroupId {
-  return groupId.startsWith('filter.param.')
+  return isFilterParamPropertyId(groupId)
 }
 
 export function normalizeAnimationGroupId(groupId: AnimationChannelKey): PropertyAnimationGroupId {

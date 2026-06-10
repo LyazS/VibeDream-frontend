@@ -5,6 +5,10 @@ import {
   clearFilterIntensityOverlay,
   clearFilterParamOverlay,
 } from '@/core/property-system/render-state'
+import {
+  getFilterParamKey,
+  isFilterParamPropertyId,
+} from '@/core/property-system/schema'
 import type { useUnifiedStore } from '@/core/unifiedStore'
 import {
   getKeyframeButtonState,
@@ -77,8 +81,8 @@ export function useFilterKeyframeActions(options: FilterKeyframeActionsOptions) 
     if (!item || !canOperateFilterNumbers.value) return
     if (channel === 'filter.intensity') {
       clearFilterIntensityOverlay(item.id)
-    } else {
-      clearFilterParamOverlay(item.id, channel.slice('filter.param.'.length))
+    } else if (isFilterParamPropertyId(channel)) {
+      clearFilterParamOverlay(item.id, getFilterParamKey(channel))
     }
     await propertyMutationCommitter.toggleKeyframe(getCommitContext(item), channel)
   }

@@ -12,6 +12,7 @@ import {
   type GetAnimation,
 } from '@/core/timelineitem/bunnytype'
 import { AnimationRegistry } from './registry'
+import { isFilterParamPropertyId } from '@/core/property-system/schema/propertyIds'
 
 export type AnimationButtonState = 'none' | 'on-keyframe' | 'between-keyframes'
 export type AnimationSetResult = 'no-animation' | 'updated-keyframe' | 'created-keyframe'
@@ -126,7 +127,7 @@ export function getSupportedAnimationGroups(item: UnifiedTimelineItemData<MediaT
     .filter((definition) => definition.supports(item))
     .map((definition) => definition.id)
   const dynamicGroups = Object.keys(item.animation?.groups ?? {})
-    .filter((groupId) => groupId.startsWith('filter.param.')) as PropertyAnimationGroupId[]
+    .filter(isFilterParamPropertyId) as PropertyAnimationGroupId[]
   return [...new Set([...staticGroups, ...dynamicGroups])]
 }
 

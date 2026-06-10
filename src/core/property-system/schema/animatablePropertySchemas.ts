@@ -1,5 +1,6 @@
 import type { PropertyAnimationGroupId } from '@/core/timelineitem/bunnytype'
 import type { AnimatablePropertyId } from '@/core/property-system/mutation/types'
+import { normalizeAngle } from '@/core/utils/rotationTransform'
 
 export type AnimatablePropertyTarget = 'config' | 'filterEffect'
 export type PropertyValueKind = 'number' | 'boolean' | 'color' | 'vec2'
@@ -17,8 +18,39 @@ export interface AnimatablePropertySchema {
   min?: number
   max?: number
   step?: number
-  normalizeDirectValue?: (value: unknown) => Record<string, unknown>
+  normalizeDirectValue: (value: unknown) => Record<string, unknown>
   normalizeKeyframeValue?: (value: unknown) => Record<string, unknown>
+}
+
+function assertFiniteNumber(value: unknown, propertyId: string): number {
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
+    throw new Error(`${propertyId} requires a finite numeric value`)
+  }
+  return value
+}
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.min(max, Math.max(min, value))
+}
+
+function assertFiniteNumberRecord(
+  value: unknown,
+  allowedFields: readonly string[],
+  propertyId: string,
+): Record<string, number> {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw new Error(`${propertyId} requires finite numeric patch values`)
+  }
+
+  const entries = Object.entries(value)
+  if (
+    entries.length === 0 ||
+    !entries.every(([key, entryValue]) => allowedFields.includes(key) && Number.isFinite(entryValue))
+  ) {
+    throw new Error(`${propertyId} requires finite numeric patch values`)
+  }
+
+  return value as Record<string, number>
 }
 
 export const transformRotationSchema: AnimatablePropertySchema = {
@@ -30,6 +62,9 @@ export const transformRotationSchema: AnimatablePropertySchema = {
   supportsDirectCommit: true,
   supportsKeyframeToggle: true,
   supportsTransientOverlay: true,
+  normalizeDirectValue: (value) => ({
+    rotation: normalizeAngle(assertFiniteNumber(value, 'transform.rotation')),
+  }),
 }
 
 export const transformPositionSchema: AnimatablePropertySchema = {
@@ -41,6 +76,8 @@ export const transformPositionSchema: AnimatablePropertySchema = {
   supportsDirectCommit: true,
   supportsKeyframeToggle: true,
   supportsTransientOverlay: true,
+  normalizeDirectValue: (value) =>
+    assertFiniteNumberRecord(value, ['x', 'y'], 'transform.position'),
 }
 
 export const transformSizeSchema: AnimatablePropertySchema = {
@@ -52,6 +89,8 @@ export const transformSizeSchema: AnimatablePropertySchema = {
   supportsDirectCommit: true,
   supportsKeyframeToggle: true,
   supportsTransientOverlay: true,
+  normalizeDirectValue: (value) =>
+    assertFiniteNumberRecord(value, ['width', 'height'], 'transform.size'),
 }
 
 export const transformOpacitySchema: AnimatablePropertySchema = {
@@ -63,6 +102,9 @@ export const transformOpacitySchema: AnimatablePropertySchema = {
   supportsDirectCommit: true,
   supportsKeyframeToggle: true,
   supportsTransientOverlay: true,
+  normalizeDirectValue: (value) => ({
+    opacity: clamp(assertFiniteNumber(value, 'transform.opacity'), 0, 1),
+  }),
 }
 
 export const filterIntensitySchema: AnimatablePropertySchema = {
@@ -74,6 +116,9 @@ export const filterIntensitySchema: AnimatablePropertySchema = {
   supportsDirectCommit: true,
   supportsKeyframeToggle: true,
   supportsTransientOverlay: true,
+  normalizeDirectValue: (value) => ({
+    intensity: clamp(assertFiniteNumber(value, 'filter.intensity'), 0, 1),
+  }),
 }
 
 export const audioVolumeSchema: AnimatablePropertySchema = {
@@ -85,4 +130,7 @@ export const audioVolumeSchema: AnimatablePropertySchema = {
   supportsDirectCommit: true,
   supportsKeyframeToggle: true,
   supportsTransientOverlay: true,
+  normalizeDirectValue: (value) => ({
+    volume: clamp(assertFiniteNumber(value, 'audio.volume'), 0, 1),
+  }),
 }

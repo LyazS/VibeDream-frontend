@@ -1,5 +1,6 @@
 import type { Ref } from 'vue'
 import type { ClipFilterConfig } from '@/core/filter/types'
+import type { DynamicFilterParamPropertyId } from '@/core/property-system/schema/propertyIds'
 import type { UnifiedTimelineItemData } from '@/core/timelineitem/type'
 
 export type FilterTimelineItem =
@@ -11,7 +12,7 @@ export interface UnifiedFilterControlsOptions {
   currentFrame: Ref<number>
 }
 
-export type FilterChannelKey = 'filter.intensity' | `filter.param.${string}`
+export type FilterChannelKey = 'filter.intensity' | DynamicFilterParamPropertyId
 
 export type FilterDeferredPatch = Partial<Pick<ClipFilterConfig, 'intensity' | 'params'>>
 

@@ -1,8 +1,13 @@
 import type { MediaType } from '@/core/mediaitem'
 import type { EffectPackageParameterDefinition } from '@/core/effect-package/types'
 import type { UnifiedTimelineItemData } from '@/core/timelineitem'
-import type { DynamicFilterParamPropertyId } from '@/core/property-system/mutation'
 import { supportsClipFilter } from '@/core/timelineitem/filter'
+import {
+  createFilterParamPropertyId,
+  getFilterParamKey,
+  isFilterParamPropertyId,
+  isValidFilterParamKey,
+} from './propertyIds'
 import {
   audioVolumeSchema,
   filterIntensitySchema,
@@ -12,9 +17,6 @@ import {
   transformSizeSchema,
   type AnimatablePropertySchema,
 } from './animatablePropertySchemas'
-
-const FILTER_PARAM_PROPERTY_PREFIX = 'filter.param.'
-const FILTER_PARAM_KEY_PATTERN = /^[A-Za-z_][A-Za-z0-9_]*$/
 
 export interface PropertySchemaContext {
   item: UnifiedTimelineItemData<MediaType>
@@ -48,11 +50,11 @@ export class StaticPropertySchemaProvider implements PropertySchemaProvider {
 
 export class DynamicFilterParameterSchemaProvider implements PropertySchemaProvider {
   getSchema(context: PropertySchemaContext, propertyId: string): AnimatablePropertySchema | null {
-    if (!propertyId.startsWith(FILTER_PARAM_PROPERTY_PREFIX)) {
+    if (!isFilterParamPropertyId(propertyId)) {
       return null
     }
 
-    const parameterKey = propertyId.slice(FILTER_PARAM_PROPERTY_PREFIX.length)
+    const parameterKey = getFilterParamKey(propertyId)
     const definition = this.getParameterDefinition(context, parameterKey)
     if (!definition || (definition.type !== 'number' && definition.type !== 'vec2' && definition.type !== 'boolean')) {
       return null
@@ -68,7 +70,7 @@ export class DynamicFilterParameterSchemaProvider implements PropertySchemaProvi
 
     return Object.entries(context.item.filterEffect.packagePayload.parameterSchema)
       .filter(([key, definition]) =>
-        this.isValidParameterKey(key) &&
+        isValidFilterParamKey(key) &&
         (definition.type === 'number' || definition.type === 'vec2' || definition.type === 'boolean'),
       )
       .map(([key, definition]) => this.createParamSchema(key, definition))
@@ -78,7 +80,7 @@ export class DynamicFilterParameterSchemaProvider implements PropertySchemaProvi
     context: PropertySchemaContext,
     parameterKey: string,
   ): EffectPackageParameterDefinition | null {
-    if (!this.isValidParameterKey(parameterKey)) {
+    if (!isValidFilterParamKey(parameterKey)) {
       return null
     }
 
@@ -104,7 +106,7 @@ export class DynamicFilterParameterSchemaProvider implements PropertySchemaProvi
   }
 
   private createBooleanParamSchema(parameterKey: string): AnimatablePropertySchema {
-    const propertyId = `${FILTER_PARAM_PROPERTY_PREFIX}${parameterKey}` as DynamicFilterParamPropertyId
+    const propertyId = createFilterParamPropertyId(parameterKey)
 
     return {
       propertyId,
@@ -132,7 +134,7 @@ export class DynamicFilterParameterSchemaProvider implements PropertySchemaProvi
       throw new Error(`filter number parameter 缺少有效默认值: ${parameterKey}`)
     }
 
-    const propertyId = `${FILTER_PARAM_PROPERTY_PREFIX}${parameterKey}` as DynamicFilterParamPropertyId
+    const propertyId = createFilterParamPropertyId(parameterKey)
     const min = definition.min
     const max = definition.max
     const normalizeNumber = (value: unknown): number => {
@@ -174,7 +176,7 @@ export class DynamicFilterParameterSchemaProvider implements PropertySchemaProvi
     this.assertFiniteNumberRange(parameterKey, definition, 'vec2')
     this.normalizeVec2(definition.default, `filter vec2 parameter 缺少有效默认值: ${parameterKey}`)
 
-    const propertyId = `${FILTER_PARAM_PROPERTY_PREFIX}${parameterKey}` as DynamicFilterParamPropertyId
+    const propertyId = createFilterParamPropertyId(parameterKey)
     const min = definition.min
     const max = definition.max
     const normalizeVec2 = (value: unknown) => {
@@ -240,10 +242,6 @@ export class DynamicFilterParameterSchemaProvider implements PropertySchemaProvi
       x: record.x,
       y: record.y,
     }
-  }
-
-  private isValidParameterKey(parameterKey: string): boolean {
-    return FILTER_PARAM_KEY_PATTERN.test(parameterKey)
   }
 }
 

@@ -316,9 +316,11 @@ interface PropertySchemaProvider {
 
 当前状态补充：
 
-- resolver / provider 仍是下一阶段方向
-- 当前静态属性 schema 仍以代码内显式注册为主，例如 `PropertyPlanner.getSchema()`
-- `filter.intensity` 已经验证的是 target / overlay / planner 协议，不代表 resolver 已经完成迁移
+- resolver / provider 已经落地到 `src/core/property-system/schema/resolver.ts`
+- 当前 resolver 已由静态属性 provider 与 dynamic filter parameter provider 组成
+- `PropertyPlanner` 已通过 resolver 按当前 item / frame 解析 schema
+- `filter.param.*` 已作为第一条动态 schema 路径接入 direct commit、deferred overlay、keyframe 和属性面板渲染
+- 下一阶段重点是收紧 schema contract、property id 工具和 UI view model，而不是新增其他 domain provider
 
 ## 8. Dynamic Parameter Metadata
 
@@ -448,8 +450,8 @@ type DynamicAnimationGroupValue =
 
 - 静态 group 继续走现有 `AnimationGroupValueMap`
 - 动态 group 由 `PropertySchema.valueKind` / `valueFields` 负责 normalize、equals、interpolate 和 apply
-- `getCurrentGroupValue()`、`findKeyframeAtFrame()`、`ensureTrack()` 等 animation engine API 应逐步接受 `PropertyAnimationGroupId`
-- 在 engine 完成动态 group 支持前，`filter.param.*` 可以先 direct commit + overlay，不急于开放 keyframe
+- `getCurrentGroupValue()`、`findKeyframeAtFrame()`、`ensureTrack()` 等 animation engine API 已接受 `PropertyAnimationGroupId`
+- 当前 `filter.param.*` 的 `number` / `vec2` 已开放 keyframe，`boolean` 保持 direct only
 
 这样可以避免为了每个 package 参数改全局静态类型，也避免把动态参数退化成一个 `filter.params` 黑盒 group。
 

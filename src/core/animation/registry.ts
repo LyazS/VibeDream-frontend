@@ -12,6 +12,7 @@ import {
   type PropertyAnimationGroupId,
   type PropertyAnimationValueByGroup,
 } from '@/core/timelineitem/bunnytype'
+import { getFilterParamKey } from '@/core/property-system/schema/propertyIds'
 import { TimelineItemQueries } from '@/core/timelineitem/queries'
 import {
   applyMaskCenterValue,
@@ -88,10 +89,6 @@ function getVisualConfigRecord(item: UnifiedTimelineItemData<MediaType>): Record
 
 function getFilterConfigRecord(item: UnifiedTimelineItemData<MediaType>) {
   return TimelineItemQueries.getRenderFilterEffect(item)
-}
-
-function getFilterParamKey(groupId: DynamicFilterParamAnimationGroupId): string {
-  return groupId.slice('filter.param.'.length)
 }
 
 function assertDynamicFilterParamNumber(value: unknown, parameterKey: string): number {

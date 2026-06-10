@@ -1,4 +1,3 @@
-import { normalizeAngle } from '@/core/utils/rotationTransform'
 import type {
   ChangePlan,
   ChangeOperation,
@@ -9,6 +8,7 @@ import type {
 } from './types'
 import {
   type AnimatablePropertySchema,
+  isFilterParamPropertyId,
   propertySchemaResolver,
 } from '@/core/property-system/schema'
 import {
@@ -216,61 +216,11 @@ export class PropertyPlanner {
     intent: DirectPropertyPlanIntent,
     schema: AnimatablePropertySchema,
   ): Record<string, unknown> {
-    if (schema.normalizeDirectValue) {
-      return schema.normalizeDirectValue(intent.value)
+    if (!schema.normalizeDirectValue) {
+      throw new Error(`Direct value normalization is not configured: ${schema.propertyId}`)
     }
 
-    if (schema.propertyId === 'transform.rotation') {
-      if (typeof intent.value !== 'number' || !Number.isFinite(intent.value)) {
-        throw new Error('transform.rotation requires a finite numeric value')
-      }
-      return {
-        rotation: normalizeAngle(intent.value),
-      }
-    }
-
-    if (schema.propertyId === 'transform.opacity') {
-      if (typeof intent.value !== 'number' || !Number.isFinite(intent.value)) {
-        throw new Error('transform.opacity requires a finite numeric value')
-      }
-      return {
-        opacity: Math.min(1, Math.max(0, intent.value)),
-      }
-    }
-
-    if (schema.propertyId === 'audio.volume') {
-      if (typeof intent.value !== 'number' || !Number.isFinite(intent.value)) {
-        throw new Error('audio.volume requires a finite numeric value')
-      }
-      return {
-        volume: Math.min(1, Math.max(0, intent.value)),
-      }
-    }
-
-    if (schema.propertyId === 'filter.intensity') {
-      if (typeof intent.value !== 'number' || !Number.isFinite(intent.value)) {
-        throw new Error('filter.intensity requires a finite numeric value')
-      }
-      return {
-        intensity: Math.min(1, Math.max(0, intent.value)),
-      }
-    }
-
-    if (schema.propertyId === 'transform.position') {
-      if (!this.isFiniteNumberRecord(intent.value, schema.valueFields)) {
-        throw new Error('transform.position requires finite numeric x/y patch values')
-      }
-      return intent.value
-    }
-
-    if (schema.propertyId === 'transform.size') {
-      if (!this.isFiniteNumberRecord(intent.value, schema.valueFields)) {
-        throw new Error('transform.size requires finite numeric width/height patch values')
-      }
-      return intent.value
-    }
-
-    throw new Error(`Unsupported direct value normalization: ${schema.propertyId}`)
+    return schema.normalizeDirectValue(intent.value)
   }
 
   private normalizeKeyframePatchValue(
@@ -290,18 +240,9 @@ export class PropertyPlanner {
     if (schema.propertyId === 'transform.size') return '尺寸'
     if (schema.propertyId === 'transform.opacity') return '混合强度'
     if (schema.propertyId === 'filter.intensity') return '滤镜强度'
-    if (schema.propertyId.startsWith('filter.param.')) return schema.label ?? schema.propertyId
+    if (isFilterParamPropertyId(schema.propertyId)) return schema.label ?? schema.propertyId
     if (schema.propertyId === 'audio.volume') return '音量'
     return schema.propertyId
-  }
-
-  private isFiniteNumberRecord(value: unknown, allowedFields: readonly string[]): value is Record<string, number> {
-    if (!value || typeof value !== 'object' || Array.isArray(value)) return false
-    const entries = Object.entries(value)
-    return (
-      entries.length > 0 &&
-      entries.every(([key, entryValue]) => allowedFields.includes(key) && Number.isFinite(entryValue))
-    )
   }
 }
 

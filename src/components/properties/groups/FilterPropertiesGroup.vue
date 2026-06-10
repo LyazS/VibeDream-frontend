@@ -32,76 +32,76 @@
       />
 
       <div
-        v-if="dynamicFilterParamSchemas.length > 0"
+        v-if="dynamicFilterParamViewModels.length > 0"
         class="filter-properties-group__dynamic-params"
       >
         <template
-          v-for="schema in dynamicFilterParamSchemas"
-          :key="schema.propertyId"
+          v-for="param in dynamicFilterParamViewModels"
+          :key="param.propertyId"
         >
           <KeyframedSliderField
-            v-if="schema.valueKind === 'number'"
-            :label="schema.label ?? schema.propertyId"
-            :state="getFilterChannelButtonState(getFilterParamChannel(schema))"
-            :tooltip="getFilterKeyframeTooltip(getFilterParamChannel(schema))"
+            v-if="param.kind === 'number'"
+            :label="param.label"
+            :state="getFilterChannelButtonState(param.channelKey)"
+            :tooltip="getFilterKeyframeTooltip(param.channelKey)"
             :disabled="!canOperateFilterNumbers || !isFilterReady"
-            :has-previous="hasPreviousFilterKeyframe(getFilterParamChannel(schema))"
-            :has-next="hasNextFilterKeyframe(getFilterParamChannel(schema))"
-            :value="getFilterParamNumberValue(schema)"
-            :min="getRequiredNumberSchemaField(schema, 'min')"
-            :max="getRequiredNumberSchemaField(schema, 'max')"
-            :step="getRequiredNumberSchemaField(schema, 'step')"
+            :has-previous="hasPreviousFilterKeyframe(param.channelKey)"
+            :has-next="hasNextFilterKeyframe(param.channelKey)"
+            :value="param.value"
+            :min="param.min"
+            :max="param.max"
+            :step="param.step"
             :precision="2"
-            @slider-input="(value) => setFilterParamDeferred(getFilterParamKey(schema), value)"
+            @slider-input="(value) => setFilterParamDeferred(param.parameterKey, value)"
             @slider-change="void commitDeferredUpdates()"
-            @number-change="(value) => void setFilterParamDirect(getFilterParamKey(schema), value)"
-            @previous="goToPreviousFilterKeyframe(getFilterParamChannel(schema))"
-            @toggle="void toggleFilterKeyframe(getFilterParamChannel(schema))"
-            @next="goToNextFilterKeyframe(getFilterParamChannel(schema))"
+            @number-change="(value) => void setFilterParamDirect(param.parameterKey, value)"
+            @previous="goToPreviousFilterKeyframe(param.channelKey)"
+            @toggle="void toggleFilterKeyframe(param.channelKey)"
+            @next="goToNextFilterKeyframe(param.channelKey)"
           />
           <KeyframedDualNumberField
-            v-else-if="schema.valueKind === 'vec2'"
-            :label="schema.label ?? schema.propertyId"
-            :state="getFilterChannelButtonState(getFilterParamChannel(schema))"
-            :tooltip="getFilterKeyframeTooltip(getFilterParamChannel(schema))"
+            v-else-if="param.kind === 'vec2'"
+            :label="param.label"
+            :state="getFilterChannelButtonState(param.channelKey)"
+            :tooltip="getFilterKeyframeTooltip(param.channelKey)"
             :disabled="!canOperateFilterNumbers || !isFilterReady"
-            :has-previous="hasPreviousFilterKeyframe(getFilterParamChannel(schema))"
-            :has-next="hasNextFilterKeyframe(getFilterParamChannel(schema))"
+            :has-previous="hasPreviousFilterKeyframe(param.channelKey)"
+            :has-next="hasNextFilterKeyframe(param.channelKey)"
             first-label="X"
             second-label="Y"
-            :first-value="getFilterParamVec2Value(schema).x"
-            :second-value="getFilterParamVec2Value(schema).y"
-            :first-min="getRequiredNumberSchemaField(schema, 'min')"
-            :first-max="getRequiredNumberSchemaField(schema, 'max')"
-            :second-min="getRequiredNumberSchemaField(schema, 'min')"
-            :second-max="getRequiredNumberSchemaField(schema, 'max')"
-            :step="getRequiredNumberSchemaField(schema, 'step')"
+            :first-value="param.value.x"
+            :second-value="param.value.y"
+            :first-min="param.min"
+            :first-max="param.max"
+            :second-min="param.min"
+            :second-max="param.max"
+            :step="param.step"
             :precision="2"
-            @first-input="(value) => setFilterParamVec2Deferred(getFilterParamKey(schema), getNextFilterParamVec2Value(schema, 'x', value))"
-            @second-input="(value) => setFilterParamVec2Deferred(getFilterParamKey(schema), getNextFilterParamVec2Value(schema, 'y', value))"
-            @first-change="(value) => void setFilterParamVec2Direct(getFilterParamKey(schema), getNextFilterParamVec2Value(schema, 'x', value))"
-            @second-change="(value) => void setFilterParamVec2Direct(getFilterParamKey(schema), getNextFilterParamVec2Value(schema, 'y', value))"
-            @previous="goToPreviousFilterKeyframe(getFilterParamChannel(schema))"
-            @toggle="void toggleFilterKeyframe(getFilterParamChannel(schema))"
-            @next="goToNextFilterKeyframe(getFilterParamChannel(schema))"
+            @first-input="(value) => setFilterParamVec2Deferred(param.parameterKey, getNextFilterParamVec2Value(param.value, 'x', value))"
+            @second-input="(value) => setFilterParamVec2Deferred(param.parameterKey, getNextFilterParamVec2Value(param.value, 'y', value))"
+            @first-change="(value) => void setFilterParamVec2Direct(param.parameterKey, getNextFilterParamVec2Value(param.value, 'x', value))"
+            @second-change="(value) => void setFilterParamVec2Direct(param.parameterKey, getNextFilterParamVec2Value(param.value, 'y', value))"
+            @previous="goToPreviousFilterKeyframe(param.channelKey)"
+            @toggle="void toggleFilterKeyframe(param.channelKey)"
+            @next="goToNextFilterKeyframe(param.channelKey)"
           />
           <div
-            v-else-if="schema.valueKind === 'boolean'"
+            v-else-if="param.kind === 'boolean'"
             class="filter-properties-group__boolean-row"
           >
             <label
-              :for="`filter-param-${getFilterParamKey(schema)}`"
+              :for="`filter-param-${param.parameterKey}`"
               class="filter-properties-group__boolean-label"
             >
-              {{ schema.label ?? schema.propertyId }}
+              {{ param.label }}
             </label>
             <input
-              :id="`filter-param-${getFilterParamKey(schema)}`"
+              :id="`filter-param-${param.parameterKey}`"
               type="checkbox"
-              :checked="getFilterParamBooleanValue(schema)"
+              :checked="param.value"
               :disabled="!canOperateFilterNumbers || !isFilterReady"
               class="filter-properties-group__boolean-input"
-              @change="handleFilterParamBooleanChange(schema, $event)"
+              @change="handleFilterParamBooleanChange(param.parameterKey, $event)"
             />
           </div>
         </template>
@@ -116,14 +116,11 @@ import FilterEffectDropZone from '@/components/properties/groups/FilterEffectDro
 import KeyframedDualNumberField from '@/components/properties/common/KeyframedDualNumberField.vue'
 import KeyframedSliderField from '@/components/properties/common/KeyframedSliderField.vue'
 import { useAppI18n, useUnifiedFilterControls } from '@/core/composables'
+import { useDynamicFilterParamViewModels } from '@/core/composables/filterControls/useDynamicFilterParamViewModels'
 import { effectTemplateRegistry } from '@/core/effect-template/EffectTemplateRegistry'
 import { useUnifiedStore } from '@/core/unifiedStore'
-import {
-  propertySchemaResolver,
-  type AnimatablePropertySchema,
-} from '@/core/property-system/schema'
 import type { UnifiedTimelineItemData } from '@/core/timelineitem/type'
-import type { FilterChannelKey } from '@/core/composables/filterControls/types'
+import type { FilterParamVec2Value } from '@/core/composables/filterControls/types'
 
 interface Props {
   selectedTimelineItem: UnifiedTimelineItemData<'video'> | UnifiedTimelineItemData<'image'>
@@ -163,21 +160,11 @@ const {
 })
 
 const currentEffectPackageId = computed(() => filterEffect.value?.effectPackageId)
-const dynamicFilterParamSchemas = computed(() => {
-  const item = selectedTimelineItem.value
-  if (!item || !hasFilterEffect.value) {
-    return []
-  }
-
-  return propertySchemaResolver
-    .listSchemas({
-      item,
-      frame: currentFrame.value,
-    })
-    .filter((schema) =>
-      schema.propertyId.startsWith('filter.param.') &&
-      (schema.valueKind === 'number' || schema.valueKind === 'vec2' || schema.valueKind === 'boolean'),
-    )
+const dynamicFilterParamViewModels = useDynamicFilterParamViewModels({
+  selectedTimelineItem,
+  currentFrame,
+  filterConfig,
+  hasFilterEffect,
 })
 const isFilterReady = computed(() => {
   if (!currentEffectPackageId.value) {
@@ -186,78 +173,24 @@ const isFilterReady = computed(() => {
   return effectTemplateRegistry.getPackageState(currentEffectPackageId.value)?.status === 'ready'
 })
 
-function getFilterParamKey(schema: AnimatablePropertySchema): string {
-  return schema.propertyId.slice('filter.param.'.length)
-}
-
-function getFilterParamChannel(schema: AnimatablePropertySchema): FilterChannelKey {
-  return `filter.param.${getFilterParamKey(schema)}`
-}
-
-function getFilterParamNumberValue(schema: AnimatablePropertySchema): number {
-  const parameterKey = getFilterParamKey(schema)
-  const currentValue = filterConfig.value.params[parameterKey]
-  if (typeof currentValue === 'number' && Number.isFinite(currentValue)) {
-    return currentValue
-  }
-  throw new Error(`滤镜参数不是有效数字: ${parameterKey}`)
-}
-
-function getFilterParamVec2Value(schema: AnimatablePropertySchema): { x: number; y: number } {
-  const parameterKey = getFilterParamKey(schema)
-  const currentValue = filterConfig.value.params[parameterKey]
-  if (
-    typeof currentValue === 'object' &&
-    currentValue !== null &&
-    !Array.isArray(currentValue) &&
-    typeof (currentValue as Record<string, unknown>).x === 'number' &&
-    Number.isFinite((currentValue as Record<string, unknown>).x) &&
-    typeof (currentValue as Record<string, unknown>).y === 'number' &&
-    Number.isFinite((currentValue as Record<string, unknown>).y)
-  ) {
-    return {
-      x: (currentValue as { x: number; y: number }).x,
-      y: (currentValue as { x: number; y: number }).y,
-    }
-  }
-  throw new Error(`滤镜参数不是有效二维向量: ${parameterKey}`)
-}
-
-function getFilterParamBooleanValue(schema: AnimatablePropertySchema): boolean {
-  const parameterKey = getFilterParamKey(schema)
-  return Boolean(filterConfig.value.params[parameterKey])
-}
-
 function getNextFilterParamVec2Value(
-  schema: AnimatablePropertySchema,
+  currentValue: FilterParamVec2Value,
   axis: 'x' | 'y',
   value: number,
-): { x: number; y: number } {
-  const currentValue = getFilterParamVec2Value(schema)
+): FilterParamVec2Value {
   return {
     ...currentValue,
     [axis]: value,
   }
 }
 
-function getRequiredNumberSchemaField(
-  schema: AnimatablePropertySchema,
-  field: 'min' | 'max' | 'step',
-): number {
-  const value = schema[field]
-  if (typeof value !== 'number' || !Number.isFinite(value)) {
-    throw new Error(`滤镜参数 schema 缺少有效 ${field}: ${schema.propertyId}`)
-  }
-  return value
-}
-
-function handleFilterParamBooleanChange(schema: AnimatablePropertySchema, event: Event) {
+function handleFilterParamBooleanChange(parameterKey: string, event: Event) {
   const target = event.target
   if (!(target instanceof HTMLInputElement)) {
     return
   }
 
-  void setFilterParamBooleanDirect(getFilterParamKey(schema), target.checked)
+  void setFilterParamBooleanDirect(parameterKey, target.checked)
 }
 
 async function handleRemove() {

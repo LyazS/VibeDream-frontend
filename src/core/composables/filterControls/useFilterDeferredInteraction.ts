@@ -9,6 +9,10 @@ import {
   setFilterIntensityOverlay,
   setFilterParamOverlay,
 } from '@/core/property-system/render-state'
+import {
+  createFilterParamPropertyId,
+  isValidFilterParamKey,
+} from '@/core/property-system/schema'
 import { TimelineItemQueries } from '@/core/timelineitem/queries'
 import type { useUnifiedStore } from '@/core/unifiedStore'
 import type {
@@ -110,7 +114,7 @@ export function useFilterDeferredInteraction(options: FilterDeferredInteractionO
 
   function setFilterParamDeferred(parameterKey: string, value: number) {
     const item = selectedTimelineItem.value
-    if (!item || !item.filterEffect || !canOperateFilterNumbers.value) return
+    if (!item || !item.filterEffect || !canOperateFilterNumbers.value || !isValidFilterParamKey(parameterKey)) return
 
     beginFilterInteraction(item)
     activeFilterParamKeys.value = new Set(activeFilterParamKeys.value).add(parameterKey)
@@ -119,7 +123,13 @@ export function useFilterDeferredInteraction(options: FilterDeferredInteractionO
 
   function setFilterParamVec2Deferred(parameterKey: string, value: FilterParamVec2Value) {
     const item = selectedTimelineItem.value
-    if (!item || !item.filterEffect || !canOperateFilterNumbers.value || !isFilterParamVec2Value(value)) return
+    if (
+      !item ||
+      !item.filterEffect ||
+      !canOperateFilterNumbers.value ||
+      !isValidFilterParamKey(parameterKey) ||
+      !isFilterParamVec2Value(value)
+    ) return
 
     beginFilterInteraction(item)
     activeFilterParamKeys.value = new Set(activeFilterParamKeys.value).add(parameterKey)
@@ -153,7 +163,7 @@ export function useFilterDeferredInteraction(options: FilterDeferredInteractionO
 
     for (const [parameterKey, value] of paramEntries) {
       entries.push({
-        propertyId: `filter.param.${parameterKey}`,
+        propertyId: createFilterParamPropertyId(parameterKey),
         value,
       })
     }
@@ -190,26 +200,32 @@ export function useFilterDeferredInteraction(options: FilterDeferredInteractionO
 
   async function setFilterParamDirect(parameterKey: string, value: number) {
     const item = selectedTimelineItem.value
-    if (!item || !item.filterEffect || !canOperateFilterNumbers.value) return
+    if (!item || !item.filterEffect || !canOperateFilterNumbers.value || !isValidFilterParamKey(parameterKey)) return
 
     await cancelDeferredUpdates()
-    await propertyMutationCommitter.commitDirect(getCommitContext(item), `filter.param.${parameterKey}`, value)
+    await propertyMutationCommitter.commitDirect(getCommitContext(item), createFilterParamPropertyId(parameterKey), value)
   }
 
   async function setFilterParamVec2Direct(parameterKey: string, value: FilterParamVec2Value) {
     const item = selectedTimelineItem.value
-    if (!item || !item.filterEffect || !canOperateFilterNumbers.value || !isFilterParamVec2Value(value)) return
+    if (
+      !item ||
+      !item.filterEffect ||
+      !canOperateFilterNumbers.value ||
+      !isValidFilterParamKey(parameterKey) ||
+      !isFilterParamVec2Value(value)
+    ) return
 
     await cancelDeferredUpdates()
-    await propertyMutationCommitter.commitDirect(getCommitContext(item), `filter.param.${parameterKey}`, value)
+    await propertyMutationCommitter.commitDirect(getCommitContext(item), createFilterParamPropertyId(parameterKey), value)
   }
 
   async function setFilterParamBooleanDirect(parameterKey: string, value: boolean) {
     const item = selectedTimelineItem.value
-    if (!item || !item.filterEffect || !canOperateFilterNumbers.value) return
+    if (!item || !item.filterEffect || !canOperateFilterNumbers.value || !isValidFilterParamKey(parameterKey)) return
 
     await cancelDeferredUpdates()
-    await propertyMutationCommitter.commitDirect(getCommitContext(item), `filter.param.${parameterKey}`, value)
+    await propertyMutationCommitter.commitDirect(getCommitContext(item), createFilterParamPropertyId(parameterKey), value)
   }
 
   watch(
