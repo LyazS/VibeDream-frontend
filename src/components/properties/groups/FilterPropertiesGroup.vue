@@ -35,27 +35,57 @@
         v-if="dynamicFilterParamSchemas.length > 0"
         class="filter-properties-group__dynamic-params"
       >
-        <KeyframedSliderField
+        <template
           v-for="schema in dynamicFilterParamSchemas"
           :key="schema.propertyId"
-          :label="schema.label ?? schema.propertyId"
-          :state="getFilterChannelButtonState(getFilterParamChannel(schema))"
-          :tooltip="getFilterKeyframeTooltip(getFilterParamChannel(schema))"
-          :disabled="!canOperateFilterNumbers || !isFilterReady"
-          :has-previous="hasPreviousFilterKeyframe(getFilterParamChannel(schema))"
-          :has-next="hasNextFilterKeyframe(getFilterParamChannel(schema))"
-          :value="getFilterParamNumberValue(schema)"
-          :min="getRequiredNumberSchemaField(schema, 'min')"
-          :max="getRequiredNumberSchemaField(schema, 'max')"
-          :step="getRequiredNumberSchemaField(schema, 'step')"
-          :precision="2"
-          @slider-input="(value) => setFilterParamDeferred(getFilterParamKey(schema), value)"
-          @slider-change="void commitDeferredUpdates()"
-          @number-change="(value) => void setFilterParamDirect(getFilterParamKey(schema), value)"
-          @previous="goToPreviousFilterKeyframe(getFilterParamChannel(schema))"
-          @toggle="void toggleFilterKeyframe(getFilterParamChannel(schema))"
-          @next="goToNextFilterKeyframe(getFilterParamChannel(schema))"
-        />
+        >
+          <KeyframedSliderField
+            v-if="schema.valueKind === 'number'"
+            :label="schema.label ?? schema.propertyId"
+            :state="getFilterChannelButtonState(getFilterParamChannel(schema))"
+            :tooltip="getFilterKeyframeTooltip(getFilterParamChannel(schema))"
+            :disabled="!canOperateFilterNumbers || !isFilterReady"
+            :has-previous="hasPreviousFilterKeyframe(getFilterParamChannel(schema))"
+            :has-next="hasNextFilterKeyframe(getFilterParamChannel(schema))"
+            :value="getFilterParamNumberValue(schema)"
+            :min="getRequiredNumberSchemaField(schema, 'min')"
+            :max="getRequiredNumberSchemaField(schema, 'max')"
+            :step="getRequiredNumberSchemaField(schema, 'step')"
+            :precision="2"
+            @slider-input="(value) => setFilterParamDeferred(getFilterParamKey(schema), value)"
+            @slider-change="void commitDeferredUpdates()"
+            @number-change="(value) => void setFilterParamDirect(getFilterParamKey(schema), value)"
+            @previous="goToPreviousFilterKeyframe(getFilterParamChannel(schema))"
+            @toggle="void toggleFilterKeyframe(getFilterParamChannel(schema))"
+            @next="goToNextFilterKeyframe(getFilterParamChannel(schema))"
+          />
+          <KeyframedDualNumberField
+            v-else-if="schema.valueKind === 'vec2'"
+            :label="schema.label ?? schema.propertyId"
+            :state="getFilterChannelButtonState(getFilterParamChannel(schema))"
+            :tooltip="getFilterKeyframeTooltip(getFilterParamChannel(schema))"
+            :disabled="!canOperateFilterNumbers || !isFilterReady"
+            :has-previous="hasPreviousFilterKeyframe(getFilterParamChannel(schema))"
+            :has-next="hasNextFilterKeyframe(getFilterParamChannel(schema))"
+            first-label="X"
+            second-label="Y"
+            :first-value="getFilterParamVec2Value(schema).x"
+            :second-value="getFilterParamVec2Value(schema).y"
+            :first-min="getRequiredNumberSchemaField(schema, 'min')"
+            :first-max="getRequiredNumberSchemaField(schema, 'max')"
+            :second-min="getRequiredNumberSchemaField(schema, 'min')"
+            :second-max="getRequiredNumberSchemaField(schema, 'max')"
+            :step="getRequiredNumberSchemaField(schema, 'step')"
+            :precision="2"
+            @first-input="(value) => setFilterParamVec2Deferred(getFilterParamKey(schema), getNextFilterParamVec2Value(schema, 'x', value))"
+            @second-input="(value) => setFilterParamVec2Deferred(getFilterParamKey(schema), getNextFilterParamVec2Value(schema, 'y', value))"
+            @first-change="(value) => void setFilterParamVec2Direct(getFilterParamKey(schema), getNextFilterParamVec2Value(schema, 'x', value))"
+            @second-change="(value) => void setFilterParamVec2Direct(getFilterParamKey(schema), getNextFilterParamVec2Value(schema, 'y', value))"
+            @previous="goToPreviousFilterKeyframe(getFilterParamChannel(schema))"
+            @toggle="void toggleFilterKeyframe(getFilterParamChannel(schema))"
+            @next="goToNextFilterKeyframe(getFilterParamChannel(schema))"
+          />
+        </template>
       </div>
     </div>
   </div>
@@ -64,6 +94,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import FilterEffectDropZone from '@/components/properties/groups/FilterEffectDropZone.vue'
+import KeyframedDualNumberField from '@/components/properties/common/KeyframedDualNumberField.vue'
 import KeyframedSliderField from '@/components/properties/common/KeyframedSliderField.vue'
 import { useAppI18n, useUnifiedFilterControls } from '@/core/composables'
 import { effectTemplateRegistry } from '@/core/effect-template/EffectTemplateRegistry'
@@ -102,6 +133,8 @@ const {
   setFilterIntensityDirect,
   setFilterParamDeferred,
   setFilterParamDirect,
+  setFilterParamVec2Deferred,
+  setFilterParamVec2Direct,
   commitDeferredUpdates,
   cancelDeferredUpdates,
 } = useUnifiedFilterControls({
@@ -123,7 +156,7 @@ const dynamicFilterParamSchemas = computed(() => {
     })
     .filter((schema) =>
       schema.propertyId.startsWith('filter.param.') &&
-      schema.valueKind === 'number',
+      (schema.valueKind === 'number' || schema.valueKind === 'vec2'),
     )
 })
 const isFilterReady = computed(() => {
@@ -148,6 +181,38 @@ function getFilterParamNumberValue(schema: AnimatablePropertySchema): number {
     return currentValue
   }
   throw new Error(`滤镜参数不是有效数字: ${parameterKey}`)
+}
+
+function getFilterParamVec2Value(schema: AnimatablePropertySchema): { x: number; y: number } {
+  const parameterKey = getFilterParamKey(schema)
+  const currentValue = filterConfig.value.params[parameterKey]
+  if (
+    typeof currentValue === 'object' &&
+    currentValue !== null &&
+    !Array.isArray(currentValue) &&
+    typeof (currentValue as Record<string, unknown>).x === 'number' &&
+    Number.isFinite((currentValue as Record<string, unknown>).x) &&
+    typeof (currentValue as Record<string, unknown>).y === 'number' &&
+    Number.isFinite((currentValue as Record<string, unknown>).y)
+  ) {
+    return {
+      x: (currentValue as { x: number; y: number }).x,
+      y: (currentValue as { x: number; y: number }).y,
+    }
+  }
+  throw new Error(`滤镜参数不是有效二维向量: ${parameterKey}`)
+}
+
+function getNextFilterParamVec2Value(
+  schema: AnimatablePropertySchema,
+  axis: 'x' | 'y',
+  value: number,
+): { x: number; y: number } {
+  const currentValue = getFilterParamVec2Value(schema)
+  return {
+    ...currentValue,
+    [axis]: value,
+  }
 }
 
 function getRequiredNumberSchemaField(

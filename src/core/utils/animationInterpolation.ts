@@ -43,16 +43,24 @@ function getActiveAnimationGroups(item: UnifiedTimelineItemData<MediaType>): Pro
   })
 }
 
+function isFrameInAnimationResolveRange(
+  item: UnifiedTimelineItemData<MediaType>,
+  currentAbsoluteFrame: number,
+): boolean {
+  // Selection preview can render the clip at timelineEndTime, where 100% keyframes live.
+  return (
+    currentAbsoluteFrame >= item.timeRange.timelineStartTime &&
+    currentAbsoluteFrame <= item.timeRange.timelineEndTime
+  )
+}
+
 export function resolveRenderConfigAtFrame<T extends MediaType>(
   item: UnifiedTimelineItemData<T>,
   currentAbsoluteFrame: number,
 ): GetConfigs<T> {
   const renderConfig = createBaseRenderConfig(item) as GetConfigs<T>
 
-  if (
-    currentAbsoluteFrame < item.timeRange.timelineStartTime ||
-    currentAbsoluteFrame >= item.timeRange.timelineEndTime
-  ) {
+  if (!isFrameInAnimationResolveRange(item, currentAbsoluteFrame)) {
     return renderConfig
   }
 
@@ -77,11 +85,7 @@ export function resolveRenderFilterEffectAtFrame(
 ): ClipFilterConfig | undefined {
   const renderFilterEffect = createBaseRenderFilterEffect(item)
 
-  if (
-    !renderFilterEffect ||
-    currentAbsoluteFrame < item.timeRange.timelineStartTime ||
-    currentAbsoluteFrame >= item.timeRange.timelineEndTime
-  ) {
+  if (!renderFilterEffect || !isFrameInAnimationResolveRange(item, currentAbsoluteFrame)) {
     return renderFilterEffect
   }
 

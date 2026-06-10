@@ -54,11 +54,11 @@ export class DynamicFilterParameterSchemaProvider implements PropertySchemaProvi
 
     const parameterKey = propertyId.slice(FILTER_PARAM_PROPERTY_PREFIX.length)
     const definition = this.getParameterDefinition(context, parameterKey)
-    if (!definition || definition.type !== 'number') {
+    if (!definition || (definition.type !== 'number' && definition.type !== 'vec2')) {
       return null
     }
 
-    return this.createNumberParamSchema(parameterKey, definition)
+    return this.createParamSchema(parameterKey, definition)
   }
 
   listSchemas(context: PropertySchemaContext): AnimatablePropertySchema[] {
@@ -67,8 +67,11 @@ export class DynamicFilterParameterSchemaProvider implements PropertySchemaProvi
     }
 
     return Object.entries(context.item.filterEffect.packagePayload.parameterSchema)
-      .filter(([key, definition]) => this.isValidParameterKey(key) && definition.type === 'number')
-      .map(([key, definition]) => this.createNumberParamSchema(key, definition))
+      .filter(([key, definition]) =>
+        this.isValidParameterKey(key) &&
+        (definition.type === 'number' || definition.type === 'vec2'),
+      )
+      .map(([key, definition]) => this.createParamSchema(key, definition))
   }
 
   private getParameterDefinition(
@@ -86,24 +89,24 @@ export class DynamicFilterParameterSchemaProvider implements PropertySchemaProvi
     return context.item.filterEffect.packagePayload.parameterSchema[parameterKey] ?? null
   }
 
+  private createParamSchema(
+    parameterKey: string,
+    definition: EffectPackageParameterDefinition,
+  ): AnimatablePropertySchema {
+    if (definition.type === 'number') {
+      return this.createNumberParamSchema(parameterKey, definition)
+    }
+
+    return this.createVec2ParamSchema(parameterKey, definition)
+  }
+
   private createNumberParamSchema(
     parameterKey: string,
     definition: EffectPackageParameterDefinition,
   ): AnimatablePropertySchema {
-    if (
-      typeof definition.default !== 'number' ||
-      !Number.isFinite(definition.default)
-    ) {
+    this.assertFiniteNumberRange(parameterKey, definition, 'number')
+    if (typeof definition.default !== 'number' || !Number.isFinite(definition.default)) {
       throw new Error(`filter number parameter 缺少有效默认值: ${parameterKey}`)
-    }
-    if (typeof definition.min !== 'number' || !Number.isFinite(definition.min)) {
-      throw new Error(`filter number parameter 缺少有效 min: ${parameterKey}`)
-    }
-    if (typeof definition.max !== 'number' || !Number.isFinite(definition.max)) {
-      throw new Error(`filter number parameter 缺少有效 max: ${parameterKey}`)
-    }
-    if (typeof definition.step !== 'number' || !Number.isFinite(definition.step)) {
-      throw new Error(`filter number parameter 缺少有效 step: ${parameterKey}`)
     }
 
     const propertyId = `${FILTER_PARAM_PROPERTY_PREFIX}${parameterKey}` as DynamicFilterParamPropertyId
@@ -138,6 +141,81 @@ export class DynamicFilterParameterSchemaProvider implements PropertySchemaProvi
       normalizeKeyframeValue: (value) => ({
         value: normalizeNumber(value),
       }),
+    }
+  }
+
+  private createVec2ParamSchema(
+    parameterKey: string,
+    definition: EffectPackageParameterDefinition,
+  ): AnimatablePropertySchema {
+    this.assertFiniteNumberRange(parameterKey, definition, 'vec2')
+    this.normalizeVec2(definition.default, `filter vec2 parameter 缺少有效默认值: ${parameterKey}`)
+
+    const propertyId = `${FILTER_PARAM_PROPERTY_PREFIX}${parameterKey}` as DynamicFilterParamPropertyId
+    const min = definition.min
+    const max = definition.max
+    const normalizeVec2 = (value: unknown) => {
+      const nextValue = this.normalizeVec2(value, `${propertyId} requires finite numeric x/y values`)
+      return {
+        x: Math.min(max, Math.max(min, nextValue.x)),
+        y: Math.min(max, Math.max(min, nextValue.y)),
+      }
+    }
+
+    return {
+      propertyId,
+      animationGroupId: propertyId,
+      target: 'filterEffect',
+      valueFields: ['x', 'y'],
+      valueKind: 'vec2',
+      supportsDirectCommit: true,
+      supportsKeyframeToggle: true,
+      supportsTransientOverlay: true,
+      label: parameterKey,
+      min: definition.min,
+      max: definition.max,
+      step: definition.step,
+      normalizeDirectValue: (value) => ({
+        params: {
+          [parameterKey]: normalizeVec2(value),
+        },
+      }),
+      normalizeKeyframeValue: (value) => normalizeVec2(value),
+    }
+  }
+
+  private assertFiniteNumberRange(
+    parameterKey: string,
+    definition: EffectPackageParameterDefinition,
+    type: 'number' | 'vec2',
+  ): asserts definition is EffectPackageParameterDefinition & { min: number; max: number; step: number } {
+    if (typeof definition.min !== 'number' || !Number.isFinite(definition.min)) {
+      throw new Error(`filter ${type} parameter 缺少有效 min: ${parameterKey}`)
+    }
+    if (typeof definition.max !== 'number' || !Number.isFinite(definition.max)) {
+      throw new Error(`filter ${type} parameter 缺少有效 max: ${parameterKey}`)
+    }
+    if (typeof definition.step !== 'number' || !Number.isFinite(definition.step)) {
+      throw new Error(`filter ${type} parameter 缺少有效 step: ${parameterKey}`)
+    }
+  }
+
+  private normalizeVec2(value: unknown, errorMessage: string): { x: number; y: number } {
+    if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+      throw new Error(errorMessage)
+    }
+
+    const record = value as Record<string, unknown>
+    if (typeof record.x !== 'number' || !Number.isFinite(record.x)) {
+      throw new Error(errorMessage)
+    }
+    if (typeof record.y !== 'number' || !Number.isFinite(record.y)) {
+      throw new Error(errorMessage)
+    }
+
+    return {
+      x: record.x,
+      y: record.y,
     }
   }
 

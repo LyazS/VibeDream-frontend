@@ -14,3 +14,8 @@ export interface UnifiedFilterControlsOptions {
 export type FilterChannelKey = 'filter.intensity' | `filter.param.${string}`
 
 export type FilterDeferredPatch = Partial<Pick<ClipFilterConfig, 'intensity' | 'params'>>
+
+export interface FilterParamVec2Value {
+  x: number
+  y: number
+}

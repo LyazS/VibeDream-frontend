@@ -7,6 +7,8 @@ import {
   type AnimationGroupValueMap,
   type DynamicFilterParamAnimationGroupId,
   type DynamicFilterParamNumberValue,
+  type DynamicFilterParamValue,
+  type DynamicFilterParamVec2Value,
   type PropertyAnimationGroupId,
   type PropertyAnimationValueByGroup,
 } from '@/core/timelineitem/bunnytype'
@@ -99,23 +101,52 @@ function assertDynamicFilterParamNumber(value: unknown, parameterKey: string): n
   return value
 }
 
+function assertDynamicFilterParamVec2(value: unknown, parameterKey: string): DynamicFilterParamVec2Value {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    throw new Error(`滤镜参数不是有效二维向量: ${parameterKey}`)
+  }
+
+  const record = value as Record<string, unknown>
+  if (typeof record.x !== 'number' || !Number.isFinite(record.x)) {
+    throw new Error(`滤镜参数不是有效二维向量: ${parameterKey}`)
+  }
+  if (typeof record.y !== 'number' || !Number.isFinite(record.y)) {
+    throw new Error(`滤镜参数不是有效二维向量: ${parameterKey}`)
+  }
+
+  return {
+    x: record.x,
+    y: record.y,
+  }
+}
+
 function createDynamicFilterParamDefinition(
   groupId: DynamicFilterParamAnimationGroupId,
 ): AnimationGroupDefinition<DynamicFilterParamAnimationGroupId> {
   const parameterKey = getFilterParamKey(groupId)
+  const getParameterType = (item: UnifiedTimelineItemData<MediaType>) =>
+    item.filterEffect?.packagePayload.parameterSchema[parameterKey]?.type
+
   return {
     id: groupId,
     scope: 'filter',
     supports: (item) => TimelineItemQueries.supportsClipFilter(item),
     isEnabled: (item) =>
       TimelineItemQueries.supportsClipFilter(item) &&
-      Boolean(item.filterEffect?.packagePayload.parameterSchema[parameterKey]?.type === 'number'),
-    getBaseValue: (item): DynamicFilterParamNumberValue => {
+      (getParameterType(item) === 'number' || getParameterType(item) === 'vec2'),
+    getBaseValue: (item): DynamicFilterParamValue => {
       const filterEffect = getFilterConfigRecord(item)
       if (!filterEffect) {
         throw new Error(`滤镜效果不存在，无法读取动态参数: ${parameterKey}`)
       }
       const currentValue = filterEffect.params[parameterKey]
+      const parameterType = getParameterType(item)
+      if (parameterType === 'vec2') {
+        return assertDynamicFilterParamVec2(currentValue, parameterKey)
+      }
+      if (parameterType !== 'number') {
+        throw new Error(`滤镜参数类型不支持关键帧: ${parameterKey}`)
+      }
       return {
         value: assertDynamicFilterParamNumber(currentValue, parameterKey),
       }
@@ -124,10 +155,16 @@ function createDynamicFilterParamDefinition(
       if (!TimelineItemQueries.supportsClipFilter(item) || !item.filterEffect) {
         throw new Error(`滤镜效果不存在，无法写入动态参数: ${parameterKey}`)
       }
-      const nextValue = assertDynamicFilterParamNumber(
-        (value as Partial<DynamicFilterParamNumberValue>).value,
-        parameterKey,
-      )
+      const parameterType = getParameterType(item)
+      if (parameterType !== 'number' && parameterType !== 'vec2') {
+        throw new Error(`滤镜参数类型不支持关键帧: ${parameterKey}`)
+      }
+      const nextValue = parameterType === 'vec2'
+        ? assertDynamicFilterParamVec2(value, parameterKey)
+        : assertDynamicFilterParamNumber(
+            (value as Partial<DynamicFilterParamNumberValue>).value,
+            parameterKey,
+          )
       const nextFilterEffect = normalizeClipFilterConfig({
         ...item.filterEffect,
         params: {
@@ -139,10 +176,25 @@ function createDynamicFilterParamDefinition(
       item.runtime.renderFilterEffect = nextFilterEffect
     },
     applyValueToConfig: (config, value) => {
-      const nextValue = assertDynamicFilterParamNumber((value as DynamicFilterParamNumberValue).value, parameterKey)
       if (typeof config.params !== 'object' || !config.params || Array.isArray(config.params)) {
         throw new Error(`滤镜参数容器非法，无法写入动态参数: ${parameterKey}`)
       }
+      const parameterSchema = config.packagePayload &&
+        typeof config.packagePayload === 'object' &&
+        !Array.isArray(config.packagePayload)
+        ? (config.packagePayload as Record<string, any>).parameterSchema
+        : null
+      const parameterType = parameterSchema &&
+        typeof parameterSchema === 'object' &&
+        !Array.isArray(parameterSchema)
+        ? (parameterSchema as Record<string, any>)[parameterKey]?.type
+        : undefined
+      if (parameterType !== 'number' && parameterType !== 'vec2') {
+        throw new Error(`滤镜参数类型不支持关键帧: ${parameterKey}`)
+      }
+      const nextValue = parameterType === 'vec2'
+        ? assertDynamicFilterParamVec2(value, parameterKey)
+        : assertDynamicFilterParamNumber((value as DynamicFilterParamNumberValue).value, parameterKey)
       const currentParams = config.params as Record<string, unknown>
       const nextFilterEffect = normalizeClipFilterConfig({
         ...(config as Record<string, unknown>),

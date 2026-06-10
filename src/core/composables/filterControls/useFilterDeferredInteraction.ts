@@ -12,6 +12,7 @@ import {
 import { TimelineItemQueries } from '@/core/timelineitem/queries'
 import type { useUnifiedStore } from '@/core/unifiedStore'
 import type {
+  FilterParamVec2Value,
   FilterTimelineItem,
   UnifiedFilterControlsOptions,
 } from './types'
@@ -27,6 +28,22 @@ const activeInteractionCancels = new Map<string, () => void>()
 
 export function cancelFilterDeferredInteractionByTimelineItemId(timelineItemId: string) {
   activeInteractionCancels.get(timelineItemId)?.()
+}
+
+function isFilterParamVec2Value(value: unknown): value is FilterParamVec2Value {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    !Array.isArray(value) &&
+    typeof (value as Record<string, unknown>).x === 'number' &&
+    Number.isFinite((value as Record<string, unknown>).x) &&
+    typeof (value as Record<string, unknown>).y === 'number' &&
+    Number.isFinite((value as Record<string, unknown>).y)
+  )
+}
+
+function isSupportedFilterParamValue(value: unknown): value is number | FilterParamVec2Value {
+  return (typeof value === 'number' && Number.isFinite(value)) || isFilterParamVec2Value(value)
 }
 
 export function useFilterDeferredInteraction(options: FilterDeferredInteractionOptions) {
@@ -100,6 +117,15 @@ export function useFilterDeferredInteraction(options: FilterDeferredInteractionO
     setFilterParamOverlay(item.id, parameterKey, value)
   }
 
+  function setFilterParamVec2Deferred(parameterKey: string, value: FilterParamVec2Value) {
+    const item = selectedTimelineItem.value
+    if (!item || !item.filterEffect || !canOperateFilterNumbers.value || !isFilterParamVec2Value(value)) return
+
+    beginFilterInteraction(item)
+    activeFilterParamKeys.value = new Set(activeFilterParamKeys.value).add(parameterKey)
+    setFilterParamOverlay(item.id, parameterKey, value)
+  }
+
   async function commitDeferredUpdates() {
     const item = getActiveItem()
     const timelineItemId = activeTimelineItemId.value
@@ -110,8 +136,8 @@ export function useFilterDeferredInteraction(options: FilterDeferredInteractionO
     const filterParamOverlay = getFilterParamOverlay(timelineItemId)
     const paramEntries = [...activeFilterParamKeys.value]
       .map((parameterKey) => [parameterKey, filterParamOverlay?.params[parameterKey]] as const)
-      .filter((entry): entry is readonly [string, number] =>
-        typeof entry[1] === 'number' && Number.isFinite(entry[1]),
+      .filter((entry): entry is readonly [string, number | FilterParamVec2Value] =>
+        isSupportedFilterParamValue(entry[1]),
       )
 
     unregisterCancelCallback(timelineItemId)
@@ -170,6 +196,14 @@ export function useFilterDeferredInteraction(options: FilterDeferredInteractionO
     await propertyMutationCommitter.commitDirect(getCommitContext(item), `filter.param.${parameterKey}`, value)
   }
 
+  async function setFilterParamVec2Direct(parameterKey: string, value: FilterParamVec2Value) {
+    const item = selectedTimelineItem.value
+    if (!item || !item.filterEffect || !canOperateFilterNumbers.value || !isFilterParamVec2Value(value)) return
+
+    await cancelDeferredUpdates()
+    await propertyMutationCommitter.commitDirect(getCommitContext(item), `filter.param.${parameterKey}`, value)
+  }
+
   watch(
     () => selectedTimelineItem.value?.id ?? null,
     (nextItemId, previousItemId) => {
@@ -190,6 +224,8 @@ export function useFilterDeferredInteraction(options: FilterDeferredInteractionO
     setFilterIntensityDirect,
     setFilterParamDeferred,
     setFilterParamDirect,
+    setFilterParamVec2Deferred,
+    setFilterParamVec2Direct,
     commitDeferredUpdates,
     cancelDeferredUpdates,
   }

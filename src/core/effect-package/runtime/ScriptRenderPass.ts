@@ -312,7 +312,7 @@ export class ScriptRenderPass {
         gl.uniform1i(location, value ? 1 : 0)
         break
       case 'vec2':
-        gl.uniform2fv(location, value as number[])
+        gl.uniform2fv(location, this.resolveVec2UniformValue(value))
         break
       case 'vec3':
         gl.uniform3fv(location, value as number[])
@@ -328,5 +328,18 @@ export class ScriptRenderPass {
         gl.uniformMatrix4fv(location, false, value as number[])
         break
     }
+  }
+
+  private resolveVec2UniformValue(value: unknown): Float32List {
+    if (Array.isArray(value) && value.length === 2) {
+      const x = Number(value[0])
+      const y = Number(value[1])
+      if (!Number.isFinite(x) || !Number.isFinite(y)) {
+        throw new Error('vec2 uniform value 数组必须包含有效数字')
+      }
+      return [x, y]
+    }
+
+    throw new Error('vec2 uniform value 必须是 [x, y]')
   }
 }

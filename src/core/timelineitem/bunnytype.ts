@@ -81,6 +81,15 @@ export interface DynamicFilterParamNumberValue {
   value: number
 }
 
+export interface DynamicFilterParamVec2Value {
+  x: number
+  y: number
+}
+
+export type DynamicFilterParamValue =
+  | DynamicFilterParamNumberValue
+  | DynamicFilterParamVec2Value
+
 export type AnimationGroupValueMap = {
   'transform.position': PositionAnimatableProps
   'transform.size': SizeAnimatableProps
@@ -120,7 +129,7 @@ export interface EasingSpec {
 
 export type AnimationValueByGroup<G extends AnimationGroupId> = AnimationGroupValueMap[G]
 export type PropertyAnimationValueByGroup<G extends PropertyAnimationGroupId> =
-  G extends AnimationGroupId ? AnimationGroupValueMap[G] : DynamicFilterParamNumberValue
+  G extends AnimationGroupId ? AnimationGroupValueMap[G] : DynamicFilterParamValue
 
 export interface AnimateKeyframe<
   T extends MediaType,

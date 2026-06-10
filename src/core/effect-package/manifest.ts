@@ -84,6 +84,21 @@ function normalizeNumberArray(value: unknown, size: number): number[] {
   })
 }
 
+function normalizeVec2Value(value: unknown): { x: number; y: number } {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    throw new Error('effect package vec2 parameter 默认值必须是 { x, y }')
+  }
+
+  const record = value as Record<string, unknown>
+  const x = Number(record.x)
+  const y = Number(record.y)
+  if (!Number.isFinite(x) || !Number.isFinite(y)) {
+    throw new Error('effect package vec2 parameter 默认值必须包含有效 x/y')
+  }
+
+  return { x, y }
+}
+
 function normalizeOptionalFiniteNumber(value: unknown, fieldName: string): number | undefined {
   if (value === undefined) {
     return undefined
@@ -285,7 +300,7 @@ export function resolveDefaultParams(
         defaults[key] = typeof value === 'string' ? parseHexColor(value) : normalizeNumberArray(value, 4)
         break
       case 'vec2':
-        defaults[key] = normalizeNumberArray(value, 2)
+        defaults[key] = normalizeVec2Value(value)
         break
     }
   }
