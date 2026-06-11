@@ -16,10 +16,6 @@ import {
   RemoveASRRequestCommand,
   StartASRRequestCommand,
   MoveTimelineItemCommand,
-  UpdateVisualTransformCommand,
-  UpdateAudioPropertiesCommand,
-  type VisualTransformUpdate,
-  type AudioPropertyUpdate,
   UpdateTransitionOutCommand,
   UpdateFilterEffectCommand,
   SplitTimelineItemCommand,
@@ -36,28 +32,11 @@ import { BatchAutoArrangeTrackCommand } from '@/core/modules/commands/batchComma
 import { MoveTrackCommand } from '@/core/modules/commands/MoveTrackCommand'
 import { TimelineItemQueries } from '@/core/timelineitem/'
 import { duplicateTimelineItem } from '@/core/timelineitem/factory'
-import { UpdateTextCommand } from '@/core/modules/commands/UpdateTextCommand'
-import type { TextStyleConfig } from '@/core/timelineitem/texttype'
 import {
-  CreateKeyframeCommand,
-  DeleteKeyframeCommand,
-  UpdatePropertyCommand,
-  UpdateMaskCommand,
   ClearAllKeyframesCommand,
-  SetAnimationGroupValueCommand,
-  ToggleAnimationGroupKeyframeCommand,
-  BatchSetAnimationGroupValuesCommand,
   type TimelineModule as KeyframeTimelineModule,
   type PlaybackControls,
 } from '@/core/modules/commands/keyframeCommands'
-import type { MaskUpdateAction } from '@/core/modules/commands/keyframes/UpdateMaskCommand'
-import { ToggleProportionalScaleCommand } from '@/core/modules/commands/ToggleProportionalScaleCommand'
-import type {
-  AnimationChannelKey,
-  AnimationGroupId,
-  AnimationGroupValueMap,
-} from '@/core/timelineitem/bunnytype'
-import { getAnimationGroupForProperty } from '@/core/timelineitem/bunnytype'
 import type { ClipTransitionOutConfig } from '@/core/transition/types'
 import {
   areClipTransitionOutConfigsEqual,
@@ -89,62 +68,6 @@ export function useHistoryOperations(
   ensureTimelineItemResolved: (timelineItemId: string) => Promise<unknown>,
 ) {
   // ==================== 辅助函数 ====================
-
-  /**
-   * 检查变换属性是否有实际变化
-   */
-  function hasVisualTransformChanges(
-    oldTransform: VisualTransformUpdate,
-    newTransform: VisualTransformUpdate,
-  ): boolean {
-    if (
-      newTransform.x !== undefined &&
-      oldTransform.x !== undefined &&
-      Math.abs(oldTransform.x - newTransform.x) > 0.1
-    ) return true
-    if (
-      newTransform.y !== undefined &&
-      oldTransform.y !== undefined &&
-      Math.abs(oldTransform.y - newTransform.y) > 0.1
-    ) return true
-    if (
-      newTransform.width !== undefined &&
-      oldTransform.width !== undefined &&
-      Math.abs(oldTransform.width - newTransform.width) > 0.1
-    ) return true
-    if (
-      newTransform.height !== undefined &&
-      oldTransform.height !== undefined &&
-      Math.abs(oldTransform.height - newTransform.height) > 0.1
-    ) return true
-    if (
-      newTransform.rotation !== undefined &&
-      oldTransform.rotation !== undefined &&
-      Math.abs(oldTransform.rotation - newTransform.rotation) > 0.001
-    ) return true
-    if (
-      newTransform.opacity !== undefined &&
-      oldTransform.opacity !== undefined &&
-      Math.abs(oldTransform.opacity - newTransform.opacity) > 0.001
-    ) return true
-    if (
-      newTransform.blendMode !== undefined &&
-      oldTransform.blendMode !== undefined &&
-      oldTransform.blendMode !== newTransform.blendMode
-    ) return true
-    return false
-  }
-
-  function hasAudioPropertyChanges(
-    oldValues: AudioPropertyUpdate,
-    newValues: AudioPropertyUpdate,
-  ): boolean {
-    return (
-      oldValues.isMuted !== undefined &&
-      newValues.isMuted !== undefined &&
-      oldValues.isMuted !== newValues.isMuted
-    )
-  }
 
   function hasPlaybackRateChanges(
     oldValue: PlaybackRateUpdate,
@@ -267,98 +190,6 @@ export function useHistoryOperations(
       newPositionFrames,
       oldTrackId,
       finalNewTrackId,
-      unifiedTimelineModule,
-      unifiedMediaModule,
-    )
-    await unifiedHistoryModule.executeCommand(command)
-  }
-
-  /**
-   * 带历史记录的更新变换属性方法（旧直写路径）。
-   *
-   * @deprecated 属性面板中的 transform 属性已迁移到
-   * `propertyMutationCommitter -> applyChangePlanWithHistory`。新代码不要再调用本方法，
-   * 避免绕过 PropertyPlanner 的 static/keyframe 写入策略。仅保留给尚未迁移的历史调用兜底。
-   * @param timelineItemId 要更新的时间轴项目ID
-   * @param newTransform 新的变换属性
-   */
-  async function updateVisualTransformWithHistory(
-    timelineItemId: string,
-    newTransform: VisualTransformUpdate,
-  ) {
-    const timelineItem = getEditableTimelineItemOrWarn(timelineItemId, '更新视觉属性')
-    if (!timelineItem) {
-      return
-    }
-
-    if (!TimelineItemQueries.hasVisualProperties(timelineItem)) {
-      console.warn(`⚠️ 时间轴项目不支持视觉属性更新: ${timelineItemId}`)
-      return
-    }
-
-    const config = timelineItem.config as VideoMediaConfig
-    const oldTransform: VisualTransformUpdate = {}
-
-    if (newTransform.x !== undefined) oldTransform.x = config.x
-    if (newTransform.y !== undefined) oldTransform.y = config.y
-    if (newTransform.width !== undefined) oldTransform.width = config.width
-    if (newTransform.height !== undefined) oldTransform.height = config.height
-    if (newTransform.rotation !== undefined) oldTransform.rotation = config.rotation
-    if (newTransform.opacity !== undefined) oldTransform.opacity = config.opacity
-    if (newTransform.blendMode !== undefined) oldTransform.blendMode = config.blendMode
-
-    if (!hasVisualTransformChanges(oldTransform, newTransform)) {
-      console.log('⚠️ 视觉属性没有变化，跳过更新操作')
-      return
-    }
-
-    const command = new UpdateVisualTransformCommand(
-      timelineItemId,
-      oldTransform,
-      newTransform,
-      unifiedTimelineModule,
-      unifiedMediaModule,
-    )
-    await unifiedHistoryModule.executeCommand(command)
-  }
-
-  /**
-   * 带历史记录的更新音频属性方法（旧直写路径）。
-   *
-   * @deprecated 属性面板中的 audio.volume / audio.isMuted 已迁移到
-   * `propertyMutationCommitter -> applyChangePlanWithHistory`。新代码不要再调用本方法，
-   * 避免继续扩散绕过 ChangePlan 的音频属性写入。
-   */
-  async function updateAudioPropertiesWithHistory(
-    timelineItemId: string,
-    newValues: AudioPropertyUpdate,
-  ) {
-    const timelineItem = getEditableTimelineItemOrWarn(timelineItemId, '更新音频属性')
-    if (!timelineItem) {
-      return
-    }
-
-    if (!TimelineItemQueries.hasAudioProperties(timelineItem)) {
-      console.warn(`⚠️ 时间轴项目不支持音频属性更新: ${timelineItemId}`)
-      return
-    }
-
-    const config = timelineItem.config as AudioMediaConfig
-    const oldValues: AudioPropertyUpdate = {}
-
-    if (newValues.isMuted !== undefined) {
-      oldValues.isMuted = config.isMuted ?? false
-    }
-
-    if (!hasAudioPropertyChanges(oldValues, newValues)) {
-      console.log('⚠️ 音频属性没有变化，跳过更新操作')
-      return
-    }
-
-    const command = new UpdateAudioPropertiesCommand(
-      timelineItemId,
-      oldValues,
-      newValues,
       unifiedTimelineModule,
       unifiedMediaModule,
     )
@@ -818,128 +649,6 @@ export function useHistoryOperations(
   }
 
   /**
-   * 带历史记录的更新文本内容方法
-   * @param timelineItemId 要更新的时间轴项目ID
-   * @param newText 新的文本内容
-   * @param newStyle 新的文本样式（可选）
-   */
-  async function updateTextContentWithHistory(
-    timelineItemId: string,
-    newText: string,
-    newStyle: Partial<TextStyleConfig> = {},
-  ) {
-    // 验证文本项目存在
-    const timelineItem = unifiedTimelineModule.getTimelineItem(timelineItemId)
-    if (!timelineItem || !TimelineItemQueries.isTextTimelineItem(timelineItem)) {
-      console.warn(`⚠️ 文本项目不存在或类型错误: ${timelineItemId}`)
-      return
-    }
-
-    // 检查文本内容是否有实际变化
-    if (timelineItem.config.text === newText.trim() && Object.keys(newStyle).length === 0) {
-      console.log('⚠️ 文本内容没有变化，跳过更新操作')
-      return
-    }
-
-    try {
-      console.log('🔄 [useHistoryOperations] 更新文本内容:', {
-        timelineItemId,
-        newText: newText.substring(0, 20) + (newText.length > 20 ? '...' : ''),
-        hasStyleUpdate: Object.keys(newStyle).length > 0,
-      })
-
-      // 创建更新文本命令
-      const command = new UpdateTextCommand(
-        timelineItemId,
-        newText.trim(),
-        newStyle,
-        {
-          getTimelineItem: (id: string) =>
-            unifiedTimelineModule.getTimelineItem(id) as
-              | UnifiedTimelineItemData<'text'>
-              | undefined,
-        },
-        unifiedConfigModule,
-      )
-
-      // 执行命令（带历史记录）
-      await unifiedHistoryModule.executeCommand(command)
-
-      console.log('✅ [useHistoryOperations] 文本内容更新成功')
-    } catch (error) {
-      console.error('❌ [useHistoryOperations] 更新文本内容失败:', error)
-      throw error
-    }
-  }
-
-  /**
-   * 带历史记录的更新文本样式方法
-   * @param timelineItemId 要更新的时间轴项目ID
-   * @param newStyle 新的文本样式
-   */
-  async function updateTextStyleWithHistory(
-    timelineItemId: string,
-    newStyle: Partial<TextStyleConfig>,
-  ) {
-    // 验证文本项目存在
-    const timelineItem = unifiedTimelineModule.getTimelineItem(timelineItemId)
-    if (!timelineItem || !TimelineItemQueries.isTextTimelineItem(timelineItem)) {
-      console.warn(`⚠️ 文本项目不存在或类型错误: ${timelineItemId}`)
-      return
-    }
-
-    // 获取当前样式进行对比
-    const currentStyle = timelineItem.config.style
-    if (!currentStyle) {
-      console.warn(`⚠️ 文本项目样式数据不存在: ${timelineItemId}`)
-      return
-    }
-
-    // 检查样式是否有实际变化
-    const hasChanges = Object.keys(newStyle).some((key) => {
-      const styleKey = key as keyof TextStyleConfig
-      return newStyle[styleKey] !== currentStyle[styleKey]
-    })
-
-    if (!hasChanges) {
-      console.log('⚠️ 文本样式没有变化，跳过更新操作')
-      return
-    }
-
-    try {
-      console.log('🔄 [useHistoryOperations] 更新文本样式:', {
-        timelineItemId,
-        styleChanges: Object.keys(newStyle),
-        currentText:
-          timelineItem.config.text.substring(0, 20) +
-          (timelineItem.config.text.length > 20 ? '...' : ''),
-      })
-
-      // 创建更新文本命令（保持文本内容不变，只更新样式）
-      const command = new UpdateTextCommand(
-        timelineItemId,
-        timelineItem.config.text, // 保持文本内容不变
-        newStyle,
-        {
-          getTimelineItem: (id: string) =>
-            unifiedTimelineModule.getTimelineItem(id) as
-              | UnifiedTimelineItemData<'text'>
-              | undefined,
-        },
-        unifiedConfigModule,
-      )
-
-      // 执行命令（带历史记录）
-      await unifiedHistoryModule.executeCommand(command)
-
-      console.log('✅ [useHistoryOperations] 文本样式更新成功')
-    } catch (error) {
-      console.error('❌ [useHistoryOperations] 更新文本样式失败:', error)
-      throw error
-    }
-  }
-
-  /**
    * 带历史记录的选择时间轴项目方法
    * @param itemIds 要操作的项目ID数组
    * @param mode 操作模式：'replace'替换选择，'toggle'切换选择状态
@@ -1022,125 +731,6 @@ export function useHistoryOperations(
     return true
   }
 
-  /**
-   * 带历史记录的创建关键帧方法
-   * @param timelineItemId 时间轴项目ID
-   * @param frame 帧数
-   */
-  async function createKeyframeWithHistory(
-    timelineItemId: string,
-    frame: number,
-    groupId: AnimationChannelKey = 'transform.position',
-  ) {
-    if (!getEditableTimelineItemOrWarn(timelineItemId, '创建关键帧')) {
-      return
-    }
-
-    try {
-      console.log('🎬 [useHistoryOperations] 创建关键帧:', { timelineItemId, frame })
-
-      // 创建关键帧命令
-      const command = new CreateKeyframeCommand(
-        timelineItemId,
-        frame,
-        groupId,
-        unifiedTimelineModule,
-        {
-          seekTo: (frame: number) => {
-            // 播放头控制应该由调用方提供，这里简化为不控制播放头
-            console.log('🔍 关键帧操作播放头控制:', frame)
-          },
-        },
-      )
-
-      // 执行命令（带历史记录）
-      await unifiedHistoryModule.executeCommand(command)
-
-      console.log('✅ [useHistoryOperations] 关键帧创建成功')
-    } catch (error) {
-      console.error('❌ [useHistoryOperations] 关键帧创建失败:', error)
-      throw error
-    }
-  }
-
-  /**
-   * 带历史记录的删除关键帧方法
-   * @param timelineItemId 时间轴项目ID
-   * @param frame 帧数
-   */
-  async function deleteKeyframeWithHistory(timelineItemId: string, frame: number) {
-    if (!getEditableTimelineItemOrWarn(timelineItemId, '删除关键帧')) {
-      return
-    }
-
-    try {
-      console.log('🎬 [useHistoryOperations] 删除关键帧:', { timelineItemId, frame })
-
-      // 创建删除关键帧命令
-      const command = new DeleteKeyframeCommand(
-        timelineItemId,
-        frame,
-        'transform.position',
-        unifiedTimelineModule,
-        {
-          seekTo: (frame: number) => {
-            console.log('🔍 关键帧操作播放头控制:', frame)
-          },
-        },
-      )
-
-      // 执行命令（带历史记录）
-      await unifiedHistoryModule.executeCommand(command)
-
-      console.log('✅ [useHistoryOperations] 关键帧删除成功')
-    } catch (error) {
-      console.error('❌ [useHistoryOperations] 关键帧删除失败:', error)
-      throw error
-    }
-  }
-
-  /**
-   * 带历史记录的更新动画组值方法（旧动画组入口）。
-   *
-   * @deprecated transform/audio.volume 等已迁移属性不要再直接调用本方法；
-   * 请通过 `propertyMutationCommitter` 或显式 `ChangePlan` 提交。当前仅作为
-   * filter/mask 等未迁移属性域的过渡兼容入口。
-   * @param timelineItemId 时间轴项目ID
-   * @param frame 帧数
-   * @param groupId 动画组ID
-   * @param patch 动画组 patch
-   */
-  async function updateAnimationGroupValueWithHistory<G extends AnimationGroupId>(
-    timelineItemId: string,
-    frame: number,
-    groupId: G,
-    patch: Partial<AnimationGroupValueMap[G]>,
-  ) {
-    if (!getEditableTimelineItemOrWarn(timelineItemId, '更新动画组')) {
-      return
-    }
-
-    try {
-      const command = new SetAnimationGroupValueCommand(
-        timelineItemId,
-        frame,
-        groupId,
-        patch,
-        unifiedTimelineModule,
-        {
-          seekTo: (nextFrame: number) => {
-            console.log('🔍 动画组操作播放头控制:', nextFrame)
-          },
-        },
-      )
-
-      await unifiedHistoryModule.executeCommand(command)
-    } catch (error) {
-      console.error('❌ [useHistoryOperations] 动画组更新失败:', error)
-      throw error
-    }
-  }
-
   async function applyChangePlanWithHistory(plan: ChangePlan) {
     const targetItemIds = new Set(plan.operations.map((operation) => operation.timelineItemId))
     for (const timelineItemId of targetItemIds) {
@@ -1163,148 +753,6 @@ export function useHistoryOperations(
       await unifiedHistoryModule.executeCommand(command)
     } catch (error) {
       console.error('❌ [useHistoryOperations] 属性修改计划执行失败:', error)
-      throw error
-    }
-  }
-
-  /**
-   * 带历史记录的批量更新动画组方法（旧动画组入口）。
-   *
-   * @deprecated 新属性提交不要继续使用本方法组合动画组命令；需要单步 undo 的组合提交
-   * 应创建一个 `ChangePlan` 并通过 `propertyMutationCommitter.commitChangePlan()` 提交。
-   * 当前仅保留给 mask 等未迁移属性域过渡使用。
-   */
-  async function updateAnimationGroupsBatchWithHistory(
-    timelineItemId: string,
-    frame: number,
-    updates: Array<{
-      groupId: AnimationGroupId
-      patch: Partial<AnimationGroupValueMap[AnimationGroupId]>
-    }>,
-  ) {
-    if (!getEditableTimelineItemOrWarn(timelineItemId, '批量更新动画组')) {
-      return
-    }
-
-    try {
-      const commands = updates.map((update) => new SetAnimationGroupValueCommand(
-        timelineItemId,
-        frame,
-        update.groupId,
-        update.patch,
-        unifiedTimelineModule,
-        {
-          seekTo: (nextFrame: number) => {
-            console.log('🔍 动画组批量操作播放头控制:', nextFrame)
-          },
-        },
-      ))
-
-      await unifiedHistoryModule.executeBatchCommand(
-        new BatchSetAnimationGroupValuesCommand([timelineItemId], commands),
-      )
-    } catch (error) {
-      console.error('❌ [useHistoryOperations] 动画组批量更新失败:', error)
-      throw error
-    }
-  }
-
-  /**
-   * 带历史记录的更新关键帧属性方法（旧 property string 入口）。
-   *
-   * @deprecated 新属性不要再通过字符串 property 路径提交。已迁移属性请走
-   * `propertyMutationCommitter`；未迁移的 filter/mask 可暂时保留使用，迁移完成后删除。
-   */
-  async function updatePropertyWithHistory(
-    timelineItemId: string,
-    frame: number,
-    property: string,
-    value: any,
-  ) {
-    if (!getEditableTimelineItemOrWarn(timelineItemId, '更新关键帧属性')) {
-      return
-    }
-
-    const groupId = getAnimationGroupForProperty(property)
-    if (groupId && typeof value === 'number') {
-      const patchKey = property.startsWith('mask.')
-        ? property.replace('mask.', '')
-        : property.startsWith('filter.')
-          ? property.replace('filter.', '')
-        : property
-      await updateAnimationGroupValueWithHistory(
-        timelineItemId,
-        frame,
-        groupId,
-        { [patchKey]: value } as never,
-      )
-      return
-    }
-
-    try {
-      console.log('🎬 [useHistoryOperations] 更新关键帧属性:', {
-        timelineItemId,
-        frame,
-        property,
-        value,
-      })
-
-      // 创建更新属性命令
-      const command = new UpdatePropertyCommand(
-        timelineItemId,
-        frame,
-        property,
-        value,
-        unifiedTimelineModule,
-        {
-          seekTo: (frame: number) => {
-            console.log('🔍 关键帧操作播放头控制:', frame)
-          },
-        },
-      )
-
-      // 执行命令（带历史记录）
-      await unifiedHistoryModule.executeCommand(command)
-
-      console.log('✅ [useHistoryOperations] 关键帧属性更新成功')
-    } catch (error) {
-      console.error('❌ [useHistoryOperations] 关键帧属性更新失败:', error)
-      throw error
-    }
-  }
-
-  /**
-   * 带历史记录的更新蒙版方法（旧 mask 专用入口）。
-   *
-   * @deprecated mask 属性域尚未迁入 property-system，当前仅作为过渡入口保留。
-   * 新增 mask 属性能力时不要继续扩展本入口，应优先按 ChangePlan 路径迁移。
-   */
-  async function updateMaskWithHistory(
-    timelineItemId: string,
-    frame: number,
-    action: MaskUpdateAction,
-  ) {
-    if (!getEditableTimelineItemOrWarn(timelineItemId, '更新蒙版')) {
-      return
-    }
-
-    try {
-      const command = new UpdateMaskCommand(
-        timelineItemId,
-        frame,
-        action,
-        unifiedTimelineModule,
-        unifiedMediaModule,
-        {
-          seekTo: (frame: number) => {
-            console.log('🔍 蒙版操作播放头控制:', frame)
-          },
-        },
-      )
-
-      await unifiedHistoryModule.executeCommand(command)
-    } catch (error) {
-      console.error('❌ [useHistoryOperations] 蒙版更新失败:', error)
       throw error
     }
   }
@@ -1338,75 +786,11 @@ export function useHistoryOperations(
     }
   }
 
-  /**
-   * 带历史记录的切换关键帧方法
-   * @param timelineItemId 时间轴项目ID
-   * @param frame 帧数
-   */
-  async function toggleKeyframeWithHistory(
-    timelineItemId: string,
-    frame: number,
-    channel: AnimationChannelKey = 'transform.position',
-  ) {
-    if (!getEditableTimelineItemOrWarn(timelineItemId, '切换关键帧')) {
-      return
-    }
-
-    try {
-      const command = new ToggleAnimationGroupKeyframeCommand(
-        timelineItemId,
-        frame,
-        channel,
-        unifiedTimelineModule,
-        {
-          seekTo: (frame: number) => {
-            console.log('🔍 关键帧操作播放头控制:', frame)
-          },
-        },
-      )
-
-      // 执行命令（带历史记录）
-      await unifiedHistoryModule.executeCommand(command)
-    } catch (error) {
-      console.error('❌ [useHistoryOperations] 关键帧切换失败:', error)
-      throw error
-    }
-  }
-
-  /**
-   * 带历史记录的切换等比缩放方法
-   * @param timelineItemId 时间轴项目ID
-   * @param frame 当前帧
-   */
-  async function toggleProportionalScaleWithHistory(timelineItemId: string, frame: number) {
-    if (!getEditableTimelineItemOrWarn(timelineItemId, '切换等比缩放')) {
-      return
-    }
-
-    try {
-      console.log('🎬 [useHistoryOperations] 切换等比缩放:', { timelineItemId, frame })
-
-      const command = new ToggleProportionalScaleCommand(timelineItemId, frame, {
-        getTimelineItem: unifiedTimelineModule.getTimelineItem,
-        getMediaItem: unifiedMediaModule.getMediaItem,
-      })
-
-      await unifiedHistoryModule.executeCommand(command)
-
-      console.log('✅ [useHistoryOperations] 等比缩放切换成功')
-    } catch (error) {
-      console.error('❌ [useHistoryOperations] 等比缩放切换失败:', error)
-      throw error
-    }
-  }
-
   return {
     addTimelineItemWithHistory,
     removeTimelineItemWithHistory,
     startASRRequestWithHistory,
     moveTimelineItemWithHistory,
-    updateVisualTransformWithHistory,
-    updateAudioPropertiesWithHistory,
     updatePlaybackRateWithHistory,
     updateTransitionOutWithHistory,
     updateFilterEffectWithHistory,
@@ -1422,18 +806,8 @@ export function useHistoryOperations(
     toggleTrackVisibilityWithHistory,
     toggleTrackMuteWithHistory,
     moveTrackWithHistory,
-    updateTextContentWithHistory,
-    updateTextStyleWithHistory,
     selectTimelineSelectionsWithHistory,
-    createKeyframeWithHistory,
-    deleteKeyframeWithHistory,
-    updatePropertyWithHistory,
-    updateMaskWithHistory,
     clearAllKeyframesWithHistory,
-    toggleKeyframeWithHistory,
     applyChangePlanWithHistory,
-    updateAnimationGroupValueWithHistory,
-    updateAnimationGroupsBatchWithHistory,
-    toggleProportionalScaleWithHistory,
   }
 }

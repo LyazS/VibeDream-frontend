@@ -126,9 +126,6 @@ export {
   // 统一关键帧交互逻辑
   toggleKeyframe,
 
-  // 属性修改处理
-  handlePropertyChange,
-
   // 关键帧导航
   getPreviousKeyframeFrame,
   getNextKeyframeFrame,

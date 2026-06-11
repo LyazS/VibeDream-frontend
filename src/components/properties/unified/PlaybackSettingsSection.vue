@@ -160,7 +160,6 @@ const speedToNormalized = (speed: number) => {
 
 // 更新播放速度
 const updatePlaybackRate = async (newRate?: number) => {
-  throwClipPropertyPhase0Todo('playback.rate.update')
   if (
     props.selectedTimelineItem
     && (isVideoTimelineItem(props.selectedTimelineItem)
@@ -195,7 +194,6 @@ const handleTimecodeError = (errorMessage: string) => {
 
 // 更新目标时长
 const updateTargetDurationFrames = async (newDurationFrames: number) => {
-  throwClipPropertyPhase0Todo('playback.targetDuration.update')
   if (!props.selectedTimelineItem) {
     console.warn('⚠️ 没有选中的时间轴项目')
     return

@@ -208,69 +208,6 @@ export function createUnifiedTimelineModule(registry: ModuleRegistry) {
       .filter((overlay): overlay is TimelineTransitionOverlayViewModel => overlay !== null)
   }
 
-  function setTimelineItemVisualPropsForCmd(
-    timelineItemId: string,
-    patch: VisualPropPatch,
-  ) {
-    const item = getReadyTimelineItem(timelineItemId)
-    if (!item) return
-
-    if (!TimelineItemQueries.hasVisualProperties(item)) {
-      return
-    }
-
-    const config = item.config
-
-    if (patch.x !== undefined) {
-      config.x = patch.x
-    }
-    if (patch.y !== undefined) {
-      config.y = patch.y
-    }
-    if (patch.width !== undefined) {
-      config.width = patch.width
-    }
-    if (patch.height !== undefined) {
-      config.height = patch.height
-    }
-    if (patch.rotation !== undefined) {
-      config.rotation = patch.rotation
-    }
-    if (patch.opacity !== undefined) {
-      config.opacity = patch.opacity
-    }
-    if (patch.blendMode !== undefined) {
-      config.blendMode = patch.blendMode
-    }
-    if (patch.proportionalScale !== undefined) {
-      config.proportionalScale = patch.proportionalScale
-    }
-    if (patch.mask !== undefined) {
-      config.mask = patch.mask
-    }
-  }
-
-  function setTimelineItemAudioPropsForCmd(
-    timelineItemId: string,
-    patch: AudioPropPatch,
-  ) {
-    const item = getReadyTimelineItem(timelineItemId)
-    if (!item) return
-
-    if (!TimelineItemQueries.hasAudioProperties(item)) {
-      return
-    }
-
-    const config = item.config
-
-    if (patch.volume !== undefined) {
-      config.volume = patch.volume
-    }
-    if (patch.isMuted !== undefined) {
-      config.isMuted = patch.isMuted
-    }
-  }
-
   // ==================== 导出接口 ====================
 
   return {
@@ -283,8 +220,6 @@ export function createUnifiedTimelineModule(registry: ModuleRegistry) {
     getTimelineItem,
     getReadyTimelineItem,
     updateTimelineItemPosition,
-    setTimelineItemVisualPropsForCmd,
-    setTimelineItemAudioPropsForCmd,
     setTimelineItemTimeRangeForCmd,
     setTimelineItemTransitionOutForCmd,
     setTimelineItemFilterEffectForCmd,

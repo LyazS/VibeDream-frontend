@@ -394,10 +394,6 @@ export const useUnifiedStore = defineStore('unified', () => {
     removeTimelineItemWithHistory: historyOperations.removeTimelineItemWithHistory,
     startASRRequestWithHistory: historyOperations.startASRRequestWithHistory,
     moveTimelineItemWithHistory: historyOperations.moveTimelineItemWithHistory,
-    // @deprecated 旧属性直写入口。transform/audio 属性新代码应走
-    // propertyMutationCommitter -> applyChangePlanWithHistory。
-    updateVisualTransformWithHistory: historyOperations.updateVisualTransformWithHistory,
-    updateAudioPropertiesWithHistory: historyOperations.updateAudioPropertiesWithHistory,
     updatePlaybackRateWithHistory: historyOperations.updatePlaybackRateWithHistory,
     updateTransitionOutWithHistory: historyOperations.updateTransitionOutWithHistory,
     updateFilterEffectWithHistory: historyOperations.updateFilterEffectWithHistory,
@@ -414,22 +410,9 @@ export const useUnifiedStore = defineStore('unified', () => {
     autoArrangeTrackWithHistory: historyOperations.autoArrangeTrackWithHistory,
     toggleTrackVisibilityWithHistory: historyOperations.toggleTrackVisibilityWithHistory,
     toggleTrackMuteWithHistory: historyOperations.toggleTrackMuteWithHistory,
-    updateTextContentWithHistory: historyOperations.updateTextContentWithHistory,
-    updateTextStyleWithHistory: historyOperations.updateTextStyleWithHistory,
     selectTimelineSelectionsWithHistory: historyOperations.selectTimelineSelectionsWithHistory,
-    // 关键帧历史记录方法
-    createKeyframeWithHistory: historyOperations.createKeyframeWithHistory,
-    deleteKeyframeWithHistory: historyOperations.deleteKeyframeWithHistory,
-    // @deprecated 旧 property string / mask / animation-group 入口。
-    // 新属性迁移应优先使用 propertyMutationCommitter 或显式 ChangePlan。
-    updatePropertyWithHistory: historyOperations.updatePropertyWithHistory,
-    updateMaskWithHistory: historyOperations.updateMaskWithHistory,
     applyChangePlanWithHistory: historyOperations.applyChangePlanWithHistory,
-    updateAnimationGroupValueWithHistory: historyOperations.updateAnimationGroupValueWithHistory,
-    updateAnimationGroupsBatchWithHistory: historyOperations.updateAnimationGroupsBatchWithHistory,
     clearAllKeyframesWithHistory: historyOperations.clearAllKeyframesWithHistory,
-    toggleKeyframeWithHistory: historyOperations.toggleKeyframeWithHistory,
-    toggleProportionalScaleWithHistory: historyOperations.toggleProportionalScaleWithHistory,
 
     // ==================== 统一媒体模块状态和方法 ====================
 
@@ -520,10 +503,6 @@ export const useUnifiedStore = defineStore('unified', () => {
     getTimelineItem: unifiedTimelineModule.getTimelineItem,
     getReadyTimelineItem: unifiedTimelineModule.getReadyTimelineItem,
     updateTimelineItemPosition: unifiedTimelineModule.updateTimelineItemPosition,
-    setTimelineItemVisualPropsForCmd:
-      unifiedTimelineModule.setTimelineItemVisualPropsForCmd,
-    setTimelineItemAudioPropsForCmd:
-      unifiedTimelineModule.setTimelineItemAudioPropsForCmd,
     setTimelineItemTimeRangeForCmd: unifiedTimelineModule.setTimelineItemTimeRangeForCmd,
     setTimelineItemTransitionOutForCmd:
       unifiedTimelineModule.setTimelineItemTransitionOutForCmd,

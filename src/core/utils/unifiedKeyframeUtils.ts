@@ -2,7 +2,6 @@ import type { MediaType } from '@/core/mediaitem'
 import type { UnifiedTimeRange } from '@/core/types/timeRange'
 import type { UnifiedTimelineItemData } from '@/core/timelineitem/type'
 import {
-  getAnimationGroupForProperty,
   normalizeAnimationGroupId,
   type AnimateKeyframe,
   type AnimationChannelKey,
@@ -27,12 +26,7 @@ import {
   toggleGroupKeyframe,
   adjustGroupKeyframesForDurationChange,
 } from '@/core/animation/engine'
-import { TimelineItemQueries } from '@/core/timelineitem/queries'
-import { setMaskPropertyValue } from '@/core/timelineitem/mask'
-import { normalizeClipFilterConfig } from '@/core/timelineitem/filter'
 import type { KeyframeButtonState, KeyframeUIState } from '@/core/timelineitem/animationtypes'
-
-export type ActionResult = 'no-animation' | 'updated-keyframe' | 'created-keyframe'
 
 export function absoluteFrameToRelativeFrame(
   absoluteFrame: number,
@@ -165,65 +159,6 @@ export function toggleKeyframe(
   channel: AnimationChannelKey,
 ): void {
   toggleGroupKeyframe(item as UnifiedTimelineItemData<MediaType>, currentFrame, channel)
-}
-
-function setConfigProperty(
-  item: UnifiedTimelineItemData,
-  property: string,
-  value: unknown,
-): void {
-  if (property.startsWith('mask.') && typeof value === 'number' && TimelineItemQueries.hasVisualProperties(item)) {
-    item.config.mask = setMaskPropertyValue(item.config.mask, property as never, value, {
-      width: item.config.width,
-      height: item.config.height,
-    })
-    return
-  }
-  if (
-    property === 'filter.intensity' &&
-    typeof value === 'number' &&
-    TimelineItemQueries.supportsClipFilter(item) &&
-    item.filterEffect
-  ) {
-    const nextFilterEffect = normalizeClipFilterConfig({
-      ...item.filterEffect,
-      intensity: value,
-    })
-    item.filterEffect = nextFilterEffect
-    item.runtime.renderFilterEffect = normalizeClipFilterConfig(nextFilterEffect)
-    return
-  }
-  const config = item.config as unknown as Record<string, unknown>
-  if (!(property in config)) return
-  config[property] = value
-}
-
-export async function handlePropertyChange(
-  item: UnifiedTimelineItemData,
-  currentFrame: number,
-  property: string,
-  value: unknown,
-): Promise<ActionResult> {
-  const groupId = getAnimationGroupForProperty(property)
-  if (!groupId || typeof value !== 'number') {
-    setConfigProperty(item, property, value)
-    return 'no-animation'
-  }
-
-  const patchKey = property.startsWith('mask.')
-    ? property.replace('mask.', '')
-    : property.startsWith('filter.')
-      ? property.replace('filter.', '')
-    : property
-
-  const next = setGroupValue(
-    item as UnifiedTimelineItemData<MediaType>,
-    currentFrame,
-    groupId,
-    { [patchKey]: value } as never,
-  )
-
-  return next
 }
 
 export function getPreviousKeyframeFrame(

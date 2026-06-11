@@ -115,7 +115,6 @@ const statusText = computed(() => {
 async function updateTransition(nextPatch: {
   durationFrames?: number
 }) {
-  throwClipPropertyPhase0Todo('transition.update')
   if (!props.selectedTimelineItem) return
 
   unifiedStore.pause()

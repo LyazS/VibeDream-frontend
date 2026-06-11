@@ -17,14 +17,10 @@ import { RenameTrackCommand } from '@/core/modules/commands/RenameTrackCommand'
 import { MoveTrackCommand } from '@/core/modules/commands/MoveTrackCommand'
 import { ToggleTrackMuteCommand } from '@/core/modules/commands/ToggleTrackMuteCommand'
 import { ToggleTrackVisibilityCommand } from '@/core/modules/commands/ToggleTrackVisibilityCommand'
-import { ToggleProportionalScaleCommand } from '@/core/modules/commands/ToggleProportionalScaleCommand'
-import { UpdateVisualTransformCommand } from '@/core/modules/commands/UpdateVisualTransformCommand'
-import { UpdateAudioPropertiesCommand } from '@/core/modules/commands/UpdateAudioPropertiesCommand'
 import { SplitTimelineItemCommand } from '@/core/modules/commands/SplitTimelineItemCommand'
 import type { MediaType } from '@/core/mediaitem/types'
 import type { UnifiedTimelineItemData } from '@/core/timelineitem/type'
 import { MediaItemQueries } from '@/core/mediaitem'
-import { hasVisualProperties, hasAudioProperties } from '@/core/timelineitem/queries'
 import { generateTimelineItemId } from '@/core/utils/idGenerator'
 import { computed } from 'vue'
 import { createTextTimelineItem } from '@/core/utils/textTimelineUtils'
@@ -74,7 +70,9 @@ export class CommandFactory {
       case 'toggleTrackVisibility':
         return this.createToggleTrackVisibilityCommand(params)
       case 'toggleProportionalScale':
-        return this.createToggleProportionalScaleCommand(params)
+        throw new Error(
+          '[Property System] Agent toggleProportionalScale 旧命令链路已移除，等待新的 agent 属性编排方案接入。',
+        )
       case 'updateTimelineItem':
         return this.createUpdateTimelineItemCommand(params)
       case 'splitTimelineItem':
@@ -722,130 +720,19 @@ export class CommandFactory {
   }
 
   /**
-   * 创建切换等比缩放命令
-   */
-  private createToggleProportionalScaleCommand(
-    params: OperationParams<'toggleProportionalScale'>,
-  ): SimpleCommand {
-    const unifiedStore = useUnifiedStore()
-
-    // 验证项目存在
-    const item = unifiedStore.getTimelineItem(params.itemId)
-    if (!item) {
-      throw new Error(`时间轴项目不存在: ${params.itemId}`)
-    }
-
-    // 获取当前帧
-    const currentFrame = unifiedStore.currentFrame
-
-    // 获取模块引用
-    const timelineModule = {
-      getTimelineItem: unifiedStore.getTimelineItem.bind(unifiedStore),
-    }
-
-    const mediaModule = {
-      getMediaItem: unifiedStore.getMediaItem.bind(unifiedStore),
-    }
-
-    // 创建命令
-    return new ToggleProportionalScaleCommand(params.itemId, currentFrame, {
-      ...timelineModule,
-      ...mediaModule,
-    })
-  }
-
-  /**
    * 创建更新时间轴项目属性命令
    */
   private createUpdateTimelineItemCommand(
     params: OperationParams<'updateTimelineItem'>,
   ): SimpleCommand {
-    const unifiedStore = useUnifiedStore()
-
-    // 验证片段存在
-    const timelineItem = unifiedStore.getTimelineItem(params.itemId)
-    if (!timelineItem) {
-      throw new Error(`时间轴项目不存在: ${params.itemId}`)
-    }
-
-    const oldVisualValues: Record<string, unknown> = {}
-    const newVisualValues: Record<string, unknown> = {}
-    const oldAudioValues: Record<string, unknown> = {}
-    const newAudioValues: Record<string, unknown> = {}
-
-    // 视觉属性（仅对 video、image、text 类型有效）
-    if (hasVisualProperties(timelineItem)) {
-      const config = timelineItem.config
-
-      // 宽高自动计算逻辑：只提供其中一个时，根据原始宽高比自动计算另一个
-      const hasWidth = params.width !== undefined
-      const hasHeight = params.height !== undefined
-
-      if (hasWidth || hasHeight) {
-        // 计算当前宽高比（从现有配置获取）
-        const aspectRatio = config.width / config.height
-
-        if (hasWidth && !hasHeight) {
-          // 只提供宽度：计算高度
-          const nextWidth = params.width
-          if (nextWidth !== undefined) {
-            params.height = nextWidth / aspectRatio
-          }
-        } else if (hasHeight && !hasWidth) {
-          // 只提供高度：计算宽度
-          const nextHeight = params.height
-          if (nextHeight !== undefined) {
-            params.width = nextHeight * aspectRatio
-          }
-        }
-        // 同时提供宽高的情况已在验证层拦截，不会到达这里
-      }
-
-      if (params.x !== undefined) {
-        oldVisualValues.x = config.x
-        newVisualValues.x = params.x
-      }
-      if (params.y !== undefined) {
-        oldVisualValues.y = config.y
-        newVisualValues.y = params.y
-      }
-      if (params.width !== undefined) {
-        oldVisualValues.width = config.width
-        newVisualValues.width = params.width
-      }
-      if (params.height !== undefined) {
-        oldVisualValues.height = config.height
-        newVisualValues.height = params.height
-      }
-      if (params.rotation !== undefined) {
-        oldVisualValues.rotation = config.rotation
-        newVisualValues.rotation = params.rotation
-      }
-      if (params.opacity !== undefined) {
-        oldVisualValues.opacity = config.opacity
-        newVisualValues.opacity = params.opacity
-      }
-      if (params.blendMode !== undefined) {
-        oldVisualValues.blendMode = config.blendMode
-        newVisualValues.blendMode = params.blendMode
-      }
-    }
-
-    if (hasAudioProperties(timelineItem)) {
-      const config = timelineItem.config
-
-      if (params.isMuted !== undefined) {
-        oldAudioValues.isMuted = config.isMuted
-        newAudioValues.isMuted = params.isMuted
-      }
-    }
-
-    const mediaModule = this.getMediaModule()
-    const baseTimelineModule = {
-      getTimelineItem: (id: string) => unifiedStore.getTimelineItem(id),
-    }
-
     if (params.playbackRate !== undefined) {
+      const unifiedStore = useUnifiedStore()
+      const timelineItem = unifiedStore.getTimelineItem(params.itemId)
+      if (!timelineItem) {
+        throw new Error(`时间轴项目不存在: ${params.itemId}`)
+      }
+
+      const mediaModule = this.getMediaModule()
       const timeRange = timelineItem.timeRange
       const clipDuration = timeRange.clipEndTime - timeRange.clipStartTime
       const clampedRate = Math.max(0.1, Math.min(100, params.playbackRate))
@@ -861,7 +748,7 @@ export class CommandFactory {
         timeRange,
         newTimeRange,
         {
-          getTimelineItem: baseTimelineModule.getTimelineItem,
+          getTimelineItem: (id: string) => unifiedStore.getTimelineItem(id),
           setTimelineItemTimeRangeForCmd:
             unifiedStore.setTimelineItemTimeRangeForCmd.bind(unifiedStore),
         },
@@ -869,30 +756,8 @@ export class CommandFactory {
       )
     }
 
-    if (Object.keys(newAudioValues).length > 0) {
-      return new UpdateAudioPropertiesCommand(
-        params.itemId,
-        oldAudioValues,
-        newAudioValues,
-        {
-          ...baseTimelineModule,
-          setTimelineItemAudioPropsForCmd:
-            unifiedStore.setTimelineItemAudioPropsForCmd.bind(unifiedStore),
-        },
-        mediaModule,
-      )
-    }
-
-    return new UpdateVisualTransformCommand(
-      params.itemId,
-      oldVisualValues,
-      newVisualValues,
-      {
-        ...baseTimelineModule,
-        setTimelineItemVisualPropsForCmd:
-          unifiedStore.setTimelineItemVisualPropsForCmd.bind(unifiedStore),
-      },
-      mediaModule,
+    throw new Error(
+      '[Property System] Agent updateTimelineItem 旧属性命令链路已移除，等待新的 agent 属性编排方案接入。',
     )
   }
 
