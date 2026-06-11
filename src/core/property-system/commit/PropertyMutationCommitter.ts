@@ -4,6 +4,7 @@ import type {
   ChangeOperation,
   ChangePlan,
   ChangePlanPropertyId,
+  DirectPropertyId,
   DirectPropertyBatchPlanEntry,
 } from '@/core/property-system/mutation'
 import type { MediaType } from '@/core/mediaitem'
@@ -18,7 +19,7 @@ export interface PropertyMutationCommitContext {
 export class PropertyMutationCommitter {
   async commitDirect(
     context: PropertyMutationCommitContext,
-    propertyId: AnimatablePropertyId,
+    propertyId: DirectPropertyId,
     value: unknown,
   ): Promise<void> {
     await context.applyChangePlan(
@@ -70,7 +71,7 @@ export class PropertyMutationCommitter {
 
   createDirectPlan(
     context: Omit<PropertyMutationCommitContext, 'applyChangePlan'>,
-    propertyId: AnimatablePropertyId,
+    propertyId: DirectPropertyId,
     value: unknown,
   ): ChangePlan {
     return propertyPlanner.plan({

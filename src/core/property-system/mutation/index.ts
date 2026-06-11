@@ -9,6 +9,8 @@ export type {
   ChangePlan,
   ChangePlanPropertyId,
   ConfigPropertyId,
+  DirectOnlyPropertyId,
+  DirectPropertyId,
   DirectPropertyBatchPlanEntry,
   DirectPropertyBatchPlanIntent,
   DirectPropertyPlanIntent,

@@ -37,11 +37,26 @@ export type ConfigPropertyId =
   | 'mask.type'
   | 'mask.inverted'
 
-export type ChangePlanPropertyId = AnimatablePropertyId | ConfigPropertyId | 'filter.batch'
+export type DirectOnlyPropertyId =
+  | 'text.content'
+  | 'text.style.fontSize'
+  | 'text.style.fontFamily'
+  | 'text.style.fontWeight'
+  | 'text.style.fontStyle'
+  | 'text.style.color'
+  | 'text.style.backgroundColor'
+  | 'text.style.textAlign'
+  | 'text.style.textShadow'
+  | 'text.style.textStroke'
+  | 'text.style.textGlow'
+
+export type DirectPropertyId = AnimatablePropertyId | DirectOnlyPropertyId
+
+export type ChangePlanPropertyId = DirectPropertyId | ConfigPropertyId | 'filter.batch'
 
 export interface DirectPropertyPlanIntent<TValue = unknown> {
   kind: 'direct'
-  propertyId: AnimatablePropertyId
+  propertyId: DirectPropertyId
   timelineItemId: string
   frame: number
   value: TValue
@@ -49,7 +64,7 @@ export interface DirectPropertyPlanIntent<TValue = unknown> {
 }
 
 export interface DirectPropertyBatchPlanEntry<TValue = unknown> {
-  propertyId: AnimatablePropertyId
+  propertyId: DirectPropertyId
   value: TValue
 }
 
@@ -124,6 +139,14 @@ export interface AnimationKeyframeDeleteOperation<G extends PropertyAnimationGro
   relativeFrame: number
 }
 
+export interface TextRebuildOperation {
+  kind: 'text-rebuild'
+  timelineItemId: string
+  frame: number
+  text?: string
+  stylePatch?: Record<string, unknown>
+}
+
 export type ChangeOperation =
   | NoAnimationGroupPatchOperation
   | VisualConfigPatchOperation
@@ -131,6 +154,7 @@ export type ChangeOperation =
   | AnimationKeyframeUpdateOperation
   | AnimationKeyframeCreateOperation
   | AnimationKeyframeDeleteOperation
+  | TextRebuildOperation
 
 export interface ChangePlan {
   propertyId: ChangePlanPropertyId

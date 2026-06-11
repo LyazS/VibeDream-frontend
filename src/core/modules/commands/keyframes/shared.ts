@@ -11,6 +11,8 @@ import type { ClipFilterConfig } from '@/core/filter/types'
 import { isPlayheadInTimelineItem as checkPlayheadInTimelineItem } from '@/core/utils/timelineSearchUtils'
 import { cloneDeep } from 'lodash'
 import { useUnifiedStore } from '@/core/unifiedStore'
+import { isTextTimelineItem } from '@/core/timelineitem/queries'
+import { rebuildTextRuntime } from '@/core/timelineitem/textRebuild'
 
 // ==================== 关键帧数据快照接口 ====================
 
@@ -98,6 +100,13 @@ export async function applyKeyframeSnapshot(
 
   item.filterEffect = snapshot.filterEffect ? cloneDeep(snapshot.filterEffect) : undefined
   item.runtime.renderFilterEffect = snapshot.filterEffect ? cloneDeep(snapshot.filterEffect) : undefined
+
+  if (isTextTimelineItem(item)) {
+    await rebuildTextRuntime(item, {
+      text: item.config.text,
+      stylePatch: item.config.style,
+    })
+  }
 }
 
 /**

@@ -84,6 +84,147 @@ export class PropertyPlanner {
     }
 
     const nextStaticPatch = this.normalizeDirectPatchValue(intent, schema)
+    if (schema.propertyId === 'text.content') {
+      return [
+        {
+          kind: 'text-rebuild',
+          timelineItemId: intent.timelineItemId,
+          frame: intent.frame,
+          text: String(nextStaticPatch.text ?? ''),
+        },
+      ]
+    }
+
+    if (schema.propertyId === 'text.style.fontSize') {
+      return [
+        {
+          kind: 'text-rebuild',
+          timelineItemId: intent.timelineItemId,
+          frame: intent.frame,
+          stylePatch: {
+            fontSize: nextStaticPatch.fontSize,
+          },
+        },
+      ]
+    }
+
+    if (schema.propertyId === 'text.style.fontFamily') {
+      return [
+        {
+          kind: 'text-rebuild',
+          timelineItemId: intent.timelineItemId,
+          frame: intent.frame,
+          stylePatch: {
+            fontFamily: nextStaticPatch.fontFamily,
+          },
+        },
+      ]
+    }
+
+    if (schema.propertyId === 'text.style.fontWeight') {
+      return [
+        {
+          kind: 'text-rebuild',
+          timelineItemId: intent.timelineItemId,
+          frame: intent.frame,
+          stylePatch: {
+            fontWeight: nextStaticPatch.fontWeight,
+          },
+        },
+      ]
+    }
+
+    if (schema.propertyId === 'text.style.fontStyle') {
+      return [
+        {
+          kind: 'text-rebuild',
+          timelineItemId: intent.timelineItemId,
+          frame: intent.frame,
+          stylePatch: {
+            fontStyle: nextStaticPatch.fontStyle,
+          },
+        },
+      ]
+    }
+
+    if (schema.propertyId === 'text.style.color') {
+      return [
+        {
+          kind: 'text-rebuild',
+          timelineItemId: intent.timelineItemId,
+          frame: intent.frame,
+          stylePatch: {
+            color: nextStaticPatch.color,
+          },
+        },
+      ]
+    }
+
+    if (schema.propertyId === 'text.style.backgroundColor') {
+      return [
+        {
+          kind: 'text-rebuild',
+          timelineItemId: intent.timelineItemId,
+          frame: intent.frame,
+          stylePatch: {
+            backgroundColor: nextStaticPatch.backgroundColor,
+          },
+        },
+      ]
+    }
+
+    if (schema.propertyId === 'text.style.textAlign') {
+      return [
+        {
+          kind: 'text-rebuild',
+          timelineItemId: intent.timelineItemId,
+          frame: intent.frame,
+          stylePatch: {
+            textAlign: nextStaticPatch.textAlign,
+          },
+        },
+      ]
+    }
+
+    if (schema.propertyId === 'text.style.textShadow') {
+      return [
+        {
+          kind: 'text-rebuild',
+          timelineItemId: intent.timelineItemId,
+          frame: intent.frame,
+          stylePatch: {
+            textShadow: nextStaticPatch.textShadow,
+          },
+        },
+      ]
+    }
+
+    if (schema.propertyId === 'text.style.textStroke') {
+      return [
+        {
+          kind: 'text-rebuild',
+          timelineItemId: intent.timelineItemId,
+          frame: intent.frame,
+          stylePatch: {
+            textStroke: nextStaticPatch.textStroke,
+          },
+        },
+      ]
+    }
+
+    if (schema.propertyId === 'text.style.textGlow') {
+      return [
+        {
+          kind: 'text-rebuild',
+          timelineItemId: intent.timelineItemId,
+          frame: intent.frame,
+          stylePatch: {
+            textGlow: nextStaticPatch.textGlow,
+          },
+        },
+      ]
+    }
+
     const groupId = schema.animationGroupId
 
     if (!groupId) {
@@ -242,6 +383,17 @@ export class PropertyPlanner {
     if (schema.propertyId === 'filter.intensity') return '滤镜强度'
     if (isFilterParamPropertyId(schema.propertyId)) return schema.label ?? schema.propertyId
     if (schema.propertyId === 'audio.volume') return '音量'
+    if (schema.propertyId === 'text.content') return '文本内容'
+    if (schema.propertyId === 'text.style.fontFamily') return '字体'
+    if (schema.propertyId === 'text.style.fontSize') return '字号'
+    if (schema.propertyId === 'text.style.fontStyle') return '字体样式'
+    if (schema.propertyId === 'text.style.fontWeight') return '字重'
+    if (schema.propertyId === 'text.style.color') return '文字颜色'
+    if (schema.propertyId === 'text.style.backgroundColor') return '背景颜色'
+    if (schema.propertyId === 'text.style.textAlign') return '文本对齐'
+    if (schema.propertyId === 'text.style.textGlow') return '文字发光'
+    if (schema.propertyId === 'text.style.textStroke') return '文字描边'
+    if (schema.propertyId === 'text.style.textShadow') return '文字阴影'
     if (schema.propertyId === 'mask.center') return '蒙版中心'
     if (schema.propertyId === 'mask.rectangle.size') return '矩形蒙版尺寸'
     if (schema.propertyId === 'mask.rectangle.cornerRadius') return '矩形蒙版圆角'

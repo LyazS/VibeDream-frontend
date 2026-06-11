@@ -23,6 +23,8 @@ import { applyAnimationToConfig } from '@/core/utils/animationInterpolation'
 import { normalizeClipFilterConfig } from '@/core/timelineitem/filter'
 import { AnimationRegistry } from '@/core/animation/registry'
 import type { PropertyAnimationGroupId } from '@/core/timelineitem/bunnytype'
+import { TimelineItemQueries } from '@/core/timelineitem/queries'
+import { rebuildTextRuntime } from '@/core/timelineitem/textRebuild'
 
 export class ApplyChangePlanCommand implements SimpleCommand {
   public readonly id: string
@@ -69,6 +71,14 @@ export class ApplyChangePlanCommand implements SimpleCommand {
         Object.assign(item.config, operation.patch)
       } else if (operation.kind === 'audio-config-patch') {
         Object.assign(item.config, operation.patch)
+      } else if (operation.kind === 'text-rebuild') {
+        if (!TimelineItemQueries.isTextTimelineItem(item)) {
+          throw new Error(`文本属性仅支持 text timeline item: ${operation.timelineItemId}`)
+        }
+        await rebuildTextRuntime(item, {
+          text: operation.text,
+          stylePatch: operation.stylePatch as never,
+        })
       } else if (operation.kind === 'animation-keyframe-update') {
         const track = ensureTrack(item, operation.groupId)
         const keyframe = track.keyframes.find((entry) => entry.frame === operation.relativeFrame)

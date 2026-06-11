@@ -1,12 +1,12 @@
 import type { PropertyAnimationGroupId } from '@/core/timelineitem/bunnytype'
-import type { AnimatablePropertyId } from '@/core/property-system/mutation/types'
+import type { DirectPropertyId } from '@/core/property-system/mutation/types'
 import { normalizeAngle } from '@/core/utils/rotationTransform'
 
 export type AnimatablePropertyTarget = 'config' | 'filterEffect' | 'maskConfig'
 export type PropertyValueKind = 'number' | 'boolean' | 'color' | 'vec2'
 
 export interface AnimatablePropertySchema {
-  propertyId: AnimatablePropertyId
+  propertyId: DirectPropertyId
   animationGroupId?: PropertyAnimationGroupId
   target: AnimatablePropertyTarget
   valueFields: readonly string[]
@@ -242,4 +242,265 @@ export const maskMirrorLengthSchema: AnimatablePropertySchema = {
   normalizeDirectValue: (value) => ({
     length: Math.max(0, assertFiniteNumber(value, 'mask.mirror.length')),
   }),
+}
+
+export const textContentSchema: AnimatablePropertySchema = {
+  propertyId: 'text.content',
+  target: 'config',
+  valueFields: ['text'],
+  valueKind: 'boolean',
+  supportsDirectCommit: true,
+  supportsKeyframeToggle: false,
+  supportsTransientOverlay: false,
+  normalizeDirectValue: (value) => {
+    if (typeof value !== 'string') {
+      throw new Error('text.content requires a string value')
+    }
+
+    const text = value.trim()
+    if (!text) {
+      throw new Error('text.content requires a non-empty string value')
+    }
+
+    return { text }
+  },
+}
+
+export const textStyleFontSizeSchema: AnimatablePropertySchema = {
+  propertyId: 'text.style.fontSize',
+  target: 'config',
+  valueFields: ['fontSize'],
+  valueKind: 'number',
+  supportsDirectCommit: true,
+  supportsKeyframeToggle: false,
+  supportsTransientOverlay: false,
+  min: 12,
+  max: 200,
+  step: 1,
+  normalizeDirectValue: (value) => ({
+    fontSize: clamp(assertFiniteNumber(value, 'text.style.fontSize'), 12, 200),
+  }),
+}
+
+export const textStyleFontFamilySchema: AnimatablePropertySchema = {
+  propertyId: 'text.style.fontFamily',
+  target: 'config',
+  valueFields: ['fontFamily'],
+  valueKind: 'boolean',
+  supportsDirectCommit: true,
+  supportsKeyframeToggle: false,
+  supportsTransientOverlay: false,
+  normalizeDirectValue: (value) => {
+    if (typeof value !== 'string') {
+      throw new Error('text.style.fontFamily requires a string value')
+    }
+
+    const fontFamily = value.trim()
+    if (!fontFamily) {
+      throw new Error('text.style.fontFamily requires a non-empty string value')
+    }
+
+    return { fontFamily }
+  },
+}
+
+export const textStyleFontWeightSchema: AnimatablePropertySchema = {
+  propertyId: 'text.style.fontWeight',
+  target: 'config',
+  valueFields: ['fontWeight'],
+  valueKind: 'boolean',
+  supportsDirectCommit: true,
+  supportsKeyframeToggle: false,
+  supportsTransientOverlay: false,
+  normalizeDirectValue: (value) => {
+    if (typeof value !== 'string' && typeof value !== 'number') {
+      throw new Error('text.style.fontWeight requires a string or number value')
+    }
+
+    return { fontWeight: value }
+  },
+}
+
+export const textStyleFontStyleSchema: AnimatablePropertySchema = {
+  propertyId: 'text.style.fontStyle',
+  target: 'config',
+  valueFields: ['fontStyle'],
+  valueKind: 'boolean',
+  supportsDirectCommit: true,
+  supportsKeyframeToggle: false,
+  supportsTransientOverlay: false,
+  normalizeDirectValue: (value) => {
+    if (value !== 'normal' && value !== 'italic') {
+      throw new Error('text.style.fontStyle requires "normal" or "italic"')
+    }
+
+    return { fontStyle: value }
+  },
+}
+
+export const textStyleColorSchema: AnimatablePropertySchema = {
+  propertyId: 'text.style.color',
+  target: 'config',
+  valueFields: ['color'],
+  valueKind: 'color',
+  supportsDirectCommit: true,
+  supportsKeyframeToggle: false,
+  supportsTransientOverlay: false,
+  normalizeDirectValue: (value) => {
+    if (typeof value !== 'string') {
+      throw new Error('text.style.color requires a string value')
+    }
+
+    const color = value.trim()
+    if (!color) {
+      throw new Error('text.style.color requires a non-empty string value')
+    }
+
+    return { color }
+  },
+}
+
+export const textStyleBackgroundColorSchema: AnimatablePropertySchema = {
+  propertyId: 'text.style.backgroundColor',
+  target: 'config',
+  valueFields: ['backgroundColor'],
+  valueKind: 'color',
+  supportsDirectCommit: true,
+  supportsKeyframeToggle: false,
+  supportsTransientOverlay: false,
+  normalizeDirectValue: (value) => {
+    if (typeof value === 'undefined') {
+      return { backgroundColor: undefined }
+    }
+
+    if (typeof value !== 'string') {
+      throw new Error('text.style.backgroundColor requires a string value or undefined')
+    }
+
+    const backgroundColor = value.trim()
+    if (!backgroundColor) {
+      throw new Error('text.style.backgroundColor requires a non-empty string value')
+    }
+
+    return { backgroundColor }
+  },
+}
+
+export const textStyleTextAlignSchema: AnimatablePropertySchema = {
+  propertyId: 'text.style.textAlign',
+  target: 'config',
+  valueFields: ['textAlign'],
+  valueKind: 'boolean',
+  supportsDirectCommit: true,
+  supportsKeyframeToggle: false,
+  supportsTransientOverlay: false,
+  normalizeDirectValue: (value) => {
+    if (value !== 'left' && value !== 'center' && value !== 'right') {
+      throw new Error('text.style.textAlign requires "left", "center", or "right"')
+    }
+
+    return { textAlign: value }
+  },
+}
+
+export const textStyleTextShadowSchema: AnimatablePropertySchema = {
+  propertyId: 'text.style.textShadow',
+  target: 'config',
+  valueFields: ['textShadow'],
+  valueKind: 'boolean',
+  supportsDirectCommit: true,
+  supportsKeyframeToggle: false,
+  supportsTransientOverlay: false,
+  normalizeDirectValue: (value) => {
+    if (typeof value === 'undefined') {
+      return { textShadow: undefined }
+    }
+
+    if (typeof value !== 'string') {
+      throw new Error('text.style.textShadow requires a string value or undefined')
+    }
+
+    const textShadow = value.trim()
+    if (!textShadow) {
+      throw new Error('text.style.textShadow requires a non-empty string value')
+    }
+
+    return { textShadow }
+  },
+}
+
+export const textStyleTextStrokeSchema: AnimatablePropertySchema = {
+  propertyId: 'text.style.textStroke',
+  target: 'config',
+  valueFields: ['textStroke'],
+  valueKind: 'boolean',
+  supportsDirectCommit: true,
+  supportsKeyframeToggle: false,
+  supportsTransientOverlay: false,
+  normalizeDirectValue: (value) => {
+    if (typeof value === 'undefined') {
+      return { textStroke: undefined }
+    }
+
+    if (!value || typeof value !== 'object' || Array.isArray(value)) {
+      throw new Error('text.style.textStroke requires an object value or undefined')
+    }
+
+    const { width, color } = value as { width?: unknown; color?: unknown }
+    if (typeof width !== 'number' || !Number.isFinite(width)) {
+      throw new Error('text.style.textStroke requires a finite width')
+    }
+    if (typeof color !== 'string' || !color.trim()) {
+      throw new Error('text.style.textStroke requires a non-empty color')
+    }
+
+    return {
+      textStroke: {
+        width: clamp(width, 0, 10),
+        color: color.trim(),
+      },
+    }
+  },
+}
+
+export const textStyleTextGlowSchema: AnimatablePropertySchema = {
+  propertyId: 'text.style.textGlow',
+  target: 'config',
+  valueFields: ['textGlow'],
+  valueKind: 'boolean',
+  supportsDirectCommit: true,
+  supportsKeyframeToggle: false,
+  supportsTransientOverlay: false,
+  normalizeDirectValue: (value) => {
+    if (typeof value === 'undefined') {
+      return { textGlow: undefined }
+    }
+
+    if (!value || typeof value !== 'object' || Array.isArray(value)) {
+      throw new Error('text.style.textGlow requires an object value or undefined')
+    }
+
+    const { color, blur, spread } = value as {
+      color?: unknown
+      blur?: unknown
+      spread?: unknown
+    }
+    if (typeof color !== 'string' || !color.trim()) {
+      throw new Error('text.style.textGlow requires a non-empty color')
+    }
+    if (typeof blur !== 'number' || !Number.isFinite(blur)) {
+      throw new Error('text.style.textGlow requires a finite blur')
+    }
+    if (typeof spread !== 'undefined' && (typeof spread !== 'number' || !Number.isFinite(spread))) {
+      throw new Error('text.style.textGlow requires a finite spread when provided')
+    }
+
+    return {
+      textGlow: {
+        color: color.trim(),
+        blur: clamp(blur, 1, 30),
+        spread: typeof spread === 'number' ? clamp(spread, 0, 20) : undefined,
+      },
+    }
+  },
 }

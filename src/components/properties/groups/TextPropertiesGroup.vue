@@ -407,6 +407,7 @@ import { isTextTimelineItem } from '@/core/timelineitem/queries'
 import { useUnifiedKeyframeTransformControls } from '@/core/composables'
 import type { UnifiedTimelineItemData } from '@/core/timelineitem/type'
 import type { TextStyleConfig } from '@/core/timelineitem/texttype'
+import { propertyMutationCommitter } from '@/core/property-system'
 import { IconComponents } from '@/constants/iconComponents'
 import NumberInput from '@/components/base/NumberInput.vue'
 import SliderInput from '@/components/base/SliderInput.vue'
@@ -420,18 +421,19 @@ const props = defineProps<Props>()
 const { t } = useAppI18n()
 const unifiedStore = useUnifiedStore()
 
-function throwClipPropertyPhase0Todo(action: string): never {
-  throw new Error(
-    `[ClipProperty Phase 0 TODO] 属性区入口 "${action}" 仍在 TextPropertiesGroup 内部实现提交分流或样式组装，` +
-      '需先收敛到统一的属性提交入口后再恢复。',
-  )
-}
-
 // 获取禁用状态（当播放头不在播放范围内时禁用）
 const { canOperateTransforms } = useUnifiedKeyframeTransformControls({
   selectedTimelineItem: computed(() => props.selectedTimelineItem),
   currentFrame: computed(() => props.currentFrame),
 })
+
+function getCommitContext(item: UnifiedTimelineItemData<'text'>) {
+  return {
+    item,
+    frame: props.currentFrame,
+    applyChangePlan: unifiedStore.applyChangePlanWithHistory,
+  }
+}
 
 // 获取当前文本内容
 const localText = computed(() => {
@@ -518,7 +520,6 @@ const textAlignOptions = [
 
 // 更新文本内容
 const updateTextContent = async (event: Event) => {
-  throwClipPropertyPhase0Todo('text.content.update')
   const target = event.target as HTMLTextAreaElement
   const textValue = target.value.trim()
 
@@ -527,178 +528,414 @@ const updateTextContent = async (event: Event) => {
   }
 
   try {
-    await unifiedStore.updateTextContentWithHistory(props.selectedTimelineItem.id, textValue, {})
+    await propertyMutationCommitter.commitDirect(
+      getCommitContext(props.selectedTimelineItem),
+      'text.content',
+      textValue,
+    )
   } catch (error) {
     console.error('更新文本内容失败:', error)
     unifiedStore.messageError(t('properties.errors.textContentUpdateFailed'))
   }
 }
 
-// 更新文本样式
-const updateTextStyle = async (styleUpdates: Partial<TextStyleConfig> = {}) => {
-  throwClipPropertyPhase0Todo('text.style.update')
-  if (!props.selectedTimelineItem || !isTextTimelineItem(props.selectedTimelineItem)) {
+// 字体相关处理
+const updateFontSize = (size: number) => {
+  const selectedTimelineItem = props.selectedTimelineItem
+  if (!selectedTimelineItem) {
     return
   }
 
-  try {
-    await unifiedStore.updateTextStyleWithHistory(props.selectedTimelineItem.id, styleUpdates)
-  } catch (error) {
-    console.error('更新文本样式失败:', error)
-    unifiedStore.messageError(t('properties.errors.textStyleUpdateFailed'))
-  }
-}
-
-// 字体相关处理
-const updateFontSize = (size: number) => {
-  updateTextStyle({ fontSize: Math.max(12, Math.min(200, size)) })
+  propertyMutationCommitter
+    .commitDirect(
+      getCommitContext(selectedTimelineItem),
+      'text.style.fontSize',
+      Math.max(12, Math.min(200, size)),
+    )
+    .catch((error) => {
+      console.error('更新文本字号失败:', error)
+      unifiedStore.messageError(t('properties.errors.textStyleUpdateFailed'))
+    })
 }
 
 const handleFontFamilyChange = (event: Event) => {
   const target = event.target as HTMLSelectElement
-  updateTextStyle({ fontFamily: target.value })
+  const selectedTimelineItem = props.selectedTimelineItem
+  if (!selectedTimelineItem) {
+    return
+  }
+
+  propertyMutationCommitter
+    .commitDirect(
+      getCommitContext(selectedTimelineItem),
+      'text.style.fontFamily',
+      target.value,
+    )
+    .catch((error) => {
+      console.error('更新文本字体失败:', error)
+      unifiedStore.messageError(t('properties.errors.textStyleUpdateFailed'))
+    })
 }
 
 const handleFontWeightChange = (event: Event) => {
   const target = event.target as HTMLSelectElement
-  updateTextStyle({ fontWeight: target.value })
+  const selectedTimelineItem = props.selectedTimelineItem
+  if (!selectedTimelineItem) {
+    return
+  }
+
+  propertyMutationCommitter
+    .commitDirect(
+      getCommitContext(selectedTimelineItem),
+      'text.style.fontWeight',
+      target.value,
+    )
+    .catch((error) => {
+      console.error('更新文本字重失败:', error)
+      unifiedStore.messageError(t('properties.errors.textStyleUpdateFailed'))
+    })
 }
 
 const handleFontStyleChange = (event: Event) => {
   const target = event.target as HTMLSelectElement
-  updateTextStyle({ fontStyle: target.value as 'normal' | 'italic' })
+  const selectedTimelineItem = props.selectedTimelineItem
+  if (!selectedTimelineItem) {
+    return
+  }
+
+  propertyMutationCommitter
+    .commitDirect(
+      getCommitContext(selectedTimelineItem),
+      'text.style.fontStyle',
+      target.value as 'normal' | 'italic',
+    )
+    .catch((error) => {
+      console.error('更新文本字体样式失败:', error)
+      unifiedStore.messageError(t('properties.errors.textStyleUpdateFailed'))
+    })
 }
 
 // 颜色相关处理
 const handleColorChange = (event: Event) => {
   const target = event.target as HTMLInputElement
-  updateTextStyle({ color: target.value })
+  const selectedTimelineItem = props.selectedTimelineItem
+  if (!selectedTimelineItem) {
+    return
+  }
+
+  propertyMutationCommitter
+    .commitDirect(
+      getCommitContext(selectedTimelineItem),
+      'text.style.color',
+      target.value,
+    )
+    .catch((error) => {
+      console.error('更新文字颜色失败:', error)
+      unifiedStore.messageError(t('properties.errors.textStyleUpdateFailed'))
+    })
 }
 
 const handleBackgroundColorChange = (event: Event) => {
   const target = event.target as HTMLInputElement
-  updateTextStyle({ backgroundColor: target.value })
+  const selectedTimelineItem = props.selectedTimelineItem
+  if (!selectedTimelineItem) {
+    return
+  }
+
+  propertyMutationCommitter
+    .commitDirect(
+      getCommitContext(selectedTimelineItem),
+      'text.style.backgroundColor',
+      target.value,
+    )
+    .catch((error) => {
+      console.error('更新文字背景色失败:', error)
+      unifiedStore.messageError(t('properties.errors.textStyleUpdateFailed'))
+    })
 }
 
 const toggleBackgroundColor = () => {
+  const selectedTimelineItem = props.selectedTimelineItem
+  if (!selectedTimelineItem) {
+    return
+  }
+
   const newEnabled = !backgroundColorEnabled.value
   if (newEnabled) {
-    updateTextStyle({ backgroundColor: localStyle.value.backgroundColor || '#000000' })
+    propertyMutationCommitter
+      .commitDirect(
+        getCommitContext(selectedTimelineItem),
+        'text.style.backgroundColor',
+        localStyle.value.backgroundColor || '#000000',
+      )
+      .catch((error) => {
+        console.error('开启文字背景色失败:', error)
+        unifiedStore.messageError(t('properties.errors.textStyleUpdateFailed'))
+      })
   } else {
-    updateTextStyle({ backgroundColor: undefined })
+    propertyMutationCommitter
+      .commitDirect(
+        getCommitContext(selectedTimelineItem),
+        'text.style.backgroundColor',
+        undefined,
+      )
+      .catch((error) => {
+        console.error('关闭文字背景色失败:', error)
+        unifiedStore.messageError(t('properties.errors.textStyleUpdateFailed'))
+      })
   }
 }
 
 // 文本对齐
 const updateTextAlign = (event: Event) => {
-  const align = (event.target as HTMLButtonElement).dataset.align as 'left' | 'center' | 'right'
-  if (align) {
-    updateTextStyle({ textAlign: align })
+  const align = (event.currentTarget as HTMLButtonElement | null)?.dataset.align as
+    | 'left'
+    | 'center'
+    | 'right'
+    | undefined
+  const selectedTimelineItem = props.selectedTimelineItem
+  if (!selectedTimelineItem || !align) {
+    return
   }
+
+  propertyMutationCommitter
+    .commitDirect(
+      getCommitContext(selectedTimelineItem),
+      'text.style.textAlign',
+      align,
+    )
+    .catch((error) => {
+      console.error('更新文本对齐失败:', error)
+      unifiedStore.messageError(t('properties.errors.textStyleUpdateFailed'))
+    })
 }
 
 // 阴影效果
 const toggleShadow = () => {
-  if (shadowEnabled.value) {
-    updateTextStyle({ textShadow: undefined })
-  } else {
-    updateTextStyle({ textShadow: '2px 2px 4px #000000' })
+  const selectedTimelineItem = props.selectedTimelineItem
+  if (!selectedTimelineItem) {
+    return
   }
+
+  propertyMutationCommitter
+    .commitDirect(
+      getCommitContext(selectedTimelineItem),
+      'text.style.textShadow',
+      shadowEnabled.value ? undefined : '2px 2px 4px #000000',
+    )
+    .catch((error) => {
+      console.error('切换文字阴影失败:', error)
+      unifiedStore.messageError(t('properties.errors.textStyleUpdateFailed'))
+    })
 }
 
 const updateShadowBlur = (blur: number) => {
   const clampedBlur = Math.max(0, Math.min(20, blur))
-  if (shadowEnabled.value) {
-    updateTextStyle({
-      textShadow: `${shadowOffsetX.value}px ${shadowOffsetY.value}px ${clampedBlur}px ${shadowColor.value}`,
-    })
+  const selectedTimelineItem = props.selectedTimelineItem
+  if (!selectedTimelineItem || !shadowEnabled.value) {
+    return
   }
+
+  propertyMutationCommitter
+    .commitDirect(
+      getCommitContext(selectedTimelineItem),
+      'text.style.textShadow',
+      `${shadowOffsetX.value}px ${shadowOffsetY.value}px ${clampedBlur}px ${shadowColor.value}`,
+    )
+    .catch((error) => {
+      console.error('更新阴影模糊失败:', error)
+      unifiedStore.messageError(t('properties.errors.textStyleUpdateFailed'))
+    })
 }
 
 const updateShadowOffsetX = (offsetX: number) => {
   const clampedOffsetX = Math.max(-20, Math.min(20, offsetX))
-  if (shadowEnabled.value) {
-    updateTextStyle({
-      textShadow: `${clampedOffsetX}px ${shadowOffsetY.value}px ${shadowBlur.value}px ${shadowColor.value}`,
-    })
+  const selectedTimelineItem = props.selectedTimelineItem
+  if (!selectedTimelineItem || !shadowEnabled.value) {
+    return
   }
+
+  propertyMutationCommitter
+    .commitDirect(
+      getCommitContext(selectedTimelineItem),
+      'text.style.textShadow',
+      `${clampedOffsetX}px ${shadowOffsetY.value}px ${shadowBlur.value}px ${shadowColor.value}`,
+    )
+    .catch((error) => {
+      console.error('更新阴影 X 偏移失败:', error)
+      unifiedStore.messageError(t('properties.errors.textStyleUpdateFailed'))
+    })
 }
 
 const updateShadowOffsetY = (offsetY: number) => {
   const clampedOffsetY = Math.max(-20, Math.min(20, offsetY))
-  if (shadowEnabled.value) {
-    updateTextStyle({
-      textShadow: `${shadowOffsetX.value}px ${clampedOffsetY}px ${shadowBlur.value}px ${shadowColor.value}`,
-    })
+  const selectedTimelineItem = props.selectedTimelineItem
+  if (!selectedTimelineItem || !shadowEnabled.value) {
+    return
   }
+
+  propertyMutationCommitter
+    .commitDirect(
+      getCommitContext(selectedTimelineItem),
+      'text.style.textShadow',
+      `${shadowOffsetX.value}px ${clampedOffsetY}px ${shadowBlur.value}px ${shadowColor.value}`,
+    )
+    .catch((error) => {
+      console.error('更新阴影 Y 偏移失败:', error)
+      unifiedStore.messageError(t('properties.errors.textStyleUpdateFailed'))
+    })
 }
 
 const handleShadowColorChange = (event: Event) => {
   const target = event.target as HTMLInputElement
-  if (shadowEnabled.value) {
-    updateTextStyle({
-      textShadow: `${shadowOffsetX.value}px ${shadowOffsetY.value}px ${shadowBlur.value}px ${target.value}`,
-    })
+  const selectedTimelineItem = props.selectedTimelineItem
+  if (!selectedTimelineItem || !shadowEnabled.value) {
+    return
   }
+
+  propertyMutationCommitter
+    .commitDirect(
+      getCommitContext(selectedTimelineItem),
+      'text.style.textShadow',
+      `${shadowOffsetX.value}px ${shadowOffsetY.value}px ${shadowBlur.value}px ${target.value}`,
+    )
+    .catch((error) => {
+      console.error('更新阴影颜色失败:', error)
+      unifiedStore.messageError(t('properties.errors.textStyleUpdateFailed'))
+    })
 }
 
 // 描边效果
 const toggleStroke = () => {
-  if (strokeEnabled.value) {
-    updateTextStyle({ textStroke: undefined })
-  } else {
-    updateTextStyle({ textStroke: { width: 1, color: '#000000' } })
+  const selectedTimelineItem = props.selectedTimelineItem
+  if (!selectedTimelineItem) {
+    return
   }
+
+  propertyMutationCommitter
+    .commitDirect(
+      getCommitContext(selectedTimelineItem),
+      'text.style.textStroke',
+      strokeEnabled.value ? undefined : { width: 1, color: '#000000' },
+    )
+    .catch((error) => {
+      console.error('切换文字描边失败:', error)
+      unifiedStore.messageError(t('properties.errors.textStyleUpdateFailed'))
+    })
 }
 
 const updateStrokeWidth = (width: number) => {
   const clampedWidth = Math.max(0, Math.min(10, width))
-  if (strokeEnabled.value) {
-    updateTextStyle({ textStroke: { width: clampedWidth, color: strokeColor.value } })
+  const selectedTimelineItem = props.selectedTimelineItem
+  if (!selectedTimelineItem || !strokeEnabled.value) {
+    return
   }
+
+  propertyMutationCommitter
+    .commitDirect(
+      getCommitContext(selectedTimelineItem),
+      'text.style.textStroke',
+      { width: clampedWidth, color: strokeColor.value },
+    )
+    .catch((error) => {
+      console.error('更新描边宽度失败:', error)
+      unifiedStore.messageError(t('properties.errors.textStyleUpdateFailed'))
+    })
 }
 
 const handleStrokeColorChange = (event: Event) => {
   const target = event.target as HTMLInputElement
-  if (strokeEnabled.value) {
-    updateTextStyle({ textStroke: { width: strokeWidth.value, color: target.value } })
+  const selectedTimelineItem = props.selectedTimelineItem
+  if (!selectedTimelineItem || !strokeEnabled.value) {
+    return
   }
+
+  propertyMutationCommitter
+    .commitDirect(
+      getCommitContext(selectedTimelineItem),
+      'text.style.textStroke',
+      { width: strokeWidth.value, color: target.value },
+    )
+    .catch((error) => {
+      console.error('更新描边颜色失败:', error)
+      unifiedStore.messageError(t('properties.errors.textStyleUpdateFailed'))
+    })
 }
 
 // 发光效果
 const toggleGlow = () => {
-  if (glowEnabled.value) {
-    updateTextStyle({ textGlow: undefined })
-  } else {
-    updateTextStyle({ textGlow: { color: '#ffffff', blur: 10, spread: 0 } })
+  const selectedTimelineItem = props.selectedTimelineItem
+  if (!selectedTimelineItem) {
+    return
   }
+
+  propertyMutationCommitter
+    .commitDirect(
+      getCommitContext(selectedTimelineItem),
+      'text.style.textGlow',
+      glowEnabled.value ? undefined : { color: '#ffffff', blur: 10, spread: 0 },
+    )
+    .catch((error) => {
+      console.error('切换文字发光失败:', error)
+      unifiedStore.messageError(t('properties.errors.textStyleUpdateFailed'))
+    })
 }
 
 const updateGlowBlur = (blur: number) => {
   const clampedBlur = Math.max(1, Math.min(30, blur))
-  if (glowEnabled.value) {
-    updateTextStyle({
-      textGlow: { color: glowColor.value, blur: clampedBlur, spread: glowSpread.value },
-    })
+  const selectedTimelineItem = props.selectedTimelineItem
+  if (!selectedTimelineItem || !glowEnabled.value) {
+    return
   }
+
+  propertyMutationCommitter
+    .commitDirect(
+      getCommitContext(selectedTimelineItem),
+      'text.style.textGlow',
+      { color: glowColor.value, blur: clampedBlur, spread: glowSpread.value },
+    )
+    .catch((error) => {
+      console.error('更新发光模糊失败:', error)
+      unifiedStore.messageError(t('properties.errors.textStyleUpdateFailed'))
+    })
 }
 
 const updateGlowSpread = (spread: number) => {
   const clampedSpread = Math.max(0, Math.min(20, spread))
-  if (glowEnabled.value) {
-    updateTextStyle({
-      textGlow: { color: glowColor.value, blur: glowBlur.value, spread: clampedSpread },
-    })
+  const selectedTimelineItem = props.selectedTimelineItem
+  if (!selectedTimelineItem || !glowEnabled.value) {
+    return
   }
+
+  propertyMutationCommitter
+    .commitDirect(
+      getCommitContext(selectedTimelineItem),
+      'text.style.textGlow',
+      { color: glowColor.value, blur: glowBlur.value, spread: clampedSpread },
+    )
+    .catch((error) => {
+      console.error('更新发光扩散失败:', error)
+      unifiedStore.messageError(t('properties.errors.textStyleUpdateFailed'))
+    })
 }
 
 const handleGlowColorChange = (event: Event) => {
   const target = event.target as HTMLInputElement
-  if (glowEnabled.value) {
-    updateTextStyle({
-      textGlow: { color: target.value, blur: glowBlur.value, spread: glowSpread.value },
-    })
+  const selectedTimelineItem = props.selectedTimelineItem
+  if (!selectedTimelineItem || !glowEnabled.value) {
+    return
   }
+
+  propertyMutationCommitter
+    .commitDirect(
+      getCommitContext(selectedTimelineItem),
+      'text.style.textGlow',
+      { color: target.value, blur: glowBlur.value, spread: glowSpread.value },
+    )
+    .catch((error) => {
+      console.error('更新发光颜色失败:', error)
+      unifiedStore.messageError(t('properties.errors.textStyleUpdateFailed'))
+    })
 }
 </script>
 
