@@ -5,10 +5,6 @@
 
 import { listContentsTool } from './listContents'
 import { readMediaTool } from './readMedia'
-import { listTracksTool } from './listTracks'
-import { readTrackTool } from './readTrack'
-import { readTimelineitemTool } from './readTimelineitem'
-import { editSdkTool } from './editSdkTool'
 import { searchMediaTool } from './searchMedia'
 import type { ToolDefinition, ToolExecutionContext, ToolResult } from '../core/toolTypes'
 
@@ -25,10 +21,6 @@ function registerTool(tool: ToolDefinition): void {
 // 注册内置工具
 registerTool(listContentsTool)
 registerTool(readMediaTool)
-registerTool(listTracksTool)
-registerTool(readTrackTool)
-registerTool(readTimelineitemTool)
-registerTool(editSdkTool)
 registerTool(searchMediaTool)
 
 /**
@@ -83,10 +75,6 @@ export function listTools(): ToolDefinition[] {
 export {
   listContentsTool,
   readMediaTool,
-  listTracksTool,
-  readTrackTool,
-  readTimelineitemTool,
-  editSdkTool,
   searchMediaTool,
 }
 export type { ToolDefinition, ToolResult }

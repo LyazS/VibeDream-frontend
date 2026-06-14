@@ -118,6 +118,7 @@ export interface RunInput {
 
 export interface StartRunRequest {
   input: RunInput
+  timeline?: import('@/aipanel/timeline-json/types').TimelineJsonBundle
 }
 
 export interface ToolResultRequest {

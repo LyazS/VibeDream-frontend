@@ -37,18 +37,13 @@
 
     <div v-if="isExpanded" class="tool-params-expanded">
       <IndexingRuntimeCard v-if="progressState" :state="progressState" />
-      <div
-        v-if="isEditSdkTool && editSdkScript"
-        class="markdown-body"
-        v-html="renderMarkdown('```javascript\n' + editSdkScript + '\n```')"
-      ></div>
-      <pre v-else>{{ formattedArgs }}</pre>
+      <pre>{{ formattedArgs }}</pre>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, inject, ref } from 'vue'
+import { computed, ref } from 'vue'
 import 'github-markdown-css/github-markdown.css'
 import { useAppI18n } from '@/core/composables/useI18n'
 import { IconComponents } from '@/constants/iconComponents'
@@ -69,12 +64,6 @@ const props = defineProps<{
 const { t } = useAppI18n()
 const isExpanded = ref(false)
 
-const renderMarkdown = inject<(content: string) => string>(
-  'renderMarkdown',
-  (content: string) => content,
-)
-
-const isEditSdkTool = computed(() => props.item.tool_name === 'edit_sdk')
 const formattedArgs = computed(() => JSON.stringify(props.item.args || {}, null, 2))
 const readMediaExecutionState = useReadMediaExecutionState(props.item.tool_call_id)
 const searchMediaExecutionState = useSearchMediaExecutionState(props.item.tool_call_id)
@@ -120,12 +109,6 @@ const progressPercent = computed(() => {
   }
 
   return 0
-})
-
-const editSdkScript = computed(() => {
-  if (!isEditSdkTool.value) return ''
-  const args = props.item.args as Record<string, unknown>
-  return typeof args.script === 'string' ? args.script : ''
 })
 
 const displayName = computed(() => {

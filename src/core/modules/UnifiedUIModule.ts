@@ -60,7 +60,9 @@ export function createUnifiedUIModule(registry: ModuleRegistry): {
   const isChatPanelVisible = ref(true)
 
   // AI 面板当前激活的标签页
-  const aiPanelActiveTab = ref<'ai-generate' | 'agent' | 'character-editor'>('agent')
+  const aiPanelActiveTab = ref<'ai-generate' | 'agent' | 'character-editor'>(
+    'agent',
+  )
 
   // 素材区当前激活的一级分区
   const librarySection = ref<LibrarySectionKey>('media')

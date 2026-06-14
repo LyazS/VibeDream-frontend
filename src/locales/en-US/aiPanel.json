@@ -6,10 +6,6 @@
       "unknown": "Unknown Tool",
       "list_contents": "List Contents",
       "read_media": "Read Media",
-      "list_tracks": "List Tracks",
-      "read_track": "Read Track",
-      "read_timelineitem": "Read Timeline Item",
-      "edit_sdk": "Edit Operation",
       "search_media": "Search Media"
     },
     "toolsState": {

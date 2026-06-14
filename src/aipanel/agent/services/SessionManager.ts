@@ -2,6 +2,8 @@ import { ref } from 'vue'
 import { fetchClient } from '@/utils/fetchClient'
 import { generateAgentMessageId } from '@/core/utils/idGenerator'
 import { API_ENDPOINTS } from '@/aipanel/agent/services/apiTypes'
+import { useUnifiedStore } from '@/core/unifiedStore'
+import { exportTimelineJsonBundle } from '@/aipanel/timeline-json/exportTimelineJsonBundle'
 import type {
   CreateSessionResponse,
   SessionSnapshotResponse,
@@ -77,9 +79,11 @@ export class SessionManager {
   private currentAbortController: AbortController | null = null
   private pendingUserMessage: AgentMessage | null = null
   private editSDK: ReturnType<typeof useEditSDK>
+  private unifiedStore: ReturnType<typeof useUnifiedStore>
 
   constructor() {
     this.editSDK = useEditSDK()
+    this.unifiedStore = useUnifiedStore()
   }
 
   clearCurrentSession(): void {
@@ -138,6 +142,7 @@ export class SessionManager {
               },
             ],
           },
+          timeline: this.exportCurrentTimeline(),
         }
 
         await this.consumeStream(
@@ -217,6 +222,14 @@ export class SessionManager {
       ],
       created_at: new Date().toISOString(),
     }
+  }
+
+  private exportCurrentTimeline(): StartRunRequest['timeline'] {
+    return exportTimelineJsonBundle({
+      projectId: this.unifiedStore.projectId,
+      tracks: this.unifiedStore.tracks,
+      timelineItems: this.unifiedStore.timelineItems,
+    })
   }
 
   private async consumeStream(
@@ -330,6 +343,10 @@ export class SessionManager {
       })
       this.setPendingInterrupt(runId, interrupt)
       return
+    }
+
+    if (interrupt.tool_name === 'edit_sdk') {
+      throw new Error('edit_sdk 已停用，请使用后端 timeline_* 工具')
     }
 
     if (!this.editSDK.hasTool(interrupt.tool_name)) {
