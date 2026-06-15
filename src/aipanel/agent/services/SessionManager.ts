@@ -2,6 +2,12 @@ import { ref } from 'vue'
 import { fetchClient } from '@/utils/fetchClient'
 import { generateAgentMessageId } from '@/core/utils/idGenerator'
 import { API_ENDPOINTS } from '@/aipanel/agent/services/apiTypes'
+import { useUnifiedStore } from '@/core/unifiedStore'
+import { exportTimelineJsonBundle } from '@/aipanel/timeline-json/exportTimelineJsonBundle'
+import {
+  dryRunTimelineApplyPayload,
+  type AgentApplyPayload,
+} from '@/aipanel/timeline-json/diffTimelineApplyPayload'
 import type {
   CreateSessionResponse,
   SessionSnapshotResponse,
@@ -41,9 +47,21 @@ interface SessionData {
   messages: AgentMessage[]
   completedMessageIds: string[]
   interactions: SessionInteractionRecord[]
+  pendingTimelineApplyConflict?: PendingTimelineApplyConflict | null
   createdAt: string
   updatedAt: string
 }
+
+interface PendingTimelineApplyConflict {
+  sessionId: string
+  runId: string
+  toolCallId: string
+  resultOutput: string
+  currentTimeline: StartRunRequest['timeline']
+}
+
+const TIMELINE_APPLY_CONFLICT_AGENT_OPTION = '交给 Agent 解决冲突'
+const TIMELINE_APPLY_CONFLICT_CANCEL_OPTION = '暂不处理'
 
 class AgentRunFailedError extends Error {
   constructor(
@@ -76,10 +94,13 @@ export class SessionManager {
 
   private currentAbortController: AbortController | null = null
   private pendingUserMessage: AgentMessage | null = null
+  private pendingTimelineApplyConflict: PendingTimelineApplyConflict | null = null
   private editSDK: ReturnType<typeof useEditSDK>
+  private unifiedStore: ReturnType<typeof useUnifiedStore>
 
   constructor() {
     this.editSDK = useEditSDK()
+    this.unifiedStore = useUnifiedStore()
   }
 
   clearCurrentSession(): void {
@@ -94,6 +115,7 @@ export class SessionManager {
     this.isSending.value = false
     this.currentAbortController = null
     this.pendingUserMessage = null
+    this.pendingTimelineApplyConflict = null
     this.sessionError.value = null
     this.clearPendingInterrupt()
   }
@@ -126,7 +148,11 @@ export class SessionManager {
     try {
       if (this.hasPendingAskUserInterrupt()) {
         this.pendingUserMessage = null
-        await this.resumePendingInteraction(sessionId, message, 'custom_input')
+        if (this.hasPendingTimelineApplyConflict()) {
+          await this.resumePendingTimelineApplyConflict(sessionId, message, 'custom_input')
+        } else {
+          await this.resumePendingInteraction(sessionId, message, 'custom_input')
+        }
       } else {
         this.pendingUserMessage = this.createLocalUserMessage(message)
         const runRequest: StartRunRequest = {
@@ -138,6 +164,7 @@ export class SessionManager {
               },
             ],
           },
+          timeline: this.exportCurrentTimeline(),
         }
 
         await this.consumeStream(
@@ -169,10 +196,12 @@ export class SessionManager {
       this.messages.value = localSession.messages
       this.completedMessageIds.value = localSession.completedMessageIds || []
       this.interactions.value = localSession.interactions || []
+      this.pendingTimelineApplyConflict = localSession.pendingTimelineApplyConflict || null
     } else {
       this.messages.value = []
       this.completedMessageIds.value = []
       this.interactions.value = []
+      this.pendingTimelineApplyConflict = null
     }
 
     const snapshot = await fetchClient.get<SessionSnapshotResponse>(
@@ -217,6 +246,14 @@ export class SessionManager {
       ],
       created_at: new Date().toISOString(),
     }
+  }
+
+  private exportCurrentTimeline(): StartRunRequest['timeline'] {
+    return exportTimelineJsonBundle({
+      projectId: this.unifiedStore.projectId,
+      tracks: this.unifiedStore.tracks,
+      timelineItems: this.unifiedStore.timelineItems,
+    })
   }
 
   private async consumeStream(
@@ -332,6 +369,15 @@ export class SessionManager {
       return
     }
 
+    if (interrupt.tool_name === 'edit_sdk') {
+      throw new Error('edit_sdk 已停用，请使用后端 timeline_* 工具')
+    }
+
+    if (interrupt.tool_name === 'timeline_apply_request') {
+      await this.handleTimelineApplyRequestDryRun(sessionId, runId, interrupt)
+      return
+    }
+
     if (!this.editSDK.hasTool(interrupt.tool_name)) {
       throw new Error(`前端工具不存在: ${interrupt.tool_name}`)
     }
@@ -366,10 +412,199 @@ export class SessionManager {
     }
   }
 
+  private async handleTimelineApplyRequestDryRun(
+    sessionId: string,
+    runId: string,
+    interrupt: FrontendToolInterrupt,
+  ): Promise<void> {
+    this.setPendingInterrupt(runId, interrupt)
+
+    try {
+      const currentTimeline = this.exportCurrentTimeline()
+      const result = dryRunTimelineApplyPayload(
+        interrupt.args as unknown as AgentApplyPayload,
+        currentTimeline,
+      )
+      const output = JSON.stringify(result, null, 2)
+      console.group('[Agent] timeline_apply_request dry-run')
+      console.info(result.summary)
+      console.table(result.changes.map((change, index) => ({ index, change })))
+      if (result.conflicts.length > 0) {
+        console.table(result.conflicts.map((conflict, index) => ({ index, conflict })))
+      }
+      if (result.warnings.length > 0) {
+        console.warn('warnings', result.warnings)
+      }
+      if (result.mergedSummary) {
+        console.info('merged timeline summary')
+        console.table(result.mergedSummary.tracks.map((track, index) => ({ index, ...track })))
+        console.table(
+          result.mergedSummary.timelineItems.map((item, index) => ({ index, ...item })),
+        )
+      }
+      console.groupEnd()
+
+      if (result.conflicts.length > 0) {
+        this.showTimelineApplyConflictInteraction(
+          sessionId,
+          runId,
+          interrupt,
+          output,
+          currentTimeline,
+        )
+        await this.saveSessionToDB()
+        return
+      }
+
+      const payload: ToolResultRequest = {
+        tool_call_id: interrupt.tool_call_id,
+        output,
+        is_error: false,
+      }
+
+      this.clearPendingInterrupt()
+      await this.consumeStream(API_ENDPOINTS.submitToolResult(sessionId, runId), payload, sessionId)
+    } catch (error) {
+      console.error('[Agent] timeline_apply_request dry-run failed', error)
+      const payload: ToolResultRequest = {
+        tool_call_id: interrupt.tool_call_id,
+        output: `timeline_apply_request dry-run failed: ${error instanceof Error ? error.message : String(error)}`,
+        is_error: true,
+      }
+      this.clearPendingInterrupt()
+      await this.consumeStream(API_ENDPOINTS.submitToolResult(sessionId, runId), payload, sessionId)
+    }
+  }
+
+  private showTimelineApplyConflictInteraction(
+    sessionId: string,
+    runId: string,
+    interrupt: FrontendToolInterrupt,
+    resultOutput: string,
+    currentTimeline: StartRunRequest['timeline'],
+  ): void {
+    const createdAt = new Date().toISOString()
+    const interaction: InteractiveInterrupt = {
+      type: 'interactive_interrupt',
+      interaction_id: `timeline_apply_conflict_${interrupt.tool_call_id}`,
+      kind: 'ask_user',
+      prompt: '检测到你在 Agent 编辑期间手动修改了时间轴，和 Agent 的改动发生冲突。是否交给 Agent 基于当前时间轴继续解决冲突？',
+      options: [
+        TIMELINE_APPLY_CONFLICT_AGENT_OPTION,
+        TIMELINE_APPLY_CONFLICT_CANCEL_OPTION,
+      ],
+      placeholder: '也可以补充你希望 Agent 如何处理这些冲突',
+      created_at: createdAt,
+    }
+
+    this.pendingTimelineApplyConflict = {
+      sessionId,
+      runId,
+      toolCallId: interrupt.tool_call_id,
+      resultOutput,
+      currentTimeline,
+    }
+    this.upsertInteractionRecord({
+      interrupt: interaction,
+      result: this.getInteractionRecord(interaction.interaction_id)?.result || null,
+    })
+    this.setPendingInterrupt(runId, interaction)
+  }
+
+  private async resumePendingTimelineApplyConflict(
+    sessionId: string,
+    message: string,
+    submittedVia: 'option' | 'custom_input',
+  ): Promise<void> {
+    const context = this.pendingTimelineApplyConflict
+    const interrupt = this.pendingInteraction.value
+    if (!context || !interrupt) {
+      throw new Error('当前没有待处理的时间轴冲突')
+    }
+    if (context.sessionId !== sessionId) {
+      throw new Error('时间轴冲突所属会话不匹配')
+    }
+
+    const answer = message.trim()
+    const previousContext = context
+    const previousInterrupt = interrupt
+    const previousInteractions = [...this.interactions.value]
+    this.pendingTimelineApplyConflict = null
+    this.clearPendingInterrupt()
+    this.upsertInteractionResult(interrupt.interaction_id, answer, submittedVia)
+
+    const userWantsAgent =
+      answer !== TIMELINE_APPLY_CONFLICT_CANCEL_OPTION
+    const output = userWantsAgent
+      ? JSON.stringify(
+          {
+            status: 'merge_conflict_user_requested_agent_resolution',
+            dryRun: true,
+            applied: false,
+            message:
+              'The XML workspace is valid, but frontend timeline changes caused merge conflicts. The user asked the Agent to resolve the conflict based on the current timeline. Do not treat this as XML validation failure; inspect the conflict report and ask follow-up questions or revise timeline edits against the latest timeline state.',
+            userAnswer: answer,
+            currentTimeline: context.currentTimeline,
+            dryRunResult: JSON.parse(context.resultOutput),
+          },
+          null,
+          2,
+        )
+      : JSON.stringify(
+          {
+            status: 'merge_conflict_user_cancelled',
+            dryRun: true,
+            applied: false,
+            message:
+              'The XML workspace is valid, but frontend timeline changes caused merge conflicts. The user chose not to proceed. Stop retrying XML edits for this apply attempt and wait for a new user instruction.',
+            userAnswer: answer,
+            currentTimeline: context.currentTimeline,
+            dryRunResult: JSON.parse(context.resultOutput),
+          },
+          null,
+          2,
+        )
+
+    const payload: ToolResultRequest = {
+      tool_call_id: context.toolCallId,
+      output,
+      is_error: false,
+    }
+
+    try {
+      await this.consumeStream(
+        API_ENDPOINTS.submitToolResult(sessionId, context.runId),
+        payload,
+        sessionId,
+      )
+    } catch (error) {
+      if (isAgentRunFailedError(error) && !error.retryable) {
+        this.pendingTimelineApplyConflict = null
+        this.clearPendingInterrupt()
+      } else {
+        this.interactions.value = previousInteractions
+        this.pendingTimelineApplyConflict = previousContext
+        this.setPendingInterrupt(previousContext.runId, previousInterrupt)
+      }
+      throw error
+    }
+  }
+
   private applySnapshot(snapshot: SessionSnapshotResponse): void {
+    const localConflictRecord = this.pendingTimelineApplyConflict
+      ? this.getInteractionRecord(`timeline_apply_conflict_${this.pendingTimelineApplyConflict.toolCallId}`)
+      : null
     this.currentSessionId.value = snapshot.session.session_id
     this.messages.value = snapshot.messages
     this.interactions.value = snapshot.interactions || []
+    if (this.pendingTimelineApplyConflict && localConflictRecord) {
+      this.interactions.value = [...this.interactions.value, localConflictRecord]
+      this.setPendingInterrupt(
+        this.pendingTimelineApplyConflict.runId,
+        localConflictRecord.interrupt,
+      )
+      return
+    }
     if (snapshot.pending_run?.interrupt) {
       this.setPendingInterrupt(snapshot.pending_run.run_id, snapshot.pending_run.interrupt)
       return
@@ -421,6 +656,10 @@ export class SessionManager {
     return !!this.pendingInteraction.value && !!this.pendingRunId.value
   }
 
+  private hasPendingTimelineApplyConflict(): boolean {
+    return !!this.pendingTimelineApplyConflict && !!this.pendingInteraction.value
+  }
+
   private setPendingInterrupt(runId: string, interrupt: PendingInterrupt): void {
     this.pendingRunId.value = runId
     this.pendingInterrupt.value = interrupt
@@ -443,7 +682,11 @@ export class SessionManager {
     this.sessionError.value = null
 
     try {
-      await this.resumePendingInteraction(sessionId, answer, 'option')
+      if (this.hasPendingTimelineApplyConflict()) {
+        await this.resumePendingTimelineApplyConflict(sessionId, answer, 'option')
+      } else {
+        await this.resumePendingInteraction(sessionId, answer, 'option')
+      }
       await this.saveSessionToDB()
     } catch (error) {
       this.sessionError.value = error instanceof Error ? error.message : '发送消息失败'
@@ -462,7 +705,11 @@ export class SessionManager {
     this.sessionError.value = null
 
     try {
-      await this.resumePendingInteraction(sessionId, answer, 'custom_input')
+      if (this.hasPendingTimelineApplyConflict()) {
+        await this.resumePendingTimelineApplyConflict(sessionId, answer, 'custom_input')
+      } else {
+        await this.resumePendingInteraction(sessionId, answer, 'custom_input')
+      }
       await this.saveSessionToDB()
     } catch (error) {
       this.sessionError.value = error instanceof Error ? error.message : '发送消息失败'
@@ -524,6 +771,9 @@ export class SessionManager {
       messages: plainMessages,
       completedMessageIds: [...this.completedMessageIds.value],
       interactions: JSON.parse(JSON.stringify(this.interactions.value)) as SessionInteractionRecord[],
+      pendingTimelineApplyConflict: this.pendingTimelineApplyConflict
+        ? { ...this.pendingTimelineApplyConflict }
+        : null,
       createdAt: existing?.createdAt || now,
       updatedAt: now,
     }
