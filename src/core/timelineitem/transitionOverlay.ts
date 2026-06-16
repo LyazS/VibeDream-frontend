@@ -20,11 +20,11 @@ export interface TimelineTransitionOverlayViewModel {
 export function createTimelineTransitionOverlay(
   item: UnifiedTimelineItemData<MediaType>,
 ): TimelineTransitionOverlayViewModel | null {
-  if (!supportsClipTransitionOut(item) || !item.transitionOut) {
+  if (!supportsClipTransitionOut(item) || !item.exRenderConfig?.transition) {
     return null
   }
 
-  const transitionOut = normalizeClipTransitionOutConfig(item.transitionOut)
+  const transitionOut = normalizeClipTransitionOutConfig(item.exRenderConfig.transition)
   const leftHalfFrames = Math.floor(transitionOut.durationFrames / 2)
   const rightHalfFrames = transitionOut.durationFrames - leftHalfFrames
   const seamFrame = item.timeRange.timelineEndTime

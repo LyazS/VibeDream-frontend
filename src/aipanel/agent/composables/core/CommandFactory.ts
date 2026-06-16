@@ -158,8 +158,8 @@ export class CommandFactory {
 
     // ✅ 从 textBitmap 获取实际宽高并设置到 config
     if (timelineItem.runtime.textBitmap) {
-      timelineItem.config.width = timelineItem.runtime.textBitmap.width
-      timelineItem.config.height = timelineItem.runtime.textBitmap.height
+      timelineItem.baseRenderConfig.visual.width = timelineItem.runtime.textBitmap.width
+      timelineItem.baseRenderConfig.visual.height = timelineItem.runtime.textBitmap.height
     }
 
     // 获取模块引用
@@ -468,7 +468,7 @@ export class CommandFactory {
         clipStartTime: clipStartFrames,
         clipEndTime: clipEndFrames,
       },
-      config: config,
+      baseRenderConfig: config,
       animation: undefined,
       timelineStatus: 'loading', // 新项目为 loading 状态
       runtime: {
@@ -486,26 +486,27 @@ export class CommandFactory {
   private createDefaultTimelineItemConfig(
     mediaType: Exclude<MediaType, 'text'>,
     originalResolution: { width: number; height: number } | null,
-  ): UnifiedTimelineItemData<Exclude<MediaType, 'text'>>['config'] {
+  ): UnifiedTimelineItemData<Exclude<MediaType, 'text'>>['baseRenderConfig'] {
     switch (mediaType) {
       case 'video': {
         const defaultWidth = originalResolution?.width || 1920
         const defaultHeight = originalResolution?.height || 1080
 
         return {
-          // 视觉属性
-          x: 0, // 居中位置
-          y: 0, // 居中位置
-          width: defaultWidth,
-          height: defaultHeight,
-          rotation: 0,
-          opacity: 1,
-          blendMode: DEFAULT_BLEND_MODE,
-          // 等比缩放状态（默认开启）
-          proportionalScale: true,
-          // 音频属性
-          volume: 1,
-          isMuted: false,
+          visual: {
+            x: 0,
+            y: 0,
+            width: defaultWidth,
+            height: defaultHeight,
+            rotation: 0,
+            opacity: 1,
+            blendMode: DEFAULT_BLEND_MODE,
+            proportionalScale: true,
+          },
+          audio: {
+            volume: 1,
+            isMuted: false,
+          },
         }
       }
 
@@ -514,24 +515,25 @@ export class CommandFactory {
         const defaultHeight = originalResolution?.height || 1080
 
         return {
-          // 视觉属性
-          x: 0,
-          y: 0,
-          width: defaultWidth,
-          height: defaultHeight,
-          rotation: 0,
-          opacity: 1,
-          blendMode: DEFAULT_BLEND_MODE,
-          // 等比缩放状态（默认开启）
-          proportionalScale: true,
+          visual: {
+            x: 0,
+            y: 0,
+            width: defaultWidth,
+            height: defaultHeight,
+            rotation: 0,
+            opacity: 1,
+            blendMode: DEFAULT_BLEND_MODE,
+            proportionalScale: true,
+          },
         }
       }
 
       case 'audio': {
         return {
-          // 音频属性
-          volume: 1,
-          isMuted: false,
+          audio: {
+            volume: 1,
+            isMuted: false,
+          },
         }
       }
 

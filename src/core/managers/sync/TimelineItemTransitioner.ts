@@ -108,17 +108,21 @@ export class TimelineItemTransitioner {
       })
     }
 
+    const isVisualTimelineItem =
+      TimelineItemQueries.isVideoTimelineItem(timelineItem) ||
+      TimelineItemQueries.isImageTimelineItem(timelineItem)
+
+    if (!isVisualTimelineItem) {
+      return
+    }
+
     // 获取媒体的原始尺寸
     const originalSize = MediaItemQueries.getOriginalSize(this.mediaItem)
 
-    // 更新config中的宽高 - 仅对视频和图片类型，并且有原始尺寸时才更新
-    if (
-      originalSize &&
-      (TimelineItemQueries.isVideoTimelineItem(timelineItem) ||
-        TimelineItemQueries.isImageTimelineItem(timelineItem))
-    ) {
+    // 更新配置中的宽高 - 仅对视频和图片类型，并且有原始尺寸时才更新
+    if (originalSize) {
       // 保留现有的配置，只更新尺寸相关字段
-      const currentConfig = timelineItem.config
+      const currentConfig = timelineItem.baseRenderConfig.visual
 
       // 更新宽度和高度
       currentConfig.width = originalSize.width

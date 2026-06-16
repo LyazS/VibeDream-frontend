@@ -50,10 +50,11 @@ const sourceClipName = computed(() => {
 
 const templateName = computed(() => {
   const sourceItem = unifiedStore.getTimelineItem(props.overlay.sourceItemId)
-  const effectPackageId = sourceItem?.transitionOut?.effectPackageId
+  const transition = sourceItem?.exRenderConfig?.transition
+  const effectPackageId = transition?.effectPackageId
   if (!effectPackageId) return '-'
   return effectTemplateRegistry.getPackageState(effectPackageId)?.meta?.name.zh
-    || sourceItem?.transitionOut?.packagePayload?.manifestSnapshot.name.zh
+    || transition?.packagePayload?.manifestSnapshot.name.zh
     || effectPackageId
 })
 

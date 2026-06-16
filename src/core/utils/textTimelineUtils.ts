@@ -5,7 +5,6 @@ import type { TextMediaConfig } from '@/core/timelineitem/type'
 import type { TextStyleConfig } from '@/core/timelineitem/texttype'
 import type { UnifiedTimeRange } from '@/core/types/timeRange'
 import { DEFAULT_TEXT_STYLE } from '@/core/timelineitem/texttype'
-import { createDefaultMaskConfig } from '@/core/timelineitem/mask'
 import { DEFAULT_BLEND_MODE } from '@/core/timelineitem'
 
 /**
@@ -64,23 +63,20 @@ export async function createTextTimelineItem(
 
   // 5. 创建文本媒体配置（适配新架构）
   const textConfig: TextMediaConfig = {
-    // 文本特有属性
-    text,
-    style: completeStyle,
-    // 视觉属性（继承自 VisualMediaProps）
-    x: 0,
-    y: 0,
-    width: 0, // 等待后续更新
-    height: 0, // 等待后续更新
-    rotation: 0,
-    opacity: 1,
-    blendMode: DEFAULT_BLEND_MODE,
-    // 等比缩放状态（默认开启）
-    proportionalScale: true,
-    mask: createDefaultMaskConfig('rectangle', {
-      width: completeStyle.maxWidth ?? completeStyle.fontSize * 6,
-      height: completeStyle.fontSize * (completeStyle.lineHeight ?? 1.2),
-    }),
+    visual: {
+      x: 0,
+      y: 0,
+      width: 0,
+      height: 0,
+      rotation: 0,
+      opacity: 1,
+      blendMode: DEFAULT_BLEND_MODE,
+      proportionalScale: true,
+    },
+    text: {
+      text,
+      style: completeStyle,
+    },
   }
 
   // 6. 创建统一时间轴项目（使用新架构，不包含sprite）
@@ -90,7 +86,7 @@ export async function createTextTimelineItem(
     trackId,
     mediaType: 'text',
     timeRange,
-    config: textConfig,
+    baseRenderConfig: textConfig,
     animation: undefined, // 新创建的文本项目默认没有动画
     timelineStatus: 'ready', // 文本项目创建后即为就绪状态
     runtime: {

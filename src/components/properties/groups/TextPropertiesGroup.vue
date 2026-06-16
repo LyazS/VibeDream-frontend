@@ -438,7 +438,7 @@ function getCommitContext(item: UnifiedTimelineItemData<'text'>) {
 // 获取当前文本内容
 const localText = computed(() => {
   if (props.selectedTimelineItem && isTextTimelineItem(props.selectedTimelineItem)) {
-    return props.selectedTimelineItem.config.text
+    return props.selectedTimelineItem.baseRenderConfig.text.text
   }
   return ''
 })
@@ -446,7 +446,7 @@ const localText = computed(() => {
 // 获取当前文本样式
 const localStyle = computed<TextStyleConfig>(() => {
   if (props.selectedTimelineItem && isTextTimelineItem(props.selectedTimelineItem)) {
-    return { ...props.selectedTimelineItem.config.style }
+    return { ...props.selectedTimelineItem.baseRenderConfig.text.style }
   }
   return {
     fontSize: 48,

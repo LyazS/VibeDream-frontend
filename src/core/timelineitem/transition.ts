@@ -150,8 +150,8 @@ export function supportsClipTransitionOut(
 
 export function hasEnabledClipTransitionOut(
   item: UnifiedTimelineItemData<MediaType>,
-): item is ClipTransitionVisualTimelineItem & { transitionOut: ClipTransitionOutConfig } {
-  return supportsClipTransitionOut(item) && Boolean(item.transitionOut)
+): item is ClipTransitionVisualTimelineItem & { exRenderConfig: { transition: ClipTransitionOutConfig } } {
+  return supportsClipTransitionOut(item) && Boolean(item.exRenderConfig?.transition)
 }
 
 export function ensureClipTransitionRuntime(
@@ -226,7 +226,7 @@ export function resolveClipTransitionBinding(
     return nextRuntime
   }
 
-  const transitionOut = normalizeClipTransitionOutConfig(itemA.transitionOut)
+  const transitionOut = normalizeClipTransitionOutConfig(itemA.exRenderConfig?.transition)
   const desiredDurationFrames = transitionOut.durationFrames
   const desiredLeftHalfFrames = Math.floor(desiredDurationFrames / 2)
   const desiredRightHalfFrames = desiredDurationFrames - desiredLeftHalfFrames

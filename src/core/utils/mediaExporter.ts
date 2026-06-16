@@ -7,7 +7,6 @@ import { QUALITY_MEDIUM } from 'mediabunny'
 import type { UnifiedTimelineItemData } from '@/core/timelineitem/type'
 import type { UnifiedMediaItemData } from '@/core/mediaitem/types'
 import { DEFAULT_BLEND_MODE } from '@/core/timelineitem'
-import { createDefaultMaskConfig } from '@/core/timelineitem/mask'
 import { RENDERER_FPS } from '@/core/mediabunny/constant'
 import { BunnyClip } from '@/core/mediabunny/bunny-clip'
 import { ExportManager, type ExportProjectOptions } from './projectExporter'
@@ -151,21 +150,21 @@ async function exportVideoMediaItem(
       clipStartTime: 0,
       clipEndTime: durationInFrames,
     },
-    config: {
-      x: 0,
-      y: 0,
-      width: outputSize.width,
-      height: outputSize.height,
-      rotation: 0,
-      opacity: 1,
-      blendMode: DEFAULT_BLEND_MODE,
-      proportionalScale: true,
-      mask: createDefaultMaskConfig('rectangle', {
+    baseRenderConfig: {
+      visual: {
+        x: 0,
+        y: 0,
         width: outputSize.width,
         height: outputSize.height,
-      }),
-      volume: 1,
-      isMuted: false,
+        rotation: 0,
+        opacity: 1,
+        blendMode: DEFAULT_BLEND_MODE,
+        proportionalScale: true,
+      },
+      audio: {
+        volume: 1,
+        isMuted: false,
+      },
     },
     runtime: {
       isInitialized: true,
@@ -287,17 +286,21 @@ async function exportVideoTimelineItem(
       clipStartTime: timelineItem.timeRange.clipStartTime,
       clipEndTime: timelineItem.timeRange.clipEndTime,
     },
-    config: {
-      x: 0,
-      y: 0,
-      width: outputWidth,
-      height: outputHeight,
-      rotation: 0,
-      opacity: 1,
-      blendMode: DEFAULT_BLEND_MODE,
-      proportionalScale: true,
-      volume: 1,
-      isMuted: false,
+    baseRenderConfig: {
+      visual: {
+        x: 0,
+        y: 0,
+        width: outputWidth,
+        height: outputHeight,
+        rotation: 0,
+        opacity: 1,
+        blendMode: DEFAULT_BLEND_MODE,
+        proportionalScale: true,
+      },
+      audio: {
+        volume: 1,
+        isMuted: false,
+      },
     },
     runtime: {
       isInitialized: true,
@@ -357,18 +360,30 @@ async function exportAudioTimelineItem(
       clipStartTime: timelineItem.timeRange.clipStartTime,
       clipEndTime: timelineItem.timeRange.clipEndTime,
     },
-    config: {
-      x: 0,
-      y: 0,
-      width: timelineItem.mediaType === 'video' ? bunnyMedia.width : 0,
-      height: timelineItem.mediaType === 'video' ? bunnyMedia.height : 0,
-      rotation: 0,
-      opacity: 1,
-      blendMode: DEFAULT_BLEND_MODE,
-      proportionalScale: true,
-      volume: 1,
-      isMuted: false,
-    },
+    baseRenderConfig:
+      timelineItem.mediaType === 'video'
+        ? {
+            visual: {
+              x: 0,
+              y: 0,
+              width: bunnyMedia.width,
+              height: bunnyMedia.height,
+              rotation: 0,
+              opacity: 1,
+              blendMode: DEFAULT_BLEND_MODE,
+              proportionalScale: true,
+            },
+            audio: {
+              volume: 1,
+              isMuted: false,
+            },
+          }
+        : {
+            audio: {
+              volume: 1,
+              isMuted: false,
+            },
+          },
     runtime: {
       isInitialized: true,
     },

@@ -459,10 +459,9 @@ export function createUnifiedAutoSaveModule(
         task: item.task,
         provenance: item.provenance,
         timeRange: item.timeRange,
-        config: item.config,        // ✅ 监听
+        baseRenderConfig: item.baseRenderConfig,        // ✅ 监听
         animation: item.animation,  // ✅ 监听
-        transitionOut: item.transitionOut, // ✅ 监听
-        filterEffect: item.filterEffect, // ✅ 监听
+        exRenderConfig: item.exRenderConfig, // ✅ 监听
         // ❌ 不监听 runtime（包括 runtime.renderConfig）
       })),
       () => {

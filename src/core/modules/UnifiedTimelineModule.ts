@@ -2,10 +2,7 @@ import { ref } from 'vue'
 import { cleanupTimelineItemBunny } from '@/core/bunnyUtils/timelineItemSetup'
 import type {
   UnifiedTimelineItemData,
-  VisualPropPatch,
-  AudioPropPatch,
 } from '@/core/timelineitem/type'
-import { TimelineItemQueries } from '@/core/timelineitem/queries'
 import type { MediaType } from '@/core/mediaitem/types'
 import type { UnifiedTimeRange } from '@/core/types/timeRange'
 import { ModuleRegistry, MODULE_NAMES } from './ModuleRegistry'
@@ -154,17 +151,20 @@ export function createUnifiedTimelineModule(registry: ModuleRegistry) {
     const item = getTimelineItem(timelineItemId)
     if (!item) return
 
-    item.transitionOut = transitionOut
-      ? normalizeClipTransitionOutConfig({
-          effectPackageId: transitionOut.effectPackageId,
-          templateId: transitionOut.templateId,
-          packageVersion: transitionOut.packageVersion,
-          catalogVersion: transitionOut.catalogVersion,
-          durationFrames: transitionOut.durationFrames,
-          params: transitionOut.params,
-          ...(transitionOut.packagePayload ? { packagePayload: transitionOut.packagePayload } : {}),
-        })
-      : undefined
+    item.exRenderConfig = {
+      ...(item.exRenderConfig ?? {}),
+      transition: transitionOut
+        ? normalizeClipTransitionOutConfig({
+            effectPackageId: transitionOut.effectPackageId,
+            templateId: transitionOut.templateId,
+            packageVersion: transitionOut.packageVersion,
+            catalogVersion: transitionOut.catalogVersion,
+            durationFrames: transitionOut.durationFrames,
+            params: transitionOut.params,
+            ...(transitionOut.packagePayload ? { packagePayload: transitionOut.packagePayload } : {}),
+          })
+        : undefined,
+    }
 
     refreshTransitionItems()
   }
@@ -176,20 +176,21 @@ export function createUnifiedTimelineModule(registry: ModuleRegistry) {
     const item = getTimelineItem(timelineItemId)
     if (!item) return
 
-    item.filterEffect = filterEffect
-      ? normalizeClipFilterConfig({
-          effectPackageId: filterEffect.effectPackageId,
-          templateId: filterEffect.templateId,
-          packageVersion: filterEffect.packageVersion,
-          catalogVersion: filterEffect.catalogVersion,
-          intensity: filterEffect.intensity,
-          params: filterEffect.params,
-          packagePayload: filterEffect.packagePayload,
-        })
-      : undefined
-    item.runtime.renderFilterEffect = item.filterEffect
-      ? normalizeClipFilterConfig(item.filterEffect)
-      : undefined
+    item.exRenderConfig = {
+      ...(item.exRenderConfig ?? {}),
+      filter: filterEffect
+        ? normalizeClipFilterConfig({
+            effectPackageId: filterEffect.effectPackageId,
+            templateId: filterEffect.templateId,
+            packageVersion: filterEffect.packageVersion,
+            catalogVersion: filterEffect.catalogVersion,
+            intensity: filterEffect.intensity,
+            params: filterEffect.params,
+            packagePayload: filterEffect.packagePayload,
+          })
+        : undefined,
+    }
+    item.runtime.exRenderConfig = undefined
   }
 
   function getTransitionOverlay(sourceItemId: string): TimelineTransitionOverlayViewModel | null {

@@ -6,10 +6,16 @@
 import type { MediaType } from '@/core/mediaitem'
 import type {
   UnifiedTimelineItemData,
-  TimelineItemStatus,
   GetConfigs,
+  VisualProps,
+  AudioProps,
+  TextProps,
+  VisualPropPatch,
+  AudioPropPatch,
+  TimelineExtraRenderConfig,
 } from '@/core/timelineitem/type'
 import type { ClipFilterConfig } from '@/core/filter/types'
+import type { ClipTransitionOutConfig } from '@/core/transition/types'
 import { TimelineStatusDisplayUtils } from '@/core/timelineitem/statusdisplayutils'
 import { useUnifiedStore } from '@/core/unifiedStore'
 import { supportsClipTransitionOut as itemSupportsClipTransitionOut } from '@/core/timelineitem/transition'
@@ -219,12 +225,206 @@ export function getErrorInfo(data: UnifiedTimelineItemData<MediaType>): {
 export function getRenderConfig<T extends MediaType>(
   item: UnifiedTimelineItemData<T>
 ): GetConfigs<T> {
-  const renderConfig = item.runtime.renderConfig || item.config
+  const renderConfig = item.runtime.renderConfig || item.baseRenderConfig
   const positionOverlay = getTransformPositionOverlay(item.id)
   const sizeOverlay = getTransformSizeOverlay(item.id)
   const rotationOverlay = getTransformRotationOverlay(item.id)
   const opacityOverlay = getTransformOpacityOverlay(item.id)
   const volumeOverlay = getAudioVolumeOverlay(item.id)
+  if (
+    !positionOverlay &&
+    !sizeOverlay &&
+    !rotationOverlay &&
+    !opacityOverlay &&
+    !volumeOverlay
+  ) {
+    return renderConfig
+  }
+
+  const nextRenderConfig = { ...renderConfig } as GetConfigs<T>
+  const visualRenderConfig = hasVisualRenderConfig(item)
+    ? ({ ...getVisualRenderConfig(item, renderConfig) } as VisualProps)
+    : null
+  const audioRenderConfig = hasAudioRenderConfig(item)
+    ? ({ ...getAudioRenderConfig(item, renderConfig) } as AudioProps)
+    : null
+
+  if (visualRenderConfig) {
+    Object.assign(visualRenderConfig, {
+      ...(positionOverlay
+        ? {
+          [transformPositionSchema.valueFields[0]]: positionOverlay.x ?? visualRenderConfig.x,
+          [transformPositionSchema.valueFields[1]]: positionOverlay.y ?? visualRenderConfig.y,
+        }
+      : {}),
+      ...(sizeOverlay
+        ? {
+          [transformSizeSchema.valueFields[0]]: sizeOverlay.width ?? visualRenderConfig.width,
+          [transformSizeSchema.valueFields[1]]: sizeOverlay.height ?? visualRenderConfig.height,
+        }
+      : {}),
+      ...(rotationOverlay
+        ? {
+          [transformRotationSchema.valueFields[0]]: rotationOverlay.rotation,
+        }
+      : {}),
+      ...(opacityOverlay
+        ? {
+          [transformOpacitySchema.valueFields[0]]: opacityOverlay.opacity,
+        }
+      : {}),
+    })
+    ;(nextRenderConfig as { visual: VisualProps }).visual = visualRenderConfig
+  }
+
+  if (audioRenderConfig) {
+    Object.assign(audioRenderConfig, {
+      ...(volumeOverlay
+        ? {
+          [audioVolumeSchema.valueFields[0]]: volumeOverlay.volume,
+        }
+      : {}),
+    })
+    ;(nextRenderConfig as { audio: AudioProps }).audio = audioRenderConfig
+  }
+
+  return nextRenderConfig
+}
+
+export function getBaseRenderConfig<T extends MediaType>(
+  item: UnifiedTimelineItemData<T>,
+): GetConfigs<T> {
+  return item.baseRenderConfig
+}
+
+export function getExtraRenderConfig(
+  item: UnifiedTimelineItemData<MediaType>,
+): TimelineExtraRenderConfig | undefined {
+  return item.exRenderConfig
+}
+
+export function getPersistentMask(item: UnifiedTimelineItemData<MediaType>) {
+  if (!hasVisualRenderConfig(item)) {
+    return undefined
+  }
+
+  const visualConfig = item.baseRenderConfig.visual
+  return normalizeMaskConfig(item.exRenderConfig?.mask, {
+    width: visualConfig.width,
+    height: visualConfig.height,
+  })
+}
+
+export function hasVisualRenderConfig(
+  item: UnifiedTimelineItemData<MediaType>,
+): item is UnifiedTimelineItemData<'video'> | UnifiedTimelineItemData<'image'> | UnifiedTimelineItemData<'text'> {
+  return hasVisualProperties(item)
+}
+
+export function hasAudioRenderConfig(
+  item: UnifiedTimelineItemData<MediaType>,
+): item is UnifiedTimelineItemData<'video'> | UnifiedTimelineItemData<'audio'> {
+  return hasAudioProperties(item)
+}
+
+export function hasTextRenderConfig(
+  item: UnifiedTimelineItemData<MediaType>,
+): item is UnifiedTimelineItemData<'text'> {
+  return isTextTimelineItem(item)
+}
+
+export function getVisualRenderConfig<T extends MediaType>(
+  item: UnifiedTimelineItemData<T>,
+  config: GetConfigs<T> = getRenderConfig(item),
+): VisualProps {
+  if (!hasVisualRenderConfig(item) || !('visual' in config)) {
+    throw new Error(`Timeline item ${item.id} does not have visual render config`)
+  }
+  return config.visual
+}
+
+export function getAudioRenderConfig<T extends MediaType>(
+  item: UnifiedTimelineItemData<T>,
+  config: GetConfigs<T> = getRenderConfig(item),
+): AudioProps {
+  if (!hasAudioRenderConfig(item) || !('audio' in config)) {
+    throw new Error(`Timeline item ${item.id} does not have audio render config`)
+  }
+  return config.audio
+}
+
+export function getTextRenderConfig<T extends MediaType>(
+  item: UnifiedTimelineItemData<T>,
+  config: GetConfigs<T> = getRenderConfig(item),
+): TextProps {
+  if (!hasTextRenderConfig(item) || !('text' in config)) {
+    throw new Error(`Timeline item ${item.id} does not have text render config`)
+  }
+  return config.text
+}
+
+export function patchVisualRenderConfig(
+  item: UnifiedTimelineItemData<MediaType>,
+  patch: VisualPropPatch,
+): void {
+  if (!hasVisualRenderConfig(item)) return
+  Object.assign(item.baseRenderConfig.visual, patch)
+}
+
+export function patchAudioRenderConfig(
+  item: UnifiedTimelineItemData<MediaType>,
+  patch: AudioPropPatch,
+): void {
+  if (!hasAudioRenderConfig(item)) return
+  Object.assign(item.baseRenderConfig.audio, patch)
+}
+
+export function patchTextRenderConfig(
+  item: UnifiedTimelineItemData<MediaType>,
+  patch: Partial<TextProps>,
+): void {
+  if (!hasTextRenderConfig(item)) return
+  Object.assign(item.baseRenderConfig.text, {
+    ...item.baseRenderConfig.text,
+    ...patch,
+    style: patch.style
+      ? { ...item.baseRenderConfig.text.style, ...patch.style }
+      : item.baseRenderConfig.text.style,
+  })
+}
+
+export function patchExtraRenderConfig(
+  item: UnifiedTimelineItemData<MediaType>,
+  patch: TimelineExtraRenderConfig,
+): void {
+  item.exRenderConfig = {
+    ...(item.exRenderConfig ?? {}),
+    ...patch,
+  }
+}
+
+export function patchRuntimeExtraRenderConfig(
+  item: UnifiedTimelineItemData<MediaType>,
+  patch: TimelineExtraRenderConfig,
+): void {
+  item.runtime.exRenderConfig = {
+    ...(item.runtime.exRenderConfig ?? {}),
+    ...patch,
+  }
+}
+
+export function getRenderMask(item: UnifiedTimelineItemData<MediaType>) {
+  if (!hasVisualRenderConfig(item)) {
+    return undefined
+  }
+
+  const renderConfig = getRenderConfig(item)
+  const visualRenderConfig = getVisualRenderConfig(item, renderConfig)
+  const renderMask = item.runtime.exRenderConfig?.mask ?? item.exRenderConfig?.mask
+  const normalizedMask = normalizeMaskConfig(renderMask, {
+    width: visualRenderConfig.width,
+    height: visualRenderConfig.height,
+  })
   const maskCenterOverlay = getMaskCenterOverlay(item.id)
   const maskFeatherOverlay = getMaskFeatherOverlay(item.id)
   const maskIntensityOverlay = getMaskIntensityOverlay(item.id)
@@ -233,12 +433,8 @@ export function getRenderConfig<T extends MediaType>(
   const maskMirrorLengthOverlay = getMaskMirrorLengthOverlay(item.id)
   const maskEllipseSizeOverlay = getMaskEllipseSizeOverlay(item.id)
   const maskRotationOverlay = getMaskRotationOverlay(item.id)
+
   if (
-    !positionOverlay &&
-    !sizeOverlay &&
-    !rotationOverlay &&
-    !opacityOverlay &&
-    !volumeOverlay &&
     !maskCenterOverlay &&
     !maskFeatherOverlay &&
     !maskIntensityOverlay &&
@@ -248,162 +444,84 @@ export function getRenderConfig<T extends MediaType>(
     !maskEllipseSizeOverlay &&
     !maskRotationOverlay
   ) {
-    return renderConfig
+    return normalizedMask
   }
 
-  const visualRenderConfig = hasVisualProperties(item)
-    ? (renderConfig as typeof renderConfig & {
-        x: number
-        y: number
-        width: number
-        height: number
-        rotation: number
-        opacity: number
-      })
-    : null
-  const normalizedMask =
-    visualRenderConfig
-      ? normalizeMaskConfig(
-          'mask' in renderConfig ? renderConfig.mask : undefined,
-          { width: visualRenderConfig.width, height: visualRenderConfig.height },
-        )
-      : null
-
   return {
-    ...renderConfig,
-    ...(positionOverlay && visualRenderConfig
+    ...normalizedMask,
+    ...(maskCenterOverlay
       ? {
-          [transformPositionSchema.valueFields[0]]: positionOverlay.x ?? visualRenderConfig.x,
-          [transformPositionSchema.valueFields[1]]: positionOverlay.y ?? visualRenderConfig.y,
+          [maskCenterSchema.valueFields[0]]:
+            maskCenterOverlay.centerX ?? normalizedMask.centerX,
+          [maskCenterSchema.valueFields[1]]:
+            maskCenterOverlay.centerY ?? normalizedMask.centerY,
         }
       : {}),
-    ...(sizeOverlay && visualRenderConfig
+    ...(maskRotationOverlay ? { rotation: maskRotationOverlay.rotation } : {}),
+    ...(maskFeatherOverlay
       ? {
-          [transformSizeSchema.valueFields[0]]: sizeOverlay.width ?? visualRenderConfig.width,
-          [transformSizeSchema.valueFields[1]]: sizeOverlay.height ?? visualRenderConfig.height,
-        }
-      : {}),
-    ...(rotationOverlay && visualRenderConfig
-      ? {
-          [transformRotationSchema.valueFields[0]]: rotationOverlay.rotation,
-        }
-      : {}),
-    ...(opacityOverlay && visualRenderConfig
-      ? {
-          [transformOpacitySchema.valueFields[0]]: opacityOverlay.opacity,
-        }
-      : {}),
-    ...(volumeOverlay && hasAudioProperties(item)
-      ? {
-          [audioVolumeSchema.valueFields[0]]: volumeOverlay.volume,
-        }
-      : {}),
-    ...((maskCenterOverlay ||
-      maskRotationOverlay ||
-      maskFeatherOverlay ||
-      maskIntensityOverlay ||
-      maskRectangleSizeOverlay ||
-      maskRectangleCornerRadiusOverlay ||
-      maskMirrorLengthOverlay ||
-      maskEllipseSizeOverlay) && visualRenderConfig
-      ? {
-          mask: {
-            ...normalizedMask,
-            ...(maskCenterOverlay
-              ? {
-                  [maskCenterSchema.valueFields[0]]:
-                    maskCenterOverlay.centerX ?? normalizedMask?.centerX,
-                  [maskCenterSchema.valueFields[1]]:
-                    maskCenterOverlay.centerY ?? normalizedMask?.centerY,
-                }
-              : {}),
-            ...(maskRotationOverlay
-              ? {
-                  rotation: maskRotationOverlay.rotation,
-                }
-              : {}),
-            ...(maskFeatherOverlay
-              ? {
-                  [maskFeatherSchema.valueFields[0]]:
-                    maskFeatherOverlay.outerRange ?? normalizedMask?.falloff.outerRange,
-                  falloff: {
-                    ...normalizedMask?.falloff,
-                    [maskFeatherSchema.valueFields[0]]:
-                      maskFeatherOverlay.outerRange ?? normalizedMask?.falloff.outerRange,
-                  },
-                }
-              : {}),
-            ...(maskIntensityOverlay
-              ? {
-                  [maskIntensitySchema.valueFields[0]]:
-                    maskIntensityOverlay.decayRate ?? normalizedMask?.falloff.decayRate,
-                  falloff: {
-                    ...normalizedMask?.falloff,
-                    [maskIntensitySchema.valueFields[0]]:
-                      maskIntensityOverlay.decayRate ?? normalizedMask?.falloff.decayRate,
-                  },
-                }
-              : {}),
-            ...(maskRectangleSizeOverlay
-              ? {
-                  [maskRectangleSizeSchema.valueFields[0]]:
-                    maskRectangleSizeOverlay.width ??
-                    (normalizedMask && isRectangleMaskConfig(normalizedMask)
-                      ? normalizedMask.width
-                      : undefined),
-                  [maskRectangleSizeSchema.valueFields[1]]:
-                    maskRectangleSizeOverlay.height ??
-                    (normalizedMask && isRectangleMaskConfig(normalizedMask)
-                      ? normalizedMask.height
-                      : undefined),
-                }
-              : {}),
-            ...(maskRectangleCornerRadiusOverlay
-              ? {
-                  [maskRectangleCornerRadiusSchema.valueFields[0]]:
-                    maskRectangleCornerRadiusOverlay.cornerRadius ??
-                    (normalizedMask && isRectangleMaskConfig(normalizedMask)
-                      ? normalizedMask.cornerRadius
-                      : undefined),
-                }
-              : {}),
-            ...(maskMirrorLengthOverlay
-              ? {
-                  [maskMirrorLengthSchema.valueFields[0]]:
-                    maskMirrorLengthOverlay.length ??
-                    (normalizedMask && isMirrorMaskConfig(normalizedMask)
-                      ? normalizedMask.length
-                      : undefined),
-                }
-              : {}),
-            ...(maskEllipseSizeOverlay
-              ? {
-                  [maskEllipseSizeSchema.valueFields[0]]:
-                    maskEllipseSizeOverlay.ellipseWidth ??
-                    (normalizedMask && isEllipseMaskConfig(normalizedMask)
-                      ? normalizedMask.ellipseWidth
-                      : undefined),
-                  [maskEllipseSizeSchema.valueFields[1]]:
-                    maskEllipseSizeOverlay.ellipseHeight ??
-                    (normalizedMask && isEllipseMaskConfig(normalizedMask)
-                      ? normalizedMask.ellipseHeight
-                      : undefined),
-                }
-              : {}),
+          falloff: {
+            ...normalizedMask.falloff,
+            [maskFeatherSchema.valueFields[0]]:
+              maskFeatherOverlay.outerRange ?? normalizedMask.falloff.outerRange,
           },
         }
       : {}),
-  } as GetConfigs<T>
+    ...(maskIntensityOverlay
+      ? {
+          falloff: {
+            ...normalizedMask.falloff,
+            [maskIntensitySchema.valueFields[0]]:
+              maskIntensityOverlay.decayRate ?? normalizedMask.falloff.decayRate,
+          },
+        }
+      : {}),
+    ...(maskRectangleSizeOverlay && isRectangleMaskConfig(normalizedMask)
+      ? {
+          [maskRectangleSizeSchema.valueFields[0]]:
+            maskRectangleSizeOverlay.width ?? normalizedMask.width,
+          [maskRectangleSizeSchema.valueFields[1]]:
+            maskRectangleSizeOverlay.height ?? normalizedMask.height,
+        }
+      : {}),
+    ...(maskRectangleCornerRadiusOverlay && isRectangleMaskConfig(normalizedMask)
+      ? {
+          [maskRectangleCornerRadiusSchema.valueFields[0]]:
+            maskRectangleCornerRadiusOverlay.cornerRadius ?? normalizedMask.cornerRadius,
+        }
+      : {}),
+    ...(maskMirrorLengthOverlay && isMirrorMaskConfig(normalizedMask)
+      ? {
+          [maskMirrorLengthSchema.valueFields[0]]:
+            maskMirrorLengthOverlay.length ?? normalizedMask.length,
+        }
+      : {}),
+    ...(maskEllipseSizeOverlay && isEllipseMaskConfig(normalizedMask)
+      ? {
+          [maskEllipseSizeSchema.valueFields[0]]:
+            maskEllipseSizeOverlay.ellipseWidth ?? normalizedMask.ellipseWidth,
+          [maskEllipseSizeSchema.valueFields[1]]:
+            maskEllipseSizeOverlay.ellipseHeight ?? normalizedMask.ellipseHeight,
+        }
+      : {}),
+  }
+}
+
+export function getRenderTransition(
+  item: UnifiedTimelineItemData<MediaType>,
+): ClipTransitionOutConfig | undefined {
+  return supportsClipTransitionOut(item) ? item.exRenderConfig?.transition : undefined
 }
 
 export function getRenderFilterEffect(
   item: UnifiedTimelineItemData<MediaType>,
 ): ClipFilterConfig | undefined {
-  if (!supportsClipFilter(item) || !item.filterEffect) {
+  const filter = item.runtime.exRenderConfig?.filter ?? item.exRenderConfig?.filter
+  if (!supportsClipFilter(item) || !filter) {
     return undefined
   }
 
-  const renderFilterEffect = item.runtime.renderFilterEffect || item.filterEffect
+  const renderFilterEffect = filter
   const filterIntensityOverlay = getFilterIntensityOverlay(item.id)
   const filterParamOverlay = getFilterParamOverlay(item.id)
 
@@ -446,6 +564,22 @@ export const TimelineItemQueries = {
   getErrorInfo,
   
   // 配置访问
+  getBaseRenderConfig,
   getRenderConfig,
+  getExtraRenderConfig,
+  getPersistentMask,
+  getRenderMask,
+  getRenderTransition,
   getRenderFilterEffect,
+  hasVisualRenderConfig,
+  hasAudioRenderConfig,
+  hasTextRenderConfig,
+  getVisualRenderConfig,
+  getAudioRenderConfig,
+  getTextRenderConfig,
+  patchVisualRenderConfig,
+  patchAudioRenderConfig,
+  patchTextRenderConfig,
+  patchExtraRenderConfig,
+  patchRuntimeExtraRenderConfig,
 }

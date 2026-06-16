@@ -102,11 +102,12 @@ export class DynamicFilterParameterSchemaProvider implements PropertySchemaProvi
   }
 
   listSchemas(context: PropertySchemaContext): AnimatablePropertySchema[] {
-    if (!supportsClipFilter(context.item) || !context.item.filterEffect) {
+    const filter = context.item.exRenderConfig?.filter
+    if (!supportsClipFilter(context.item) || !filter) {
       return []
     }
 
-    return Object.entries(context.item.filterEffect.packagePayload.parameterSchema)
+    return Object.entries(filter.packagePayload.parameterSchema)
       .filter(([key, definition]) =>
         isValidFilterParamKey(key) &&
         (definition.type === 'number' || definition.type === 'vec2' || definition.type === 'boolean'),
@@ -122,11 +123,12 @@ export class DynamicFilterParameterSchemaProvider implements PropertySchemaProvi
       return null
     }
 
-    if (!supportsClipFilter(context.item) || !context.item.filterEffect) {
+    const filter = context.item.exRenderConfig?.filter
+    if (!supportsClipFilter(context.item) || !filter) {
       return null
     }
 
-    return context.item.filterEffect.packagePayload.parameterSchema[parameterKey] ?? null
+    return filter.packagePayload.parameterSchema[parameterKey] ?? null
   }
 
   private createParamSchema(
@@ -148,7 +150,7 @@ export class DynamicFilterParameterSchemaProvider implements PropertySchemaProvi
 
     return {
       propertyId,
-      target: 'filterEffect',
+      target: 'filter',
       valueFields: ['value'],
       valueKind: 'boolean',
       supportsDirectCommit: true,
@@ -186,7 +188,7 @@ export class DynamicFilterParameterSchemaProvider implements PropertySchemaProvi
     return {
       propertyId,
       animationGroupId: propertyId,
-      target: 'filterEffect',
+      target: 'filter',
       valueFields: ['value'],
       valueKind: 'number',
       supportsDirectCommit: true,
@@ -228,7 +230,7 @@ export class DynamicFilterParameterSchemaProvider implements PropertySchemaProvi
     return {
       propertyId,
       animationGroupId: propertyId,
-      target: 'filterEffect',
+      target: 'filter',
       valueFields: ['x', 'y'],
       valueKind: 'vec2',
       supportsDirectCommit: true,

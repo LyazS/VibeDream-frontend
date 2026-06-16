@@ -4,10 +4,13 @@
  */
 
 import type { UnifiedTimelineItemData } from '@/core/timelineitem/type'
-import type { AnimateKeyframe, GetAnimation } from '@/core/timelineitem/bunnytype'
-import type { GetConfigs } from '@/core/timelineitem/bunnytype'
+import type {
+  AnimateKeyframe,
+  GetAnimation,
+  GetConfigs,
+  TimelineExtraRenderConfig,
+} from '@/core/timelineitem/bunnytype'
 import type { MediaType } from '@/core/mediaitem'
-import type { ClipFilterConfig } from '@/core/filter/types'
 import { isPlayheadInTimelineItem as checkPlayheadInTimelineItem } from '@/core/utils/timelineSearchUtils'
 import { cloneDeep } from 'lodash'
 import { useUnifiedStore } from '@/core/unifiedStore'
@@ -25,8 +28,8 @@ export interface KeyframeSnapshot {
   animationConfig: GetAnimation<MediaType> | undefined
   /** 时间轴项目的属性快照 */
   itemProperties: GetConfigs<MediaType>
-  /** 时间轴项目的滤镜快照 */
-  filterEffect: ClipFilterConfig | undefined
+  /** 时间轴项目的扩展渲染配置快照 */
+  exRenderConfig: TimelineExtraRenderConfig | undefined
 }
 
 // ==================== 通用接口定义 ====================
@@ -53,8 +56,8 @@ export interface PlaybackControls {
 export function createSnapshot(item: UnifiedTimelineItemData): KeyframeSnapshot {
   return {
     animationConfig: item.animation ? cloneDeep(item.animation) : undefined,
-    itemProperties: cloneDeep(item.config),
-    filterEffect: item.filterEffect ? cloneDeep(item.filterEffect) : undefined,
+    itemProperties: cloneDeep(item.baseRenderConfig),
+    exRenderConfig: item.exRenderConfig ? cloneDeep(item.exRenderConfig) : undefined,
   }
 }
 
@@ -95,16 +98,17 @@ export async function applyKeyframeSnapshot(
   }
 
   if (snapshot.itemProperties) {
-    Object.assign(item.config, snapshot.itemProperties)
+    item.baseRenderConfig = cloneDeep(snapshot.itemProperties)
   }
 
-  item.filterEffect = snapshot.filterEffect ? cloneDeep(snapshot.filterEffect) : undefined
-  item.runtime.renderFilterEffect = snapshot.filterEffect ? cloneDeep(snapshot.filterEffect) : undefined
+  item.exRenderConfig = snapshot.exRenderConfig ? cloneDeep(snapshot.exRenderConfig) : undefined
+  item.runtime.renderConfig = undefined
+  item.runtime.exRenderConfig = undefined
 
   if (isTextTimelineItem(item)) {
     await rebuildTextRuntime(item, {
-      text: item.config.text,
-      stylePatch: item.config.style,
+      text: item.baseRenderConfig.text.text,
+      stylePatch: item.baseRenderConfig.text.style,
     })
   }
 }

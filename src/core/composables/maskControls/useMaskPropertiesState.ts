@@ -19,9 +19,8 @@ export function useMaskPropertiesState(options: UnifiedMaskKeyframeControlsOptio
       return { width: 0, height: 0 }
     }
 
-    const renderConfig = TimelineItemQueries.getRenderConfig(item)
-    if ('width' in renderConfig && 'height' in renderConfig) {
-      return renderConfig
+    if (TimelineItemQueries.hasVisualProperties(item)) {
+      return TimelineItemQueries.getVisualRenderConfig(item)
     }
 
     return { width: 0, height: 0 }
@@ -43,15 +42,7 @@ export function useMaskPropertiesState(options: UnifiedMaskKeyframeControlsOptio
       return normalizeMaskConfig(undefined, itemLocalSize.value)
     }
 
-    const renderConfig = TimelineItemQueries.getRenderConfig(item)
-    return normalizeMaskConfig(
-      'mask' in renderConfig
-        ? renderConfig.mask
-        : 'mask' in item.config
-          ? item.config.mask
-          : undefined,
-      itemLocalSize.value,
-    )
+    return normalizeMaskConfig(TimelineItemQueries.getRenderMask(item), itemLocalSize.value)
   })
 
   const rectangleMaskConfig = computed(() =>

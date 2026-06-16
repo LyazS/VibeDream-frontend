@@ -2,7 +2,7 @@ import type { PropertyAnimationGroupId } from '@/core/timelineitem/bunnytype'
 import type { DirectPropertyId } from '@/core/property-system/mutation/types'
 import { normalizeAngle } from '@/core/utils/rotationTransform'
 
-export type AnimatablePropertyTarget = 'config' | 'filterEffect' | 'maskConfig'
+export type AnimatablePropertyTarget = 'visual' | 'audio' | 'text' | 'mask' | 'filter'
 export type PropertyValueKind = 'number' | 'boolean' | 'color' | 'vec2'
 
 export interface AnimatablePropertySchema {
@@ -56,7 +56,7 @@ function assertFiniteNumberRecord(
 export const transformRotationSchema: AnimatablePropertySchema = {
   propertyId: 'transform.rotation',
   animationGroupId: 'transform.rotation',
-  target: 'config',
+  target: 'visual',
   valueFields: ['rotation'],
   valueKind: 'number',
   supportsDirectCommit: true,
@@ -70,7 +70,7 @@ export const transformRotationSchema: AnimatablePropertySchema = {
 export const transformPositionSchema: AnimatablePropertySchema = {
   propertyId: 'transform.position',
   animationGroupId: 'transform.position',
-  target: 'config',
+  target: 'visual',
   valueFields: ['x', 'y'],
   valueKind: 'vec2',
   supportsDirectCommit: true,
@@ -83,7 +83,7 @@ export const transformPositionSchema: AnimatablePropertySchema = {
 export const transformSizeSchema: AnimatablePropertySchema = {
   propertyId: 'transform.size',
   animationGroupId: 'transform.size',
-  target: 'config',
+  target: 'visual',
   valueFields: ['width', 'height'],
   valueKind: 'vec2',
   supportsDirectCommit: true,
@@ -96,7 +96,7 @@ export const transformSizeSchema: AnimatablePropertySchema = {
 export const transformOpacitySchema: AnimatablePropertySchema = {
   propertyId: 'transform.opacity',
   animationGroupId: 'transform.opacity',
-  target: 'config',
+  target: 'visual',
   valueFields: ['opacity'],
   valueKind: 'number',
   supportsDirectCommit: true,
@@ -110,7 +110,7 @@ export const transformOpacitySchema: AnimatablePropertySchema = {
 export const filterIntensitySchema: AnimatablePropertySchema = {
   propertyId: 'filter.intensity',
   animationGroupId: 'filter.intensity',
-  target: 'filterEffect',
+  target: 'filter',
   valueFields: ['intensity'],
   valueKind: 'number',
   supportsDirectCommit: true,
@@ -124,7 +124,7 @@ export const filterIntensitySchema: AnimatablePropertySchema = {
 export const audioVolumeSchema: AnimatablePropertySchema = {
   propertyId: 'audio.volume',
   animationGroupId: 'audio.volume',
-  target: 'config',
+  target: 'audio',
   valueFields: ['volume'],
   valueKind: 'number',
   supportsDirectCommit: true,
@@ -138,7 +138,7 @@ export const audioVolumeSchema: AnimatablePropertySchema = {
 export const maskCenterSchema: AnimatablePropertySchema = {
   propertyId: 'mask.center',
   animationGroupId: 'mask.center',
-  target: 'maskConfig',
+  target: 'mask',
   valueFields: ['centerX', 'centerY'],
   valueKind: 'vec2',
   supportsDirectCommit: true,
@@ -151,7 +151,7 @@ export const maskCenterSchema: AnimatablePropertySchema = {
 export const maskRectangleSizeSchema: AnimatablePropertySchema = {
   propertyId: 'mask.rectangle.size',
   animationGroupId: 'mask.rectangle.size',
-  target: 'maskConfig',
+  target: 'mask',
   valueFields: ['width', 'height'],
   valueKind: 'vec2',
   supportsDirectCommit: true,
@@ -164,7 +164,7 @@ export const maskRectangleSizeSchema: AnimatablePropertySchema = {
 export const maskEllipseSizeSchema: AnimatablePropertySchema = {
   propertyId: 'mask.ellipse.size',
   animationGroupId: 'mask.ellipse.size',
-  target: 'maskConfig',
+  target: 'mask',
   valueFields: ['ellipseWidth', 'ellipseHeight'],
   valueKind: 'vec2',
   supportsDirectCommit: true,
@@ -177,7 +177,7 @@ export const maskEllipseSizeSchema: AnimatablePropertySchema = {
 export const maskRectangleCornerRadiusSchema: AnimatablePropertySchema = {
   propertyId: 'mask.rectangle.cornerRadius',
   animationGroupId: 'mask.rectangle.cornerRadius',
-  target: 'maskConfig',
+  target: 'mask',
   valueFields: ['cornerRadius'],
   valueKind: 'number',
   supportsDirectCommit: true,
@@ -191,7 +191,7 @@ export const maskRectangleCornerRadiusSchema: AnimatablePropertySchema = {
 export const maskFeatherSchema: AnimatablePropertySchema = {
   propertyId: 'mask.feather',
   animationGroupId: 'mask.feather',
-  target: 'maskConfig',
+  target: 'mask',
   valueFields: ['outerRange'],
   valueKind: 'number',
   supportsDirectCommit: true,
@@ -205,7 +205,7 @@ export const maskFeatherSchema: AnimatablePropertySchema = {
 export const maskIntensitySchema: AnimatablePropertySchema = {
   propertyId: 'mask.intensity',
   animationGroupId: 'mask.intensity',
-  target: 'maskConfig',
+  target: 'mask',
   valueFields: ['decayRate'],
   valueKind: 'number',
   supportsDirectCommit: true,
@@ -219,7 +219,7 @@ export const maskIntensitySchema: AnimatablePropertySchema = {
 export const maskRotationSchema: AnimatablePropertySchema = {
   propertyId: 'mask.rotation',
   animationGroupId: 'mask.rotation',
-  target: 'maskConfig',
+  target: 'mask',
   valueFields: ['rotation'],
   valueKind: 'number',
   supportsDirectCommit: true,
@@ -233,7 +233,7 @@ export const maskRotationSchema: AnimatablePropertySchema = {
 export const maskMirrorLengthSchema: AnimatablePropertySchema = {
   propertyId: 'mask.mirror.length',
   animationGroupId: 'mask.mirror.length',
-  target: 'maskConfig',
+  target: 'mask',
   valueFields: ['length'],
   valueKind: 'number',
   supportsDirectCommit: true,
@@ -246,7 +246,7 @@ export const maskMirrorLengthSchema: AnimatablePropertySchema = {
 
 export const textContentSchema: AnimatablePropertySchema = {
   propertyId: 'text.content',
-  target: 'config',
+  target: 'text',
   valueFields: ['text'],
   valueKind: 'boolean',
   supportsDirectCommit: true,
@@ -268,7 +268,7 @@ export const textContentSchema: AnimatablePropertySchema = {
 
 export const textStyleFontSizeSchema: AnimatablePropertySchema = {
   propertyId: 'text.style.fontSize',
-  target: 'config',
+  target: 'text',
   valueFields: ['fontSize'],
   valueKind: 'number',
   supportsDirectCommit: true,
@@ -284,7 +284,7 @@ export const textStyleFontSizeSchema: AnimatablePropertySchema = {
 
 export const textStyleFontFamilySchema: AnimatablePropertySchema = {
   propertyId: 'text.style.fontFamily',
-  target: 'config',
+  target: 'text',
   valueFields: ['fontFamily'],
   valueKind: 'boolean',
   supportsDirectCommit: true,
@@ -306,7 +306,7 @@ export const textStyleFontFamilySchema: AnimatablePropertySchema = {
 
 export const textStyleFontWeightSchema: AnimatablePropertySchema = {
   propertyId: 'text.style.fontWeight',
-  target: 'config',
+  target: 'text',
   valueFields: ['fontWeight'],
   valueKind: 'boolean',
   supportsDirectCommit: true,
@@ -323,7 +323,7 @@ export const textStyleFontWeightSchema: AnimatablePropertySchema = {
 
 export const textStyleFontStyleSchema: AnimatablePropertySchema = {
   propertyId: 'text.style.fontStyle',
-  target: 'config',
+  target: 'text',
   valueFields: ['fontStyle'],
   valueKind: 'boolean',
   supportsDirectCommit: true,
@@ -340,7 +340,7 @@ export const textStyleFontStyleSchema: AnimatablePropertySchema = {
 
 export const textStyleColorSchema: AnimatablePropertySchema = {
   propertyId: 'text.style.color',
-  target: 'config',
+  target: 'text',
   valueFields: ['color'],
   valueKind: 'color',
   supportsDirectCommit: true,
@@ -362,7 +362,7 @@ export const textStyleColorSchema: AnimatablePropertySchema = {
 
 export const textStyleBackgroundColorSchema: AnimatablePropertySchema = {
   propertyId: 'text.style.backgroundColor',
-  target: 'config',
+  target: 'text',
   valueFields: ['backgroundColor'],
   valueKind: 'color',
   supportsDirectCommit: true,
@@ -388,7 +388,7 @@ export const textStyleBackgroundColorSchema: AnimatablePropertySchema = {
 
 export const textStyleTextAlignSchema: AnimatablePropertySchema = {
   propertyId: 'text.style.textAlign',
-  target: 'config',
+  target: 'text',
   valueFields: ['textAlign'],
   valueKind: 'boolean',
   supportsDirectCommit: true,
@@ -405,7 +405,7 @@ export const textStyleTextAlignSchema: AnimatablePropertySchema = {
 
 export const textStyleTextShadowSchema: AnimatablePropertySchema = {
   propertyId: 'text.style.textShadow',
-  target: 'config',
+  target: 'text',
   valueFields: ['textShadow'],
   valueKind: 'boolean',
   supportsDirectCommit: true,
@@ -431,7 +431,7 @@ export const textStyleTextShadowSchema: AnimatablePropertySchema = {
 
 export const textStyleTextStrokeSchema: AnimatablePropertySchema = {
   propertyId: 'text.style.textStroke',
-  target: 'config',
+  target: 'text',
   valueFields: ['textStroke'],
   valueKind: 'boolean',
   supportsDirectCommit: true,
@@ -465,7 +465,7 @@ export const textStyleTextStrokeSchema: AnimatablePropertySchema = {
 
 export const textStyleTextGlowSchema: AnimatablePropertySchema = {
   propertyId: 'text.style.textGlow',
-  target: 'config',
+  target: 'text',
   valueFields: ['textGlow'],
   valueKind: 'boolean',
   supportsDirectCommit: true,

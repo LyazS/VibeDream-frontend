@@ -43,16 +43,17 @@ function isInBounds(
   }
 
   const config = TimelineItemQueries.getRenderConfig(item)
-  const halfW = config.width / 2
-  const halfH = config.height / 2
+  const visual = TimelineItemQueries.getVisualRenderConfig(item, config)
+  const halfW = visual.width / 2
+  const halfH = visual.height / 2
   const canvasHalfWidth = canvasWidth / 2
   const canvasHalfHeight = canvasHeight / 2
 
   return (
-    config.x + halfW >= -canvasHalfWidth &&
-    config.x - halfW <= canvasHalfWidth &&
-    config.y + halfH >= -canvasHalfHeight &&
-    config.y - halfH <= canvasHalfHeight
+    visual.x + halfW >= -canvasHalfWidth &&
+    visual.x - halfW <= canvasHalfWidth &&
+    visual.y + halfH >= -canvasHalfHeight &&
+    visual.y - halfH <= canvasHalfHeight
   )
 }
 

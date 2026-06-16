@@ -484,8 +484,9 @@ export function createUnifiedMediaBunnyModule(
 
         // ✅ 使用辅助函数获取渲染配置（包含动画插值后的音量）
         const config = TimelineItemQueries.getRenderConfig(item)
-        const isItemMuted = config.isMuted ?? false
-        const itemVolume = config.volume ?? 1.0
+        const audioConfig = TimelineItemQueries.getAudioRenderConfig(item, config)
+        const isItemMuted = audioConfig.isMuted ?? false
+        const itemVolume = audioConfig.volume ?? 1.0
         const shouldRenderSelectedVideoBoundaryFrame =
           shouldPreviewSelectedBoundaryFrame &&
           TimelineItemQueries.isVideoTimelineItem(item)

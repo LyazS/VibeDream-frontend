@@ -168,9 +168,12 @@ function formatTimelineItemDetail(item: UnifiedTimelineItemData, originalInfo: O
   }
 
   // 4. 变换属性
-  const config = item.config
-  if (config) {
-    const transformInfo = extractTransformInfo(config)
+  const baseRenderConfig = item.baseRenderConfig
+  if (baseRenderConfig) {
+    const transformInfo = extractTransformInfo({
+      ...('visual' in baseRenderConfig ? baseRenderConfig.visual : {}),
+      ...('audio' in baseRenderConfig ? baseRenderConfig.audio : {}),
+    } as VisualProps & AudioProps)
     if (Object.keys(transformInfo).length > 0) {
       lines.push('')
       lines.push(`=== 变换属性 ===`)
@@ -186,8 +189,10 @@ function formatTimelineItemDetail(item: UnifiedTimelineItemData, originalInfo: O
   }
 
   // 4. 文本内容（文本类型）
-  if (item.mediaType === 'text' && config) {
-    const textInfo = extractTextContentInfo(config as TextProps)
+  if (item.mediaType === 'text') {
+    const textInfo = extractTextContentInfo(
+      (item as UnifiedTimelineItemData<'text'>).baseRenderConfig.text,
+    )
     if (textInfo) {
       lines.push('')
       lines.push(`=== 文本内容 ===`)

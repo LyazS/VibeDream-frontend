@@ -60,8 +60,10 @@ export class ChainBuilder {
       : 0
 
     const renderConfig = TimelineItemQueries.getRenderConfig(item)
+    const visualConfig = TimelineItemQueries.getVisualRenderConfig(item, renderConfig)
+    const renderMask = TimelineItemQueries.getRenderMask(item)
     const renderFilterEffect = TimelineItemQueries.getRenderFilterEffect(item)
-    const hasMask = Boolean(renderConfig.mask?.enabled)
+    const hasMask = Boolean(renderMask?.enabled)
     const loadedFilterPackage = this.resolveLoadedFilterPackage(item)
     const hasFilter = Boolean(renderFilterEffect && loadedFilterPackage)
     const getEffectEvaluationFrame = () => this.params.getCurrentFrame()
@@ -83,9 +85,10 @@ export class ChainBuilder {
         () => clockwiseRotationSourceTextureId,
         () => {
           const config = TimelineItemQueries.getRenderConfig(item)
+          const visual = TimelineItemQueries.getVisualRenderConfig(item, config)
           return {
-            width: config.width,
-            height: config.height,
+            width: visual.width,
+            height: visual.height,
           }
         },
       ),
@@ -96,7 +99,7 @@ export class ChainBuilder {
             itemTargetTextureId,
             maskedItemTextureId,
             this.params.targets,
-            () => TimelineItemQueries.getRenderConfig(item).mask,
+            () => TimelineItemQueries.getRenderMask(item),
           )]
         : []),
       ...(hasFilter && loadedFilterPackage
@@ -120,14 +123,15 @@ export class ChainBuilder {
         this.params.programs,
         `composite:${item.id}`,
         hasFilter ? filteredItemTextureId : (hasMask ? maskedItemTextureId : itemTargetTextureId),
-        renderConfig.blendMode ?? DEFAULT_BLEND_MODE,
+        visualConfig.blendMode ?? DEFAULT_BLEND_MODE,
         () => {
           const config = TimelineItemQueries.getRenderConfig(item)
+          const visual = TimelineItemQueries.getVisualRenderConfig(item, config)
           return {
-            x: config.x,
-            y: config.y,
-            rotationRadians: degreesToRadians(-config.rotation),
-            opacity: config.opacity ?? 1,
+            x: visual.x,
+            y: visual.y,
+            rotationRadians: degreesToRadians(-visual.rotation),
+            opacity: visual.opacity ?? 1,
           }
         },
       ),
@@ -138,11 +142,12 @@ export class ChainBuilder {
 
   getSignature(item: VisualTimelineItem): string {
     const config = TimelineItemQueries.getRenderConfig(item)
-    const mask = config.mask
+    const visual = TimelineItemQueries.getVisualRenderConfig(item, config)
+    const mask = TimelineItemQueries.getRenderMask(item)
     const loadedFilterPackage = this.resolveLoadedFilterPackage(item)
     return [
       `mask:${mask?.enabled ? 'on' : 'off'}:${mask?.type ?? 'rectangle'}`,
-      `blend:${config.blendMode ?? DEFAULT_BLEND_MODE}`,
+      `blend:${visual.blendMode ?? DEFAULT_BLEND_MODE}`,
       `filter:${TimelineItemQueries.getRenderFilterEffect(item)?.effectPackageId ?? ''}`,
       `filter-installed:${loadedFilterPackage ? 'ready' : 'missing'}`,
       `filter-version:${loadedFilterPackage?.payload.version ?? TimelineItemQueries.getRenderFilterEffect(item)?.packagePayload?.version ?? ''}`,

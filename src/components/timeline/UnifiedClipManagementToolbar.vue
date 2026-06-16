@@ -371,8 +371,8 @@ function debugTimeline() {
         }
 
         // 显示配置信息（如果有的话）
-        if (item.config && Object.keys(item.config).length > 0) {
-          console.log('配置信息:', item.config)
+        if (item.baseRenderConfig && Object.keys(item.baseRenderConfig).length > 0) {
+          console.log('配置信息:', item.baseRenderConfig)
         }
 
         console.groupEnd()
@@ -428,8 +428,8 @@ function debugTimeline() {
     console.log('持续时长 (秒):', framesToSeconds(duration))
 
     // 显示配置信息
-    if (item.config && Object.keys(item.config).length > 0) {
-      console.log('配置信息:', item.config)
+    if (item.baseRenderConfig && Object.keys(item.baseRenderConfig).length > 0) {
+      console.log('配置信息:', item.baseRenderConfig)
     }
 
     console.groupEnd()

@@ -601,7 +601,7 @@ export function createUnifiedMediaModule(registry: ModuleRegistry) {
       }
 
       const relatedTransitionItems = timelineModule.timelineItems.value.filter(
-        (item: UnifiedTimelineItemData) => item.transitionOut?.effectPackageId === assetId,
+        (item: UnifiedTimelineItemData) => item.exRenderConfig?.transition?.effectPackageId === assetId,
       )
 
       for (const timelineItem of relatedTransitionItems) {
@@ -609,7 +609,7 @@ export function createUnifiedMediaModule(registry: ModuleRegistry) {
       }
 
       const relatedFilterItems = timelineModule.timelineItems.value.filter(
-        (item: UnifiedTimelineItemData) => item.filterEffect?.effectPackageId === assetId,
+        (item: UnifiedTimelineItemData) => item.exRenderConfig?.filter?.effectPackageId === assetId,
       )
 
       for (const timelineItem of relatedFilterItems) {

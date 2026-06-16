@@ -346,8 +346,8 @@ async function materializeASRSubtitles(
     textItem.timelineStatus = 'loading'
     await setupTimelineItemBunny(textItem)
     if (textItem.runtime.textBitmap) {
-      textItem.config.width = textItem.runtime.textBitmap.width
-      textItem.config.height = textItem.runtime.textBitmap.height
+      textItem.baseRenderConfig.visual.width = textItem.runtime.textBitmap.width
+      textItem.baseRenderConfig.visual.height = textItem.runtime.textBitmap.height
     }
     textItem.provenance = {
       ...textItem.provenance,
@@ -442,4 +442,3 @@ async function waitForASRCompletion(
 
   return resolvedResult
 }
-

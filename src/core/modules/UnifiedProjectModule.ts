@@ -815,7 +815,7 @@ function collectTimelineEffectDependencies(
   const unique = new Map<string, EffectPackageIdentity>()
 
   for (const item of timelineItems) {
-    const transitionOut = item.transitionOut
+    const transitionOut = item.exRenderConfig?.transition
     if (transitionOut?.effectPackageId) {
       const identity = normalizeEffectIdentity(
         transitionOut.effectPackageId,
@@ -828,7 +828,7 @@ function collectTimelineEffectDependencies(
       }
     }
 
-    const filterEffect = item.filterEffect
+    const filterEffect = item.exRenderConfig?.filter
     if (filterEffect?.effectPackageId) {
       const identity = normalizeEffectIdentity(
         filterEffect.effectPackageId,

@@ -50,16 +50,21 @@ const props = defineProps<Props>()
 const { t } = useAppI18n()
 const unifiedStore = useUnifiedStore()
 
-function throwClipPropertyPhase0Todo(action: string): never {
-  throw new Error(
-    `[ClipProperty Phase 0 TODO] 属性区入口 "${action}" 仍在 TransitionPropertiesGroup 内部实现提交分流，` +
-      '需先收敛到统一的属性提交入口后再恢复。',
-  )
-}
+const transitionConfig = computed(() => {
+  if (!props.selectedTimelineItem) {
+    return normalizeClipTransitionOutConfig(undefined)
+  }
 
-const transitionConfig = computed(() =>
-  normalizeClipTransitionOutConfig(props.selectedTimelineItem?.transitionOut),
-)
+  const transition = props.selectedTimelineItem.exRenderConfig?.transition
+  if (!transition) {
+    throw new Error(
+      `[TransitionPropertiesGroup] selectedTimelineItem ${props.selectedTimelineItem.id} 缺少 transition 配置，` +
+        '转场属性面板只能在已存在转场的片段上打开。',
+    )
+  }
+
+  return normalizeClipTransitionOutConfig(transition)
+})
 
 const transitionRuntime = computed(() => props.selectedTimelineItem?.runtime.transition)
 

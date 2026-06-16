@@ -366,7 +366,7 @@ function handleDragStart(event: MouseEvent) {
   const item = selectedItem.value
   if (!item || !TimelineItemQueries.hasVisualProperties(item)) return
 
-  const config = TimelineItemQueries.getRenderConfig(item)
+  const config = TimelineItemQueries.getVisualRenderConfig(item)
 
   dragState.value = {
     isDragging: true,
@@ -428,7 +428,7 @@ function handleScaleStart(event: any) {
   const item = selectedItem.value
   if (!item || !TimelineItemQueries.hasVisualProperties(item)) return
 
-  const config = TimelineItemQueries.getRenderConfig(item)
+  const config = TimelineItemQueries.getVisualRenderConfig(item)
 
   scaleState.value = {
     isScaling: true,
@@ -515,7 +515,7 @@ function handleRotateStart(event: any) {
   const item = selectedItem.value
   if (!item || !TimelineItemQueries.hasVisualProperties(item)) return
 
-  const config = TimelineItemQueries.getRenderConfig(item)
+  const config = TimelineItemQueries.getVisualRenderConfig(item)
 
   rotationState.value = {
     isRotating: true,
@@ -675,7 +675,7 @@ function findTimelineItemAtPosition(
       continue
     }
 
-    const renderConfig = TimelineItemQueries.getRenderConfig(item)
+    const renderConfig = TimelineItemQueries.getVisualRenderConfig(item)
 
     const isHit = isPointInRotatedBoundingBox(canvasPoint, {
       x: renderConfig.x,

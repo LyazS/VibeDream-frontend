@@ -99,12 +99,12 @@ const getAnimatedLabelClass = (state: string) => ({
   'animated-property-label--between-keyframes': state === 'between-keyframes',
 })
 
-// isMuted 不使用关键帧系统，直接从 config 读取
+// isMuted 不使用关键帧系统，直接从 audio render config 读取
 const isMuted = computed(() => {
   if (!props.selectedTimelineItem || !hasAudioProperties(props.selectedTimelineItem)) {
     return false
   }
-  return props.selectedTimelineItem.config.isMuted ?? false
+  return props.selectedTimelineItem.baseRenderConfig.audio.isMuted ?? false
 })
 
 // 切换静音（不使用关键帧系统）

@@ -106,7 +106,7 @@ export function useFilterDeferredInteraction(options: FilterDeferredInteractionO
 
   function setFilterIntensityDeferred(value: number) {
     const item = selectedTimelineItem.value
-    if (!item || !item.filterEffect || !canOperateFilterNumbers.value) return
+    if (!item || !item.exRenderConfig?.filter || !canOperateFilterNumbers.value) return
 
     beginFilterInteraction(item)
     setFilterIntensityOverlay(item.id, value)
@@ -114,7 +114,7 @@ export function useFilterDeferredInteraction(options: FilterDeferredInteractionO
 
   function setFilterParamDeferred(parameterKey: string, value: number) {
     const item = selectedTimelineItem.value
-    if (!item || !item.filterEffect || !canOperateFilterNumbers.value || !isValidFilterParamKey(parameterKey)) return
+    if (!item || !item.exRenderConfig?.filter || !canOperateFilterNumbers.value || !isValidFilterParamKey(parameterKey)) return
 
     beginFilterInteraction(item)
     activeFilterParamKeys.value = new Set(activeFilterParamKeys.value).add(parameterKey)
@@ -125,7 +125,7 @@ export function useFilterDeferredInteraction(options: FilterDeferredInteractionO
     const item = selectedTimelineItem.value
     if (
       !item ||
-      !item.filterEffect ||
+      !item.exRenderConfig?.filter ||
       !canOperateFilterNumbers.value ||
       !isValidFilterParamKey(parameterKey) ||
       !isFilterParamVec2Value(value)
@@ -192,7 +192,7 @@ export function useFilterDeferredInteraction(options: FilterDeferredInteractionO
 
   async function setFilterIntensityDirect(value: number) {
     const item = selectedTimelineItem.value
-    if (!item || !item.filterEffect || !canOperateFilterNumbers.value) return
+    if (!item || !item.exRenderConfig?.filter || !canOperateFilterNumbers.value) return
 
     await cancelDeferredUpdates()
     await propertyMutationCommitter.commitDirect(getCommitContext(item), 'filter.intensity', value)
@@ -200,7 +200,7 @@ export function useFilterDeferredInteraction(options: FilterDeferredInteractionO
 
   async function setFilterParamDirect(parameterKey: string, value: number) {
     const item = selectedTimelineItem.value
-    if (!item || !item.filterEffect || !canOperateFilterNumbers.value || !isValidFilterParamKey(parameterKey)) return
+    if (!item || !item.exRenderConfig?.filter || !canOperateFilterNumbers.value || !isValidFilterParamKey(parameterKey)) return
 
     await cancelDeferredUpdates()
     await propertyMutationCommitter.commitDirect(getCommitContext(item), createFilterParamPropertyId(parameterKey), value)
@@ -210,7 +210,7 @@ export function useFilterDeferredInteraction(options: FilterDeferredInteractionO
     const item = selectedTimelineItem.value
     if (
       !item ||
-      !item.filterEffect ||
+      !item.exRenderConfig?.filter ||
       !canOperateFilterNumbers.value ||
       !isValidFilterParamKey(parameterKey) ||
       !isFilterParamVec2Value(value)
@@ -222,7 +222,7 @@ export function useFilterDeferredInteraction(options: FilterDeferredInteractionO
 
   async function setFilterParamBooleanDirect(parameterKey: string, value: boolean) {
     const item = selectedTimelineItem.value
-    if (!item || !item.filterEffect || !canOperateFilterNumbers.value || !isValidFilterParamKey(parameterKey)) return
+    if (!item || !item.exRenderConfig?.filter || !canOperateFilterNumbers.value || !isValidFilterParamKey(parameterKey)) return
 
     await cancelDeferredUpdates()
     await propertyMutationCommitter.commitDirect(getCommitContext(item), createFilterParamPropertyId(parameterKey), value)

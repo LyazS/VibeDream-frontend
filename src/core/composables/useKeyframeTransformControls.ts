@@ -71,6 +71,18 @@ export function useUnifiedKeyframeTransformControls(
     return TimelineItemQueries.getRenderConfig(selectedTimelineItem.value)
   })
 
+  const visualRenderConfig = computed(() => {
+    const item = selectedTimelineItem.value
+    if (!item || !TimelineItemQueries.hasVisualProperties(item) || !renderConfig.value) return null
+    return TimelineItemQueries.getVisualRenderConfig(item)
+  })
+
+  const audioRenderConfig = computed(() => {
+    const item = selectedTimelineItem.value
+    if (!item || !TimelineItemQueries.hasAudioProperties(item) || !renderConfig.value) return null
+    return TimelineItemQueries.getAudioRenderConfig(item)
+  })
+
   function getOriginalDimensions() {
     const item = selectedTimelineItem.value
     if (!item || !TimelineItemQueries.hasVisualProperties(item)) {
@@ -78,7 +90,7 @@ export function useUnifiedKeyframeTransformControls(
     }
 
     if (TimelineItemQueries.isTextTimelineItem(item)) {
-      const currentRenderConfig = renderConfig.value as any
+      const currentRenderConfig = visualRenderConfig.value
       return {
         width: item.runtime.textBitmap?.width ?? currentRenderConfig?.width ?? 0,
         height: item.runtime.textBitmap?.height ?? currentRenderConfig?.height ?? 0,
@@ -86,28 +98,28 @@ export function useUnifiedKeyframeTransformControls(
     }
 
     const mediaItem = unifiedStore.getMediaItem(item.mediaItemId)
-    const currentRenderConfig = renderConfig.value as any
+    const currentRenderConfig = visualRenderConfig.value
     return {
       width: mediaItem?.runtime.bunny?.originalWidth ?? currentRenderConfig?.width ?? 0,
       height: mediaItem?.runtime.bunny?.originalHeight ?? currentRenderConfig?.height ?? 0,
     }
   }
 
-  const transformX = computed(() => (renderConfig.value as any)?.x ?? 0)
-  const transformY = computed(() => (renderConfig.value as any)?.y ?? 0)
-  const displayWidth = computed(() => (renderConfig.value as any)?.width ?? 0)
-  const displayHeight = computed(() => (renderConfig.value as any)?.height ?? 0)
-  const rotation = computed(() => (renderConfig.value as any)?.rotation ?? 0)
-  const opacity = computed(() => (renderConfig.value as any)?.opacity ?? 1)
-  const blendMode = computed(() => (renderConfig.value as any)?.blendMode ?? 'normal')
-  const volume = computed(() => (renderConfig.value as any)?.volume ?? 1)
+  const transformX = computed(() => visualRenderConfig.value?.x ?? 0)
+  const transformY = computed(() => visualRenderConfig.value?.y ?? 0)
+  const displayWidth = computed(() => visualRenderConfig.value?.width ?? 0)
+  const displayHeight = computed(() => visualRenderConfig.value?.height ?? 0)
+  const rotation = computed(() => visualRenderConfig.value?.rotation ?? 0)
+  const opacity = computed(() => visualRenderConfig.value?.opacity ?? 1)
+  const blendMode = computed(() => visualRenderConfig.value?.blendMode ?? 'normal')
+  const volume = computed(() => audioRenderConfig.value?.volume ?? 1)
   const elementWidth = computed(() => getOriginalDimensions().width)
   const elementHeight = computed(() => getOriginalDimensions().height)
   const proportionalScale = computed(() =>
     Boolean(
-      selectedTimelineItem.value &&
-      TimelineItemQueries.hasVisualProperties(selectedTimelineItem.value) &&
-      selectedTimelineItem.value.config.proportionalScale,
+	      selectedTimelineItem.value &&
+	      TimelineItemQueries.hasVisualProperties(selectedTimelineItem.value) &&
+	      selectedTimelineItem.value.baseRenderConfig.visual.proportionalScale,
     ),
   )
   function getScaledSizeFromWidth(nextWidth: number): Record<string, number> {
@@ -241,7 +253,7 @@ export function useUnifiedKeyframeTransformControls(
     if (!item || !canOperateTransforms.value) return
 
     const positionOverlay = getTransformPositionOverlay(item.id)
-    const currentRenderConfig = renderConfig.value as { x?: number; y?: number } | null
+    const currentRenderConfig = visualRenderConfig.value
     const resolvedValue =
       typeof nextValue === 'number'
         ? nextValue
@@ -262,7 +274,7 @@ export function useUnifiedKeyframeTransformControls(
     const positionOverlay = getTransformPositionOverlay(item.id)
     if (!positionOverlay) return
 
-    const currentRenderConfig = renderConfig.value as { x?: number; y?: number } | null
+    const currentRenderConfig = visualRenderConfig.value
     const x = positionOverlay.x ?? currentRenderConfig?.x
     const y = positionOverlay.y ?? currentRenderConfig?.y
     if (!isFiniteNumber(x) || !isFiniteNumber(y)) return
@@ -279,7 +291,7 @@ export function useUnifiedKeyframeTransformControls(
     if (!item || !canOperateTransforms.value) return
 
     const sizeOverlay = getTransformSizeOverlay(item.id)
-    const currentRenderConfig = renderConfig.value as { width?: number; height?: number } | null
+    const currentRenderConfig = visualRenderConfig.value
     const resolvedValue =
       typeof nextValue === 'number'
         ? nextValue
@@ -307,7 +319,7 @@ export function useUnifiedKeyframeTransformControls(
     if (!item || !canOperateTransforms.value) return
 
     const opacityOverlay = getTransformOpacityOverlay(item.id)
-    const currentRenderConfig = renderConfig.value as { opacity?: number } | null
+    const currentRenderConfig = visualRenderConfig.value
     const nextOpacity =
       typeof nextValue === 'number'
         ? nextValue
@@ -324,7 +336,7 @@ export function useUnifiedKeyframeTransformControls(
     if (!item || !canOperateTransforms.value) return
 
     const volumeOverlay = getAudioVolumeOverlay(item.id)
-    const currentRenderConfig = renderConfig.value as { volume?: number } | null
+    const currentRenderConfig = audioRenderConfig.value
     const nextVolume =
       typeof nextValue === 'number'
         ? nextValue
@@ -344,12 +356,7 @@ export function useUnifiedKeyframeTransformControls(
     const positionOverlay = getTransformPositionOverlay(item.id)
     if (!sizeOverlay && !positionOverlay) return
 
-    const currentRenderConfig = renderConfig.value as {
-      x?: number
-      y?: number
-      width?: number
-      height?: number
-    } | null
+    const currentRenderConfig = visualRenderConfig.value
     const operations: ChangeOperation[] = []
 
     if (sizeOverlay) {
@@ -607,7 +614,7 @@ export function useUnifiedKeyframeTransformControls(
     const item = selectedTimelineItem.value
     if (!item || !canOperateTransforms.value || !TimelineItemQueries.hasVisualProperties(item)) return
 
-    const nextProportionalScale = !item.config.proportionalScale
+    const nextProportionalScale = !item.baseRenderConfig.visual.proportionalScale
     const operations: ChangeOperation[] = [
       {
         kind: 'visual-config-patch' as const,
@@ -639,7 +646,7 @@ export function useUnifiedKeyframeTransformControls(
 
   const alignHorizontal = async (mode: 'left' | 'center' | 'right') => {
     const item = selectedTimelineItem.value
-    const currentRenderConfig = renderConfig.value as { width?: number } | null
+    const currentRenderConfig = visualRenderConfig.value
     if (!item || !canOperateTransforms.value || !currentRenderConfig) return
 
     const canvasWidth = unifiedStore.videoResolution.width
@@ -656,7 +663,7 @@ export function useUnifiedKeyframeTransformControls(
 
   const alignVertical = async (mode: 'top' | 'middle' | 'bottom') => {
     const item = selectedTimelineItem.value
-    const currentRenderConfig = renderConfig.value as { height?: number } | null
+    const currentRenderConfig = visualRenderConfig.value
     if (!item || !canOperateTransforms.value || !currentRenderConfig) return
 
     const canvasHeight = unifiedStore.videoResolution.height

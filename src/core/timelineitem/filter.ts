@@ -103,6 +103,6 @@ export function supportsClipFilter(
 
 export function hasEnabledClipFilter(
   item: UnifiedTimelineItemData<MediaType>,
-): item is ClipFilterVisualTimelineItem & { filterEffect: ClipFilterConfig } {
-  return supportsClipFilter(item) && Boolean(item.filterEffect)
+): item is ClipFilterVisualTimelineItem & { exRenderConfig: { filter: ClipFilterConfig } } {
+  return supportsClipFilter(item) && Boolean(item.exRenderConfig?.filter)
 }

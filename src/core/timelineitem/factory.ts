@@ -3,23 +3,16 @@
  * 支持混合类型系统的重构版本
  */
 
-import { reactive, markRaw } from 'vue'
+import { reactive } from 'vue'
 import { cloneDeep } from 'lodash'
 import { generateTimelineItemId } from '@/core/utils/idGenerator'
 import type { MediaType, UnifiedMediaItemData } from '@/core/mediaitem'
-import type {
-  VideoMediaConfig,
-  ImageMediaConfig,
-  AudioMediaConfig,
-  TextMediaConfig,
-  GetConfigs,
-} from '@/core/timelineitem/type'
+import type { GetConfigs } from '@/core/timelineitem/type'
 import type { UnifiedTimeRange } from '@/core/types/timeRange'
-import type { UnifiedTimelineItemData, TimelineItemStatus } from '@/core/timelineitem/type'
+import type { UnifiedTimelineItemData } from '@/core/timelineitem/type'
 import type { GetAnimation } from './bunnytype'
 import { TimelineItemQueries } from '@/core/timelineitem/queries'
 import { MediaItemQueries } from '@/core/mediaitem'
-import { createTextTimelineItem as createTextTimelineItemFromUtils } from '@/core/utils/textTimelineUtils'
 import { setupTimelineItemBunny } from '@/core/bunnyUtils/timelineItemSetup'
 
 // ==================== 克隆和复制函数 ====================
@@ -35,30 +28,32 @@ export function cloneTimelineItem<T extends MediaType>(
     mediaItemId?: string
     trackId?: string
     timeRange?: UnifiedTimeRange
-    config?: GetConfigs<T>
+    baseRenderConfig?: GetConfigs<T>
     timelineStatus?: 'loading' | 'ready' | 'error'
     animation?: GetAnimation<T>
   },
 ): UnifiedTimelineItemData<T> {
-  // 深拷贝原始对象，排除不需要克隆的 runtime 属性
-  const cloned = cloneDeep({
-    ...original,
+  const result = {
+    id: overrides?.id || original.id,
+    mediaItemId: overrides?.mediaItemId || original.mediaItemId,
+    trackId: overrides?.trackId || original.trackId,
+    timelineStatus: overrides?.timelineStatus || original.timelineStatus,
+    mediaType: original.mediaType,
+    timeRange: overrides?.timeRange ? cloneDeep(overrides.timeRange) : cloneDeep(original.timeRange),
+    baseRenderConfig: overrides?.baseRenderConfig
+      ? cloneDeep(overrides.baseRenderConfig)
+      : cloneDeep(original.baseRenderConfig),
+    animation: overrides?.animation
+      ? cloneDeep(overrides.animation)
+      : (original.animation ? cloneDeep(original.animation) : undefined),
+    exRenderConfig: original.exRenderConfig ? cloneDeep(original.exRenderConfig) : undefined,
     runtime: {
-      // ✅ 只保留 isInitialized，其他 runtime 字段（bunnyClip、textBitmap 等）会在后续重建
+      // 只保留可复用的初始化标记；其余运行时资源在后续重建
       isInitialized: original.runtime.isInitialized,
     },
-  })
-
-  // 应用覆盖值
-  const result = {
-    ...cloned,
-    id: overrides?.id || cloned.id,
-    mediaItemId: overrides?.mediaItemId || cloned.mediaItemId,
-    trackId: overrides?.trackId || cloned.trackId,
-    timelineStatus: overrides?.timelineStatus || cloned.timelineStatus,
-    timeRange: overrides?.timeRange ? cloneDeep(overrides.timeRange) : cloned.timeRange,
-    config: overrides?.config ? cloneDeep(overrides.config) : cloned.config,
-    animation: overrides?.animation ? cloneDeep(overrides.animation) : cloned.animation,
+    isPlaceholder: original.isPlaceholder,
+    task: original.task ? cloneDeep(original.task) : undefined,
+    provenance: original.provenance ? cloneDeep(original.provenance) : undefined,
   }
 
   return reactive(result) as UnifiedTimelineItemData<T>
@@ -126,7 +121,7 @@ export function validateTimelineItem<T extends MediaType>(
   }
 
   // 配置验证（根据媒体类型进行不同的验证）
-  if (!item.config) {
+  if (!item.baseRenderConfig) {
     errors.push('缺少配置信息')
   }
 

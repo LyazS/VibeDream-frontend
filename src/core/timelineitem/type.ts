@@ -13,17 +13,16 @@ import type { Raw } from 'vue'
 import type { MediaType } from '@/core/mediaitem'
 import type { UnifiedTimeRange } from '@/core/types/timeRange'
 import type { BunnyClip } from '@/core/mediabunny/bunny-clip'
-import type { GetConfigs, GetAnimation } from './bunnytype'
-import type { BlendMode } from './blendMode'
+import type { GetConfigs, GetAnimation, TimelineExtraRenderConfig } from './bunnytype'
 import type { ClipTransitionRuntime } from './transition'
-import type { ClipTransitionOutConfig } from '@/core/transition/types'
-import type { ClipFilterConfig } from '@/core/filter/types'
 
 // 重新导出 bunnytype 中的类型供其他模块使用
 export type {
   AnimationChannelKey,
   GetConfigs,
   GetAnimation,
+  TimelineBaseRenderConfig,
+  TimelineExtraRenderConfig,
   VisualProps,
   AudioProps,
   TextProps,
@@ -34,16 +33,7 @@ export type {
 } from './bunnytype'
 export type { BlendMode } from './blendMode'
 export type { MaskConfig, MaskType } from './mask'
-import type {
-  AnimationChannelKey,
-  VisualProps,
-  AudioProps,
-  TextProps,
-  VideoMediaConfig,
-  ImageMediaConfig,
-  AudioMediaConfig,
-  TextMediaConfig,
-} from './bunnytype'
+import type { VisualProps, AudioProps, TextProps } from './bunnytype'
 
 // ==================== 基础类型定义 ====================
 
@@ -97,8 +87,8 @@ export interface UnifiedTimelineItemRuntime<T extends MediaType = MediaType> {
   textBitmapVersion?: number // 文本位图重建版本，用于驱动 WebGL 纹理重新上传
   /** 动画插值后的临时配置（运行时数据，不持久化） */
   renderConfig?: GetConfigs<T>
-  /** 动画插值后的滤镜配置（运行时数据，不持久化） */
-  renderFilterEffect?: ClipFilterConfig
+  /** 动画插值后的扩展配置（运行时数据，不持久化） */
+  exRenderConfig?: TimelineExtraRenderConfig
   /** 片段出场转场的运行时绑定与边界帧缓存 */
   transition?: ClipTransitionRuntime
 
@@ -144,17 +134,14 @@ export interface UnifiedTimelineItemData<T extends MediaType = MediaType> {
   // ==================== 时间范围 ====================
   timeRange: UnifiedTimeRange
 
-  // ==================== 配置（类型安全） ====================
-  config: GetConfigs<T>
+  // ==================== 基础渲染配置（类型安全） ====================
+  baseRenderConfig: GetConfigs<T>
 
   // ==================== 动画配置（类型安全） ====================
   animation?: GetAnimation<T>
 
-  // ==================== 片段转场配置（持久化） ====================
-  transitionOut?: ClipTransitionOutConfig
-
-  // ==================== 片段滤镜配置（持久化） ====================
-  filterEffect?: ClipFilterConfig
+  // ==================== 扩展渲染配置（持久化） ====================
+  exRenderConfig?: TimelineExtraRenderConfig
 
   // ==================== 运行时数据（不可持久化） ====================
   runtime: UnifiedTimelineItemRuntime<T>

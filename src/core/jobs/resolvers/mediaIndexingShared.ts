@@ -13,7 +13,6 @@ import type { FileData, FinalEvent, TaskStreamEvent } from '@/core/datasource/pr
 import { TaskStatus, TaskStreamEventType } from '@/core/datasource/providers/ai-generation/types'
 import type { UnifiedTimelineItemData, VideoMediaConfig } from '@/core/timelineitem/type'
 import { DEFAULT_BLEND_MODE } from '@/core/timelineitem'
-import { createDefaultMaskConfig } from '@/core/timelineitem/mask'
 import type { UploadFileExportOptions } from '@/core/utils/bizyairFileUploader'
 import { fetchClient, sleepWithAbortSignal } from '@/utils/fetchClient'
 import type { ResourcePolicy, ResourceRequest } from '../ResourceTypes'
@@ -382,18 +381,21 @@ export function createTemporaryVideoTimelineItem(
       clipStartTime: startFrame,
       clipEndTime: endFrame,
     },
-    config: {
-      x: 0,
-      y: 0,
-      width,
-      height,
-      rotation: 0,
-      opacity: 1,
-      blendMode: DEFAULT_BLEND_MODE,
-      proportionalScale: true,
-      mask: createDefaultMaskConfig('rectangle', { width, height }),
-      volume: 1,
-      isMuted: false,
+    baseRenderConfig: {
+      visual: {
+        x: 0,
+        y: 0,
+        width,
+        height,
+        rotation: 0,
+        opacity: 1,
+        blendMode: DEFAULT_BLEND_MODE,
+        proportionalScale: true,
+      },
+      audio: {
+        volume: 1,
+        isMuted: false,
+      },
     } satisfies VideoMediaConfig,
     runtime: {
       isInitialized: true,

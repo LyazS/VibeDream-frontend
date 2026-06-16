@@ -65,12 +65,11 @@ export function useMaskKeyframeActions(options: MaskKeyframeActionsOptions) {
   }
 
   function getMaskPlanContext(item: NonNullable<typeof selectedTimelineItem.value>) {
-    const renderConfig = TimelineItemQueries.getRenderConfig(item)
-    const itemLocalSize = getItemLocalSize(
-      'width' in renderConfig ? renderConfig.width : 0,
-      'height' in renderConfig ? renderConfig.height : 0,
-    )
-    const currentMask = normalizeMaskConfig('mask' in item.config ? item.config.mask : undefined, itemLocalSize)
+    const visualConfig = TimelineItemQueries.hasVisualProperties(item)
+      ? TimelineItemQueries.getVisualRenderConfig(item)
+      : { width: 0, height: 0 }
+    const itemLocalSize = getItemLocalSize(visualConfig.width, visualConfig.height)
+    const currentMask = normalizeMaskConfig(TimelineItemQueries.getPersistentMask(item), itemLocalSize)
 
     return { currentMask, itemLocalSize }
   }
@@ -83,15 +82,14 @@ export function useMaskKeyframeActions(options: MaskKeyframeActionsOptions) {
       description: value ? '启用蒙版' : '关闭蒙版',
       operations: [
         {
-          kind: 'visual-config-patch',
+          kind: 'no-animation-group-patch',
           timelineItemId: item.id,
           frame: currentFrame.value,
+          target: 'mask',
           patch: {
-            mask: {
-              ...currentMask,
-              enabled: value,
-            },
-          },
+            ...currentMask,
+            enabled: value,
+          } as never,
         },
       ],
     }
@@ -105,11 +103,12 @@ export function useMaskKeyframeActions(options: MaskKeyframeActionsOptions) {
       description: '修改蒙版类型',
       operations: [
         {
-          kind: 'visual-config-patch',
+          kind: 'no-animation-group-patch',
           timelineItemId: item.id,
           frame: currentFrame.value,
+          target: 'mask',
           patch: {
-            mask: replaceMaskType(currentMask, value, itemLocalSize),
+            ...replaceMaskType(currentMask, value, itemLocalSize),
           },
         },
       ],
@@ -124,15 +123,14 @@ export function useMaskKeyframeActions(options: MaskKeyframeActionsOptions) {
       description: value ? '开启蒙版反相' : '关闭蒙版反相',
       operations: [
         {
-          kind: 'visual-config-patch',
+          kind: 'no-animation-group-patch',
           timelineItemId: item.id,
           frame: currentFrame.value,
+          target: 'mask',
           patch: {
-            mask: {
-              ...currentMask,
-              inverted: value,
-            },
-          },
+            ...currentMask,
+            inverted: value,
+          } as never,
         },
       ],
     }

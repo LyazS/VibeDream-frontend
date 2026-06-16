@@ -1,10 +1,17 @@
 import type { MediaType } from '@/core/mediaitem'
+import { cloneDeep } from 'lodash'
 import type { UnifiedTimelineItemData } from '@/core/timelineitem/type'
-import type { GetConfigs, PropertyAnimationGroupId } from '@/core/timelineitem/bunnytype'
+import type {
+  GetConfigs,
+  PropertyAnimationGroupId,
+  TimelineExtraRenderConfig,
+  VisualProps,
+} from '@/core/timelineitem/bunnytype'
 import type { ClipFilterConfig } from '@/core/filter/types'
-import { normalizeMaskConfig } from '@/core/timelineitem/mask'
+import { getItemLocalSize, normalizeMaskConfig } from '@/core/timelineitem/mask'
 import { normalizeClipFilterConfig } from '@/core/timelineitem/filter'
 import { AnimationRegistry } from '@/core/animation/registry'
+import { TimelineItemQueries } from '@/core/timelineitem/queries'
 import {
   getCurrentGroupValue,
   getSupportedAnimationGroups,
@@ -16,29 +23,26 @@ import {
 import { filterIntensitySchema } from '@/core/property-system/schema'
 
 export function createBaseRenderConfig(item: UnifiedTimelineItemData<MediaType>) {
-  const baseConfig = { ...item.config }
-  if ('mask' in baseConfig) {
-    const width = typeof baseConfig.width === 'number' ? baseConfig.width : undefined
-    const height = typeof baseConfig.height === 'number' ? baseConfig.height : undefined
-    ;(baseConfig as { mask?: ReturnType<typeof normalizeMaskConfig> }).mask = normalizeMaskConfig(
-      (item.config as { mask?: unknown }).mask as never,
-      width && height ? { width, height } : undefined,
-    )
-  }
-  return baseConfig
+  return cloneDeep(item.baseRenderConfig)
 }
 
 export function createBaseRenderFilterEffect(
   item: UnifiedTimelineItemData<MediaType>,
 ): ClipFilterConfig | undefined {
-  return item.filterEffect ? normalizeClipFilterConfig(item.filterEffect) : undefined
+  return item.exRenderConfig?.filter ? normalizeClipFilterConfig(item.exRenderConfig.filter) : undefined
+}
+
+export function createBaseExtraRenderConfig(
+  item: UnifiedTimelineItemData<MediaType>,
+): TimelineExtraRenderConfig {
+  return cloneDeep(item.exRenderConfig ?? {})
 }
 
 function getActiveAnimationGroups(item: UnifiedTimelineItemData<MediaType>): PropertyAnimationGroupId[] {
   if (!item.animation?.groups) return []
   return getSupportedAnimationGroups(item).filter((groupId) => {
     const definition = AnimationRegistry.get(groupId)
-    const track = (item.animation?.groups as Record<string, any> | undefined)?.[groupId]
+    const track = (item.animation?.groups as Record<string, { keyframes: unknown[] }> | undefined)?.[groupId]
     return definition.isEnabled(item) && Boolean(track && track.keyframes.length > 0)
   })
 }
@@ -64,14 +68,17 @@ export function resolveRenderConfigAtFrame<T extends MediaType>(
     return renderConfig
   }
 
-  const mutableRenderConfig = renderConfig as unknown as Record<string, unknown>
   for (const groupId of getActiveAnimationGroups(item)) {
     const definition = AnimationRegistry.get(groupId)
-    if (definition.scope === 'filter') {
+    if (definition.scope !== 'transform' && definition.scope !== 'audio') {
       continue
     }
+    const targetConfig =
+      definition.scope === 'transform'
+        ? TimelineItemQueries.getVisualRenderConfig(item, renderConfig)
+        : TimelineItemQueries.getAudioRenderConfig(item, renderConfig)
     definition.applyValueToConfig(
-      mutableRenderConfig,
+      targetConfig as unknown as Record<string, unknown>,
       getCurrentGroupValue(item, currentAbsoluteFrame, groupId),
     )
   }
@@ -121,12 +128,72 @@ export function resolveRenderFilterEffectAtFrame(
   })
 }
 
+export function resolveExtraRenderConfigAtFrame(
+  item: UnifiedTimelineItemData<MediaType>,
+  currentAbsoluteFrame: number,
+  resolvedVisualConfig?: VisualProps,
+): TimelineExtraRenderConfig {
+  const extraRenderConfig = createBaseExtraRenderConfig(item)
+
+  if (!isFrameInAnimationResolveRange(item, currentAbsoluteFrame)) {
+    return extraRenderConfig
+  }
+
+  for (const groupId of getActiveAnimationGroups(item)) {
+    const definition = AnimationRegistry.get(groupId)
+    if (definition.scope === 'filter') {
+      const renderFilterEffect = extraRenderConfig.filter
+      if (!renderFilterEffect) continue
+      definition.applyValueToConfig(
+        renderFilterEffect as unknown as Record<string, unknown>,
+        getCurrentGroupValue(item, currentAbsoluteFrame, groupId),
+      )
+      extraRenderConfig.filter = normalizeClipFilterConfig(
+        renderFilterEffect as Partial<ClipFilterConfig>,
+      )
+      continue
+    }
+
+    if (definition.scope === 'mask') {
+      if (!TimelineItemQueries.hasVisualProperties(item)) continue
+      const visualConfig = resolvedVisualConfig
+        ?? TimelineItemQueries.getVisualRenderConfig(item)
+      const mutableMaskConfig = {
+        mask: normalizeMaskConfig(extraRenderConfig.mask, {
+          width: visualConfig.width,
+          height: visualConfig.height,
+        }),
+        width: visualConfig.width,
+        height: visualConfig.height,
+      }
+      definition.applyValueToConfig(
+        mutableMaskConfig as unknown as Record<string, unknown>,
+        getCurrentGroupValue(item, currentAbsoluteFrame, groupId),
+      )
+      extraRenderConfig.mask = normalizeMaskConfig(
+        mutableMaskConfig.mask,
+        getItemLocalSize(visualConfig.width, visualConfig.height),
+      )
+    }
+  }
+
+  return extraRenderConfig
+}
+
 export function applyAnimationToConfig(
   item: UnifiedTimelineItemData<MediaType>,
   currentAbsoluteFrame: number,
 ): void {
-  item.runtime.renderConfig = resolveRenderConfigAtFrame(item, currentAbsoluteFrame)
-  item.runtime.renderFilterEffect = resolveRenderFilterEffectAtFrame(item, currentAbsoluteFrame)
+  const resolvedRenderConfig = resolveRenderConfigAtFrame(item, currentAbsoluteFrame)
+  item.runtime.renderConfig = resolvedRenderConfig
+  const resolvedVisualConfig = TimelineItemQueries.hasVisualProperties(item)
+    ? TimelineItemQueries.getVisualRenderConfig(item, resolvedRenderConfig as GetConfigs<'video' | 'image' | 'text'>)
+    : undefined
+  item.runtime.exRenderConfig = resolveExtraRenderConfigAtFrame(
+    item,
+    currentAbsoluteFrame,
+    resolvedVisualConfig,
+  )
 }
 
 export function applyAnimationsToItems(

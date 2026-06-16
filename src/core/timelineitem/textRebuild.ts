@@ -11,14 +11,14 @@ export async function rebuildTextRuntime(
   item: UnifiedTimelineItemData<'text'>,
   options: RebuildTextRuntimeOptions = {},
 ): Promise<void> {
-  const nextText = options.text ?? item.config.text
+  const nextText = options.text ?? item.baseRenderConfig.text.text
   const nextStyle: TextStyleConfig = {
-    ...item.config.style,
+    ...item.baseRenderConfig.text.style,
     ...(options.stylePatch ?? {}),
   }
 
-  const oldConfigHeight = item.config.height
-  const oldConfigWidth = item.config.width
+  const oldConfigHeight = item.baseRenderConfig.visual.height
+  const oldConfigWidth = item.baseRenderConfig.visual.width
   const oldBitmapHeight = item.runtime.textBitmap?.height ?? oldConfigHeight
   const oldBitmapWidth = item.runtime.textBitmap?.width ?? oldConfigWidth
 
@@ -27,10 +27,10 @@ export async function rebuildTextRuntime(
 
   const newTextBitmap = await textToImageBitmap2(nextText, nextStyle)
 
-  item.config.text = nextText
-  item.config.style = nextStyle
-  item.config.height = newTextBitmap.height * bitmapHeightRatio
-  item.config.width = newTextBitmap.width * bitmapWidthRatio
+  item.baseRenderConfig.text.text = nextText
+  item.baseRenderConfig.text.style = nextStyle
+  item.baseRenderConfig.visual.height = newTextBitmap.height * bitmapHeightRatio
+  item.baseRenderConfig.visual.width = newTextBitmap.width * bitmapWidthRatio
 
   item.runtime.textBitmap?.close()
   item.runtime.textBitmap = newTextBitmap

@@ -103,12 +103,12 @@ const tempResizePositionFrames = ref(0)
 const isDragging = ref(false)
 
 const hasEffectWarning = computed(() => {
-  const transitionPackageId = props.data.transitionOut?.effectPackageId
+  const transitionPackageId = props.data.exRenderConfig?.transition?.effectPackageId
   if (transitionPackageId && effectTemplateRegistry.getPackageState(transitionPackageId)?.status !== 'ready') {
     return true
   }
 
-  const filterPackageId = props.data.filterEffect?.effectPackageId
+  const filterPackageId = props.data.exRenderConfig?.filter?.effectPackageId
   return Boolean(
     filterPackageId && effectTemplateRegistry.getPackageState(filterPackageId)?.status !== 'ready',
   )

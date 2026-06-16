@@ -136,11 +136,13 @@ import { effectTemplateRegistry } from '@/core/effect-template/EffectTemplateReg
 import { useUnifiedStore } from '@/core/unifiedStore'
 import { useAppI18n } from '@/core/composables/useI18n'
 import { NScrollbar } from 'naive-ui'
+import type { MediaType } from '@/core/mediaitem'
 import type { UnifiedTimelineItemData } from '@/core/timelineitem/type'
 import { getStatusText } from '@/core/timelineitem/queries'
 import { hasVisualProperties } from '@/core/timelineitem/queries'
 import { supportsClipTransitionOut } from '@/core/timelineitem/queries'
 import { supportsClipFilter } from '@/core/timelineitem/queries'
+import { TimelineItemQueries } from '@/core/timelineitem/queries'
 import { IconComponents } from '@/constants/iconComponents'
 import type { PropertyTabKey } from '@/core/modules/UnifiedUIModule'
 
@@ -243,8 +245,9 @@ const multiSelectInfo = computed(() => {
       if (parsed.kind === 'transition') {
         const overlay = unifiedStore.getTransitionOverlay(parsed.sourceId)
         const sourceItem = overlay ? unifiedStore.getTimelineItem(overlay.sourceItemId) : null
-        const assetName = sourceItem?.transitionOut?.effectPackageId
-          ? effectTemplateRegistry.getPackageState(sourceItem.transitionOut.effectPackageId)?.meta?.name.zh
+        const transition = sourceItem ? TimelineItemQueries.getRenderTransition(sourceItem) : undefined
+        const assetName = transition?.effectPackageId
+          ? effectTemplateRegistry.getPackageState(transition.effectPackageId)?.meta?.name.zh
           : ''
         return {
           id: selectionId,
@@ -279,30 +282,21 @@ const mediaMultiSelectInfo = computed(() => {
 })
 
 // 获取项目显示名称
-const getItemDisplayName = (item: any) => {
+const getItemDisplayName = (item: UnifiedTimelineItemData<MediaType>) => {
   if (!item) return '未知素材'
 
   if (item.mediaType === 'text') {
     // 文本项目显示文本内容
-    const text = item.config?.text || '空文本'
+    const text = (item as UnifiedTimelineItemData<'text'>).baseRenderConfig.text.text || '空文本'
     return text.length > 15 ? text.substring(0, 15) + '...' : text
   } else {
     // 其他类型显示素材名称
-    return unifiedStore.getMediaItem(item.mediaItemId)?.name || '未知素材'
+    return unifiedStore.getMediaItem(item.mediaItemId ?? null)?.name || '未知素材'
   }
 }
 
 function getLibraryAssetTypeLabel(asset: UnifiedMediaItemData): string {
   return t('properties.mediaTypes.' + (asset.mediaType || 'unknown'))
-}
-
-function formatDate(value: string): string {
-  if (!value) return '-'
-
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) return value
-
-  return date.toLocaleString()
 }
 
 watch(propertyTabs, (tabs) => {

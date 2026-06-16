@@ -14,6 +14,8 @@ import type {
   MaskRotationValue,
   MaskType,
 } from './mask'
+import type { ClipTransitionOutConfig } from '@/core/transition/types'
+import type { ClipFilterConfig } from '@/core/filter/types'
 
 export type {
   MaskConfig,
@@ -37,7 +39,6 @@ export interface VisualProps {
   opacity: number
   blendMode: BlendMode
   proportionalScale: boolean
-  mask?: MaskConfig
 }
 
 export interface AudioProps {
@@ -222,7 +223,32 @@ export interface AnimationProps<T extends MediaType> {
   }>
 }
 
-type GetConfigMap = {
+export type TimelineBaseRenderConfigMap = {
+  video: {
+    visual: VisualProps
+    audio: AudioProps
+  }
+  image: {
+    visual: VisualProps
+  }
+  audio: {
+    audio: AudioProps
+  }
+  text: {
+    visual: VisualProps
+    text: TextProps
+  }
+}
+
+export interface TimelineExtraRenderConfig {
+  mask?: MaskConfig
+  transition?: ClipTransitionOutConfig
+  filter?: ClipFilterConfig
+}
+
+type GetConfigMap = TimelineBaseRenderConfigMap
+
+type LegacyFlatConfigMap = {
   video: VisualProps & AudioProps
   image: VisualProps
   audio: AudioProps
@@ -237,6 +263,7 @@ type GetAnimationMap = {
 }
 
 export type GetConfigs<T extends MediaType> = GetConfigMap[T]
+export type TimelineBaseRenderConfig<T extends MediaType> = TimelineBaseRenderConfigMap[T]
 export type GetAnimation<T extends MediaType> = GetAnimationMap[T]
 
 export const VISUAL_CHANNELS = [
@@ -294,7 +321,8 @@ export function getAnimationGroupForProperty(
   return PROPERTY_TO_GROUP_MAP[property as AnimatablePropertyKey]
 }
 
-export type VideoMediaConfig = GetConfigs<'video'>
-export type ImageMediaConfig = GetConfigs<'image'>
-export type AudioMediaConfig = GetConfigs<'audio'>
-export type TextMediaConfig = GetConfigs<'text'>
+export type VideoMediaConfig = TimelineBaseRenderConfig<'video'>
+export type ImageMediaConfig = TimelineBaseRenderConfig<'image'>
+export type AudioMediaConfig = TimelineBaseRenderConfig<'audio'>
+export type TextMediaConfig = TimelineBaseRenderConfig<'text'>
+export type LegacyFlatConfig<T extends MediaType> = LegacyFlatConfigMap[T]

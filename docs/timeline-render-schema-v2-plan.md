@@ -136,15 +136,30 @@ config.width
 config.volume
 config.mask
 ```
+ 
+v2 以后，属性提交和动画插值需要拆成两条路径：
 
-v2 以后改为：
+- 用户直接提交属性值、设置关键帧基准值时，写入持久配置。
+- 播放/预览时按帧插值，只写入 `runtime`，不污染持久配置。
+
+持久配置写入目标为：
 
 ```ts
-renderConfig.visual.x
-renderConfig.visual.width
-renderConfig.audio.volume
+baseRenderConfig.visual.x
+baseRenderConfig.visual.width
+baseRenderConfig.audio.volume
 exRenderConfig.mask
 exRenderConfig.filter
+```
+
+运行时动画插值输出目标为：
+
+```ts
+runtime.renderConfig.visual.x
+runtime.renderConfig.visual.width
+runtime.renderConfig.audio.volume
+runtime.exRenderConfig.mask
+runtime.exRenderConfig.filter
 ```
 
 建议把属性 schema 的 target 改为：
@@ -164,7 +179,9 @@ export type AnimatablePropertyTarget =
 - mask center/rotation/feather/intensity/size 写入 `exRenderConfig.mask`
 - filter intensity 和动态 filter params 写入 `exRenderConfig.filter`
 
-`runtime.renderConfig` 改为和 `baseRenderConfig` 同形状：
+这里的“写入”指直接提交属性值或关键帧基准值。按帧 apply 动画时不能回写 `baseRenderConfig` 或 `exRenderConfig`，而是从持久配置派生运行时结果。
+
+`runtime.renderConfig` 改为和 `baseRenderConfig` 同形状，承载 transform/audio/text 这类基础渲染配置的运行时结果；新增 `runtime.exRenderConfig`，和 `exRenderConfig` 同形状，承载 mask/filter 这类扩展效果的运行时结果：
 
 ```ts
 export interface UnifiedTimelineItemRuntime<T extends MediaType = MediaType> {
@@ -172,12 +189,13 @@ export interface UnifiedTimelineItemRuntime<T extends MediaType = MediaType> {
   textBitmap?: ImageBitmap
   textBitmapVersion?: number
   renderConfig?: TimelineBaseRenderConfig<T>
+  exRenderConfig?: TimelineExtraRenderConfig
   transition?: ClipTransitionRuntime
   isInitialized: boolean
 }
 ```
 
-`runtime.renderFilterEffect` 移除。滤镜运行时值通过统一查询函数从 `exRenderConfig.filter`、动画和 overlay 计算得到。
+`runtime.renderFilterEffect` 移除。滤镜运行时值通过统一查询函数从 `runtime.exRenderConfig?.filter ?? exRenderConfig?.filter` 读取，再叠加 overlay；mask 同理从 `runtime.exRenderConfig?.mask ?? exRenderConfig?.mask` 读取。
 
 ## 查询和写入 API
 
@@ -217,9 +235,112 @@ patchExtraRenderConfig(item, patch)
 业务代码迁移原则：
 
 - 渲染链读取统一走 `TimelineItemQueries.getRenderConfig(item)` 和 `getRenderMask/getRenderFilter/getRenderTransition`。
+- `getRenderConfig(item)` 返回的是分组结构。业务代码禁止再把它当成扁平对象读取，例如不要写 `getRenderConfig(item).rotation`、`getRenderConfig(item).volume`；必须先进入对应分组：`getRenderConfig(item).visual.rotation`、`getRenderConfig(item).audio.volume`。
 - 属性面板和 keyframe control 写入统一走 patch API。
 - 文本重建逻辑直接更新 `baseRenderConfig.visual.width/height` 和 `baseRenderConfig.text`。
-- 创建默认 timeline item 时，基础属性放 `baseRenderConfig`，mask/filter/transition 放 `exRenderConfig`。
+- 创建默认 timeline item 时，基础属性放 `baseRenderConfig`；只有用户显式启用或设置过的 mask/filter/transition 才写入 `exRenderConfig`，新建 item 不附带默认 mask。
+
+## 开发防回归约束
+
+这次迁移中最容易出问题的不是类型定义，而是“预览态”和“提交态”读写路径不一致。下面这些约束要作为后续开发和 review 的检查项。
+
+### 属性区控制器
+
+属性区拖拽一般会先写 overlay 预览，松手后再提交到持久配置。如果提交时 fallback 仍从旧扁平结构读取，就会出现“拖动时能预览，松手后跳回默认值”的问题。
+
+必须遵守：
+
+- transform/opacity/blendMode 读取 `TimelineItemQueries.getRenderConfig(item).visual`。
+- volume/mute 读取 `TimelineItemQueries.getRenderConfig(item).audio`。
+- text 读取 `baseRenderConfig.text` 或 text 专用 helper。
+- mask/filter 读取 `getRenderMask(item)`、`getRenderFilterEffect(item)`，不要直接读旧字段或拼路径。
+- direct commit、deferred commit、overlay fallback 三处必须读同一套 render helper，不能一处读 runtime、一处读 base、一处读旧字段。
+
+### Extra Render Config 动画
+
+mask/filter 属于 `exRenderConfig`，它们的运行时动画结果必须写到 `runtime.exRenderConfig`，不能混入 `runtime.renderConfig`。
+
+基础动画解析：
+
+```ts
+runtime.renderConfig.visual.x
+runtime.renderConfig.visual.rotation
+runtime.renderConfig.audio.volume
+```
+
+扩展动画解析：
+
+```ts
+runtime.exRenderConfig.mask
+runtime.exRenderConfig.filter
+```
+
+`getRenderMask(item)` 和 `getRenderFilterEffect(item)` 负责按 `runtime.exRenderConfig -> exRenderConfig -> overlay` 的优先级返回最终渲染值。渲染链、MaskPass、FilterPass、preview overlay 都应通过这些 helper 读取。
+
+### Mask 动画写入形状
+
+`AnimationRegistry` 里的 mask `applyValueToConfig` 不是直接接受 `MaskConfig` 本体，而是接受包含尺寸上下文的 wrapper：
+
+```ts
+{
+  mask: MaskConfig
+  width: number
+  height: number
+}
+```
+
+因此 `resolveExtraRenderConfigAtFrame` 解析 mask 动画时必须传入这个 wrapper，然后从 `wrapper.mask` 取回结果：
+
+```ts
+const mutableMaskConfig = {
+  mask: renderMask,
+  width: visualConfig.width,
+  height: visualConfig.height,
+}
+
+definition.applyValueToConfig(mutableMaskConfig, value)
+renderMask = normalizeMaskConfig(mutableMaskConfig.mask, textureSize)
+```
+
+不要把 `renderMask` 本体直接传给 `applyValueToConfig`。否则 registry 会把结果写到 `renderMask.mask` 这种无效嵌套字段里，表现为 mask keyframe 存在但预览完全不生效。
+
+### Mask 静态提交和动画组
+
+mask 有两类提交：
+
+- 数值类动画属性：`mask.center`、`mask.rotation`、`mask.feather`、`mask.intensity`、`mask.rectangle.size`、`mask.ellipse.size`、`mask.mirror.length` 等。
+- 非动画配置属性：`mask.enabled`、`mask.type`、`mask.inverted`。
+
+数值类属性必须带真实 `groupId`，并通过 `AnimationRegistry.get(groupId).applyValue(...)` 写入。原因是部分属性不是一层字段映射，例如：
+
+- `mask.feather` 的值字段是 `outerRange`，实际写入 `mask.falloff.outerRange`。
+- `mask.intensity` 的值字段是 `decayRate`，实际写入 `mask.falloff.decayRate`。
+
+非动画配置属性不要使用占位 `groupId`。它们应走普通 `no-animation-group-patch`，直接合并到 `exRenderConfig.mask`。不要为了复用流程写 `groupId: 'mask.center'`，这会污染命令执行层对“真实动画组”和“普通配置 patch”的判断。
+
+### 渲染链签名
+
+普通 item 的 render chain 是否包含 `MaskPass` 由构建时的 `mask.enabled` 决定。mask 参数动画不需要进入 chain signature，因为 `MaskPass` 每帧通过 callback 读取 `getRenderMask(item)`。
+
+但是如果一个交互会改变 `mask.enabled` 或 `mask.type`，signature 必须能变化并触发 chain 重建。当前签名至少需要包含：
+
+```ts
+mask.enabled
+mask.type
+```
+
+mask center/size/rotation/feather/intensity 不应放进 signature，否则会导致每帧重建 render chain。
+
+### 搜索清理建议
+
+前端迁移完成后，用更精确的搜索确认没有旧结构读写残留：
+
+```bash
+rg -n "getRenderConfig\([^)]*\)\.(x|y|width|height|rotation|opacity|blendMode|volume|isMuted|mask)\b|renderConfig\.value" src/core src/components src/aipanel -g '*.ts' -g '*.vue'
+rg -n "\b(item|timelineItem|textItem|sourceItem|transitionItem|selectedItem)\.(config|filterEffect|transitionOut)\b|runtime\.renderFilterEffect" src/core src/components src/aipanel -g '*.ts' -g '*.vue'
+```
+
+命中结果需要逐个判断。普通局部变量 `config`、表单 `props.config` 不属于 timeline item schema；外部 JSON diff/apply 的旧 payload 兼容入口要单独标注，不要混入属性区和渲染链路径。
 
 ## 主要影响范围
 
@@ -272,7 +393,8 @@ patchExtraRenderConfig(item, patch)
    - 更新 property schema target。
    - 更新 `AnimationRegistry` 的读写路径。
    - 更新 `resolveRenderConfigAtFrame`，使基础动画输出分组式 `runtime.renderConfig`。
-   - 更新 mask/filter 动画输出路径。
+   - 新增 `resolveExtraRenderConfigAtFrame` 或等价逻辑，使 mask/filter 动画输出到 `runtime.exRenderConfig`。
+   - 确保按帧动画 apply 不回写 `baseRenderConfig` 或 `exRenderConfig`。
 
 4. 渲染和属性面板
    - WebGL、preview、mask overlay 改读新查询 API。
@@ -322,11 +444,24 @@ cd backend && pytest backend/tests
 
 - 新增 video/image/audio/text item 后能正常预览。
 - transform、opacity、volume keyframe 能正常插值。
+- 属性区拖拽 transform rotation/position/size/opacity 时，拖动过程中预览正确，松手提交后数值不跳回默认值。
 - mask 开关、类型、中心点、羽化、强度、尺寸 keyframe 能正常预览。
+- mask center/rotation/feather/intensity/rectangle size/ellipse size/mirror length 创建两个不同关键帧后，播放头移动时能看到连续插值。
+- mask feather 和 intensity 提交后要确认实际改变的是 `falloff.outerRange` 和 `falloff.decayRate`，不是写到顶层无效字段。
+- mask enabled/type/inverted 提交后能立即触发预览更新；enabled/type 改变需要确认 render chain 会重建，center/size/rotation/feather/intensity 改变不应导致每帧重建 chain。
 - filter intensity 和动态参数 keyframe 能正常预览。
 - 文本修改后 bitmap 内容和 visual 尺寸正常更新。
 - transition overlay 和转场渲染正常。
 - agent timeline export/apply 后 timeline item 只包含 `baseRenderConfig` 和 `exRenderConfig`，不再包含旧 `config`、顶层 `transitionOut`、顶层 `filterEffect`。
+
+回归搜索：
+
+```bash
+cd LightCut-frontend
+npm run type-check:no-generate
+rg -n "getRenderConfig\([^)]*\)\.(x|y|width|height|rotation|opacity|blendMode|volume|isMuted|mask)\b|renderConfig\.value" src/core src/components src/aipanel -g '*.ts' -g '*.vue'
+rg -n "\b(item|timelineItem|textItem|sourceItem|transitionItem|selectedItem)\.(config|filterEffect|transitionOut)\b|runtime\.renderFilterEffect" src/core src/components src/aipanel -g '*.ts' -g '*.vue'
+```
 
 ## 明确取舍
 
@@ -335,4 +470,6 @@ cd backend && pytest backend/tests
 - `baseRenderConfig` 使用严格媒体类型映射，而不是统一可选分组。
 - `GetAnimationMap` 保留，动画目标和 apply 路径重构。
 - `runtime.renderConfig` 和 `baseRenderConfig` 同形状。
+- `runtime.exRenderConfig` 和 `exRenderConfig` 同形状，用于 mask/filter 动画后的运行时值。
+- 播放/预览的动画插值只写 `runtime`，不回写持久配置。
 - XML worktree 仍保持当前 v1 能力；高级效果对象是否展开为 XML 文件另开方案。

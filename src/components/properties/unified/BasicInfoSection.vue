@@ -51,7 +51,7 @@ const currentResolution = computed(() => {
     return null
   }
   
-  const config = props.selectedTimelineItem.config
+  const config = props.selectedTimelineItem.baseRenderConfig.visual
   return {
     width: Math.round(config.width),
     height: Math.round(config.height),

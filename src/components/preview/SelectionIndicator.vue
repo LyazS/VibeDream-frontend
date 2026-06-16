@@ -74,7 +74,6 @@ import { computed, ref, onMounted, onUnmounted, type CSSProperties } from 'vue'
 import { useUnifiedStore } from '@/core/unifiedStore'
 import { TimelineItemQueries } from '@/core/timelineitem/queries'
 import type { VisualProps } from '@/core/timelineitem/bunnytype'
-import type { MediaType } from '@/core/mediaitem'
 import { degreesToRadians } from '@/core/utils/rotationTransform'
 
 interface Props {
@@ -141,14 +140,14 @@ const selectedItem = computed(() => {
 const visualConfig = computed<VisualProps | null>(() => {
   if (!selectedItem.value) return null
   if (!TimelineItemQueries.hasVisualProperties(selectedItem.value)) return null
-  return TimelineItemQueries.getRenderConfig(selectedItem.value)
+  return TimelineItemQueries.getVisualRenderConfig(selectedItem.value)
 })
 
 // 是否等比缩放
 const isProportionalScale = computed(() => {
   if (!selectedItem.value) return false
   if (!TimelineItemQueries.hasVisualProperties(selectedItem.value)) return false
-  return selectedItem.value.config.proportionalScale ?? false
+  return selectedItem.value.baseRenderConfig.visual.proportionalScale ?? false
 })
 
 // 计算指示器样式

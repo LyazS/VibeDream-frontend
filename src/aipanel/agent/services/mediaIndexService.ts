@@ -5,7 +5,6 @@ import { fetchClient } from '@/utils/fetchClient'
 import type { MediaIndexStatus, UnifiedMediaItemData } from '@/core/mediaitem/types'
 import type { UnifiedTimelineItemData } from '@/core/timelineitem/type'
 import { DEFAULT_BLEND_MODE } from '@/core/timelineitem'
-import { createDefaultMaskConfig } from '@/core/timelineitem/mask'
 import { BunnyClip } from '@/core/mediabunny/bunny-clip'
 import { calculateThumbnailSize, createCanvasWithSize, drawImageOnCanvas } from '@/core/bunnyUtils/thumbUtils'
 import { ThumbnailMode } from '@/constants/ThumbnailConstants'
@@ -183,18 +182,21 @@ function createVideoSegmentTimelineItem(
       clipStartTime: startFrame,
       clipEndTime: endFrame,
     },
-    config: {
-      x: 0,
-      y: 0,
-      width,
-      height,
-      rotation: 0,
-      opacity: 1,
-      blendMode: DEFAULT_BLEND_MODE,
-      proportionalScale: true,
-      mask: createDefaultMaskConfig('rectangle', { width, height }),
-      volume: 1,
-      isMuted: false,
+    baseRenderConfig: {
+      visual: {
+        x: 0,
+        y: 0,
+        width,
+        height,
+        rotation: 0,
+        opacity: 1,
+        blendMode: DEFAULT_BLEND_MODE,
+        proportionalScale: true,
+      },
+      audio: {
+        volume: 1,
+        isMuted: false,
+      },
     },
     runtime: {
       isInitialized: true,

@@ -1,7 +1,6 @@
 import { markRaw } from 'vue'
 import type { UnifiedTimelineItemData } from '@/core/timelineitem/type'
 import type { UnifiedMediaItemData } from '@/core/mediaitem/types'
-import type { TextMediaConfig } from '@/core/timelineitem/type'
 import { BunnyClip } from '@/core/mediabunny/bunny-clip'
 import { textToImageBitmap, textToImageBitmap2 } from './ToBitmap'
 import { closeClipTransitionEdgeFrames } from '@/core/timelineitem/transition'
@@ -34,7 +33,7 @@ export async function setupTimelineItemBunny(
     switch (timelineItem.mediaType) {
       case 'text': {
         // 文本类型：创建 textBitmap
-        const textConfig = timelineItem.config as TextMediaConfig
+        const textConfig = (timelineItem as UnifiedTimelineItemData<'text'>).baseRenderConfig.text
         const bmap = await textToImageBitmap2(textConfig.text, textConfig.style)
         timelineItem.runtime.textBitmap = bmap
         timelineItem.runtime.textBitmapVersion = (timelineItem.runtime.textBitmapVersion ?? 0) + 1
