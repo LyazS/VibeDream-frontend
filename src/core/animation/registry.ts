@@ -44,10 +44,6 @@ export interface AnimationGroupDefinition<G extends PropertyAnimationGroupId = A
   supports: (item: UnifiedTimelineItemData<MediaType>) => boolean
   isEnabled: (item: UnifiedTimelineItemData<MediaType>) => boolean
   getBaseValue: (item: UnifiedTimelineItemData<MediaType>) => PropertyAnimationValueByGroup<G> | any
-  applyValue: (
-    item: UnifiedTimelineItemData<MediaType>,
-    value: Partial<PropertyAnimationValueByGroup<G>> | Record<string, number>,
-  ) => void
   applyValueToConfig: (
     config: Record<string, unknown>,
     value: PropertyAnimationValueByGroup<G> | Record<string, number>,
@@ -144,37 +140,6 @@ function createDynamicFilterParamDefinition(
         value: assertDynamicFilterParamNumber(currentValue, parameterKey),
       }
     },
-    applyValue: (item, value) => {
-      const currentFilterEffect = TimelineItemQueries.getFilter(item)
-      if (!TimelineItemQueries.supportsClipFilter(item) || !currentFilterEffect) {
-        throw new Error(`滤镜效果不存在，无法写入动态参数: ${parameterKey}`)
-      }
-      const parameterType = getParameterType(item)
-      if (parameterType !== 'number' && parameterType !== 'vec2') {
-        throw new Error(`滤镜参数类型不支持关键帧: ${parameterKey}`)
-      }
-      const nextValue = parameterType === 'vec2'
-        ? assertDynamicFilterParamVec2(value, parameterKey)
-        : assertDynamicFilterParamNumber(
-            (value as Partial<DynamicFilterParamNumberValue>).value,
-            parameterKey,
-          )
-      const nextFilterEffect = normalizeClipFilterConfig({
-        ...currentFilterEffect,
-        params: {
-          ...currentFilterEffect.params,
-          [parameterKey]: nextValue,
-        },
-      })
-      item.exRenderConfig = {
-        ...item.exRenderConfig,
-        filter: nextFilterEffect,
-      }
-      item.runtime.exRenderConfig = {
-        ...item.runtime.exRenderConfig,
-        filter: nextFilterEffect,
-      }
-    },
     applyValueToConfig: (config, value) => {
       if (typeof config.params !== 'object' || !config.params || Array.isArray(config.params)) {
         throw new Error(`滤镜参数容器非法，无法写入动态参数: ${parameterKey}`)
@@ -222,17 +187,6 @@ function getMaskTextureSizeFromItem(item: UnifiedTimelineItemData<MediaType>) {
   return getMaskTextureSizeFromConfig(config)
 }
 
-function writeMaskConfig(item: UnifiedTimelineItemData<MediaType>, mask: ReturnType<typeof normalizeMaskConfig>) {
-  item.exRenderConfig = {
-    ...item.exRenderConfig,
-    mask,
-  }
-  item.runtime.exRenderConfig = {
-    ...item.runtime.exRenderConfig,
-    mask,
-  }
-}
-
 const animationGroupDefinitions: {
   [G in AnimationGroupId]: AnimationGroupDefinition<G>
 } = {
@@ -247,10 +201,6 @@ const animationGroupDefinitions: {
         x: config.x,
         y: config.y,
       }
-    },
-    applyValue: (item, value) => {
-      if (!TimelineItemQueries.hasVisualProperties(item)) return
-      Object.assign(item.config, value)
     },
     applyValueToConfig: (config, value) => {
       Object.assign(config, value)
@@ -271,10 +221,6 @@ const animationGroupDefinitions: {
         height: config.height,
       }
     },
-    applyValue: (item, value) => {
-      if (!TimelineItemQueries.hasVisualProperties(item)) return
-      Object.assign(item.config, value)
-    },
     applyValueToConfig: (config, value) => {
       Object.assign(config, value)
     },
@@ -288,10 +234,6 @@ const animationGroupDefinitions: {
     supports: (item) => TimelineItemQueries.hasVisualProperties(item),
     isEnabled: (item) => TimelineItemQueries.hasVisualProperties(item),
     getBaseValue: (item) => ({ rotation: getVisualConfigRecord(item).rotation }),
-    applyValue: (item, value) => {
-      if (!TimelineItemQueries.hasVisualProperties(item)) return
-      Object.assign(item.config, value)
-    },
     applyValueToConfig: (config, value) => {
       Object.assign(config, value)
     },
@@ -305,10 +247,6 @@ const animationGroupDefinitions: {
     supports: (item) => TimelineItemQueries.hasVisualProperties(item),
     isEnabled: (item) => TimelineItemQueries.hasVisualProperties(item),
     getBaseValue: (item) => ({ opacity: getVisualConfigRecord(item).opacity }),
-    applyValue: (item, value) => {
-      if (!TimelineItemQueries.hasVisualProperties(item)) return
-      Object.assign(item.config, value)
-    },
     applyValueToConfig: (config, value) => {
       Object.assign(config, value)
     },
@@ -322,10 +260,6 @@ const animationGroupDefinitions: {
     supports: (item) => TimelineItemQueries.hasAudioProperties(item),
     isEnabled: (item) => TimelineItemQueries.hasAudioProperties(item),
     getBaseValue: (item) => ({ volume: getVisualConfigRecord(item).volume ?? 1 }),
-    applyValue: (item, value) => {
-      if (!TimelineItemQueries.hasAudioProperties(item)) return
-      Object.assign(item.config, value)
-    },
     applyValueToConfig: (config, value) => {
       Object.assign(config, value)
     },
@@ -343,22 +277,6 @@ const animationGroupDefinitions: {
     getBaseValue: (item) => ({
       intensity: normalizeClipFilterConfig(TimelineItemQueries.getRenderFilter(item)).intensity,
     }),
-    applyValue: (item, value) => {
-      const currentFilterEffect = TimelineItemQueries.getFilter(item)
-      if (!TimelineItemQueries.supportsClipFilter(item) || !currentFilterEffect) return
-      const nextFilterEffect = normalizeClipFilterConfig({
-        ...currentFilterEffect,
-        intensity: value.intensity ?? currentFilterEffect.intensity,
-      })
-      item.exRenderConfig = {
-        ...item.exRenderConfig,
-        filter: nextFilterEffect,
-      }
-      item.runtime.exRenderConfig = {
-        ...item.runtime.exRenderConfig,
-        filter: nextFilterEffect,
-      }
-    },
     applyValueToConfig: (config, value) => {
       const nextFilterEffect = normalizeClipFilterConfig({
         ...(config as Record<string, unknown>),
@@ -380,14 +298,6 @@ const animationGroupDefinitions: {
     getBaseValue: (item) => {
       return getMaskCenterValue(TimelineItemQueries.getRenderMask(item), getMaskTextureSizeFromItem(item))
     },
-    applyValue: (item, value) => {
-      if (!TimelineItemQueries.hasVisualProperties(item)) return
-      writeMaskConfig(item, applyMaskCenterValue(
-        TimelineItemQueries.getMask(item),
-        value,
-        getItemLocalSize(item.config.width, item.config.height),
-      ))
-    },
     applyValueToConfig: (maskConfig, value) => {
       Object.assign(maskConfig, applyMaskCenterValue(maskConfig as never, value))
     },
@@ -404,14 +314,6 @@ const animationGroupDefinitions: {
       normalizeMaskConfig(TimelineItemQueries.getRenderMask(item), getMaskTextureSizeFromItem(item)).enabled,
     getBaseValue: (item) => {
       return getMaskRotationValue(TimelineItemQueries.getRenderMask(item), getMaskTextureSizeFromItem(item))
-    },
-    applyValue: (item, value) => {
-      if (!TimelineItemQueries.hasVisualProperties(item)) return
-      writeMaskConfig(item, applyMaskRotationValue(
-        TimelineItemQueries.getMask(item),
-        value,
-        getItemLocalSize(item.config.width, item.config.height),
-      ))
     },
     applyValueToConfig: (maskConfig, value) => {
       Object.assign(maskConfig, applyMaskRotationValue(maskConfig as never, value))
@@ -430,14 +332,6 @@ const animationGroupDefinitions: {
     getBaseValue: (item) => {
       return getMaskFeatherValue(TimelineItemQueries.getRenderMask(item), getMaskTextureSizeFromItem(item))
     },
-    applyValue: (item, value) => {
-      if (!TimelineItemQueries.hasVisualProperties(item)) return
-      writeMaskConfig(item, applyMaskFeatherValue(
-        TimelineItemQueries.getMask(item),
-        value,
-        getItemLocalSize(item.config.width, item.config.height),
-      ))
-    },
     applyValueToConfig: (maskConfig, value) => {
       Object.assign(maskConfig, applyMaskFeatherValue(maskConfig as never, value))
     },
@@ -454,14 +348,6 @@ const animationGroupDefinitions: {
       normalizeMaskConfig(TimelineItemQueries.getRenderMask(item), getMaskTextureSizeFromItem(item)).enabled,
     getBaseValue: (item) => {
       return getMaskIntensityValue(TimelineItemQueries.getRenderMask(item), getMaskTextureSizeFromItem(item))
-    },
-    applyValue: (item, value) => {
-      if (!TimelineItemQueries.hasVisualProperties(item)) return
-      writeMaskConfig(item, applyMaskIntensityValue(
-        TimelineItemQueries.getMask(item),
-        value,
-        getItemLocalSize(item.config.width, item.config.height),
-      ))
     },
     applyValueToConfig: (maskConfig, value) => {
       Object.assign(maskConfig, applyMaskIntensityValue(maskConfig as never, value))
@@ -483,14 +369,6 @@ const animationGroupDefinitions: {
         getMaskTextureSizeFromItem(item),
       )
     },
-    applyValue: (item, value) => {
-      if (!TimelineItemQueries.hasVisualProperties(item)) return
-      writeMaskConfig(item, applyMaskRectangleSizeValue(
-        TimelineItemQueries.getMask(item),
-        value,
-        getItemLocalSize(item.config.width, item.config.height),
-      ))
-    },
     applyValueToConfig: (maskConfig, value) => {
       Object.assign(maskConfig, applyMaskRectangleSizeValue(maskConfig as never, value))
     },
@@ -510,14 +388,6 @@ const animationGroupDefinitions: {
         TimelineItemQueries.getRenderMask(item),
         getMaskTextureSizeFromItem(item),
       )
-    },
-    applyValue: (item, value) => {
-      if (!TimelineItemQueries.hasVisualProperties(item)) return
-      writeMaskConfig(item, applyMaskRectangleCornerRadiusValue(
-        TimelineItemQueries.getMask(item),
-        value,
-        getItemLocalSize(item.config.width, item.config.height),
-      ))
     },
     applyValueToConfig: (maskConfig, value) => {
       Object.assign(maskConfig, applyMaskRectangleCornerRadiusValue(maskConfig as never, value))
@@ -539,14 +409,6 @@ const animationGroupDefinitions: {
         getMaskTextureSizeFromItem(item),
       )
     },
-    applyValue: (item, value) => {
-      if (!TimelineItemQueries.hasVisualProperties(item)) return
-      writeMaskConfig(item, applyMaskEllipseSizeValue(
-        TimelineItemQueries.getMask(item),
-        value,
-        getItemLocalSize(item.config.width, item.config.height),
-      ))
-    },
     applyValueToConfig: (maskConfig, value) => {
       Object.assign(maskConfig, applyMaskEllipseSizeValue(maskConfig as never, value))
     },
@@ -562,7 +424,6 @@ const animationGroupDefinitions: {
       TimelineItemQueries.hasVisualProperties(item) &&
       normalizeMaskConfig(TimelineItemQueries.getRenderMask(item), getMaskTextureSizeFromItem(item)).type === 'linear',
     getBaseValue: () => ({}),
-    applyValue: () => {},
     applyValueToConfig: () => {},
     interpolate: (from) => from,
     uiMeta: { order: 120, allowDeferred: false, allowNavigation: false },
@@ -578,14 +439,6 @@ const animationGroupDefinitions: {
     getBaseValue: (item) => {
       return getMaskMirrorValue(TimelineItemQueries.getRenderMask(item), getMaskTextureSizeFromItem(item))
     },
-    applyValue: (item, value) => {
-      if (!TimelineItemQueries.hasVisualProperties(item)) return
-      writeMaskConfig(item, applyMaskMirrorValue(
-        TimelineItemQueries.getMask(item),
-        value,
-        getItemLocalSize(item.config.width, item.config.height),
-      ))
-    },
     applyValueToConfig: (maskConfig, value) => {
       Object.assign(maskConfig, applyMaskMirrorValue(maskConfig as never, value))
     },
@@ -599,7 +452,7 @@ export const AnimationRegistry = {
   ids: ALL_ANIMATION_GROUPS,
   get<G extends PropertyAnimationGroupId>(groupId: G): AnimationGroupDefinition<G> {
     if (isDynamicFilterParamAnimationGroupId(groupId)) {
-      return createDynamicFilterParamDefinition(groupId) as AnimationGroupDefinition<G>
+      return createDynamicFilterParamDefinition(groupId) as unknown as AnimationGroupDefinition<G>
     }
     return animationGroupDefinitions[groupId as AnimationGroupId] as AnimationGroupDefinition<G>
   },

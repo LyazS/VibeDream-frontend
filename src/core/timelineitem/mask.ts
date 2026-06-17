@@ -1,3 +1,5 @@
+import type { AnimationGroupId } from './bunnytype'
+
 export type MaskType = 'rectangle' | 'ellipse' | 'linear' | 'mirror'
 
 export interface MaskTextureSize {
@@ -650,6 +652,38 @@ export function applyMaskMirrorValue(
   return {
     ...normalized,
     length: patch.length ?? normalized.length,
+  }
+}
+
+export function applyMaskGroupValue(
+  mask: MaskConfigPatch | Partial<MaskConfig> | null | undefined,
+  groupId: AnimationGroupId,
+  patch: unknown,
+  textureSize?: Partial<MaskTextureSize> | null,
+): MaskConfig {
+  switch (groupId) {
+    case 'mask.center':
+      return applyMaskCenterValue(mask, patch as Partial<MaskCenterValue>, textureSize)
+    case 'mask.rotation':
+      return applyMaskRotationValue(mask, patch as Partial<MaskRotationValue>, textureSize)
+    case 'mask.feather':
+      return applyMaskFeatherValue(mask, patch as Partial<MaskFeatherValue>, textureSize)
+    case 'mask.intensity':
+      return applyMaskIntensityValue(mask, patch as Partial<MaskIntensityValue>, textureSize)
+    case 'mask.rectangle.size':
+      return applyMaskRectangleSizeValue(mask, patch as Partial<MaskRectangleSizeValue>, textureSize)
+    case 'mask.rectangle.cornerRadius':
+      return applyMaskRectangleCornerRadiusValue(
+        mask,
+        patch as Partial<MaskRectangleCornerRadiusValue>,
+        textureSize,
+      )
+    case 'mask.ellipse.size':
+      return applyMaskEllipseSizeValue(mask, patch as Partial<MaskEllipseSizeValue>, textureSize)
+    case 'mask.mirror.length':
+      return applyMaskMirrorValue(mask, patch as Partial<MaskMirrorValue>, textureSize)
+    default:
+      throw new Error(`不支持的蒙版动画组静态写入: ${groupId}`)
   }
 }
 

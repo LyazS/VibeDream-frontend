@@ -21,7 +21,6 @@ import {
   isCurrentFrameOnKeyframe as isGroupCurrentFrameOnKeyframe,
   removeEmptyTrack,
   removeKeyframeAtFrame as removeGroupKeyframeAtFrame,
-  setGroupValue,
   sortGroupKeyframes,
   toggleGroupKeyframe,
   adjustGroupKeyframesForDurationChange,

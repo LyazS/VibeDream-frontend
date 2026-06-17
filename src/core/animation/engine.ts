@@ -15,7 +15,6 @@ import { AnimationRegistry } from './registry'
 import { isFilterParamPropertyId } from '@/core/property-system/schema/propertyIds'
 
 export type AnimationButtonState = 'none' | 'on-keyframe' | 'between-keyframes'
-export type AnimationSetResult = 'no-animation' | 'updated-keyframe' | 'created-keyframe'
 
 function cloneValue<G extends PropertyAnimationGroupId>(
   value: PropertyAnimationValueByGroup<G>,
@@ -270,68 +269,6 @@ export function getCurrentGroupValue<G extends PropertyAnimationGroupId>(
   if (before) return cloneValue(before.value) as PropertyAnimationValueByGroup<G>
   if (after) return cloneValue(after.value) as PropertyAnimationValueByGroup<G>
   return cloneValue(definition.getBaseValue(item)) as PropertyAnimationValueByGroup<G>
-}
-
-export function setStaticGroupValue<G extends PropertyAnimationGroupId>(
-  item: UnifiedTimelineItemData<MediaType>,
-  groupId: G,
-  patch: Partial<PropertyAnimationValueByGroup<G>>,
-): void {
-  AnimationRegistry.get(groupId).applyValue(item, patch)
-}
-
-function mergeGroupValue<G extends PropertyAnimationGroupId>(
-  base: PropertyAnimationValueByGroup<G>,
-  patch: Partial<PropertyAnimationValueByGroup<G>>,
-): PropertyAnimationValueByGroup<G> {
-  return { ...base, ...patch } as PropertyAnimationValueByGroup<G>
-}
-
-export function setGroupValue<G extends PropertyAnimationGroupId>(
-  item: UnifiedTimelineItemData<MediaType>,
-  absoluteFrame: number,
-  rawGroupId: G | AnimationChannelKey,
-  patch: Partial<PropertyAnimationValueByGroup<G>>,
-): AnimationSetResult {
-  const groupId = normalizeAnimationGroupId(rawGroupId)
-  if (!groupId) {
-    throw new Error(`未知动画组: ${String(rawGroupId)}`)
-  }
-
-  const buttonState = getKeyframeButtonState(item, absoluteFrame, groupId)
-  if (buttonState === 'none') {
-    setStaticGroupValue(item, groupId, patch as Partial<PropertyAnimationValueByGroup<typeof groupId>>)
-    return 'no-animation'
-  }
-
-  const track = ensureTrack(item, groupId)
-  const relativeFrame = getRelativeFrame(item, absoluteFrame)
-
-  if (buttonState === 'on-keyframe') {
-    const keyframe = track.keyframes.find((entry) => entry.frame === relativeFrame)
-    if (keyframe) {
-      const nextValue = mergeGroupValue(
-        keyframe.value as any,
-        patch as Partial<PropertyAnimationValueByGroup<typeof groupId>>,
-      ) as PropertyAnimationValueByGroup<typeof groupId>
-      keyframe.value = nextValue as any
-      keyframe.properties = keyframe.value
-      setStaticGroupValue(item, groupId, nextValue)
-    }
-    return 'updated-keyframe'
-  }
-
-  const current = getCurrentGroupValue(item, absoluteFrame, groupId)
-  const nextValue = mergeGroupValue(current, patch as Partial<PropertyAnimationValueByGroup<typeof groupId>>)
-  const nextKeyframe = createKeyframeValueAlias(
-    relativeFrame,
-    getPosition(item, relativeFrame),
-    nextValue,
-  )
-  track.keyframes.push(nextKeyframe as AnimateKeyframe<MediaType, typeof groupId>)
-  sortGroupKeyframes(item, groupId)
-  setStaticGroupValue(item, groupId, nextValue)
-  return 'created-keyframe'
 }
 
 export function toggleGroupKeyframe(

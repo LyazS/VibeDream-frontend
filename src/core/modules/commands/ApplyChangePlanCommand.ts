@@ -15,16 +15,18 @@ import {
 } from './keyframes/shared'
 import {
   ensureTrack,
-  getCurrentGroupValue,
   removeEmptyTrack,
   sortGroupKeyframes,
 } from '@/core/animation/engine'
 import { applyAnimationToConfig } from '@/core/utils/animationInterpolation'
 import { normalizeClipFilterConfig } from '@/core/timelineitem/filter'
-import { AnimationRegistry } from '@/core/animation/registry'
-import type { PropertyAnimationGroupId } from '@/core/timelineitem/bunnytype'
 import { TimelineItemQueries } from '@/core/timelineitem/queries'
 import { rebuildTextRuntime } from '@/core/timelineitem/textRebuild'
+import type { AnimationGroupId } from '@/core/timelineitem/bunnytype'
+import {
+  applyMaskGroupValue,
+  getItemLocalSize,
+} from '@/core/timelineitem/mask'
 
 export class ApplyChangePlanCommand implements SimpleCommand {
   public readonly id: string
@@ -96,11 +98,9 @@ export class ApplyChangePlanCommand implements SimpleCommand {
         }
         keyframe.value = operation.value as never
         keyframe.properties = operation.value as never
-        this.applyAnimatedValue(item, operation.groupId, operation.frame, operation.value)
       } else if (operation.kind === 'animation-keyframe-create') {
         ensureTrack(item, operation.groupId).keyframes.push(operation.keyframe as never)
         sortGroupKeyframes(item, operation.groupId)
-        this.applyAnimatedValue(item, operation.groupId, operation.frame, operation.keyframe.value)
       } else if (operation.kind === 'animation-keyframe-delete') {
         const track = ensureTrack(item, operation.groupId)
         track.keyframes = track.keyframes.filter((entry) => entry.frame !== operation.relativeFrame)
@@ -151,7 +151,7 @@ export class ApplyChangePlanCommand implements SimpleCommand {
 
     if (operation.target === 'mask') {
       if (operation.groupId) {
-        AnimationRegistry.get(operation.groupId).applyValue(item, operation.patch as never)
+        this.applyMaskGroupPatch(item, operation.groupId as AnimationGroupId, operation.patch)
         return
       }
 
@@ -199,29 +199,25 @@ export class ApplyChangePlanCommand implements SimpleCommand {
     }
   }
 
-  private applyAnimatedValue(
+  private applyMaskGroupPatch(
     item: UnifiedTimelineItemData,
-    groupId: PropertyAnimationGroupId,
-    frame: number,
-    fallbackValue: object,
+    groupId: AnimationGroupId,
+    patch: unknown,
   ): void {
-    const definition = AnimationRegistry.get(groupId)
-    if (definition.scope === 'filter') {
-      if (!TimelineItemQueries.getExtraRenderConfig(item)?.filter) {
-        throw new Error(`滤镜效果不存在，无法更新属性: ${item.id}`)
-      }
-      const currentValue = getCurrentGroupValue(item, frame, groupId)
-      definition.applyValue(item, currentValue as never)
-      return
-    }
+    if (!TimelineItemQueries.hasVisualProperties(item)) return
 
-    if (definition.scope === 'mask') {
-      const currentValue = getCurrentGroupValue(item, frame, groupId)
-      definition.applyValue(item, currentValue as never)
-      return
-    }
+    const currentMask = TimelineItemQueries.getMask(item)
+    const textureSize = getItemLocalSize(item.config.width, item.config.height)
+    const nextMask = applyMaskGroupValue(currentMask, groupId, patch, textureSize)
 
-    Object.assign(item.config, fallbackValue)
+    item.exRenderConfig = {
+      ...item.exRenderConfig,
+      mask: nextMask,
+    }
+    item.runtime.exRenderConfig = {
+      ...item.runtime.exRenderConfig,
+      mask: nextMask,
+    }
   }
 
   get isDisposed(): boolean {

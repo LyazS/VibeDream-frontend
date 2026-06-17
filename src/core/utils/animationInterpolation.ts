@@ -72,13 +72,12 @@ export function resolveRenderConfigAtFrame<T extends MediaType>(
   const mutableRenderConfig = renderConfig as unknown as Record<string, unknown>
   for (const groupId of getActiveAnimationGroups(item)) {
     const definition = AnimationRegistry.get(groupId)
-    if (definition.scope === 'filter' || definition.scope === 'mask') {
-      continue
+    if (definition.scope === 'transform' || definition.scope === 'audio') {
+      definition.applyValueToConfig(
+        mutableRenderConfig,
+        getCurrentGroupValue(item, currentAbsoluteFrame, groupId),
+      )
     }
-    definition.applyValueToConfig(
-      mutableRenderConfig,
-      getCurrentGroupValue(item, currentAbsoluteFrame, groupId),
-    )
   }
 
   return renderConfig
