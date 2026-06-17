@@ -14,6 +14,7 @@ export type {
   VideoMediaConfig,
   AudioMediaConfig,
 } from './type'
+export { createDefaultTimelineExtraRenderConfig } from './type'
 export type {
   ClipTransitionRuntime,
   ClipTransitionBindingState,

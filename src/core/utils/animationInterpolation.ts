@@ -31,7 +31,8 @@ export function createBaseRenderConfig(item: UnifiedTimelineItemData<MediaType>)
 export function createBaseRenderFilterEffect(
   item: UnifiedTimelineItemData<MediaType>,
 ): ClipFilterConfig | undefined {
-  return item.filterEffect ? normalizeClipFilterConfig(item.filterEffect) : undefined
+  const filterConfig = item.exRenderConfig?.filter
+  return filterConfig ? normalizeClipFilterConfig(filterConfig) : undefined
 }
 
 function getActiveAnimationGroups(item: UnifiedTimelineItemData<MediaType>): PropertyAnimationGroupId[] {
@@ -126,7 +127,11 @@ export function applyAnimationToConfig(
   currentAbsoluteFrame: number,
 ): void {
   item.runtime.renderConfig = resolveRenderConfigAtFrame(item, currentAbsoluteFrame)
-  item.runtime.renderFilterEffect = resolveRenderFilterEffectAtFrame(item, currentAbsoluteFrame)
+  const resolvedFilterEffect = resolveRenderFilterEffectAtFrame(item, currentAbsoluteFrame)
+  item.runtime.exRenderConfig = {
+    ...item.runtime.exRenderConfig,
+    filter: resolvedFilterEffect,
+  }
 }
 
 export function applyAnimationsToItems(

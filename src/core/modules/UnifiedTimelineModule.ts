@@ -154,7 +154,7 @@ export function createUnifiedTimelineModule(registry: ModuleRegistry) {
     const item = getTimelineItem(timelineItemId)
     if (!item) return
 
-    item.transitionOut = transitionOut
+    const nextTransitionOut = transitionOut
       ? normalizeClipTransitionOutConfig({
           effectPackageId: transitionOut.effectPackageId,
           templateId: transitionOut.templateId,
@@ -165,6 +165,16 @@ export function createUnifiedTimelineModule(registry: ModuleRegistry) {
           ...(transitionOut.packagePayload ? { packagePayload: transitionOut.packagePayload } : {}),
         })
       : undefined
+    item.exRenderConfig = {
+      ...item.exRenderConfig,
+      transition: nextTransitionOut,
+    }
+    item.runtime.exRenderConfig = {
+      ...item.runtime.exRenderConfig,
+      transition: nextTransitionOut
+        ? normalizeClipTransitionOutConfig(nextTransitionOut)
+        : undefined,
+    }
 
     refreshTransitionItems()
   }
@@ -176,7 +186,7 @@ export function createUnifiedTimelineModule(registry: ModuleRegistry) {
     const item = getTimelineItem(timelineItemId)
     if (!item) return
 
-    item.filterEffect = filterEffect
+    const nextFilterEffect = filterEffect
       ? normalizeClipFilterConfig({
           effectPackageId: filterEffect.effectPackageId,
           templateId: filterEffect.templateId,
@@ -187,9 +197,16 @@ export function createUnifiedTimelineModule(registry: ModuleRegistry) {
           packagePayload: filterEffect.packagePayload,
         })
       : undefined
-    item.runtime.renderFilterEffect = item.filterEffect
-      ? normalizeClipFilterConfig(item.filterEffect)
-      : undefined
+    item.exRenderConfig = {
+      ...item.exRenderConfig,
+      filter: nextFilterEffect,
+    }
+    item.runtime.exRenderConfig = {
+      ...item.runtime.exRenderConfig,
+      filter: nextFilterEffect
+        ? normalizeClipFilterConfig(nextFilterEffect)
+        : undefined,
+    }
   }
 
   function getTransitionOverlay(sourceItemId: string): TimelineTransitionOverlayViewModel | null {

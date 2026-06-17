@@ -8,8 +8,10 @@ import type {
   UnifiedTimelineItemData,
   TimelineItemStatus,
   GetConfigs,
+  TimelineExtraRenderConfig,
 } from '@/core/timelineitem/type'
 import type { ClipFilterConfig } from '@/core/filter/types'
+import type { ClipTransitionOutConfig } from '@/core/transition/types'
 import { TimelineStatusDisplayUtils } from '@/core/timelineitem/statusdisplayutils'
 import { useUnifiedStore } from '@/core/unifiedStore'
 import { supportsClipTransitionOut as itemSupportsClipTransitionOut } from '@/core/timelineitem/transition'
@@ -209,6 +211,48 @@ export function getErrorInfo(data: UnifiedTimelineItemData<MediaType>): {
 
 // ==================== 配置访问函数 ====================
 
+export function getExtraRenderConfig(item: UnifiedTimelineItemData<MediaType>) {
+  return item.exRenderConfig
+}
+
+export function getRenderExtraRenderConfig(
+  item: UnifiedTimelineItemData<MediaType> | null | undefined,
+): TimelineExtraRenderConfig | undefined {
+  if (!item) {
+    return undefined
+  }
+
+  const persistentConfig = item.exRenderConfig
+  const runtimeConfig = item.runtime.exRenderConfig
+
+  return {
+    filter: runtimeConfig.filter ?? persistentConfig.filter,
+    transition: runtimeConfig.transition ?? persistentConfig.transition,
+  }
+}
+
+export function getTransition(
+  item: UnifiedTimelineItemData<MediaType> | null | undefined,
+): ClipTransitionOutConfig | undefined {
+  return item?.exRenderConfig.transition
+}
+
+export function getRenderTransition(
+  item: UnifiedTimelineItemData<MediaType> | null | undefined,
+): ClipTransitionOutConfig | undefined {
+  return getRenderExtraRenderConfig(item)?.transition
+}
+
+export function getFilter(
+  item: UnifiedTimelineItemData<MediaType> | null | undefined,
+): ClipFilterConfig | undefined {
+  if (!item || !supportsClipFilter(item)) {
+    return undefined
+  }
+
+  return item.exRenderConfig.filter
+}
+
 /**
  * 获取用于渲染的配置
  * 优先返回 renderConfig（包含动画插值），否则返回 config
@@ -396,14 +440,19 @@ export function getRenderConfig<T extends MediaType>(
   } as GetConfigs<T>
 }
 
-export function getRenderFilterEffect(
-  item: UnifiedTimelineItemData<MediaType>,
+export function getRenderFilter(
+  item: UnifiedTimelineItemData<MediaType> | null | undefined,
 ): ClipFilterConfig | undefined {
-  if (!supportsClipFilter(item) || !item.filterEffect) {
+  if (!item || !supportsClipFilter(item)) {
     return undefined
   }
 
-  const renderFilterEffect = item.runtime.renderFilterEffect || item.filterEffect
+  const renderFilterEffect = getRenderExtraRenderConfig(item)?.filter
+
+  if (!renderFilterEffect) {
+    return undefined
+  }
+
   const filterIntensityOverlay = getFilterIntensityOverlay(item.id)
   const filterParamOverlay = getFilterParamOverlay(item.id)
 
@@ -446,6 +495,11 @@ export const TimelineItemQueries = {
   getErrorInfo,
   
   // 配置访问
+  getExtraRenderConfig,
+  getRenderExtraRenderConfig,
+  getTransition,
+  getRenderTransition,
+  getFilter,
+  getRenderFilter,
   getRenderConfig,
-  getRenderFilterEffect,
 }

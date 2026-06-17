@@ -28,6 +28,7 @@
 import { computed } from 'vue'
 import { useAppI18n } from '@/core/composables/useI18n'
 import { effectTemplateRegistry } from '@/core/effect-template/EffectTemplateRegistry'
+import { TimelineItemQueries } from '@/core/timelineitem/queries'
 import { useUnifiedStore } from '@/core/unifiedStore'
 import type { TimelineTransitionOverlayViewModel } from '@/core/timelineitem/transitionOverlay'
 
@@ -50,10 +51,11 @@ const sourceClipName = computed(() => {
 
 const templateName = computed(() => {
   const sourceItem = unifiedStore.getTimelineItem(props.overlay.sourceItemId)
-  const effectPackageId = sourceItem?.transitionOut?.effectPackageId
+  const transitionOut = TimelineItemQueries.getTransition(sourceItem)
+  const effectPackageId = transitionOut?.effectPackageId
   if (!effectPackageId) return '-'
   return effectTemplateRegistry.getPackageState(effectPackageId)?.meta?.name.zh
-    || sourceItem?.transitionOut?.packagePayload?.manifestSnapshot.name.zh
+    || transitionOut?.packagePayload?.manifestSnapshot.name.zh
     || effectPackageId
 })
 

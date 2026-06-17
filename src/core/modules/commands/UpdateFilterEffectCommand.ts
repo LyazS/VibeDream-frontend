@@ -22,7 +22,7 @@ export class UpdateFilterEffectCommand implements SimpleCommand {
       getTimelineItem: (id: string) => UnifiedTimelineItemData<MediaType> | undefined
       setTimelineItemFilterEffectForCmd: (
         id: string,
-        filterEffect?: ClipFilterConfig,
+        filter?: ClipFilterConfig,
       ) => void
     },
     private readonly mediaModule: {

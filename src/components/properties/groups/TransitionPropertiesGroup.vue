@@ -38,6 +38,7 @@ import { computed } from 'vue'
 import TimecodeInput from '@/components/base/TimecodeInput.vue'
 import { useAppI18n } from '@/core/composables/useI18n'
 import { effectTemplateRegistry } from '@/core/effect-template/EffectTemplateRegistry'
+import { TimelineItemQueries } from '@/core/timelineitem/queries'
 import { useUnifiedStore } from '@/core/unifiedStore'
 import type { UnifiedTimelineItemData } from '@/core/timelineitem/type'
 import { normalizeClipTransitionOutConfig } from '@/core/timelineitem/transition'
@@ -58,7 +59,11 @@ function throwClipPropertyPhase0Todo(action: string): never {
 }
 
 const transitionConfig = computed(() =>
-  normalizeClipTransitionOutConfig(props.selectedTimelineItem?.transitionOut),
+  normalizeClipTransitionOutConfig(
+    props.selectedTimelineItem
+      ? TimelineItemQueries.getTransition(props.selectedTimelineItem)
+      : undefined,
+  ),
 )
 
 const transitionRuntime = computed(() => props.selectedTimelineItem?.runtime.transition)

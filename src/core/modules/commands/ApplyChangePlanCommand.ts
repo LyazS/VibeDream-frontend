@@ -148,8 +148,9 @@ export class ApplyChangePlanCommand implements SimpleCommand {
       return
     }
 
-    if (operation.target === 'filterEffect') {
-      if (!item.filterEffect) {
+    if (operation.target === 'filter') {
+      const currentFilterEffect = TimelineItemQueries.getExtraRenderConfig(item)?.filter
+      if (!currentFilterEffect) {
         throw new Error(`滤镜效果不存在，无法更新属性: ${operation.timelineItemId}`)
       }
       const filterEffectPatch = operation.patch as {
@@ -157,15 +158,21 @@ export class ApplyChangePlanCommand implements SimpleCommand {
         params?: Record<string, unknown>
       }
       const nextFilterEffect = normalizeClipFilterConfig({
-        ...item.filterEffect,
+        ...currentFilterEffect,
         ...filterEffectPatch,
         params: {
-          ...item.filterEffect.params,
+          ...currentFilterEffect.params,
           ...(filterEffectPatch.params ?? {}),
         },
       })
-      item.filterEffect = nextFilterEffect
-      item.runtime.renderFilterEffect = nextFilterEffect
+      item.exRenderConfig = {
+        ...item.exRenderConfig,
+        filter: nextFilterEffect,
+      }
+      item.runtime.exRenderConfig = {
+        ...item.runtime.exRenderConfig,
+        filter: nextFilterEffect,
+      }
       return
     }
   }
@@ -178,7 +185,7 @@ export class ApplyChangePlanCommand implements SimpleCommand {
   ): void {
     const definition = AnimationRegistry.get(groupId)
     if (definition.scope === 'filter') {
-      if (!item.filterEffect) {
+      if (!TimelineItemQueries.getExtraRenderConfig(item)?.filter) {
         throw new Error(`滤镜效果不存在，无法更新属性: ${item.id}`)
       }
       const currentValue = getCurrentGroupValue(item, frame, groupId)

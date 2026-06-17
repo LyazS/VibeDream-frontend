@@ -2,6 +2,7 @@ import type { MediaType } from '@/core/mediaitem'
 import type { EffectPackageParameterDefinition } from '@/core/effect-package/types'
 import type { UnifiedTimelineItemData } from '@/core/timelineitem'
 import { supportsClipFilter } from '@/core/timelineitem/filter'
+import { TimelineItemQueries } from '@/core/timelineitem/queries'
 import {
   createFilterParamPropertyId,
   getFilterParamKey,
@@ -102,11 +103,12 @@ export class DynamicFilterParameterSchemaProvider implements PropertySchemaProvi
   }
 
   listSchemas(context: PropertySchemaContext): AnimatablePropertySchema[] {
-    if (!supportsClipFilter(context.item) || !context.item.filterEffect) {
+    const filterConfig = TimelineItemQueries.getExtraRenderConfig(context.item)?.filter
+    if (!supportsClipFilter(context.item) || !filterConfig) {
       return []
     }
 
-    return Object.entries(context.item.filterEffect.packagePayload.parameterSchema)
+    return Object.entries(filterConfig.packagePayload.parameterSchema)
       .filter(([key, definition]) =>
         isValidFilterParamKey(key) &&
         (definition.type === 'number' || definition.type === 'vec2' || definition.type === 'boolean'),
@@ -122,11 +124,12 @@ export class DynamicFilterParameterSchemaProvider implements PropertySchemaProvi
       return null
     }
 
-    if (!supportsClipFilter(context.item) || !context.item.filterEffect) {
+    const filterConfig = TimelineItemQueries.getExtraRenderConfig(context.item)?.filter
+    if (!supportsClipFilter(context.item) || !filterConfig) {
       return null
     }
 
-    return context.item.filterEffect.packagePayload.parameterSchema[parameterKey] ?? null
+    return filterConfig.packagePayload.parameterSchema[parameterKey] ?? null
   }
 
   private createParamSchema(
@@ -148,7 +151,7 @@ export class DynamicFilterParameterSchemaProvider implements PropertySchemaProvi
 
     return {
       propertyId,
-      target: 'filterEffect',
+      target: 'filter',
       valueFields: ['value'],
       valueKind: 'boolean',
       supportsDirectCommit: true,
@@ -186,7 +189,7 @@ export class DynamicFilterParameterSchemaProvider implements PropertySchemaProvi
     return {
       propertyId,
       animationGroupId: propertyId,
-      target: 'filterEffect',
+      target: 'filter',
       valueFields: ['value'],
       valueKind: 'number',
       supportsDirectCommit: true,
@@ -228,7 +231,7 @@ export class DynamicFilterParameterSchemaProvider implements PropertySchemaProvi
     return {
       propertyId,
       animationGroupId: propertyId,
-      target: 'filterEffect',
+      target: 'filter',
       valueFields: ['x', 'y'],
       valueKind: 'vec2',
       supportsDirectCommit: true,

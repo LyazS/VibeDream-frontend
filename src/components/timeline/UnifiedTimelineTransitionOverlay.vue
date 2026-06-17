@@ -42,6 +42,7 @@ import { THUMBNAIL_CONSTANTS } from '@/constants/ThumbnailConstants'
 import type { TimelineTransitionOverlayViewModel } from '@/core/timelineitem/transitionOverlay'
 import { alignFramesToFrame } from '@/core/utils/timeUtils'
 import { normalizeClipTransitionOutConfig } from '@/core/timelineitem/transition'
+import { TimelineItemQueries } from '@/core/timelineitem/queries'
 import type { SnapPoint } from '@/types/snap'
 import type { SnapResultState } from '@/core/composables/useTimelineSnap'
 
@@ -85,22 +86,23 @@ const sourceTimelineItem = computed(
 )
 
 const transitionConfig = computed(() =>
-  normalizeClipTransitionOutConfig(sourceTimelineItem.value?.transitionOut),
+  normalizeClipTransitionOutConfig(TimelineItemQueries.getTransition(sourceTimelineItem.value)),
 )
 
 const transitionLabel = computed(() => {
-  const effectPackageId = sourceTimelineItem.value?.transitionOut?.effectPackageId
+  const transitionOut = TimelineItemQueries.getTransition(sourceTimelineItem.value)
+  const effectPackageId = transitionOut?.effectPackageId
   if (!effectPackageId) {
     return t('properties.transition.title')
   }
 
   return effectTemplateRegistry.getPackageState(effectPackageId)?.meta?.name.zh
-    || sourceTimelineItem.value?.transitionOut?.packagePayload?.manifestSnapshot.name.zh
+    || transitionOut?.packagePayload?.manifestSnapshot.name.zh
     || t('properties.transition.title')
 })
 
 const hasPackageWarning = computed(() => {
-  const effectPackageId = sourceTimelineItem.value?.transitionOut?.effectPackageId
+  const effectPackageId = TimelineItemQueries.getTransition(sourceTimelineItem.value)?.effectPackageId
   if (!effectPackageId) {
     return false
   }

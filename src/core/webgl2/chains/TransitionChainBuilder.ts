@@ -39,14 +39,14 @@ export class TransitionChainBuilder {
   constructor(private readonly params: TransitionChainBuilderParams) {}
 
   private resolveLoadedTransitionPackage(transitionItem: TransitionItem) {
-    const effectPackageId = transitionItem.transitionOut?.effectPackageId
+    const effectPackageId = TimelineItemQueries.getRenderTransition(transitionItem)?.effectPackageId
     return effectPackageId
       ? effectTemplateRegistry.getReadyPackage(effectPackageId)
       : null
   }
 
   private resolveLoadedFilterPackage(item: TransitionItem) {
-    const filterEffect = TimelineItemQueries.getRenderFilterEffect(item)
+    const filterEffect = TimelineItemQueries.getRenderFilter(item)
     return filterEffect?.effectPackageId
       ? effectTemplateRegistry.getReadyPackage(filterEffect.effectPackageId)
       : null
@@ -70,7 +70,7 @@ export class TransitionChainBuilder {
         item: transitionItem,
         getSourceTextureId: () => this.params.getSourceTextureId(transitionItem.id),
         getRenderConfig: () => TimelineItemQueries.getRenderConfig(transitionItem),
-        getRenderFilterEffect: () => TimelineItemQueries.getRenderFilterEffect(transitionItem),
+        getRenderFilterEffect: () => TimelineItemQueries.getRenderFilter(transitionItem),
         getEffectEvaluationFrame: () => this.params.getCurrentFrame(),
       }),
       ...this.buildBranchPasses({
@@ -94,7 +94,7 @@ export class TransitionChainBuilder {
         item: rightItem,
         getSourceTextureId: () => this.params.getSourceTextureId(rightItem.id),
         getRenderConfig: () => TimelineItemQueries.getRenderConfig(rightItem),
-        getRenderFilterEffect: () => TimelineItemQueries.getRenderFilterEffect(rightItem),
+        getRenderFilterEffect: () => TimelineItemQueries.getRenderFilter(rightItem),
         getEffectEvaluationFrame: () => this.params.getCurrentFrame(),
       }),
       ...this.buildBranchPasses({
@@ -121,7 +121,7 @@ export class TransitionChainBuilder {
         () => this.getTransitionProgress(transitionItem),
         () => ({
           ...loadedPackage.payload.defaultParams,
-          ...(transitionItem.transitionOut?.params ?? {}),
+          ...(TimelineItemQueries.getRenderTransition(transitionItem)?.params ?? {}),
         }),
         () => {
           const playbackState = resolveClipTransitionPlaybackState(
@@ -165,10 +165,14 @@ export class TransitionChainBuilder {
     return [
       `left:${this.getBranchSignature(transitionItem)}`,
       `right:${this.getBranchSignature(rightItem)}`,
-      transitionItem.transitionOut?.effectPackageId ?? '',
+      TimelineItemQueries.getRenderTransition(transitionItem)?.effectPackageId ?? '',
       `transition-installed:${loadedTransitionPackage ? 'ready' : 'missing'}`,
-      loadedTransitionPackage?.payload.version ?? transitionItem.transitionOut?.packagePayload?.version ?? '',
-      loadedTransitionPackage?.payload.scriptHash ?? transitionItem.transitionOut?.packagePayload?.scriptHash ?? '',
+      loadedTransitionPackage?.payload.version
+        ?? TimelineItemQueries.getRenderTransition(transitionItem)?.packagePayload?.version
+        ?? '',
+      loadedTransitionPackage?.payload.scriptHash
+        ?? TimelineItemQueries.getRenderTransition(transitionItem)?.packagePayload?.scriptHash
+        ?? '',
     ].join('|')
   }
 
@@ -193,7 +197,7 @@ export class TransitionChainBuilder {
     item: TransitionItem
     getSourceTextureId: () => string | null
     getRenderConfig: () => any
-    getRenderFilterEffect: () => ReturnType<typeof TimelineItemQueries.getRenderFilterEffect>
+    getRenderFilterEffect: () => ReturnType<typeof TimelineItemQueries.getRenderFilter>
     getEffectEvaluationFrame: () => number
   }) {
     const rotatedTextureId = `${params.prefix}:rotated`
@@ -298,10 +302,10 @@ export class TransitionChainBuilder {
     return [
       `blend:${item.config.blendMode ?? DEFAULT_BLEND_MODE}`,
       `mask:${mask?.enabled ? 'on' : 'off'}:${mask?.type ?? 'rectangle'}`,
-      `filter:${TimelineItemQueries.getRenderFilterEffect(item)?.effectPackageId ?? ''}`,
+      `filter:${TimelineItemQueries.getRenderFilter(item)?.effectPackageId ?? ''}`,
       `filter-installed:${loadedFilterPackage ? 'ready' : 'missing'}`,
-      `filter-version:${loadedFilterPackage?.payload.version ?? TimelineItemQueries.getRenderFilterEffect(item)?.packagePayload?.version ?? ''}`,
-      `filter-script:${loadedFilterPackage?.payload.scriptHash ?? TimelineItemQueries.getRenderFilterEffect(item)?.packagePayload?.scriptHash ?? ''}`,
+      `filter-version:${loadedFilterPackage?.payload.version ?? TimelineItemQueries.getRenderFilter(item)?.packagePayload?.version ?? ''}`,
+      `filter-script:${loadedFilterPackage?.payload.scriptHash ?? TimelineItemQueries.getRenderFilter(item)?.packagePayload?.scriptHash ?? ''}`,
     ].join(':')
   }
 }

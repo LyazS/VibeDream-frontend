@@ -15,6 +15,7 @@ import { createDefaultMaskConfig } from '@/core/timelineitem/mask'
 import { createTextTimelineItem } from '@/core/utils/textTimelineUtils'
 import { setupTimelineItemBunny } from '@/core/bunnyUtils/timelineItemSetup'
 import { buildClipSelectionId } from '@/core/types/timelineSelection'
+import { createDefaultTimelineExtraRenderConfig } from '@/core/timelineitem/type'
 
 /**
  * 时间轴项目操作模块
@@ -99,9 +100,11 @@ export function useTimelineItemOperations() {
           clipEndTime: availableDuration,
         },
         config: config,
+        exRenderConfig: createDefaultTimelineExtraRenderConfig(),
         animation: undefined, // 新创建的项目默认没有动画
         timelineStatus: timelineStatus, // 根据素材状态设置时间轴项目状态
         runtime: {
+          exRenderConfig: createDefaultTimelineExtraRenderConfig(),
           // ✅ 新创建的项目，未初始化，需要从 mediaItem 同步数据
           isInitialized: false,
         },

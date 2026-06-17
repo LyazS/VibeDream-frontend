@@ -12,6 +12,7 @@ import { RENDERER_FPS } from '@/core/mediabunny/constant'
 import type { FileData, FinalEvent, TaskStreamEvent } from '@/core/datasource/providers/ai-generation/types'
 import { TaskStatus, TaskStreamEventType } from '@/core/datasource/providers/ai-generation/types'
 import type { UnifiedTimelineItemData, VideoMediaConfig } from '@/core/timelineitem/type'
+import { createDefaultTimelineExtraRenderConfig } from '@/core/timelineitem/type'
 import { DEFAULT_BLEND_MODE } from '@/core/timelineitem'
 import { createDefaultMaskConfig } from '@/core/timelineitem/mask'
 import type { UploadFileExportOptions } from '@/core/utils/bizyairFileUploader'
@@ -395,7 +396,9 @@ export function createTemporaryVideoTimelineItem(
       volume: 1,
       isMuted: false,
     } satisfies VideoMediaConfig,
+    exRenderConfig: createDefaultTimelineExtraRenderConfig(),
     runtime: {
+      exRenderConfig: createDefaultTimelineExtraRenderConfig(),
       isInitialized: true,
     },
   }

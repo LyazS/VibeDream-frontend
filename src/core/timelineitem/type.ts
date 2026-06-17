@@ -83,6 +83,15 @@ export type VisualPropPatch = Partial<VisualProps>
  */
 export type AudioPropPatch = Partial<AudioProps>
 
+export interface TimelineExtraRenderConfig {
+  filter?: ClipFilterConfig
+  transition?: ClipTransitionOutConfig
+}
+
+export function createDefaultTimelineExtraRenderConfig(): TimelineExtraRenderConfig {
+  return {}
+}
+
 // ==================== 统一时间轴项目运行时数据接口 ====================
 /**
  * 设计理念：
@@ -97,8 +106,8 @@ export interface UnifiedTimelineItemRuntime<T extends MediaType = MediaType> {
   textBitmapVersion?: number // 文本位图重建版本，用于驱动 WebGL 纹理重新上传
   /** 动画插值后的临时配置（运行时数据，不持久化） */
   renderConfig?: GetConfigs<T>
-  /** 动画插值后的滤镜配置（运行时数据，不持久化） */
-  renderFilterEffect?: ClipFilterConfig
+  /** 扩展渲染配置的运行时结果（运行时数据，不持久化） */
+  exRenderConfig: TimelineExtraRenderConfig
   /** 片段出场转场的运行时绑定与边界帧缓存 */
   transition?: ClipTransitionRuntime
 
@@ -146,17 +155,13 @@ export interface UnifiedTimelineItemData<T extends MediaType = MediaType> {
 
   // ==================== 配置（类型安全） ====================
   config: GetConfigs<T>
+  /** schema v2 迁移期扩展渲染配置 */
+  exRenderConfig: TimelineExtraRenderConfig
 
   // ==================== 动画配置（类型安全） ====================
   animation?: GetAnimation<T>
 
-  // ==================== 片段转场配置（持久化） ====================
-  transitionOut?: ClipTransitionOutConfig
-
   // ==================== 片段滤镜配置（持久化） ====================
-  filterEffect?: ClipFilterConfig
-
-  // ==================== 运行时数据（不可持久化） ====================
   runtime: UnifiedTimelineItemRuntime<T>
 
   // ==================== 占位符标识（可选） ====================

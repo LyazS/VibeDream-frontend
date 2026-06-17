@@ -7,7 +7,7 @@ import type { UnifiedTimelineItemData } from '@/core/timelineitem/type'
 import type { AnimateKeyframe, GetAnimation } from '@/core/timelineitem/bunnytype'
 import type { GetConfigs } from '@/core/timelineitem/bunnytype'
 import type { MediaType } from '@/core/mediaitem'
-import type { ClipFilterConfig } from '@/core/filter/types'
+import { createDefaultTimelineExtraRenderConfig } from '@/core/timelineitem/type'
 import { isPlayheadInTimelineItem as checkPlayheadInTimelineItem } from '@/core/utils/timelineSearchUtils'
 import { cloneDeep } from 'lodash'
 import { useUnifiedStore } from '@/core/unifiedStore'
@@ -25,8 +25,8 @@ export interface KeyframeSnapshot {
   animationConfig: GetAnimation<MediaType> | undefined
   /** 时间轴项目的属性快照 */
   itemProperties: GetConfigs<MediaType>
-  /** 时间轴项目的滤镜快照 */
-  filterEffect: ClipFilterConfig | undefined
+  /** 扩展渲染配置快照 */
+  exRenderConfig: UnifiedTimelineItemData['exRenderConfig']
 }
 
 // ==================== 通用接口定义 ====================
@@ -54,7 +54,7 @@ export function createSnapshot(item: UnifiedTimelineItemData): KeyframeSnapshot 
   return {
     animationConfig: item.animation ? cloneDeep(item.animation) : undefined,
     itemProperties: cloneDeep(item.config),
-    filterEffect: item.filterEffect ? cloneDeep(item.filterEffect) : undefined,
+    exRenderConfig: cloneDeep(item.exRenderConfig),
   }
 }
 
@@ -98,8 +98,12 @@ export async function applyKeyframeSnapshot(
     Object.assign(item.config, snapshot.itemProperties)
   }
 
-  item.filterEffect = snapshot.filterEffect ? cloneDeep(snapshot.filterEffect) : undefined
-  item.runtime.renderFilterEffect = snapshot.filterEffect ? cloneDeep(snapshot.filterEffect) : undefined
+  item.exRenderConfig = snapshot.exRenderConfig
+    ? cloneDeep(snapshot.exRenderConfig)
+    : createDefaultTimelineExtraRenderConfig()
+  item.runtime.exRenderConfig = snapshot.exRenderConfig
+    ? cloneDeep(snapshot.exRenderConfig)
+    : createDefaultTimelineExtraRenderConfig()
 
   if (isTextTimelineItem(item)) {
     await rebuildTextRuntime(item, {

@@ -41,7 +41,7 @@ export class ChainBuilder {
   constructor(private readonly params: ChainBuilderParams) {}
 
   private resolveLoadedFilterPackage(item: VisualTimelineItem) {
-    const filterEffect = TimelineItemQueries.getRenderFilterEffect(item)
+    const filterEffect = TimelineItemQueries.getRenderFilter(item)
     return filterEffect?.effectPackageId
       ? effectTemplateRegistry.getReadyPackage(filterEffect.effectPackageId)
       : null
@@ -60,7 +60,7 @@ export class ChainBuilder {
       : 0
 
     const renderConfig = TimelineItemQueries.getRenderConfig(item)
-    const renderFilterEffect = TimelineItemQueries.getRenderFilterEffect(item)
+    const renderFilterEffect = TimelineItemQueries.getRenderFilter(item)
     const hasMask = Boolean(renderConfig.mask?.enabled)
     const loadedFilterPackage = this.resolveLoadedFilterPackage(item)
     const hasFilter = Boolean(renderFilterEffect && loadedFilterPackage)
@@ -107,10 +107,10 @@ export class ChainBuilder {
             loadedFilterPackage,
             filteredItemTextureId,
             getEffectEvaluationFrame,
-            () => TimelineItemQueries.getRenderFilterEffect(item)?.intensity ?? 1,
+            () => TimelineItemQueries.getRenderFilter(item)?.intensity ?? 1,
             () => ({
               ...loadedFilterPackage.payload.defaultParams,
-              ...(TimelineItemQueries.getRenderFilterEffect(item)?.params ?? {}),
+              ...(TimelineItemQueries.getRenderFilter(item)?.params ?? {}),
             }),
             () => (hasMask ? maskedItemTextureId : itemTargetTextureId),
             (name) => `filter:${item.id}:${name}`,
@@ -143,10 +143,10 @@ export class ChainBuilder {
     return [
       `mask:${mask?.enabled ? 'on' : 'off'}:${mask?.type ?? 'rectangle'}`,
       `blend:${config.blendMode ?? DEFAULT_BLEND_MODE}`,
-      `filter:${TimelineItemQueries.getRenderFilterEffect(item)?.effectPackageId ?? ''}`,
+      `filter:${TimelineItemQueries.getRenderFilter(item)?.effectPackageId ?? ''}`,
       `filter-installed:${loadedFilterPackage ? 'ready' : 'missing'}`,
-      `filter-version:${loadedFilterPackage?.payload.version ?? TimelineItemQueries.getRenderFilterEffect(item)?.packagePayload?.version ?? ''}`,
-      `filter-script:${loadedFilterPackage?.payload.scriptHash ?? TimelineItemQueries.getRenderFilterEffect(item)?.packagePayload?.scriptHash ?? ''}`,
+      `filter-version:${loadedFilterPackage?.payload.version ?? TimelineItemQueries.getRenderFilter(item)?.packagePayload?.version ?? ''}`,
+      `filter-script:${loadedFilterPackage?.payload.scriptHash ?? TimelineItemQueries.getRenderFilter(item)?.packagePayload?.scriptHash ?? ''}`,
     ].join(':')
   }
 }

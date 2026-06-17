@@ -2,7 +2,7 @@ import type { PropertyAnimationGroupId } from '@/core/timelineitem/bunnytype'
 import type { DirectPropertyId } from '@/core/property-system/mutation/types'
 import { normalizeAngle } from '@/core/utils/rotationTransform'
 
-export type AnimatablePropertyTarget = 'config' | 'filterEffect' | 'maskConfig'
+export type AnimatablePropertyTarget = 'config' | 'maskConfig' | 'filter'
 export type PropertyValueKind = 'number' | 'boolean' | 'color' | 'vec2'
 
 export interface AnimatablePropertySchema {
@@ -110,7 +110,7 @@ export const transformOpacitySchema: AnimatablePropertySchema = {
 export const filterIntensitySchema: AnimatablePropertySchema = {
   propertyId: 'filter.intensity',
   animationGroupId: 'filter.intensity',
-  target: 'filterEffect',
+  target: 'filter',
   valueFields: ['intensity'],
   valueKind: 'number',
   supportsDirectCommit: true,

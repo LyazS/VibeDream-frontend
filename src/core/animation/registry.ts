@@ -87,10 +87,6 @@ function getVisualConfigRecord(item: UnifiedTimelineItemData<MediaType>): Record
   return TimelineItemQueries.getRenderConfig(item) as unknown as Record<string, any>
 }
 
-function getFilterConfigRecord(item: UnifiedTimelineItemData<MediaType>) {
-  return TimelineItemQueries.getRenderFilterEffect(item)
-}
-
 function assertDynamicFilterParamNumber(value: unknown, parameterKey: string): number {
   if (typeof value !== 'number' || !Number.isFinite(value)) {
     throw new Error(`滤镜参数不是有效数字: ${parameterKey}`)
@@ -122,7 +118,7 @@ function createDynamicFilterParamDefinition(
 ): AnimationGroupDefinition<DynamicFilterParamAnimationGroupId> {
   const parameterKey = getFilterParamKey(groupId)
   const getParameterType = (item: UnifiedTimelineItemData<MediaType>) =>
-    item.filterEffect?.packagePayload.parameterSchema[parameterKey]?.type
+    TimelineItemQueries.getFilter(item)?.packagePayload.parameterSchema[parameterKey]?.type
 
   return {
     id: groupId,
@@ -132,7 +128,7 @@ function createDynamicFilterParamDefinition(
       TimelineItemQueries.supportsClipFilter(item) &&
       (getParameterType(item) === 'number' || getParameterType(item) === 'vec2'),
     getBaseValue: (item): DynamicFilterParamValue => {
-      const filterEffect = getFilterConfigRecord(item)
+      const filterEffect = TimelineItemQueries.getRenderFilter(item)
       if (!filterEffect) {
         throw new Error(`滤镜效果不存在，无法读取动态参数: ${parameterKey}`)
       }
@@ -149,7 +145,8 @@ function createDynamicFilterParamDefinition(
       }
     },
     applyValue: (item, value) => {
-      if (!TimelineItemQueries.supportsClipFilter(item) || !item.filterEffect) {
+      const currentFilterEffect = TimelineItemQueries.getFilter(item)
+      if (!TimelineItemQueries.supportsClipFilter(item) || !currentFilterEffect) {
         throw new Error(`滤镜效果不存在，无法写入动态参数: ${parameterKey}`)
       }
       const parameterType = getParameterType(item)
@@ -163,14 +160,20 @@ function createDynamicFilterParamDefinition(
             parameterKey,
           )
       const nextFilterEffect = normalizeClipFilterConfig({
-        ...item.filterEffect,
+        ...currentFilterEffect,
         params: {
-          ...item.filterEffect.params,
+          ...currentFilterEffect.params,
           [parameterKey]: nextValue,
         },
       })
-      item.filterEffect = nextFilterEffect
-      item.runtime.renderFilterEffect = nextFilterEffect
+      item.exRenderConfig = {
+        ...item.exRenderConfig,
+        filter: nextFilterEffect,
+      }
+      item.runtime.exRenderConfig = {
+        ...item.runtime.exRenderConfig,
+        filter: nextFilterEffect,
+      }
     },
     applyValueToConfig: (config, value) => {
       if (typeof config.params !== 'object' || !config.params || Array.isArray(config.params)) {
@@ -318,18 +321,27 @@ const animationGroupDefinitions: {
     id: 'filter.intensity',
     scope: 'filter',
     supports: (item) => TimelineItemQueries.supportsClipFilter(item),
-    isEnabled: (item) => TimelineItemQueries.supportsClipFilter(item) && Boolean(item.filterEffect),
+    isEnabled: (item) =>
+      TimelineItemQueries.supportsClipFilter(item) &&
+      Boolean(TimelineItemQueries.getFilter(item)),
     getBaseValue: (item) => ({
-      intensity: normalizeClipFilterConfig(getFilterConfigRecord(item)).intensity,
+      intensity: normalizeClipFilterConfig(TimelineItemQueries.getRenderFilter(item)).intensity,
     }),
     applyValue: (item, value) => {
-      if (!TimelineItemQueries.supportsClipFilter(item) || !item.filterEffect) return
+      const currentFilterEffect = TimelineItemQueries.getFilter(item)
+      if (!TimelineItemQueries.supportsClipFilter(item) || !currentFilterEffect) return
       const nextFilterEffect = normalizeClipFilterConfig({
-        ...item.filterEffect,
-        intensity: value.intensity ?? item.filterEffect.intensity,
+        ...currentFilterEffect,
+        intensity: value.intensity ?? currentFilterEffect.intensity,
       })
-      item.filterEffect = nextFilterEffect
-      item.runtime.renderFilterEffect = nextFilterEffect
+      item.exRenderConfig = {
+        ...item.exRenderConfig,
+        filter: nextFilterEffect,
+      }
+      item.runtime.exRenderConfig = {
+        ...item.runtime.exRenderConfig,
+        filter: nextFilterEffect,
+      }
     },
     applyValueToConfig: (config, value) => {
       const nextFilterEffect = normalizeClipFilterConfig({

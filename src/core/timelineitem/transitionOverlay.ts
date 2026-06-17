@@ -5,6 +5,7 @@ import {
   normalizeClipTransitionOutConfig,
   supportsClipTransitionOut,
 } from '@/core/timelineitem/transition'
+import { TimelineItemQueries } from '@/core/timelineitem/queries'
 import { buildTransitionSelectionId, type TimelineSelectionId } from '@/core/types/timelineSelection'
 
 export interface TimelineTransitionOverlayViewModel {
@@ -20,11 +21,12 @@ export interface TimelineTransitionOverlayViewModel {
 export function createTimelineTransitionOverlay(
   item: UnifiedTimelineItemData<MediaType>,
 ): TimelineTransitionOverlayViewModel | null {
-  if (!supportsClipTransitionOut(item) || !item.transitionOut) {
+  const transitionConfig = TimelineItemQueries.getTransition(item)
+  if (!supportsClipTransitionOut(item) || !transitionConfig) {
     return null
   }
 
-  const transitionOut = normalizeClipTransitionOutConfig(item.transitionOut)
+  const transitionOut = normalizeClipTransitionOutConfig(transitionConfig)
   const leftHalfFrames = Math.floor(transitionOut.durationFrames / 2)
   const rightHalfFrames = transitionOut.durationFrames - leftHalfFrames
   const seamFrame = item.timeRange.timelineEndTime

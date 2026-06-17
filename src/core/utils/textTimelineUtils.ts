@@ -7,6 +7,7 @@ import type { UnifiedTimeRange } from '@/core/types/timeRange'
 import { DEFAULT_TEXT_STYLE } from '@/core/timelineitem/texttype'
 import { createDefaultMaskConfig } from '@/core/timelineitem/mask'
 import { DEFAULT_BLEND_MODE } from '@/core/timelineitem'
+import { createDefaultTimelineExtraRenderConfig } from '@/core/timelineitem/type'
 
 /**
  * 统一架构下的文本时间轴工具函数
@@ -91,10 +92,12 @@ export async function createTextTimelineItem(
     mediaType: 'text',
     timeRange,
     config: textConfig,
+    exRenderConfig: createDefaultTimelineExtraRenderConfig(),
     animation: undefined, // 新创建的文本项目默认没有动画
     timelineStatus: 'ready', // 文本项目创建后即为就绪状态
     runtime: {
       // ✅ 文本项目不依赖外部媒体，直接完成初始化
+      exRenderConfig: createDefaultTimelineExtraRenderConfig(),
       isInitialized: true,
       textBitmapVersion: 0,
     },

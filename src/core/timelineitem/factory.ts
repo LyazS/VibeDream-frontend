@@ -16,6 +16,7 @@ import type {
 } from '@/core/timelineitem/type'
 import type { UnifiedTimeRange } from '@/core/types/timeRange'
 import type { UnifiedTimelineItemData, TimelineItemStatus } from '@/core/timelineitem/type'
+import { createDefaultTimelineExtraRenderConfig } from '@/core/timelineitem/type'
 import type { GetAnimation } from './bunnytype'
 import { TimelineItemQueries } from '@/core/timelineitem/queries'
 import { MediaItemQueries } from '@/core/mediaitem'
@@ -43,8 +44,10 @@ export function cloneTimelineItem<T extends MediaType>(
   // 深拷贝原始对象，排除不需要克隆的 runtime 属性
   const cloned = cloneDeep({
     ...original,
+    exRenderConfig: original.exRenderConfig ?? createDefaultTimelineExtraRenderConfig(),
     runtime: {
       // ✅ 只保留 isInitialized，其他 runtime 字段（bunnyClip、textBitmap 等）会在后续重建
+      exRenderConfig: original.runtime.exRenderConfig ?? createDefaultTimelineExtraRenderConfig(),
       isInitialized: original.runtime.isInitialized,
     },
   })
