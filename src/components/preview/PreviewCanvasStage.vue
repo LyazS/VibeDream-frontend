@@ -144,7 +144,7 @@ const showMaskOverlay = computed(
       return false
     }
 
-    return true
+    return Boolean(TimelineItemQueries.getMask(selectedItem.value))
   },
 )
 

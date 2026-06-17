@@ -133,6 +133,7 @@
 <script setup lang="ts">
 import { computed, watch } from 'vue'
 import { effectTemplateRegistry } from '@/core/effect-template/EffectTemplateRegistry'
+import { TimelineItemQueries } from '@/core/timelineitem/queries'
 import { useUnifiedStore } from '@/core/unifiedStore'
 import { useAppI18n } from '@/core/composables/useI18n'
 import { NScrollbar } from 'naive-ui'
@@ -243,8 +244,9 @@ const multiSelectInfo = computed(() => {
       if (parsed.kind === 'transition') {
         const overlay = unifiedStore.getTransitionOverlay(parsed.sourceId)
         const sourceItem = overlay ? unifiedStore.getTimelineItem(overlay.sourceItemId) : null
-        const assetName = sourceItem?.transitionOut?.effectPackageId
-          ? effectTemplateRegistry.getPackageState(sourceItem.transitionOut.effectPackageId)?.meta?.name.zh
+        const transitionOut = TimelineItemQueries.getTransition(sourceItem)
+        const assetName = transitionOut?.effectPackageId
+          ? effectTemplateRegistry.getPackageState(transitionOut.effectPackageId)?.meta?.name.zh
           : ''
         return {
           id: selectionId,

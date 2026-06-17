@@ -37,7 +37,6 @@ export interface VisualProps {
   opacity: number
   blendMode: BlendMode
   proportionalScale: boolean
-  mask?: MaskConfig
 }
 
 export interface AudioProps {

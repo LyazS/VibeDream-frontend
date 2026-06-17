@@ -29,6 +29,7 @@ import {
 } from '@/core/asset/types'
 import { EffectTemplateManager } from '@/core/effect-template/EffectTemplateManager'
 import { clearChannelKeyframes } from '@/core/utils/unifiedKeyframeUtils'
+import { TimelineItemQueries } from '@/core/timelineitem/queries'
 
 // ==================== 统一媒体项目调试工具 ====================
 
@@ -601,7 +602,7 @@ export function createUnifiedMediaModule(registry: ModuleRegistry) {
       }
 
       const relatedTransitionItems = timelineModule.timelineItems.value.filter(
-        (item: UnifiedTimelineItemData) => item.transitionOut?.effectPackageId === assetId,
+        (item: UnifiedTimelineItemData) => TimelineItemQueries.getTransition(item)?.effectPackageId === assetId,
       )
 
       for (const timelineItem of relatedTransitionItems) {
@@ -609,7 +610,7 @@ export function createUnifiedMediaModule(registry: ModuleRegistry) {
       }
 
       const relatedFilterItems = timelineModule.timelineItems.value.filter(
-        (item: UnifiedTimelineItemData) => item.filterEffect?.effectPackageId === assetId,
+        (item: UnifiedTimelineItemData) => item.exRenderConfig?.filter?.effectPackageId === assetId,
       )
 
       for (const timelineItem of relatedFilterItems) {

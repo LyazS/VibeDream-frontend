@@ -8,12 +8,14 @@ export type {
   // 核心数据类型
   UnifiedTimelineItemData,
   TimelineItemStatus,
+  TimelineExtraRenderConfig,
   VisualPropPatch,
   AudioPropPatch,
   BlendMode,
   VideoMediaConfig,
   AudioMediaConfig,
 } from './type'
+export { createDefaultTimelineExtraRenderConfig } from './type'
 export type {
   ClipTransitionRuntime,
   ClipTransitionBindingState,

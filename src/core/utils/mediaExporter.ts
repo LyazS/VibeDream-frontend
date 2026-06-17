@@ -5,9 +5,9 @@
 
 import { QUALITY_MEDIUM } from 'mediabunny'
 import type { UnifiedTimelineItemData } from '@/core/timelineitem/type'
+import { createDefaultTimelineExtraRenderConfig } from '@/core/timelineitem/type'
 import type { UnifiedMediaItemData } from '@/core/mediaitem/types'
 import { DEFAULT_BLEND_MODE } from '@/core/timelineitem'
-import { createDefaultMaskConfig } from '@/core/timelineitem/mask'
 import { RENDERER_FPS } from '@/core/mediabunny/constant'
 import { BunnyClip } from '@/core/mediabunny/bunny-clip'
 import { ExportManager, type ExportProjectOptions } from './projectExporter'
@@ -160,14 +160,12 @@ async function exportVideoMediaItem(
       opacity: 1,
       blendMode: DEFAULT_BLEND_MODE,
       proportionalScale: true,
-      mask: createDefaultMaskConfig('rectangle', {
-        width: outputSize.width,
-        height: outputSize.height,
-      }),
       volume: 1,
       isMuted: false,
     },
+    exRenderConfig: createDefaultTimelineExtraRenderConfig(),
     runtime: {
+      exRenderConfig: createDefaultTimelineExtraRenderConfig(),
       isInitialized: true,
     },
   }
@@ -299,7 +297,9 @@ async function exportVideoTimelineItem(
       volume: 1,
       isMuted: false,
     },
+    exRenderConfig: createDefaultTimelineExtraRenderConfig(),
     runtime: {
+      exRenderConfig: createDefaultTimelineExtraRenderConfig(),
       isInitialized: true,
     },
   }
@@ -369,7 +369,9 @@ async function exportAudioTimelineItem(
       volume: 1,
       isMuted: false,
     },
+    exRenderConfig: createDefaultTimelineExtraRenderConfig(),
     runtime: {
+      exRenderConfig: createDefaultTimelineExtraRenderConfig(),
       isInitialized: true,
     },
   }

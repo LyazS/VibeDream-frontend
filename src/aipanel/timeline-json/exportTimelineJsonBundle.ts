@@ -2,6 +2,7 @@ import { cloneDeep } from 'lodash'
 import type { UnifiedTrackData } from '@/core/track/TrackTypes'
 import { TimelineItemFactory } from '@/core/timelineitem/factory'
 import type { UnifiedTimelineItemData } from '@/core/timelineitem/type'
+import { createDefaultTimelineExtraRenderConfig } from '@/core/timelineitem/type'
 import type { TimelineJsonBundle } from './types'
 
 function cloneTrack(track: UnifiedTrackData): UnifiedTrackData {
@@ -12,6 +13,7 @@ function cloneTimelineItem(item: UnifiedTimelineItemData): UnifiedTimelineItemDa
   const clonedItem = TimelineItemFactory.clone(item)
   if (clonedItem.runtime) {
     clonedItem.runtime = {
+      exRenderConfig: createDefaultTimelineExtraRenderConfig(),
       isInitialized: clonedItem.runtime.isInitialized,
     }
   }

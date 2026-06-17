@@ -70,7 +70,7 @@ export function useMaskKeyframeActions(options: MaskKeyframeActionsOptions) {
       'width' in renderConfig ? renderConfig.width : 0,
       'height' in renderConfig ? renderConfig.height : 0,
     )
-    const currentMask = normalizeMaskConfig('mask' in item.config ? item.config.mask : undefined, itemLocalSize)
+    const currentMask = normalizeMaskConfig(TimelineItemQueries.getMask(item), itemLocalSize)
 
     return { currentMask, itemLocalSize }
   }
@@ -83,7 +83,7 @@ export function useMaskKeyframeActions(options: MaskKeyframeActionsOptions) {
       description: value ? '启用蒙版' : '关闭蒙版',
       operations: [
         {
-          kind: 'visual-config-patch',
+          kind: 'extra-render-config-patch',
           timelineItemId: item.id,
           frame: currentFrame.value,
           patch: {
@@ -105,7 +105,7 @@ export function useMaskKeyframeActions(options: MaskKeyframeActionsOptions) {
       description: '修改蒙版类型',
       operations: [
         {
-          kind: 'visual-config-patch',
+          kind: 'extra-render-config-patch',
           timelineItemId: item.id,
           frame: currentFrame.value,
           patch: {
@@ -124,7 +124,7 @@ export function useMaskKeyframeActions(options: MaskKeyframeActionsOptions) {
       description: value ? '开启蒙版反相' : '关闭蒙版反相',
       operations: [
         {
-          kind: 'visual-config-patch',
+          kind: 'extra-render-config-patch',
           timelineItemId: item.id,
           frame: currentFrame.value,
           patch: {

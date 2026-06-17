@@ -43,15 +43,15 @@ export function useMaskPropertiesState(options: UnifiedMaskKeyframeControlsOptio
       return normalizeMaskConfig(undefined, itemLocalSize.value)
     }
 
-    const renderConfig = TimelineItemQueries.getRenderConfig(item)
     return normalizeMaskConfig(
-      'mask' in renderConfig
-        ? renderConfig.mask
-        : 'mask' in item.config
-          ? item.config.mask
-          : undefined,
+      TimelineItemQueries.getRenderMask(item),
       itemLocalSize.value,
     )
+  })
+
+  const hasMaskConfig = computed(() => {
+    const item = selectedTimelineItem.value
+    return Boolean(item && TimelineItemQueries.getMask(item))
   })
 
   const rectangleMaskConfig = computed(() =>
@@ -75,6 +75,7 @@ export function useMaskPropertiesState(options: UnifiedMaskKeyframeControlsOptio
   return {
     itemLocalSize,
     maskConfig,
+    hasMaskConfig,
     rectangleMaskConfig,
     ellipseMaskConfig,
     mirrorMaskConfig,

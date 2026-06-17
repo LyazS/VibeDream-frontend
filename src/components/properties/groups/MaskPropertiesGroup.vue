@@ -15,7 +15,7 @@
         </div>
       </div>
 
-      <div class="property-item">
+      <div v-if="hasMaskConfig" class="property-item">
         <label>{{ t('properties.mask.type') }}</label>
         <select
           class="property-input mask-select"
@@ -28,7 +28,7 @@
         </select>
       </div>
 
-      <div class="property-item">
+      <div v-if="hasMaskConfig" class="property-item">
         <label>{{ t('properties.mask.inverted') }}</label>
         <div class="compact-boolean-control">
           <input
@@ -41,6 +41,7 @@
       </div>
 
       <KeyframedDualNumberField
+        v-if="hasMaskConfig"
         :label="t('properties.mask.center')"
         :state="getMaskChannelButtonState('mask.center')"
         :tooltip="getMaskKeyframeTooltip('mask.center')"
@@ -67,6 +68,7 @@
       />
 
       <KeyframedSliderField
+        v-if="hasMaskConfig"
         :label="t('properties.transform.rotation')"
         :state="getMaskChannelButtonState('mask.rotation')"
         :tooltip="getMaskKeyframeTooltip('mask.rotation')"
@@ -87,6 +89,7 @@
       />
 
       <KeyframedSliderField
+        v-if="hasMaskConfig"
         :label="t('properties.mask.outerRange')"
         :state="getMaskChannelButtonState('mask.feather')"
         :tooltip="getMaskKeyframeTooltip('mask.feather')"
@@ -107,6 +110,7 @@
       />
 
       <KeyframedSliderField
+        v-if="hasMaskConfig"
         :label="t('properties.mask.decayRate')"
         :state="getMaskChannelButtonState('mask.intensity')"
         :tooltip="getMaskKeyframeTooltip('mask.intensity')"
@@ -127,7 +131,7 @@
       />
     </div>
 
-    <div v-if="maskConfig.type === 'rectangle'" class="property-section">
+    <div v-if="hasMaskConfig && maskConfig.type === 'rectangle'" class="property-section">
       <h4>{{ t('properties.mask.types.rectangleUpper') }}</h4>
 
       <KeyframedDualNumberField
@@ -177,7 +181,7 @@
       />
     </div>
 
-    <div v-if="maskConfig.type === 'ellipse'" class="property-section">
+    <div v-if="hasMaskConfig && maskConfig.type === 'ellipse'" class="property-section">
       <h4>{{ t('properties.mask.types.ellipseUpper') }}</h4>
 
       <KeyframedDualNumberField
@@ -207,7 +211,7 @@
       />
     </div>
 
-    <div v-if="maskConfig.type === 'mirror'" class="property-section">
+    <div v-if="hasMaskConfig && maskConfig.type === 'mirror'" class="property-section">
       <h4>{{ t('properties.mask.types.mirrorUpper') }}</h4>
 
       <KeyframedSliderField
@@ -259,6 +263,7 @@ const typeOptions = computed<{ value: MaskType; label: string }[]>(() => [
 const {
   itemLocalSize,
   maskConfig,
+  hasMaskConfig,
   rectangleMaskConfig,
   ellipseMaskConfig,
   mirrorMaskConfig,

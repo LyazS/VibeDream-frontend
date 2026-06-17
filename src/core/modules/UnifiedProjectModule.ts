@@ -4,6 +4,8 @@ import type { UnifiedDirectoryConfig } from '@/core/directory/types'
 import { ProjectFileOps } from '@/core/utils'
 import { TimelineItemFactory } from '@/core/timelineitem/factory'
 import type { UnifiedTimelineItemData } from '@/core/timelineitem/type'
+import { createDefaultTimelineExtraRenderConfig } from '@/core/timelineitem/type'
+import { TimelineItemQueries } from '@/core/timelineitem/queries'
 import type { UnifiedTrackData, UnifiedTrackType } from '@/core/track/TrackTypes'
 import { createUnifiedTrackData } from '@/core/track/TrackTypes'
 import type { UnifiedMediaItemData } from '@/core/mediaitem/types'
@@ -219,6 +221,7 @@ export function createUnifiedProjectModule(registry: ModuleRegistry) {
             if (clonedItem.runtime) {
               // 清空运行时数据，但保留 isInitialized 字段（必选）
               clonedItem.runtime = {
+                exRenderConfig: createDefaultTimelineExtraRenderConfig(),
                 isInitialized: clonedItem.runtime.isInitialized,
               }
             }
@@ -815,7 +818,7 @@ function collectTimelineEffectDependencies(
   const unique = new Map<string, EffectPackageIdentity>()
 
   for (const item of timelineItems) {
-    const transitionOut = item.transitionOut
+    const transitionOut = TimelineItemQueries.getTransition(item)
     if (transitionOut?.effectPackageId) {
       const identity = normalizeEffectIdentity(
         transitionOut.effectPackageId,
@@ -828,7 +831,7 @@ function collectTimelineEffectDependencies(
       }
     }
 
-    const filterEffect = item.filterEffect
+    const filterEffect = item.exRenderConfig?.filter
     if (filterEffect?.effectPackageId) {
       const identity = normalizeEffectIdentity(
         filterEffect.effectPackageId,

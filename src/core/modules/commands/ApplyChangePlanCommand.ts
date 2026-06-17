@@ -71,6 +71,15 @@ export class ApplyChangePlanCommand implements SimpleCommand {
         Object.assign(item.config, operation.patch)
       } else if (operation.kind === 'audio-config-patch') {
         Object.assign(item.config, operation.patch)
+      } else if (operation.kind === 'extra-render-config-patch') {
+        item.exRenderConfig = {
+          ...item.exRenderConfig,
+          ...operation.patch,
+        }
+        item.runtime.exRenderConfig = {
+          ...item.runtime.exRenderConfig,
+          ...operation.patch,
+        }
       } else if (operation.kind === 'text-rebuild') {
         if (!TimelineItemQueries.isTextTimelineItem(item)) {
           throw new Error(`文本属性仅支持 text timeline item: ${operation.timelineItemId}`)
@@ -140,16 +149,30 @@ export class ApplyChangePlanCommand implements SimpleCommand {
       return
     }
 
-    if (operation.target === 'maskConfig') {
-      if (!operation.groupId) {
-        throw new Error(`蒙版属性缺少动画组: ${operation.timelineItemId}`)
+    if (operation.target === 'mask') {
+      if (operation.groupId) {
+        AnimationRegistry.get(operation.groupId).applyValue(item, operation.patch as never)
+        return
       }
-      AnimationRegistry.get(operation.groupId).applyValue(item, operation.patch as never)
+
+      const currentMask = TimelineItemQueries.getMask(item)
+      item.exRenderConfig = {
+        ...item.exRenderConfig,
+        mask: {
+          ...currentMask,
+          ...operation.patch,
+        } as never,
+      }
+      item.runtime.exRenderConfig = {
+        ...item.runtime.exRenderConfig,
+        mask: item.exRenderConfig.mask,
+      }
       return
     }
 
-    if (operation.target === 'filterEffect') {
-      if (!item.filterEffect) {
+    if (operation.target === 'filter') {
+      const currentFilterEffect = TimelineItemQueries.getExtraRenderConfig(item)?.filter
+      if (!currentFilterEffect) {
         throw new Error(`滤镜效果不存在，无法更新属性: ${operation.timelineItemId}`)
       }
       const filterEffectPatch = operation.patch as {
@@ -157,15 +180,21 @@ export class ApplyChangePlanCommand implements SimpleCommand {
         params?: Record<string, unknown>
       }
       const nextFilterEffect = normalizeClipFilterConfig({
-        ...item.filterEffect,
+        ...currentFilterEffect,
         ...filterEffectPatch,
         params: {
-          ...item.filterEffect.params,
+          ...currentFilterEffect.params,
           ...(filterEffectPatch.params ?? {}),
         },
       })
-      item.filterEffect = nextFilterEffect
-      item.runtime.renderFilterEffect = nextFilterEffect
+      item.exRenderConfig = {
+        ...item.exRenderConfig,
+        filter: nextFilterEffect,
+      }
+      item.runtime.exRenderConfig = {
+        ...item.runtime.exRenderConfig,
+        filter: nextFilterEffect,
+      }
       return
     }
   }
@@ -178,7 +207,7 @@ export class ApplyChangePlanCommand implements SimpleCommand {
   ): void {
     const definition = AnimationRegistry.get(groupId)
     if (definition.scope === 'filter') {
-      if (!item.filterEffect) {
+      if (!TimelineItemQueries.getExtraRenderConfig(item)?.filter) {
         throw new Error(`滤镜效果不存在，无法更新属性: ${item.id}`)
       }
       const currentValue = getCurrentGroupValue(item, frame, groupId)

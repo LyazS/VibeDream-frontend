@@ -11,10 +11,10 @@ import type {
 } from '@/core/timelineitem/type'
 import type { GetConfigs } from '@/core/timelineitem/bunnytype'
 import { DEFAULT_BLEND_MODE } from '@/core/timelineitem'
-import { createDefaultMaskConfig } from '@/core/timelineitem/mask'
 import { createTextTimelineItem } from '@/core/utils/textTimelineUtils'
 import { setupTimelineItemBunny } from '@/core/bunnyUtils/timelineItemSetup'
 import { buildClipSelectionId } from '@/core/types/timelineSelection'
+import { createDefaultTimelineExtraRenderConfig } from '@/core/timelineitem/type'
 
 /**
  * 时间轴项目操作模块
@@ -85,6 +85,7 @@ export function useTimelineItemOperations() {
 
       // 创建增强的默认配置
       const config = createDefaultTimelineItemConfig(storeMediaItem.mediaType, originalResolution)
+      const exRenderConfig = createDefaultTimelineExtraRenderConfig()
 
       // 创建时间轴项目数据
       const timelineItemData: UnifiedTimelineItemData = {
@@ -99,9 +100,11 @@ export function useTimelineItemOperations() {
           clipEndTime: availableDuration,
         },
         config: config,
+        exRenderConfig,
         animation: undefined, // 新创建的项目默认没有动画
         timelineStatus: timelineStatus, // 根据素材状态设置时间轴项目状态
         runtime: {
+          exRenderConfig: createDefaultTimelineExtraRenderConfig(),
           // ✅ 新创建的项目，未初始化，需要从 mediaItem 同步数据
           isInitialized: false,
         },
@@ -143,10 +146,6 @@ export function useTimelineItemOperations() {
           blendMode: DEFAULT_BLEND_MODE,
           // 等比缩放状态（默认开启）
           proportionalScale: true,
-          mask: createDefaultMaskConfig('rectangle', {
-            width: defaultWidth,
-            height: defaultHeight,
-          }),
           // 音频属性
           volume: 1,
           isMuted: false,
@@ -168,10 +167,6 @@ export function useTimelineItemOperations() {
           blendMode: DEFAULT_BLEND_MODE,
           // 等比缩放状态（默认开启）
           proportionalScale: true,
-          mask: createDefaultMaskConfig('rectangle', {
-            width: defaultWidth,
-            height: defaultHeight,
-          }),
         } as ImageMediaConfig
       }
 

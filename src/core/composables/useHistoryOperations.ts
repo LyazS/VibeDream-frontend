@@ -254,8 +254,8 @@ export function useHistoryOperations(
       return
     }
 
-    const currentTransitionOut = timelineItem.transitionOut
-      ? normalizeClipTransitionOutConfig(timelineItem.transitionOut)
+    const currentTransitionOut = TimelineItemQueries.getTransition(timelineItem)
+      ? normalizeClipTransitionOutConfig(TimelineItemQueries.getTransition(timelineItem))
       : undefined
     const normalizedNextTransitionOut = nextTransitionOut
       ? normalizeClipTransitionOutConfig(nextTransitionOut)
@@ -288,8 +288,8 @@ export function useHistoryOperations(
       return
     }
 
-    const currentFilterEffect = timelineItem.filterEffect
-      ? normalizeClipFilterConfig(timelineItem.filterEffect)
+    const currentFilterEffect = timelineItem.exRenderConfig?.filter
+      ? normalizeClipFilterConfig(timelineItem.exRenderConfig.filter)
       : undefined
     const normalizedNextFilterEffect = nextFilterEffect
       ? normalizeClipFilterConfig(nextFilterEffect)
@@ -353,8 +353,8 @@ export function useHistoryOperations(
       return
     }
 
-    const currentFilterEffect = timelineItem.filterEffect
-      ? normalizeClipFilterConfig(timelineItem.filterEffect)
+    const currentFilterEffect = timelineItem.exRenderConfig?.filter
+      ? normalizeClipFilterConfig(timelineItem.exRenderConfig.filter)
       : undefined
     const filterIntensityTrack = (timelineItem.animation?.groups as
       | Record<string, { keyframes?: unknown[] }>

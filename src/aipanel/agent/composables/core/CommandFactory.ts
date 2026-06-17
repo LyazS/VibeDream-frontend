@@ -20,6 +20,7 @@ import { ToggleTrackVisibilityCommand } from '@/core/modules/commands/ToggleTrac
 import { SplitTimelineItemCommand } from '@/core/modules/commands/SplitTimelineItemCommand'
 import type { MediaType } from '@/core/mediaitem/types'
 import type { UnifiedTimelineItemData } from '@/core/timelineitem/type'
+import { createDefaultTimelineExtraRenderConfig } from '@/core/timelineitem/type'
 import { MediaItemQueries } from '@/core/mediaitem'
 import { generateTimelineItemId } from '@/core/utils/idGenerator'
 import { computed } from 'vue'
@@ -469,9 +470,11 @@ export class CommandFactory {
         clipEndTime: clipEndFrames,
       },
       config: config,
+      exRenderConfig: createDefaultTimelineExtraRenderConfig(),
       animation: undefined,
       timelineStatus: 'loading', // 新项目为 loading 状态
       runtime: {
+        exRenderConfig: createDefaultTimelineExtraRenderConfig(),
         isInitialized: false, // 新创建的项目，未初始化
       },
     }
