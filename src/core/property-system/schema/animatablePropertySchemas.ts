@@ -2,7 +2,7 @@ import type { PropertyAnimationGroupId } from '@/core/timelineitem/bunnytype'
 import type { DirectPropertyId } from '@/core/property-system/mutation/types'
 import { normalizeAngle } from '@/core/utils/rotationTransform'
 
-export type AnimatablePropertyTarget = 'config' | 'maskConfig' | 'filter'
+export type AnimatablePropertyTarget = 'config' | 'mask' | 'filter'
 export type PropertyValueKind = 'number' | 'boolean' | 'color' | 'vec2'
 
 export interface AnimatablePropertySchema {
@@ -138,7 +138,7 @@ export const audioVolumeSchema: AnimatablePropertySchema = {
 export const maskCenterSchema: AnimatablePropertySchema = {
   propertyId: 'mask.center',
   animationGroupId: 'mask.center',
-  target: 'maskConfig',
+  target: 'mask',
   valueFields: ['centerX', 'centerY'],
   valueKind: 'vec2',
   supportsDirectCommit: true,
@@ -151,7 +151,7 @@ export const maskCenterSchema: AnimatablePropertySchema = {
 export const maskRectangleSizeSchema: AnimatablePropertySchema = {
   propertyId: 'mask.rectangle.size',
   animationGroupId: 'mask.rectangle.size',
-  target: 'maskConfig',
+  target: 'mask',
   valueFields: ['width', 'height'],
   valueKind: 'vec2',
   supportsDirectCommit: true,
@@ -164,7 +164,7 @@ export const maskRectangleSizeSchema: AnimatablePropertySchema = {
 export const maskEllipseSizeSchema: AnimatablePropertySchema = {
   propertyId: 'mask.ellipse.size',
   animationGroupId: 'mask.ellipse.size',
-  target: 'maskConfig',
+  target: 'mask',
   valueFields: ['ellipseWidth', 'ellipseHeight'],
   valueKind: 'vec2',
   supportsDirectCommit: true,
@@ -177,7 +177,7 @@ export const maskEllipseSizeSchema: AnimatablePropertySchema = {
 export const maskRectangleCornerRadiusSchema: AnimatablePropertySchema = {
   propertyId: 'mask.rectangle.cornerRadius',
   animationGroupId: 'mask.rectangle.cornerRadius',
-  target: 'maskConfig',
+  target: 'mask',
   valueFields: ['cornerRadius'],
   valueKind: 'number',
   supportsDirectCommit: true,
@@ -191,7 +191,7 @@ export const maskRectangleCornerRadiusSchema: AnimatablePropertySchema = {
 export const maskFeatherSchema: AnimatablePropertySchema = {
   propertyId: 'mask.feather',
   animationGroupId: 'mask.feather',
-  target: 'maskConfig',
+  target: 'mask',
   valueFields: ['outerRange'],
   valueKind: 'number',
   supportsDirectCommit: true,
@@ -205,7 +205,7 @@ export const maskFeatherSchema: AnimatablePropertySchema = {
 export const maskIntensitySchema: AnimatablePropertySchema = {
   propertyId: 'mask.intensity',
   animationGroupId: 'mask.intensity',
-  target: 'maskConfig',
+  target: 'mask',
   valueFields: ['decayRate'],
   valueKind: 'number',
   supportsDirectCommit: true,
@@ -219,7 +219,7 @@ export const maskIntensitySchema: AnimatablePropertySchema = {
 export const maskRotationSchema: AnimatablePropertySchema = {
   propertyId: 'mask.rotation',
   animationGroupId: 'mask.rotation',
-  target: 'maskConfig',
+  target: 'mask',
   valueFields: ['rotation'],
   valueKind: 'number',
   supportsDirectCommit: true,
@@ -233,7 +233,7 @@ export const maskRotationSchema: AnimatablePropertySchema = {
 export const maskMirrorLengthSchema: AnimatablePropertySchema = {
   propertyId: 'mask.mirror.length',
   animationGroupId: 'mask.mirror.length',
-  target: 'maskConfig',
+  target: 'mask',
   valueFields: ['length'],
   valueKind: 'number',
   supportsDirectCommit: true,

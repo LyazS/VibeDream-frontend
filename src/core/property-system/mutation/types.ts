@@ -10,7 +10,7 @@ import type {
 import type { AnimatablePropertyTarget } from '@/core/property-system/schema'
 import type { DynamicFilterParamPropertyId } from '@/core/property-system/schema/propertyIds'
 import type { MediaType } from '@/core/mediaitem'
-import type { UnifiedTimelineItemData } from '@/core/timelineitem'
+import type { TimelineExtraRenderConfig, UnifiedTimelineItemData } from '@/core/timelineitem'
 
 export type AnimatablePropertyId =
   | 'transform.rotation'
@@ -114,6 +114,13 @@ export interface AudioConfigPatchOperation {
   patch: Partial<AudioProps>
 }
 
+export interface ExtraRenderConfigPatchOperation {
+  kind: 'extra-render-config-patch'
+  timelineItemId: string
+  frame: number
+  patch: Partial<TimelineExtraRenderConfig>
+}
+
 export interface AnimationKeyframeUpdateOperation<G extends PropertyAnimationGroupId = PropertyAnimationGroupId> {
   kind: 'animation-keyframe-update'
   timelineItemId: string
@@ -151,6 +158,7 @@ export type ChangeOperation =
   | NoAnimationGroupPatchOperation
   | VisualConfigPatchOperation
   | AudioConfigPatchOperation
+  | ExtraRenderConfigPatchOperation
   | AnimationKeyframeUpdateOperation
   | AnimationKeyframeCreateOperation
   | AnimationKeyframeDeleteOperation

@@ -61,7 +61,8 @@ export class ChainBuilder {
 
     const renderConfig = TimelineItemQueries.getRenderConfig(item)
     const renderFilterEffect = TimelineItemQueries.getRenderFilter(item)
-    const hasMask = Boolean(renderConfig.mask?.enabled)
+    const renderMask = TimelineItemQueries.getRenderMask(item)
+    const hasMask = Boolean(renderMask?.enabled)
     const loadedFilterPackage = this.resolveLoadedFilterPackage(item)
     const hasFilter = Boolean(renderFilterEffect && loadedFilterPackage)
     const getEffectEvaluationFrame = () => this.params.getCurrentFrame()
@@ -96,7 +97,7 @@ export class ChainBuilder {
             itemTargetTextureId,
             maskedItemTextureId,
             this.params.targets,
-            () => TimelineItemQueries.getRenderConfig(item).mask,
+            () => TimelineItemQueries.getRenderMask(item),
           )]
         : []),
       ...(hasFilter && loadedFilterPackage
@@ -138,7 +139,7 @@ export class ChainBuilder {
 
   getSignature(item: VisualTimelineItem): string {
     const config = TimelineItemQueries.getRenderConfig(item)
-    const mask = config.mask
+    const mask = TimelineItemQueries.getRenderMask(item)
     const loadedFilterPackage = this.resolveLoadedFilterPackage(item)
     return [
       `mask:${mask?.enabled ? 'on' : 'off'}:${mask?.type ?? 'rectangle'}`,

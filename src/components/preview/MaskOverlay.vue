@@ -134,7 +134,10 @@ const {
 const shouldShowOverlay = computed(() => {
   if (props.isMultiSelectMode || unifiedStore.activePropertyTab !== 'mask') return false
   if (!selectedItem.value) return false
-  return TimelineItemQueries.hasVisualProperties(selectedItem.value)
+  return (
+    TimelineItemQueries.hasVisualProperties(selectedItem.value) &&
+    Boolean(TimelineItemQueries.getMask(selectedItem.value))
+  )
 })
 
 const overlayContext = computed<MaskOverlayContext | null>(() => {

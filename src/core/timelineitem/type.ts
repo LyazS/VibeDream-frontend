@@ -18,6 +18,7 @@ import type { BlendMode } from './blendMode'
 import type { ClipTransitionRuntime } from './transition'
 import type { ClipTransitionOutConfig } from '@/core/transition/types'
 import type { ClipFilterConfig } from '@/core/filter/types'
+import type { MaskConfig } from './mask'
 
 // 重新导出 bunnytype 中的类型供其他模块使用
 export type {
@@ -86,6 +87,7 @@ export type AudioPropPatch = Partial<AudioProps>
 export interface TimelineExtraRenderConfig {
   filter?: ClipFilterConfig
   transition?: ClipTransitionOutConfig
+  mask?: MaskConfig
 }
 
 export function createDefaultTimelineExtraRenderConfig(): TimelineExtraRenderConfig {

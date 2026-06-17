@@ -5,7 +5,6 @@ import type { TextMediaConfig } from '@/core/timelineitem/type'
 import type { TextStyleConfig } from '@/core/timelineitem/texttype'
 import type { UnifiedTimeRange } from '@/core/types/timeRange'
 import { DEFAULT_TEXT_STYLE } from '@/core/timelineitem/texttype'
-import { createDefaultMaskConfig } from '@/core/timelineitem/mask'
 import { DEFAULT_BLEND_MODE } from '@/core/timelineitem'
 import { createDefaultTimelineExtraRenderConfig } from '@/core/timelineitem/type'
 
@@ -78,10 +77,6 @@ export async function createTextTimelineItem(
     blendMode: DEFAULT_BLEND_MODE,
     // 等比缩放状态（默认开启）
     proportionalScale: true,
-    mask: createDefaultMaskConfig('rectangle', {
-      width: completeStyle.maxWidth ?? completeStyle.fontSize * 6,
-      height: completeStyle.fontSize * (completeStyle.lineHeight ?? 1.2),
-    }),
   }
 
   // 6. 创建统一时间轴项目（使用新架构，不包含sprite）

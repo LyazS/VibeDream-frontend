@@ -217,6 +217,22 @@ function getMaskTextureSizeFromConfig(config: Record<string, unknown>) {
   return getItemLocalSize(width, height)
 }
 
+function getMaskTextureSizeFromItem(item: UnifiedTimelineItemData<MediaType>) {
+  const config = getVisualConfigRecord(item)
+  return getMaskTextureSizeFromConfig(config)
+}
+
+function writeMaskConfig(item: UnifiedTimelineItemData<MediaType>, mask: ReturnType<typeof normalizeMaskConfig>) {
+  item.exRenderConfig = {
+    ...item.exRenderConfig,
+    mask,
+  }
+  item.runtime.exRenderConfig = {
+    ...item.runtime.exRenderConfig,
+    mask,
+  }
+}
+
 const animationGroupDefinitions: {
   [G in AnimationGroupId]: AnimationGroupDefinition<G>
 } = {
@@ -360,21 +376,20 @@ const animationGroupDefinitions: {
     supports: (item) => TimelineItemQueries.hasVisualProperties(item),
     isEnabled: (item) =>
       TimelineItemQueries.hasVisualProperties(item) &&
-      normalizeMaskConfig(TimelineItemQueries.getRenderConfig(item).mask).enabled,
+      normalizeMaskConfig(TimelineItemQueries.getRenderMask(item), getMaskTextureSizeFromItem(item)).enabled,
     getBaseValue: (item) => {
-      const config = getVisualConfigRecord(item)
-      return getMaskCenterValue(config.mask as never, getMaskTextureSizeFromConfig(config))
+      return getMaskCenterValue(TimelineItemQueries.getRenderMask(item), getMaskTextureSizeFromItem(item))
     },
     applyValue: (item, value) => {
       if (!TimelineItemQueries.hasVisualProperties(item)) return
-      item.config.mask = applyMaskCenterValue(
-        item.config.mask,
+      writeMaskConfig(item, applyMaskCenterValue(
+        TimelineItemQueries.getMask(item),
         value,
         getItemLocalSize(item.config.width, item.config.height),
-      )
+      ))
     },
-    applyValueToConfig: (config, value) => {
-      config.mask = applyMaskCenterValue(config.mask as never, value, getMaskTextureSizeFromConfig(config))
+    applyValueToConfig: (maskConfig, value) => {
+      Object.assign(maskConfig, applyMaskCenterValue(maskConfig as never, value))
     },
     interpolate: interpolateNumericRecord,
     uiMeta: { order: 60, allowDeferred: true, allowNavigation: true },
@@ -386,21 +401,20 @@ const animationGroupDefinitions: {
     supports: (item) => TimelineItemQueries.hasVisualProperties(item),
     isEnabled: (item) =>
       TimelineItemQueries.hasVisualProperties(item) &&
-      normalizeMaskConfig(TimelineItemQueries.getRenderConfig(item).mask).enabled,
+      normalizeMaskConfig(TimelineItemQueries.getRenderMask(item), getMaskTextureSizeFromItem(item)).enabled,
     getBaseValue: (item) => {
-      const config = getVisualConfigRecord(item)
-      return getMaskRotationValue(config.mask as never, getMaskTextureSizeFromConfig(config))
+      return getMaskRotationValue(TimelineItemQueries.getRenderMask(item), getMaskTextureSizeFromItem(item))
     },
     applyValue: (item, value) => {
       if (!TimelineItemQueries.hasVisualProperties(item)) return
-      item.config.mask = applyMaskRotationValue(
-        item.config.mask,
+      writeMaskConfig(item, applyMaskRotationValue(
+        TimelineItemQueries.getMask(item),
         value,
         getItemLocalSize(item.config.width, item.config.height),
-      )
+      ))
     },
-    applyValueToConfig: (config, value) => {
-      config.mask = applyMaskRotationValue(config.mask as never, value, getMaskTextureSizeFromConfig(config))
+    applyValueToConfig: (maskConfig, value) => {
+      Object.assign(maskConfig, applyMaskRotationValue(maskConfig as never, value))
     },
     interpolate: interpolateNumericRecord,
     uiMeta: { order: 70, allowDeferred: true, allowNavigation: true },
@@ -412,21 +426,20 @@ const animationGroupDefinitions: {
     supports: (item) => TimelineItemQueries.hasVisualProperties(item),
     isEnabled: (item) =>
       TimelineItemQueries.hasVisualProperties(item) &&
-      normalizeMaskConfig(TimelineItemQueries.getRenderConfig(item).mask).enabled,
+      normalizeMaskConfig(TimelineItemQueries.getRenderMask(item), getMaskTextureSizeFromItem(item)).enabled,
     getBaseValue: (item) => {
-      const config = getVisualConfigRecord(item)
-      return getMaskFeatherValue(config.mask as never, getMaskTextureSizeFromConfig(config))
+      return getMaskFeatherValue(TimelineItemQueries.getRenderMask(item), getMaskTextureSizeFromItem(item))
     },
     applyValue: (item, value) => {
       if (!TimelineItemQueries.hasVisualProperties(item)) return
-      item.config.mask = applyMaskFeatherValue(
-        item.config.mask,
+      writeMaskConfig(item, applyMaskFeatherValue(
+        TimelineItemQueries.getMask(item),
         value,
         getItemLocalSize(item.config.width, item.config.height),
-      )
+      ))
     },
-    applyValueToConfig: (config, value) => {
-      config.mask = applyMaskFeatherValue(config.mask as never, value, getMaskTextureSizeFromConfig(config))
+    applyValueToConfig: (maskConfig, value) => {
+      Object.assign(maskConfig, applyMaskFeatherValue(maskConfig as never, value))
     },
     interpolate: interpolateNumericRecord,
     uiMeta: { order: 70, allowDeferred: true, allowNavigation: true },
@@ -438,21 +451,20 @@ const animationGroupDefinitions: {
     supports: (item) => TimelineItemQueries.hasVisualProperties(item),
     isEnabled: (item) =>
       TimelineItemQueries.hasVisualProperties(item) &&
-      normalizeMaskConfig(TimelineItemQueries.getRenderConfig(item).mask).enabled,
+      normalizeMaskConfig(TimelineItemQueries.getRenderMask(item), getMaskTextureSizeFromItem(item)).enabled,
     getBaseValue: (item) => {
-      const config = getVisualConfigRecord(item)
-      return getMaskIntensityValue(config.mask as never, getMaskTextureSizeFromConfig(config))
+      return getMaskIntensityValue(TimelineItemQueries.getRenderMask(item), getMaskTextureSizeFromItem(item))
     },
     applyValue: (item, value) => {
       if (!TimelineItemQueries.hasVisualProperties(item)) return
-      item.config.mask = applyMaskIntensityValue(
-        item.config.mask,
+      writeMaskConfig(item, applyMaskIntensityValue(
+        TimelineItemQueries.getMask(item),
         value,
         getItemLocalSize(item.config.width, item.config.height),
-      )
+      ))
     },
-    applyValueToConfig: (config, value) => {
-      config.mask = applyMaskIntensityValue(config.mask as never, value, getMaskTextureSizeFromConfig(config))
+    applyValueToConfig: (maskConfig, value) => {
+      Object.assign(maskConfig, applyMaskIntensityValue(maskConfig as never, value))
     },
     interpolate: interpolateNumericRecord,
     uiMeta: { order: 80, allowDeferred: true, allowNavigation: true },
@@ -464,25 +476,23 @@ const animationGroupDefinitions: {
     supports: (item) => TimelineItemQueries.hasVisualProperties(item),
     isEnabled: (item) =>
       TimelineItemQueries.hasVisualProperties(item) &&
-      normalizeMaskConfig(TimelineItemQueries.getRenderConfig(item).mask).type === 'rectangle',
+      normalizeMaskConfig(TimelineItemQueries.getRenderMask(item), getMaskTextureSizeFromItem(item)).type === 'rectangle',
     getBaseValue: (item) => {
-      const config = getVisualConfigRecord(item)
-      return getMaskRectangleSizeValue(config.mask as never, getMaskTextureSizeFromConfig(config))
+      return getMaskRectangleSizeValue(
+        TimelineItemQueries.getRenderMask(item),
+        getMaskTextureSizeFromItem(item),
+      )
     },
     applyValue: (item, value) => {
       if (!TimelineItemQueries.hasVisualProperties(item)) return
-      item.config.mask = applyMaskRectangleSizeValue(
-        item.config.mask,
+      writeMaskConfig(item, applyMaskRectangleSizeValue(
+        TimelineItemQueries.getMask(item),
         value,
         getItemLocalSize(item.config.width, item.config.height),
-      )
+      ))
     },
-    applyValueToConfig: (config, value) => {
-      config.mask = applyMaskRectangleSizeValue(
-        config.mask as never,
-        value,
-        getMaskTextureSizeFromConfig(config),
-      )
+    applyValueToConfig: (maskConfig, value) => {
+      Object.assign(maskConfig, applyMaskRectangleSizeValue(maskConfig as never, value))
     },
     interpolate: interpolateNumericRecord,
     uiMeta: { order: 90, allowDeferred: true, allowNavigation: true },
@@ -494,25 +504,23 @@ const animationGroupDefinitions: {
     supports: (item) => TimelineItemQueries.hasVisualProperties(item),
     isEnabled: (item) =>
       TimelineItemQueries.hasVisualProperties(item) &&
-      normalizeMaskConfig(TimelineItemQueries.getRenderConfig(item).mask).type === 'rectangle',
+      normalizeMaskConfig(TimelineItemQueries.getRenderMask(item), getMaskTextureSizeFromItem(item)).type === 'rectangle',
     getBaseValue: (item) => {
-      const config = getVisualConfigRecord(item)
-      return getMaskRectangleCornerRadiusValue(config.mask as never, getMaskTextureSizeFromConfig(config))
+      return getMaskRectangleCornerRadiusValue(
+        TimelineItemQueries.getRenderMask(item),
+        getMaskTextureSizeFromItem(item),
+      )
     },
     applyValue: (item, value) => {
       if (!TimelineItemQueries.hasVisualProperties(item)) return
-      item.config.mask = applyMaskRectangleCornerRadiusValue(
-        item.config.mask,
+      writeMaskConfig(item, applyMaskRectangleCornerRadiusValue(
+        TimelineItemQueries.getMask(item),
         value,
         getItemLocalSize(item.config.width, item.config.height),
-      )
+      ))
     },
-    applyValueToConfig: (config, value) => {
-      config.mask = applyMaskRectangleCornerRadiusValue(
-        config.mask as never,
-        value,
-        getMaskTextureSizeFromConfig(config),
-      )
+    applyValueToConfig: (maskConfig, value) => {
+      Object.assign(maskConfig, applyMaskRectangleCornerRadiusValue(maskConfig as never, value))
     },
     interpolate: interpolateNumericRecord,
     uiMeta: { order: 100, allowDeferred: true, allowNavigation: true },
@@ -524,21 +532,23 @@ const animationGroupDefinitions: {
     supports: (item) => TimelineItemQueries.hasVisualProperties(item),
     isEnabled: (item) =>
       TimelineItemQueries.hasVisualProperties(item) &&
-      normalizeMaskConfig(TimelineItemQueries.getRenderConfig(item).mask).type === 'ellipse',
+      normalizeMaskConfig(TimelineItemQueries.getRenderMask(item), getMaskTextureSizeFromItem(item)).type === 'ellipse',
     getBaseValue: (item) => {
-      const config = getVisualConfigRecord(item)
-      return getMaskEllipseSizeValue(config.mask as never, getMaskTextureSizeFromConfig(config))
+      return getMaskEllipseSizeValue(
+        TimelineItemQueries.getRenderMask(item),
+        getMaskTextureSizeFromItem(item),
+      )
     },
     applyValue: (item, value) => {
       if (!TimelineItemQueries.hasVisualProperties(item)) return
-      item.config.mask = applyMaskEllipseSizeValue(
-        item.config.mask,
+      writeMaskConfig(item, applyMaskEllipseSizeValue(
+        TimelineItemQueries.getMask(item),
         value,
         getItemLocalSize(item.config.width, item.config.height),
-      )
+      ))
     },
-    applyValueToConfig: (config, value) => {
-      config.mask = applyMaskEllipseSizeValue(config.mask as never, value, getMaskTextureSizeFromConfig(config))
+    applyValueToConfig: (maskConfig, value) => {
+      Object.assign(maskConfig, applyMaskEllipseSizeValue(maskConfig as never, value))
     },
     interpolate: interpolateNumericRecord,
     uiMeta: { order: 110, allowDeferred: true, allowNavigation: true },
@@ -550,7 +560,7 @@ const animationGroupDefinitions: {
     supports: (item) => TimelineItemQueries.hasVisualProperties(item),
     isEnabled: (item) =>
       TimelineItemQueries.hasVisualProperties(item) &&
-      normalizeMaskConfig(TimelineItemQueries.getRenderConfig(item).mask).type === 'linear',
+      normalizeMaskConfig(TimelineItemQueries.getRenderMask(item), getMaskTextureSizeFromItem(item)).type === 'linear',
     getBaseValue: () => ({}),
     applyValue: () => {},
     applyValueToConfig: () => {},
@@ -564,21 +574,20 @@ const animationGroupDefinitions: {
     supports: (item) => TimelineItemQueries.hasVisualProperties(item),
     isEnabled: (item) =>
       TimelineItemQueries.hasVisualProperties(item) &&
-      normalizeMaskConfig(TimelineItemQueries.getRenderConfig(item).mask).type === 'mirror',
+      normalizeMaskConfig(TimelineItemQueries.getRenderMask(item), getMaskTextureSizeFromItem(item)).type === 'mirror',
     getBaseValue: (item) => {
-      const config = getVisualConfigRecord(item)
-      return getMaskMirrorValue(config.mask as never, getMaskTextureSizeFromConfig(config))
+      return getMaskMirrorValue(TimelineItemQueries.getRenderMask(item), getMaskTextureSizeFromItem(item))
     },
     applyValue: (item, value) => {
       if (!TimelineItemQueries.hasVisualProperties(item)) return
-      item.config.mask = applyMaskMirrorValue(
-        item.config.mask,
+      writeMaskConfig(item, applyMaskMirrorValue(
+        TimelineItemQueries.getMask(item),
         value,
         getItemLocalSize(item.config.width, item.config.height),
-      )
+      ))
     },
-    applyValueToConfig: (config, value) => {
-      config.mask = applyMaskMirrorValue(config.mask as never, value, getMaskTextureSizeFromConfig(config))
+    applyValueToConfig: (maskConfig, value) => {
+      Object.assign(maskConfig, applyMaskMirrorValue(maskConfig as never, value))
     },
     interpolate: interpolateNumericRecord,
     uiMeta: { order: 130, allowDeferred: true, allowNavigation: true },
