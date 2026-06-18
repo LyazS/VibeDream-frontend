@@ -123,7 +123,7 @@ async function updateTransition(nextPatch: {
   if (!props.selectedTimelineItem) return
 
   unifiedStore.pause()
-  await unifiedStore.updateTransitionOutWithHistory(props.selectedTimelineItem.id, {
+  await unifiedStore.updateTransitionConfigWithHistory(props.selectedTimelineItem.id, {
     ...transitionConfig.value,
     ...nextPatch,
   })

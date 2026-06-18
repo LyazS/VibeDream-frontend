@@ -6,6 +6,7 @@ import type { MediaIndexStatus, UnifiedMediaItemData } from '@/core/mediaitem/ty
 import type { UnifiedTimelineItemData } from '@/core/timelineitem/type'
 import { createDefaultTimelineExtraRenderConfig } from '@/core/timelineitem/type'
 import { DEFAULT_BLEND_MODE } from '@/core/timelineitem'
+import { TimelineItemQueries } from '@/core/timelineitem/queries'
 import { BunnyClip } from '@/core/mediabunny/bunny-clip'
 import { calculateThumbnailSize, createCanvasWithSize, drawImageOnCanvas } from '@/core/bunnyUtils/thumbUtils'
 import { ThumbnailMode } from '@/constants/ThumbnailConstants'
@@ -170,6 +171,22 @@ function createVideoSegmentTimelineItem(
 ): UnifiedTimelineItemData<'video'> {
   const width = mediaItem.runtime.bunny?.originalWidth || 1920
   const height = mediaItem.runtime.bunny?.originalHeight || 1080
+  const baseRenderConfig = {
+    visual: {
+      x: 0,
+      y: 0,
+      width,
+      height,
+      rotation: 0,
+      opacity: 1,
+      blendMode: DEFAULT_BLEND_MODE,
+      proportionalScale: true,
+    },
+    audio: {
+      volume: 1,
+      isMuted: false,
+    },
+  }
 
   return {
     id: `rerank-${mediaItem.id}-${startFrame}`,
@@ -183,18 +200,7 @@ function createVideoSegmentTimelineItem(
       clipStartTime: startFrame,
       clipEndTime: endFrame,
     },
-    config: {
-      x: 0,
-      y: 0,
-      width,
-      height,
-      rotation: 0,
-      opacity: 1,
-      blendMode: DEFAULT_BLEND_MODE,
-      proportionalScale: true,
-      volume: 1,
-      isMuted: false,
-    },
+    baseRenderConfig,
     exRenderConfig: createDefaultTimelineExtraRenderConfig(),
     runtime: {
       exRenderConfig: createDefaultTimelineExtraRenderConfig(),

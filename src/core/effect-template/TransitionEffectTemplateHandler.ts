@@ -136,7 +136,7 @@ export class TransitionEffectTemplateHandler
     }
 
     store.pause()
-    await store.updateTransitionOutWithHistory(candidate.sourceItemId, {
+    await store.updateTransitionConfigWithHistory(candidate.sourceItemId, {
       effectPackageId: dragData.effectPackageId,
       templateId: dragData.templateId,
       packageVersion: dragData.packageVersion,

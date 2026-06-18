@@ -90,14 +90,14 @@ const transitionConfig = computed(() =>
 )
 
 const transitionLabel = computed(() => {
-  const transitionOut = TimelineItemQueries.getTransition(sourceTimelineItem.value)
-  const effectPackageId = transitionOut?.effectPackageId
+  const transitionConfig = TimelineItemQueries.getTransition(sourceTimelineItem.value)
+  const effectPackageId = transitionConfig?.effectPackageId
   if (!effectPackageId) {
     return t('properties.transition.title')
   }
 
   return effectTemplateRegistry.getPackageState(effectPackageId)?.meta?.name.zh
-    || transitionOut?.packagePayload?.manifestSnapshot.name.zh
+    || transitionConfig?.packagePayload?.manifestSnapshot.name.zh
     || t('properties.transition.title')
 })
 
@@ -257,7 +257,7 @@ async function stopResize() {
     return
   }
 
-  await unifiedStore.updateTransitionOutWithHistory(sourceTimelineItem.value.id, {
+  await unifiedStore.updateTransitionConfigWithHistory(sourceTimelineItem.value.id, {
     ...transitionConfig.value,
     durationFrames: nextDurationFrames,
   })

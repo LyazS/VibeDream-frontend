@@ -10,7 +10,7 @@
       />
 
       <KeyframedSliderField
-        v-if="hasFilterEffect"
+        v-if="hasFilterConfig"
         class="filter-properties-group__intensity"
         :label="t('properties.filter.intensity')"
         :state="getFilterChannelButtonState()"
@@ -18,7 +18,7 @@
         :disabled="!canOperateFilterNumbers || !isFilterReady"
         :has-previous="hasPreviousFilterKeyframe()"
         :has-next="hasNextFilterKeyframe()"
-        :value="filterConfig.intensity"
+        :value="normalizedFilterConfig.intensity"
         :min="0"
         :max="1"
         :step="0.01"
@@ -134,9 +134,9 @@ const selectedTimelineItem = computed(() => props.selectedTimelineItem)
 const currentFrame = computed(() => props.currentFrame)
 
 const {
-  filterEffect,
   filterConfig,
-  hasFilterEffect,
+  normalizedFilterConfig,
+  hasFilterConfig,
   canOperateFilterNumbers,
   getFilterChannelButtonState,
   hasPreviousFilterKeyframe,
@@ -159,12 +159,12 @@ const {
   currentFrame,
 })
 
-const currentEffectPackageId = computed(() => filterEffect.value?.effectPackageId)
+const currentEffectPackageId = computed(() => filterConfig.value?.effectPackageId)
 const dynamicFilterParamViewModels = useDynamicFilterParamViewModels({
   selectedTimelineItem,
   currentFrame,
-  filterConfig,
-  hasFilterEffect,
+  filterConfig: normalizedFilterConfig,
+  hasFilterEffect: hasFilterConfig,
 })
 const isFilterReady = computed(() => {
   if (!currentEffectPackageId.value) {

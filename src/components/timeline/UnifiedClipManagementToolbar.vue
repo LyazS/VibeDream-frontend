@@ -218,7 +218,7 @@ async function splitSelectedClip() {
 
 async function deleteSelectedSelection() {
   if (selectedTransitionSourceItemId.value) {
-    await unifiedStore.updateTransitionOutWithHistory(selectedTransitionSourceItemId.value, undefined)
+    await unifiedStore.updateTransitionConfigWithHistory(selectedTransitionSourceItemId.value, undefined)
     console.log('✅ 转场删除成功')
     return
   }
@@ -370,9 +370,9 @@ function debugTimeline() {
           }
         }
 
-        // 显示配置信息（如果有的话）
-        if (item.config && Object.keys(item.config).length > 0) {
-          console.log('配置信息:', item.config)
+        // 显示基础渲染配置信息（如果有的话）
+        if (item.baseRenderConfig && Object.keys(item.baseRenderConfig).length > 0) {
+          console.log('基础渲染配置:', item.baseRenderConfig)
         }
 
         console.groupEnd()
@@ -427,9 +427,9 @@ function debugTimeline() {
     console.log('时间轴结束 (秒):', framesToSeconds(timeRange.timelineEndTime))
     console.log('持续时长 (秒):', framesToSeconds(duration))
 
-    // 显示配置信息
-    if (item.config && Object.keys(item.config).length > 0) {
-      console.log('配置信息:', item.config)
+    // 显示基础渲染配置信息
+    if (item.baseRenderConfig && Object.keys(item.baseRenderConfig).length > 0) {
+      console.log('基础渲染配置:', item.baseRenderConfig)
     }
 
     console.groupEnd()

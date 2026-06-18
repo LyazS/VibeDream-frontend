@@ -51,11 +51,11 @@ const sourceClipName = computed(() => {
 
 const templateName = computed(() => {
   const sourceItem = unifiedStore.getTimelineItem(props.overlay.sourceItemId)
-  const transitionOut = TimelineItemQueries.getTransition(sourceItem)
-  const effectPackageId = transitionOut?.effectPackageId
+  const transitionConfig = TimelineItemQueries.getTransition(sourceItem)
+  const effectPackageId = transitionConfig?.effectPackageId
   if (!effectPackageId) return '-'
   return effectTemplateRegistry.getPackageState(effectPackageId)?.meta?.name.zh
-    || transitionOut?.packagePayload?.manifestSnapshot.name.zh
+    || transitionConfig?.packagePayload?.manifestSnapshot.name.zh
     || effectPackageId
 })
 

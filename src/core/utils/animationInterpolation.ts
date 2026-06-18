@@ -1,6 +1,6 @@
 import type { MediaType } from '@/core/mediaitem'
-import type { UnifiedTimelineItemData } from '@/core/timelineitem/type'
-import type { GetConfigs, PropertyAnimationGroupId } from '@/core/timelineitem/bunnytype'
+import type { UnifiedTimelineItemData, TimelineBaseRenderConfig } from '@/core/timelineitem/type'
+import type { PropertyAnimationGroupId } from '@/core/timelineitem/bunnytype'
 import type { ClipFilterConfig } from '@/core/filter/types'
 import type { MaskConfig } from '@/core/timelineitem/mask'
 import { getItemLocalSize, normalizeMaskConfig } from '@/core/timelineitem/mask'
@@ -16,12 +16,13 @@ import {
   getFilterParamOverlay,
 } from '@/core/property-system/render-state'
 import { filterIntensitySchema } from '@/core/property-system/schema'
+import { cloneDeep } from 'lodash'
 
 export function createBaseRenderConfig(item: UnifiedTimelineItemData<MediaType>) {
-  return { ...item.config }
+  return cloneDeep(TimelineItemQueries.getBaseRenderConfig(item))
 }
 
-export function createBaseRenderFilterEffect(
+export function createBaseRenderFilterConfig(
   item: UnifiedTimelineItemData<MediaType>,
 ): ClipFilterConfig | undefined {
   const filterConfig = item.exRenderConfig?.filter
@@ -34,8 +35,9 @@ export function createBaseRenderMask(item: UnifiedTimelineItemData<MediaType>): 
   }
 
   const maskConfig = item.exRenderConfig?.mask
+  const visualConfig = TimelineItemQueries.getVisualRenderConfig(item)
   return maskConfig
-    ? normalizeMaskConfig(maskConfig, getItemLocalSize(item.config.width, item.config.height))
+    ? normalizeMaskConfig(maskConfig, getItemLocalSize(visualConfig?.width ?? 0, visualConfig?.height ?? 0))
     : undefined
 }
 
@@ -62,19 +64,27 @@ function isFrameInAnimationResolveRange(
 export function resolveRenderConfigAtFrame<T extends MediaType>(
   item: UnifiedTimelineItemData<T>,
   currentAbsoluteFrame: number,
-): GetConfigs<T> {
-  const renderConfig = createBaseRenderConfig(item) as GetConfigs<T>
+): TimelineBaseRenderConfig<T> {
+  const renderConfig = createBaseRenderConfig(item) as TimelineBaseRenderConfig<T>
 
   if (!isFrameInAnimationResolveRange(item, currentAbsoluteFrame)) {
     return renderConfig
   }
 
-  const mutableRenderConfig = renderConfig as unknown as Record<string, unknown>
   for (const groupId of getActiveAnimationGroups(item)) {
     const definition = AnimationRegistry.get(groupId)
-    if (definition.scope === 'transform' || definition.scope === 'audio') {
+    if (definition.scope === 'transform') {
+      const visualConfig = (renderConfig as Record<string, any>).visual
+      if (!visualConfig) continue
       definition.applyValueToConfig(
-        mutableRenderConfig,
+        visualConfig,
+        getCurrentGroupValue(item, currentAbsoluteFrame, groupId),
+      )
+    } else if (definition.scope === 'audio') {
+      const audioConfig = (renderConfig as Record<string, any>).audio
+      if (!audioConfig) continue
+      definition.applyValueToConfig(
+        audioConfig,
         getCurrentGroupValue(item, currentAbsoluteFrame, groupId),
       )
     }
@@ -93,7 +103,7 @@ export function resolveRenderMaskAtFrame(
     return renderMask
   }
 
-  const visualConfig = item.config as { width: number; height: number }
+  const visualConfig = TimelineItemQueries.getVisualRenderConfig(item)
   const mutableMask = renderMask as unknown as Record<string, unknown>
   for (const groupId of getActiveAnimationGroups(item)) {
     const definition = AnimationRegistry.get(groupId)
@@ -108,47 +118,47 @@ export function resolveRenderMaskAtFrame(
 
   return normalizeMaskConfig(
     mutableMask as Partial<MaskConfig>,
-    getItemLocalSize(visualConfig.width, visualConfig.height),
+    getItemLocalSize(visualConfig?.width ?? 0, visualConfig?.height ?? 0),
   )
 }
 
-export function resolveRenderFilterEffectAtFrame(
+export function resolveRenderFilterConfigAtFrame(
   item: UnifiedTimelineItemData<MediaType>,
   currentAbsoluteFrame: number,
 ): ClipFilterConfig | undefined {
-  const renderFilterEffect = createBaseRenderFilterEffect(item)
+  const renderFilterConfig = createBaseRenderFilterConfig(item)
 
-  if (!renderFilterEffect || !isFrameInAnimationResolveRange(item, currentAbsoluteFrame)) {
-    return renderFilterEffect
+  if (!renderFilterConfig || !isFrameInAnimationResolveRange(item, currentAbsoluteFrame)) {
+    return renderFilterConfig
   }
 
-  const mutableFilterEffect = renderFilterEffect as unknown as Record<string, unknown>
+  const mutableFilterConfig = renderFilterConfig as unknown as Record<string, unknown>
   for (const groupId of getActiveAnimationGroups(item)) {
     const definition = AnimationRegistry.get(groupId)
     if (definition.scope !== 'filter') {
       continue
     }
     definition.applyValueToConfig(
-      mutableFilterEffect,
+      mutableFilterConfig,
       getCurrentGroupValue(item, currentAbsoluteFrame, groupId),
     )
   }
 
-  const resolvedFilterEffect = normalizeClipFilterConfig(mutableFilterEffect as Partial<ClipFilterConfig>)
+  const resolvedFilterConfig = normalizeClipFilterConfig(mutableFilterConfig as Partial<ClipFilterConfig>)
   const filterIntensityOverlay = getFilterIntensityOverlay(item.id)
   const filterParamOverlay = getFilterParamOverlay(item.id)
 
   if (!filterIntensityOverlay && !filterParamOverlay) {
-    return resolvedFilterEffect
+    return resolvedFilterConfig
   }
 
   return normalizeClipFilterConfig({
-    ...resolvedFilterEffect,
+    ...resolvedFilterConfig,
     ...(filterIntensityOverlay
       ? { [filterIntensitySchema.valueFields[0]]: filterIntensityOverlay.intensity }
       : {}),
     params: {
-      ...resolvedFilterEffect.params,
+      ...resolvedFilterConfig.params,
       ...(filterParamOverlay?.params ?? {}),
     },
   })
@@ -159,11 +169,11 @@ export function applyAnimationToConfig(
   currentAbsoluteFrame: number,
 ): void {
   item.runtime.renderConfig = resolveRenderConfigAtFrame(item, currentAbsoluteFrame)
-  const resolvedFilterEffect = resolveRenderFilterEffectAtFrame(item, currentAbsoluteFrame)
+  const resolvedFilterConfig = resolveRenderFilterConfigAtFrame(item, currentAbsoluteFrame)
   const resolvedMask = resolveRenderMaskAtFrame(item, currentAbsoluteFrame)
   item.runtime.exRenderConfig = {
     ...item.runtime.exRenderConfig,
-    filter: resolvedFilterEffect,
+    filter: resolvedFilterConfig,
     mask: resolvedMask,
   }
 }

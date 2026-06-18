@@ -403,7 +403,7 @@
 import { computed } from 'vue'
 import { useAppI18n } from '@/core/composables/useI18n'
 import { useUnifiedStore } from '@/core/unifiedStore'
-import { isTextTimelineItem } from '@/core/timelineitem/queries'
+import { TimelineItemQueries, isTextTimelineItem } from '@/core/timelineitem/queries'
 import { useUnifiedKeyframeTransformControls } from '@/core/composables'
 import type { UnifiedTimelineItemData } from '@/core/timelineitem/type'
 import type { TextStyleConfig } from '@/core/timelineitem/texttype'
@@ -438,7 +438,7 @@ function getCommitContext(item: UnifiedTimelineItemData<'text'>) {
 // 获取当前文本内容
 const localText = computed(() => {
   if (props.selectedTimelineItem && isTextTimelineItem(props.selectedTimelineItem)) {
-    return props.selectedTimelineItem.config.text
+    return TimelineItemQueries.getTextRenderConfig(props.selectedTimelineItem)?.text ?? ''
   }
   return ''
 })
@@ -446,7 +446,10 @@ const localText = computed(() => {
 // 获取当前文本样式
 const localStyle = computed<TextStyleConfig>(() => {
   if (props.selectedTimelineItem && isTextTimelineItem(props.selectedTimelineItem)) {
-    return { ...props.selectedTimelineItem.config.style }
+    const style = TimelineItemQueries.getTextRenderConfig(props.selectedTimelineItem)?.style
+    if (style) {
+      return { ...style }
+    }
   }
   return {
     fontSize: 48,

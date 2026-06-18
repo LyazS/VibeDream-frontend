@@ -23,6 +23,7 @@ import { normalizeClipFilterConfig } from '@/core/timelineitem/filter'
 import { TimelineItemQueries } from '@/core/timelineitem/queries'
 import { rebuildTextRuntime } from '@/core/timelineitem/textRebuild'
 import type { AnimationGroupId } from '@/core/timelineitem/bunnytype'
+import type { AudioProps, VisualProps } from '@/core/timelineitem/type'
 import {
   applyMaskGroupValue,
   getItemLocalSize,
@@ -70,9 +71,9 @@ export class ApplyChangePlanCommand implements SimpleCommand {
       if (operation.kind === 'no-animation-group-patch') {
         this.applyStaticPatch(item, operation)
       } else if (operation.kind === 'visual-config-patch') {
-        Object.assign(item.config, operation.patch)
+        TimelineItemQueries.patchVisualRenderConfig(item, operation.patch)
       } else if (operation.kind === 'audio-config-patch') {
-        Object.assign(item.config, operation.patch)
+        TimelineItemQueries.patchAudioRenderConfig(item, operation.patch)
       } else if (operation.kind === 'extra-render-config-patch') {
         item.exRenderConfig = {
           ...item.exRenderConfig,
@@ -144,8 +145,13 @@ export class ApplyChangePlanCommand implements SimpleCommand {
     item: UnifiedTimelineItemData,
     operation: Extract<ChangeOperation, { kind: 'no-animation-group-patch' }>,
   ): void {
-    if (operation.target === 'config') {
-      Object.assign(item.config, operation.patch)
+    if (operation.target === 'visual') {
+      TimelineItemQueries.patchVisualRenderConfig(item, operation.patch as Partial<VisualProps>)
+      return
+    }
+
+    if (operation.target === 'audio') {
+      TimelineItemQueries.patchAudioRenderConfig(item, operation.patch as Partial<AudioProps>)
       return
     }
 
@@ -207,7 +213,8 @@ export class ApplyChangePlanCommand implements SimpleCommand {
     if (!TimelineItemQueries.hasVisualProperties(item)) return
 
     const currentMask = TimelineItemQueries.getMask(item)
-    const textureSize = getItemLocalSize(item.config.width, item.config.height)
+    const visualConfig = TimelineItemQueries.getVisualRenderConfig(item)
+    const textureSize = getItemLocalSize(visualConfig?.width ?? 0, visualConfig?.height ?? 0)
     const nextMask = applyMaskGroupValue(currentMask, groupId, patch, textureSize)
 
     item.exRenderConfig = {

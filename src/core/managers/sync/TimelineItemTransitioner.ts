@@ -117,12 +117,10 @@ export class TimelineItemTransitioner {
       (TimelineItemQueries.isVideoTimelineItem(timelineItem) ||
         TimelineItemQueries.isImageTimelineItem(timelineItem))
     ) {
-      // 保留现有的配置，只更新尺寸相关字段
-      const currentConfig = timelineItem.config
-
-      // 更新宽度和高度
-      currentConfig.width = originalSize.width
-      currentConfig.height = originalSize.height
+      TimelineItemQueries.patchVisualRenderConfig(timelineItem, {
+        width: originalSize.width,
+        height: originalSize.height,
+      })
     } else if (!originalSize) {
       console.warn(`⚠️ [TimelineItemTransitioner] 无法获取媒体原始尺寸: ${this.mediaItem.id}`)
     }

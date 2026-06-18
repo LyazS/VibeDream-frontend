@@ -13,12 +13,12 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import type { ContentTemplateProps } from '@/core/types/clipRenderer'
+import { TimelineItemQueries } from '@/core/timelineitem/queries'
 
 const props = defineProps<ContentTemplateProps<'text'>>()
 
 const previewText = computed(() => {
-  const config = props.data.config
-  const content = config.text || '文本内容'
+  const content = TimelineItemQueries.getTextRenderConfig(props.data)?.text || '文本内容'
 
   if (!content || content.trim() === '') {
     return '文本内容'

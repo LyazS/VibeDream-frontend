@@ -147,64 +147,64 @@ export function createUnifiedTimelineModule(registry: ModuleRegistry) {
     refreshTransitionItems()
   }
 
-  function setTimelineItemTransitionOutForCmd(
+  function setTimelineItemTransitionConfigForCmd(
     timelineItemId: string,
-    transitionOut?: ClipTransitionOutConfig,
+    transitionConfig?: ClipTransitionOutConfig,
   ) {
     const item = getTimelineItem(timelineItemId)
     if (!item) return
 
-    const nextTransitionOut = transitionOut
+    const nextTransitionConfig = transitionConfig
       ? normalizeClipTransitionOutConfig({
-          effectPackageId: transitionOut.effectPackageId,
-          templateId: transitionOut.templateId,
-          packageVersion: transitionOut.packageVersion,
-          catalogVersion: transitionOut.catalogVersion,
-          durationFrames: transitionOut.durationFrames,
-          params: transitionOut.params,
-          ...(transitionOut.packagePayload ? { packagePayload: transitionOut.packagePayload } : {}),
+          effectPackageId: transitionConfig.effectPackageId,
+          templateId: transitionConfig.templateId,
+          packageVersion: transitionConfig.packageVersion,
+          catalogVersion: transitionConfig.catalogVersion,
+          durationFrames: transitionConfig.durationFrames,
+          params: transitionConfig.params,
+          ...(transitionConfig.packagePayload ? { packagePayload: transitionConfig.packagePayload } : {}),
         })
       : undefined
     item.exRenderConfig = {
       ...item.exRenderConfig,
-      transition: nextTransitionOut,
+      transition: nextTransitionConfig,
     }
     item.runtime.exRenderConfig = {
       ...item.runtime.exRenderConfig,
-      transition: nextTransitionOut
-        ? normalizeClipTransitionOutConfig(nextTransitionOut)
+      transition: nextTransitionConfig
+        ? normalizeClipTransitionOutConfig(nextTransitionConfig)
         : undefined,
     }
 
     refreshTransitionItems()
   }
 
-  function setTimelineItemFilterEffectForCmd(
+  function setTimelineItemFilterConfigForCmd(
     timelineItemId: string,
-    filterEffect?: ClipFilterConfig,
+    filterConfig?: ClipFilterConfig,
   ) {
     const item = getTimelineItem(timelineItemId)
     if (!item) return
 
-    const nextFilterEffect = filterEffect
+    const nextFilterConfig = filterConfig
       ? normalizeClipFilterConfig({
-          effectPackageId: filterEffect.effectPackageId,
-          templateId: filterEffect.templateId,
-          packageVersion: filterEffect.packageVersion,
-          catalogVersion: filterEffect.catalogVersion,
-          intensity: filterEffect.intensity,
-          params: filterEffect.params,
-          packagePayload: filterEffect.packagePayload,
+          effectPackageId: filterConfig.effectPackageId,
+          templateId: filterConfig.templateId,
+          packageVersion: filterConfig.packageVersion,
+          catalogVersion: filterConfig.catalogVersion,
+          intensity: filterConfig.intensity,
+          params: filterConfig.params,
+          packagePayload: filterConfig.packagePayload,
         })
       : undefined
     item.exRenderConfig = {
       ...item.exRenderConfig,
-      filter: nextFilterEffect,
+      filter: nextFilterConfig,
     }
     item.runtime.exRenderConfig = {
       ...item.runtime.exRenderConfig,
-      filter: nextFilterEffect
-        ? normalizeClipFilterConfig(nextFilterEffect)
+      filter: nextFilterConfig
+        ? normalizeClipFilterConfig(nextFilterConfig)
         : undefined,
     }
   }
@@ -238,8 +238,8 @@ export function createUnifiedTimelineModule(registry: ModuleRegistry) {
     getReadyTimelineItem,
     updateTimelineItemPosition,
     setTimelineItemTimeRangeForCmd,
-    setTimelineItemTransitionOutForCmd,
-    setTimelineItemFilterEffectForCmd,
+    setTimelineItemTransitionConfigForCmd,
+    setTimelineItemFilterConfigForCmd,
     refreshTransitionItems,
     getTransitionOverlay,
     getTransitionOverlaysByTrack,

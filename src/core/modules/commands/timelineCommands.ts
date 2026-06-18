@@ -25,8 +25,8 @@ export { ToggleTrackVisibilityCommand } from './ToggleTrackVisibilityCommand' //
 export { ToggleTrackMuteCommand } from './ToggleTrackMuteCommand' // ok
 export { ResizeTimelineItemCommand } from './ResizeTimelineItemCommand' // ok
 export { SelectTimelineSelectionsCommand } from './SelectTimelineItemsCommand' // ok
-export { UpdateTransitionOutCommand } from './UpdateTransitionOutCommand'
-export { UpdateFilterEffectCommand } from './UpdateFilterEffectCommand'
+export { UpdateTransitionConfigCommand } from './UpdateTransitionOutCommand'
+export { UpdateFilterConfigCommand } from './UpdateFilterEffectCommand'
 
 // 导出类型定义
 export type { SimpleCommand } from './types'

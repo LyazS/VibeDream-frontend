@@ -5,13 +5,14 @@
 
 import type { UnifiedTimelineItemData } from '@/core/timelineitem/type'
 import type { AnimateKeyframe, GetAnimation } from '@/core/timelineitem/bunnytype'
-import type { GetConfigs } from '@/core/timelineitem/bunnytype'
+import type { TimelineBaseRenderConfig } from '@/core/timelineitem/type'
 import type { MediaType } from '@/core/mediaitem'
 import { createDefaultTimelineExtraRenderConfig } from '@/core/timelineitem/type'
 import { isPlayheadInTimelineItem as checkPlayheadInTimelineItem } from '@/core/utils/timelineSearchUtils'
 import { cloneDeep } from 'lodash'
 import { useUnifiedStore } from '@/core/unifiedStore'
 import { isTextTimelineItem } from '@/core/timelineitem/queries'
+import { TimelineItemQueries } from '@/core/timelineitem/queries'
 import { rebuildTextRuntime } from '@/core/timelineitem/textRebuild'
 
 // ==================== 关键帧数据快照接口 ====================
@@ -24,7 +25,7 @@ export interface KeyframeSnapshot {
   /** 动画配置的完整快照 */
   animationConfig: GetAnimation<MediaType> | undefined
   /** 时间轴项目的属性快照 */
-  itemProperties: GetConfigs<MediaType>
+  itemProperties: TimelineBaseRenderConfig<MediaType>
   /** 扩展渲染配置快照 */
   exRenderConfig: UnifiedTimelineItemData['exRenderConfig']
 }
@@ -53,7 +54,7 @@ export interface PlaybackControls {
 export function createSnapshot(item: UnifiedTimelineItemData): KeyframeSnapshot {
   return {
     animationConfig: item.animation ? cloneDeep(item.animation) : undefined,
-    itemProperties: cloneDeep(item.config),
+    itemProperties: cloneDeep(TimelineItemQueries.getBaseRenderConfig(item)),
     exRenderConfig: cloneDeep(item.exRenderConfig),
   }
 }
@@ -95,7 +96,7 @@ export async function applyKeyframeSnapshot(
   }
 
   if (snapshot.itemProperties) {
-    Object.assign(item.config, snapshot.itemProperties)
+    item.baseRenderConfig = cloneDeep(snapshot.itemProperties) as never
   }
 
   item.exRenderConfig = snapshot.exRenderConfig
@@ -106,9 +107,10 @@ export async function applyKeyframeSnapshot(
     : createDefaultTimelineExtraRenderConfig()
 
   if (isTextTimelineItem(item)) {
+    const textConfig = TimelineItemQueries.getTextRenderConfig(item)
     await rebuildTextRuntime(item, {
-      text: item.config.text,
-      stylePatch: item.config.style,
+      text: textConfig?.text,
+      stylePatch: textConfig?.style,
     })
   }
 }

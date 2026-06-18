@@ -606,7 +606,7 @@ export function createUnifiedMediaModule(registry: ModuleRegistry) {
       )
 
       for (const timelineItem of relatedTransitionItems) {
-        timelineModule.setTimelineItemTransitionOutForCmd(timelineItem.id, undefined)
+        timelineModule.setTimelineItemTransitionConfigForCmd(timelineItem.id, undefined)
       }
 
       const relatedFilterItems = timelineModule.timelineItems.value.filter(
@@ -615,7 +615,7 @@ export function createUnifiedMediaModule(registry: ModuleRegistry) {
 
       for (const timelineItem of relatedFilterItems) {
         clearChannelKeyframes(timelineItem, 'filter.intensity')
-        timelineModule.setTimelineItemFilterEffectForCmd(timelineItem.id, undefined)
+        timelineModule.setTimelineItemFilterConfigForCmd(timelineItem.id, undefined)
       }
 
       if (relatedTransitionItems.length > 0 || relatedFilterItems.length > 0) {

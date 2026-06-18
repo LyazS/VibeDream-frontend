@@ -7,8 +7,11 @@ import type { MediaType } from '@/core/mediaitem'
 import type {
   UnifiedTimelineItemData,
   TimelineItemStatus,
-  GetConfigs,
+  TimelineBaseRenderConfig,
   TimelineExtraRenderConfig,
+  VisualProps,
+  AudioProps,
+  TextProps,
 } from '@/core/timelineitem/type'
 import type { ClipFilterConfig } from '@/core/filter/types'
 import type { ClipTransitionOutConfig } from '@/core/transition/types'
@@ -212,6 +215,69 @@ export function getErrorInfo(data: UnifiedTimelineItemData<MediaType>): {
 
 // ==================== 配置访问函数 ====================
 
+export function getBaseRenderConfig<T extends MediaType>(
+  item: UnifiedTimelineItemData<T>,
+): TimelineBaseRenderConfig<T> {
+  return item.baseRenderConfig
+}
+
+export function getVisualRenderConfig(
+  item: UnifiedTimelineItemData<MediaType>,
+): VisualProps | undefined {
+  if (!hasVisualProperties(item)) {
+    return undefined
+  }
+  return (item.baseRenderConfig as { visual: VisualProps }).visual
+}
+
+export function getAudioRenderConfig(
+  item: UnifiedTimelineItemData<MediaType>,
+): AudioProps | undefined {
+  if (!hasAudioProperties(item)) {
+    return undefined
+  }
+  return (item.baseRenderConfig as { audio: AudioProps }).audio
+}
+
+export function getTextRenderConfig(
+  item: UnifiedTimelineItemData<MediaType>,
+): TextProps | undefined {
+  if (!isTextTimelineItem(item)) {
+    return undefined
+  }
+  return (item.baseRenderConfig as { text: TextProps }).text
+}
+
+export function patchVisualRenderConfig(
+  item: UnifiedTimelineItemData<MediaType>,
+  patch: Partial<VisualProps>,
+): void {
+  if (!hasVisualProperties(item)) {
+    return
+  }
+  Object.assign((item.baseRenderConfig as { visual: VisualProps }).visual, patch)
+}
+
+export function patchAudioRenderConfig(
+  item: UnifiedTimelineItemData<MediaType>,
+  patch: Partial<AudioProps>,
+): void {
+  if (!hasAudioProperties(item)) {
+    return
+  }
+  Object.assign((item.baseRenderConfig as { audio: AudioProps }).audio, patch)
+}
+
+export function patchTextRenderConfig(
+  item: UnifiedTimelineItemData<MediaType>,
+  patch: Partial<TextProps>,
+): void {
+  if (!isTextTimelineItem(item)) {
+    return
+  }
+  Object.assign((item.baseRenderConfig as { text: TextProps }).text, patch)
+}
+
 export function getExtraRenderConfig(item: UnifiedTimelineItemData<MediaType>) {
   return item.exRenderConfig
 }
@@ -274,8 +340,8 @@ export function getMask(
  */
 export function getRenderConfig<T extends MediaType>(
   item: UnifiedTimelineItemData<T>
-): GetConfigs<T> {
-  const renderConfig = item.runtime.renderConfig || item.config
+): TimelineBaseRenderConfig<T> {
+  const renderConfig = item.runtime.renderConfig || item.baseRenderConfig
   const positionOverlay = getTransformPositionOverlay(item.id)
   const sizeOverlay = getTransformSizeOverlay(item.id)
   const rotationOverlay = getTransformRotationOverlay(item.id)
@@ -286,46 +352,54 @@ export function getRenderConfig<T extends MediaType>(
   }
 
   const visualRenderConfig = hasVisualProperties(item)
-    ? (renderConfig as typeof renderConfig & {
-        x: number
-        y: number
-        width: number
-        height: number
-        rotation: number
-        opacity: number
-      })
+    ? (renderConfig as Record<string, any>).visual as VisualProps
+    : null
+  const audioRenderConfig = hasAudioProperties(item)
+    ? (renderConfig as Record<string, any>).audio as AudioProps
+    : null
+  const nextVisualRenderConfig = visualRenderConfig
+    ? {
+        ...visualRenderConfig,
+        ...(positionOverlay
+          ? {
+              [transformPositionSchema.valueFields[0]]: positionOverlay.x ?? visualRenderConfig.x,
+              [transformPositionSchema.valueFields[1]]: positionOverlay.y ?? visualRenderConfig.y,
+            }
+          : {}),
+        ...(sizeOverlay
+          ? {
+              [transformSizeSchema.valueFields[0]]: sizeOverlay.width ?? visualRenderConfig.width,
+              [transformSizeSchema.valueFields[1]]: sizeOverlay.height ?? visualRenderConfig.height,
+            }
+          : {}),
+        ...(rotationOverlay
+          ? {
+              [transformRotationSchema.valueFields[0]]: rotationOverlay.rotation,
+            }
+          : {}),
+        ...(opacityOverlay
+          ? {
+              [transformOpacitySchema.valueFields[0]]: opacityOverlay.opacity,
+            }
+          : {}),
+      }
+    : null
+  const nextAudioRenderConfig = audioRenderConfig
+    ? {
+        ...audioRenderConfig,
+        ...(volumeOverlay
+          ? {
+              [audioVolumeSchema.valueFields[0]]: volumeOverlay.volume,
+            }
+          : {}),
+      }
     : null
 
   return {
     ...renderConfig,
-    ...(positionOverlay && visualRenderConfig
-      ? {
-          [transformPositionSchema.valueFields[0]]: positionOverlay.x ?? visualRenderConfig.x,
-          [transformPositionSchema.valueFields[1]]: positionOverlay.y ?? visualRenderConfig.y,
-        }
-      : {}),
-    ...(sizeOverlay && visualRenderConfig
-      ? {
-          [transformSizeSchema.valueFields[0]]: sizeOverlay.width ?? visualRenderConfig.width,
-          [transformSizeSchema.valueFields[1]]: sizeOverlay.height ?? visualRenderConfig.height,
-        }
-      : {}),
-    ...(rotationOverlay && visualRenderConfig
-      ? {
-          [transformRotationSchema.valueFields[0]]: rotationOverlay.rotation,
-        }
-      : {}),
-    ...(opacityOverlay && visualRenderConfig
-      ? {
-          [transformOpacitySchema.valueFields[0]]: opacityOverlay.opacity,
-        }
-      : {}),
-    ...(volumeOverlay && hasAudioProperties(item)
-      ? {
-          [audioVolumeSchema.valueFields[0]]: volumeOverlay.volume,
-        }
-      : {}),
-  } as GetConfigs<T>
+    ...(nextVisualRenderConfig ? { visual: nextVisualRenderConfig } : {}),
+    ...(nextAudioRenderConfig ? { audio: nextAudioRenderConfig } : {}),
+  } as TimelineBaseRenderConfig<T>
 }
 
 export function getRenderMask(
@@ -360,8 +434,8 @@ export function getRenderMask(
   }
 
   const normalizedMask = normalizeMaskConfig(renderMask, {
-    width: renderConfig.width,
-    height: renderConfig.height,
+    width: (renderConfig as Record<string, any>).visual?.width ?? 0,
+    height: (renderConfig as Record<string, any>).visual?.height ?? 0,
   })
 
   return {
@@ -437,9 +511,9 @@ export function getRenderFilter(
     return undefined
   }
 
-  const renderFilterEffect = getRenderExtraRenderConfig(item)?.filter
+  const renderFilterConfig = getRenderExtraRenderConfig(item)?.filter
 
-  if (!renderFilterEffect) {
+  if (!renderFilterConfig) {
     return undefined
   }
 
@@ -447,16 +521,16 @@ export function getRenderFilter(
   const filterParamOverlay = getFilterParamOverlay(item.id)
 
   if (!filterIntensityOverlay && !filterParamOverlay) {
-    return renderFilterEffect
+    return renderFilterConfig
   }
 
   return normalizeClipFilterConfig({
-    ...renderFilterEffect,
+    ...renderFilterConfig,
     ...(filterIntensityOverlay
       ? { [filterIntensitySchema.valueFields[0]]: filterIntensityOverlay.intensity }
       : {}),
     params: {
-      ...renderFilterEffect.params,
+      ...renderFilterConfig.params,
       ...(filterParamOverlay?.params ?? {}),
     },
   })
@@ -485,6 +559,13 @@ export const TimelineItemQueries = {
   getErrorInfo,
   
   // 配置访问
+  getBaseRenderConfig,
+  getVisualRenderConfig,
+  getAudioRenderConfig,
+  getTextRenderConfig,
+  patchVisualRenderConfig,
+  patchAudioRenderConfig,
+  patchTextRenderConfig,
   getExtraRenderConfig,
   getRenderExtraRenderConfig,
   getTransition,

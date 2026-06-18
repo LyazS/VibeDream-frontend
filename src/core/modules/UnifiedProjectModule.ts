@@ -818,26 +818,26 @@ function collectTimelineEffectDependencies(
   const unique = new Map<string, EffectPackageIdentity>()
 
   for (const item of timelineItems) {
-    const transitionOut = TimelineItemQueries.getTransition(item)
-    if (transitionOut?.effectPackageId) {
+    const transitionConfig = TimelineItemQueries.getTransition(item)
+    if (transitionConfig?.effectPackageId) {
       const identity = normalizeEffectIdentity(
-        transitionOut.effectPackageId,
-        transitionOut.templateId,
-        transitionOut.packageVersion,
-        transitionOut.catalogVersion,
+        transitionConfig.effectPackageId,
+        transitionConfig.templateId,
+        transitionConfig.packageVersion,
+        transitionConfig.catalogVersion,
       )
       if (identity) {
         unique.set(identity.effectPackageId, identity)
       }
     }
 
-    const filterEffect = item.exRenderConfig?.filter
-    if (filterEffect?.effectPackageId) {
+    const filterConfig = item.exRenderConfig?.filter
+    if (filterConfig?.effectPackageId) {
       const identity = normalizeEffectIdentity(
-        filterEffect.effectPackageId,
-        filterEffect.templateId,
-        filterEffect.packageVersion,
-        filterEffect.catalogVersion,
+        filterConfig.effectPackageId,
+        filterConfig.templateId,
+        filterConfig.packageVersion,
+        filterConfig.catalogVersion,
       )
       if (identity) {
         unique.set(identity.effectPackageId, identity)

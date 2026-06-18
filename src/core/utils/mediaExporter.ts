@@ -4,7 +4,7 @@
  */
 
 import { QUALITY_MEDIUM } from 'mediabunny'
-import type { UnifiedTimelineItemData } from '@/core/timelineitem/type'
+import type { AudioMediaConfig, UnifiedTimelineItemData, VideoMediaConfig } from '@/core/timelineitem/type'
 import { createDefaultTimelineExtraRenderConfig } from '@/core/timelineitem/type'
 import type { UnifiedMediaItemData } from '@/core/mediaitem/types'
 import { DEFAULT_BLEND_MODE } from '@/core/timelineitem'
@@ -139,6 +139,22 @@ async function exportVideoMediaItem(
   const outputSize = resolveExportSize(bunnyMedia.width, bunnyMedia.height, sizeOptions)
 
   const durationInFrames = Number(bunnyMedia.durationN)
+  const baseRenderConfig: VideoMediaConfig = {
+    visual: {
+      x: 0,
+      y: 0,
+      width: outputSize.width,
+      height: outputSize.height,
+      rotation: 0,
+      opacity: 1,
+      blendMode: DEFAULT_BLEND_MODE,
+      proportionalScale: true,
+    },
+    audio: {
+      volume: 1,
+      isMuted: false,
+    },
+  }
   const tempTimelineItem: UnifiedTimelineItemData<'video'> = {
     id: 'temp-export-item',
     mediaType: 'video',
@@ -151,18 +167,7 @@ async function exportVideoMediaItem(
       clipStartTime: 0,
       clipEndTime: durationInFrames,
     },
-    config: {
-      x: 0,
-      y: 0,
-      width: outputSize.width,
-      height: outputSize.height,
-      rotation: 0,
-      opacity: 1,
-      blendMode: DEFAULT_BLEND_MODE,
-      proportionalScale: true,
-      volume: 1,
-      isMuted: false,
-    },
+    baseRenderConfig,
     exRenderConfig: createDefaultTimelineExtraRenderConfig(),
     runtime: {
       exRenderConfig: createDefaultTimelineExtraRenderConfig(),
@@ -272,6 +277,22 @@ async function exportVideoTimelineItem(
   const outputWidth = normalizeEvenExportDimension(sizeOptions?.outputWidth) ?? bunnyMedia.width
   const outputHeight = normalizeEvenExportDimension(sizeOptions?.outputHeight) ?? bunnyMedia.height
 
+  const baseRenderConfig: VideoMediaConfig = {
+    visual: {
+      x: 0,
+      y: 0,
+      width: outputWidth,
+      height: outputHeight,
+      rotation: 0,
+      opacity: 1,
+      blendMode: DEFAULT_BLEND_MODE,
+      proportionalScale: true,
+    },
+    audio: {
+      volume: 1,
+      isMuted: false,
+    },
+  }
   const cleanTimelineItem: UnifiedTimelineItemData<'video'> = {
     id: 'temp-export-item',
     mediaType: 'video',
@@ -285,18 +306,7 @@ async function exportVideoTimelineItem(
       clipStartTime: timelineItem.timeRange.clipStartTime,
       clipEndTime: timelineItem.timeRange.clipEndTime,
     },
-    config: {
-      x: 0,
-      y: 0,
-      width: outputWidth,
-      height: outputHeight,
-      rotation: 0,
-      opacity: 1,
-      blendMode: DEFAULT_BLEND_MODE,
-      proportionalScale: true,
-      volume: 1,
-      isMuted: false,
-    },
+    baseRenderConfig,
     exRenderConfig: createDefaultTimelineExtraRenderConfig(),
     runtime: {
       exRenderConfig: createDefaultTimelineExtraRenderConfig(),
@@ -345,6 +355,30 @@ async function exportAudioTimelineItem(
   }
   await bunnyMedia.ready
 
+  const baseRenderConfig: VideoMediaConfig | AudioMediaConfig =
+    timelineItem.mediaType === 'video'
+      ? {
+          visual: {
+            x: 0,
+            y: 0,
+            width: bunnyMedia.width,
+            height: bunnyMedia.height,
+            rotation: 0,
+            opacity: 1,
+            blendMode: DEFAULT_BLEND_MODE,
+            proportionalScale: true,
+          },
+          audio: {
+            volume: 1,
+            isMuted: false,
+          },
+        }
+      : {
+          audio: {
+            volume: 1,
+            isMuted: false,
+          },
+        }
   const cleanTimelineItem: UnifiedTimelineItemData<'video' | 'audio'> = {
     ...timelineItem,
     id: 'temp-export-item',
@@ -357,18 +391,7 @@ async function exportAudioTimelineItem(
       clipStartTime: timelineItem.timeRange.clipStartTime,
       clipEndTime: timelineItem.timeRange.clipEndTime,
     },
-    config: {
-      x: 0,
-      y: 0,
-      width: timelineItem.mediaType === 'video' ? bunnyMedia.width : 0,
-      height: timelineItem.mediaType === 'video' ? bunnyMedia.height : 0,
-      rotation: 0,
-      opacity: 1,
-      blendMode: DEFAULT_BLEND_MODE,
-      proportionalScale: true,
-      volume: 1,
-      isMuted: false,
-    },
+    baseRenderConfig,
     exRenderConfig: createDefaultTimelineExtraRenderConfig(),
     runtime: {
       exRenderConfig: createDefaultTimelineExtraRenderConfig(),

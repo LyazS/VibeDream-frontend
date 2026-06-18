@@ -22,7 +22,7 @@
 import { computed } from 'vue'
 import { useAppI18n } from '@/core/composables/useI18n'
 import { useUnifiedStore } from '@/core/unifiedStore'
-import { hasVisualProperties } from '@/core/timelineitem/queries'
+import { TimelineItemQueries, hasVisualProperties } from '@/core/timelineitem/queries'
 import type { UnifiedTimelineItemData } from '@/core/timelineitem/type'
 
 interface Props {
@@ -51,7 +51,11 @@ const currentResolution = computed(() => {
     return null
   }
   
-  const config = props.selectedTimelineItem.config
+  const config = TimelineItemQueries.getVisualRenderConfig(props.selectedTimelineItem)
+  if (!config) {
+    return null
+  }
+
   return {
     width: Math.round(config.width),
     height: Math.round(config.height),

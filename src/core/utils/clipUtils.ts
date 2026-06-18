@@ -4,6 +4,7 @@
 
 import type { UnifiedTimelineItemData } from '@/core/timelineitem/type'
 import type { MediaType } from '@/core/mediaitem'
+import { TimelineItemQueries } from '@/core/timelineitem/queries'
 
 // ==================== 媒体项目信息工具 ====================
 
@@ -12,8 +13,8 @@ import type { MediaType } from '@/core/mediaitem'
  */
 export function getTimelineItemDisplayName(data: UnifiedTimelineItemData<MediaType>): string {
   // 对于文本类型，优先显示文本内容
-  if (data.mediaType === 'text' && 'text' in data.config) {
-    const textContent = data.config.text
+  if (data.mediaType === 'text') {
+    const textContent = TimelineItemQueries.getTextRenderConfig(data)?.text
     if (textContent && typeof textContent === 'string') {
       return textContent.length > 20 ? textContent.substring(0, 20) + '...' : textContent
     }

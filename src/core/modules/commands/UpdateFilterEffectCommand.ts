@@ -9,7 +9,7 @@ import {
 } from '@/core/asset/types'
 import { effectTemplateRegistry } from '@/core/effect-template/EffectTemplateRegistry'
 
-export class UpdateFilterEffectCommand implements SimpleCommand {
+export class UpdateFilterConfigCommand implements SimpleCommand {
   public readonly id: string
   public readonly description: string
   private _isDisposed = false
@@ -20,7 +20,7 @@ export class UpdateFilterEffectCommand implements SimpleCommand {
     private readonly newValue: ClipFilterConfig | undefined,
     private readonly timelineModule: {
       getTimelineItem: (id: string) => UnifiedTimelineItemData<MediaType> | undefined
-      setTimelineItemFilterEffectForCmd: (
+      setTimelineItemFilterConfigForCmd: (
         id: string,
         filter?: ClipFilterConfig,
       ) => void
@@ -62,7 +62,7 @@ export class UpdateFilterEffectCommand implements SimpleCommand {
       }
     }
 
-    this.timelineModule.setTimelineItemFilterEffectForCmd(this.timelineItemId, nextValue)
+    this.timelineModule.setTimelineItemFilterConfigForCmd(this.timelineItemId, nextValue)
   }
 
   get isDisposed(): boolean {

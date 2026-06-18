@@ -221,11 +221,21 @@ export interface AnimationProps<T extends MediaType> {
   }>
 }
 
-type GetConfigMap = {
-  video: VisualProps & AudioProps
-  image: VisualProps
-  audio: AudioProps
-  text: VisualProps & TextProps
+export type TimelineBaseRenderConfigMap = {
+  video: {
+    visual: VisualProps
+    audio: AudioProps
+  }
+  image: {
+    visual: VisualProps
+  }
+  audio: {
+    audio: AudioProps
+  }
+  text: {
+    visual: VisualProps
+    text: TextProps
+  }
 }
 
 type GetAnimationMap = {
@@ -235,7 +245,7 @@ type GetAnimationMap = {
   text: AnimationProps<'text'>
 }
 
-export type GetConfigs<T extends MediaType> = GetConfigMap[T]
+export type TimelineBaseRenderConfig<T extends MediaType> = TimelineBaseRenderConfigMap[T]
 export type GetAnimation<T extends MediaType> = GetAnimationMap[T]
 
 export const VISUAL_CHANNELS = [
@@ -293,7 +303,7 @@ export function getAnimationGroupForProperty(
   return PROPERTY_TO_GROUP_MAP[property as AnimatablePropertyKey]
 }
 
-export type VideoMediaConfig = GetConfigs<'video'>
-export type ImageMediaConfig = GetConfigs<'image'>
-export type AudioMediaConfig = GetConfigs<'audio'>
-export type TextMediaConfig = GetConfigs<'text'>
+export type VideoMediaConfig = TimelineBaseRenderConfig<'video'>
+export type ImageMediaConfig = TimelineBaseRenderConfig<'image'>
+export type AudioMediaConfig = TimelineBaseRenderConfig<'audio'>
+export type TextMediaConfig = TimelineBaseRenderConfig<'text'>

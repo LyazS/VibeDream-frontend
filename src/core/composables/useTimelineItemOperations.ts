@@ -7,10 +7,9 @@ import type {
   VideoMediaConfig,
   ImageMediaConfig,
   AudioMediaConfig,
-  TextMediaConfig,
 } from '@/core/timelineitem/type'
-import type { GetConfigs } from '@/core/timelineitem/bunnytype'
 import { DEFAULT_BLEND_MODE } from '@/core/timelineitem'
+import { TimelineItemQueries } from '@/core/timelineitem/queries'
 import { createTextTimelineItem } from '@/core/utils/textTimelineUtils'
 import { setupTimelineItemBunny } from '@/core/bunnyUtils/timelineItemSetup'
 import { buildClipSelectionId } from '@/core/types/timelineSelection'
@@ -84,7 +83,10 @@ export function useTimelineItemOperations() {
       }
 
       // 创建增强的默认配置
-      const config = createDefaultTimelineItemConfig(storeMediaItem.mediaType, originalResolution)
+      const baseRenderConfig = createDefaultTimelineItemConfig(
+        storeMediaItem.mediaType,
+        originalResolution,
+      )
       const exRenderConfig = createDefaultTimelineExtraRenderConfig()
 
       // 创建时间轴项目数据
@@ -99,7 +101,7 @@ export function useTimelineItemOperations() {
           clipStartTime: 0,
           clipEndTime: availableDuration,
         },
-        config: config,
+        baseRenderConfig,
         exRenderConfig,
         animation: undefined, // 新创建的项目默认没有动画
         timelineStatus: timelineStatus, // 根据素材状态设置时间轴项目状态
@@ -128,7 +130,7 @@ export function useTimelineItemOperations() {
   function createDefaultTimelineItemConfig(
     mediaType: Exclude<MediaType, 'text'>,
     originalResolution: { width: number; height: number } | null,
-  ): GetConfigs<Exclude<MediaType, 'text'>> {
+  ): VideoMediaConfig | ImageMediaConfig | AudioMediaConfig {
     // 根据媒体类型创建对应的默认配置
     switch (mediaType) {
       case 'video': {
@@ -136,19 +138,20 @@ export function useTimelineItemOperations() {
         const defaultHeight = originalResolution?.height || 1080
 
         return {
-          // 视觉属性
-          x: 0, // 居中位置（项目坐标系，中心原点）
-          y: 0, // 居中位置
-          width: defaultWidth,
-          height: defaultHeight,
-          rotation: 0,
-          opacity: 1,
-          blendMode: DEFAULT_BLEND_MODE,
-          // 等比缩放状态（默认开启）
-          proportionalScale: true,
-          // 音频属性
-          volume: 1,
-          isMuted: false,
+          visual: {
+            x: 0,
+            y: 0,
+            width: defaultWidth,
+            height: defaultHeight,
+            rotation: 0,
+            opacity: 1,
+            blendMode: DEFAULT_BLEND_MODE,
+            proportionalScale: true,
+          },
+          audio: {
+            volume: 1,
+            isMuted: false,
+          },
         } as VideoMediaConfig
       }
 
@@ -157,25 +160,25 @@ export function useTimelineItemOperations() {
         const defaultHeight = originalResolution?.height || 1080
 
         return {
-          // 视觉属性
-          x: 0, // 居中位置（项目坐标系，中心原点）
-          y: 0, // 居中位置
-          width: defaultWidth,
-          height: defaultHeight,
-          rotation: 0,
-          opacity: 1,
-          blendMode: DEFAULT_BLEND_MODE,
-          // 等比缩放状态（默认开启）
-          proportionalScale: true,
+          visual: {
+            x: 0,
+            y: 0,
+            width: defaultWidth,
+            height: defaultHeight,
+            rotation: 0,
+            opacity: 1,
+            blendMode: DEFAULT_BLEND_MODE,
+            proportionalScale: true,
+          },
         } as ImageMediaConfig
       }
 
       case 'audio':
         return {
-          // 音频属性
-          volume: 1,
-          isMuted: false,
-          gain: 0, // 默认增益为0dB
+          audio: {
+            volume: 1,
+            isMuted: false,
+          },
         } as AudioMediaConfig
 
       default:
@@ -291,8 +294,10 @@ export function useTimelineItemOperations() {
 
       // ✅ 从 textBitmap 获取实际宽高并设置到 config
       if (textItem.runtime.textBitmap) {
-        textItem.config.width = textItem.runtime.textBitmap.width
-        textItem.config.height = textItem.runtime.textBitmap.height
+        TimelineItemQueries.patchVisualRenderConfig(textItem, {
+          width: textItem.runtime.textBitmap.width,
+          height: textItem.runtime.textBitmap.height,
+        })
       }
 
       // 设置状态为 ready（文本项目不依赖外部媒体，可直接就绪）
@@ -304,7 +309,7 @@ export function useTimelineItemOperations() {
 
       console.log('✅ [UnifiedTimeline] 文本项目创建成功:', {
         id: textItem.id,
-        text: textItem.config.text,
+        text: TimelineItemQueries.getTextRenderConfig(textItem)?.text,
         position: timePosition,
       })
 

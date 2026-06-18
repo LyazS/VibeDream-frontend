@@ -14,6 +14,7 @@ import { TaskStatus, TaskStreamEventType } from '@/core/datasource/providers/ai-
 import type { UnifiedTimelineItemData, VideoMediaConfig } from '@/core/timelineitem/type'
 import { createDefaultTimelineExtraRenderConfig } from '@/core/timelineitem/type'
 import { DEFAULT_BLEND_MODE } from '@/core/timelineitem'
+import { TimelineItemQueries } from '@/core/timelineitem/queries'
 import type { UploadFileExportOptions } from '@/core/utils/bizyairFileUploader'
 import { fetchClient, sleepWithAbortSignal } from '@/utils/fetchClient'
 import type { ResourcePolicy, ResourceRequest } from '../ResourceTypes'
@@ -369,6 +370,22 @@ export function createTemporaryVideoTimelineItem(
 ): UnifiedTimelineItemData<'video'> {
   const width = mediaItem.runtime.bunny?.originalWidth || 1920
   const height = mediaItem.runtime.bunny?.originalHeight || 1080
+  const baseRenderConfig: VideoMediaConfig = {
+    visual: {
+      x: 0,
+      y: 0,
+      width,
+      height,
+      rotation: 0,
+      opacity: 1,
+      blendMode: DEFAULT_BLEND_MODE,
+      proportionalScale: true,
+    },
+    audio: {
+      volume: 1,
+      isMuted: false,
+    },
+  }
 
   return {
     id,
@@ -382,18 +399,7 @@ export function createTemporaryVideoTimelineItem(
       clipStartTime: startFrame,
       clipEndTime: endFrame,
     },
-    config: {
-      x: 0,
-      y: 0,
-      width,
-      height,
-      rotation: 0,
-      opacity: 1,
-      blendMode: DEFAULT_BLEND_MODE,
-      proportionalScale: true,
-      volume: 1,
-      isMuted: false,
-    } satisfies VideoMediaConfig,
+    baseRenderConfig,
     exRenderConfig: createDefaultTimelineExtraRenderConfig(),
     runtime: {
       exRenderConfig: createDefaultTimelineExtraRenderConfig(),

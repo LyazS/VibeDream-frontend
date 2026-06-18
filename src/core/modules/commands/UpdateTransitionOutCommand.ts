@@ -4,7 +4,7 @@ import type { UnifiedTimelineItemData } from '@/core/timelineitem/type'
 import type { MediaType } from '@/core/mediaitem/types'
 import type { ClipTransitionOutConfig } from '@/core/transition/types'
 
-export class UpdateTransitionOutCommand implements SimpleCommand {
+export class UpdateTransitionConfigCommand implements SimpleCommand {
   public readonly id: string
   public readonly description: string
   private _isDisposed = false
@@ -15,9 +15,9 @@ export class UpdateTransitionOutCommand implements SimpleCommand {
     private readonly newValue: ClipTransitionOutConfig | undefined,
     private readonly timelineModule: {
       getTimelineItem: (id: string) => UnifiedTimelineItemData<MediaType> | undefined
-      setTimelineItemTransitionOutForCmd: (
+      setTimelineItemTransitionConfigForCmd: (
         id: string,
-        transitionOut?: ClipTransitionOutConfig,
+        transitionConfig?: ClipTransitionOutConfig,
       ) => void
     },
   ) {
@@ -47,7 +47,7 @@ export class UpdateTransitionOutCommand implements SimpleCommand {
       throw new Error('转场效果缺少必要标识字段')
     }
 
-    this.timelineModule.setTimelineItemTransitionOutForCmd(this.timelineItemId, nextValue)
+    this.timelineModule.setTimelineItemTransitionConfigForCmd(this.timelineItemId, nextValue)
   }
 
   get isDisposed(): boolean {

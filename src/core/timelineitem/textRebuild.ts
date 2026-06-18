@@ -1,6 +1,8 @@
 import { textToImageBitmap2 } from '@/core/bunnyUtils/ToBitmap'
 import type { UnifiedTimelineItemData } from '@/core/timelineitem/type'
 import type { TextStyleConfig } from '@/core/timelineitem/texttype'
+import { DEFAULT_TEXT_STYLE } from '@/core/timelineitem/texttype'
+import { TimelineItemQueries } from '@/core/timelineitem/queries'
 
 export interface RebuildTextRuntimeOptions {
   text?: string
@@ -11,14 +13,17 @@ export async function rebuildTextRuntime(
   item: UnifiedTimelineItemData<'text'>,
   options: RebuildTextRuntimeOptions = {},
 ): Promise<void> {
-  const nextText = options.text ?? item.config.text
+  const visualConfig = TimelineItemQueries.getVisualRenderConfig(item)
+  const textConfig = TimelineItemQueries.getTextRenderConfig(item)
+  const nextText = options.text ?? textConfig?.text ?? ''
   const nextStyle: TextStyleConfig = {
-    ...item.config.style,
+    ...DEFAULT_TEXT_STYLE,
+    ...(textConfig?.style ?? {}),
     ...(options.stylePatch ?? {}),
   }
 
-  const oldConfigHeight = item.config.height
-  const oldConfigWidth = item.config.width
+  const oldConfigHeight = visualConfig?.height ?? 0
+  const oldConfigWidth = visualConfig?.width ?? 0
   const oldBitmapHeight = item.runtime.textBitmap?.height ?? oldConfigHeight
   const oldBitmapWidth = item.runtime.textBitmap?.width ?? oldConfigWidth
 
@@ -27,10 +32,14 @@ export async function rebuildTextRuntime(
 
   const newTextBitmap = await textToImageBitmap2(nextText, nextStyle)
 
-  item.config.text = nextText
-  item.config.style = nextStyle
-  item.config.height = newTextBitmap.height * bitmapHeightRatio
-  item.config.width = newTextBitmap.width * bitmapWidthRatio
+  TimelineItemQueries.patchTextRenderConfig(item, {
+    text: nextText,
+    style: nextStyle,
+  })
+  TimelineItemQueries.patchVisualRenderConfig(item, {
+    height: newTextBitmap.height * bitmapHeightRatio,
+    width: newTextBitmap.width * bitmapWidthRatio,
+  })
 
   item.runtime.textBitmap?.close()
   item.runtime.textBitmap = newTextBitmap

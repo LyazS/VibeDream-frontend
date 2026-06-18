@@ -8,6 +8,7 @@ import { framesToTimecode } from '@/core/utils/timeUtils'
 import { MediaItemQueries } from '@/core/mediaitem/queries'
 import type { ToolDefinition } from '../core/toolTypes'
 import type { UnifiedTimelineItemData } from '@/core/timelineitem/type'
+import { TimelineItemQueries } from '@/core/timelineitem/queries'
 import type { VisualProps, AudioProps, TextProps } from '@/core/timelineitem/bunnytype'
 
 /**
@@ -168,9 +169,15 @@ function formatTimelineItemDetail(item: UnifiedTimelineItemData, originalInfo: O
   }
 
   // 4. 变换属性
-  const config = item.config
-  if (config) {
-    const transformInfo = extractTransformInfo(config)
+  const visualConfig = TimelineItemQueries.getVisualRenderConfig(item)
+  const audioConfig = TimelineItemQueries.getAudioRenderConfig(item)
+  const textConfig = TimelineItemQueries.getTextRenderConfig(item)
+  const transformConfig = {
+    ...(visualConfig ?? {}),
+    ...(audioConfig ?? {}),
+  }
+  if (Object.keys(transformConfig).length > 0) {
+    const transformInfo = extractTransformInfo(transformConfig)
     if (Object.keys(transformInfo).length > 0) {
       lines.push('')
       lines.push(`=== 变换属性 ===`)
@@ -186,8 +193,8 @@ function formatTimelineItemDetail(item: UnifiedTimelineItemData, originalInfo: O
   }
 
   // 4. 文本内容（文本类型）
-  if (item.mediaType === 'text' && config) {
-    const textInfo = extractTextContentInfo(config as TextProps)
+  if (item.mediaType === 'text' && textConfig) {
+    const textInfo = extractTextContentInfo(textConfig)
     if (textInfo) {
       lines.push('')
       lines.push(`=== 文本内容 ===`)
@@ -251,7 +258,7 @@ function extractOriginalInfo(mediaItem: any, timelineItem: UnifiedTimelineItemDa
 /**
  * 从配置中提取变换属性
  */
-function extractTransformInfo(config: VisualProps | AudioProps | TextProps): TransformInfo {
+function extractTransformInfo(config: Partial<VisualProps & AudioProps & TextProps>): TransformInfo {
   const info: TransformInfo = {}
 
   // VisualProps 相关属性

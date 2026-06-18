@@ -151,7 +151,7 @@ const overlayContext = computed<MaskOverlayContext | null>(() => {
   return {
     item: selectedItem.value,
     maskConfig: maskConfig.value,
-    visualConfig: TimelineItemQueries.getRenderConfig(selectedItem.value),
+    visualConfig: TimelineItemQueries.getRenderConfig(selectedItem.value).visual,
     itemLocalSize: itemLocalSize.value,
     canvasResolution: props.canvasResolution,
     canvasDisplaySize: props.canvasDisplaySize,

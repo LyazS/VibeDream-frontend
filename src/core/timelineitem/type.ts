@@ -13,7 +13,7 @@ import type { Raw } from 'vue'
 import type { MediaType } from '@/core/mediaitem'
 import type { UnifiedTimeRange } from '@/core/types/timeRange'
 import type { BunnyClip } from '@/core/mediabunny/bunny-clip'
-import type { GetConfigs, GetAnimation } from './bunnytype'
+import type { GetAnimation, TimelineBaseRenderConfig } from './bunnytype'
 import type { BlendMode } from './blendMode'
 import type { ClipTransitionRuntime } from './transition'
 import type { ClipTransitionOutConfig } from '@/core/transition/types'
@@ -23,8 +23,8 @@ import type { MaskConfig } from './mask'
 // 重新导出 bunnytype 中的类型供其他模块使用
 export type {
   AnimationChannelKey,
-  GetConfigs,
   GetAnimation,
+  TimelineBaseRenderConfig,
   VisualProps,
   AudioProps,
   TextProps,
@@ -107,7 +107,7 @@ export interface UnifiedTimelineItemRuntime<T extends MediaType = MediaType> {
   textBitmap?: ImageBitmap // 专门用于文本渲染的ImageBitmap
   textBitmapVersion?: number // 文本位图重建版本，用于驱动 WebGL 纹理重新上传
   /** 动画插值后的临时配置（运行时数据，不持久化） */
-  renderConfig?: GetConfigs<T>
+  renderConfig?: TimelineBaseRenderConfig<T>
   /** 扩展渲染配置的运行时结果（运行时数据，不持久化） */
   exRenderConfig: TimelineExtraRenderConfig
   /** 片段出场转场的运行时绑定与边界帧缓存 */
@@ -156,7 +156,7 @@ export interface UnifiedTimelineItemData<T extends MediaType = MediaType> {
   timeRange: UnifiedTimeRange
 
   // ==================== 配置（类型安全） ====================
-  config: GetConfigs<T>
+  baseRenderConfig: TimelineBaseRenderConfig<T>
   /** schema v2 迁移期扩展渲染配置 */
   exRenderConfig: TimelineExtraRenderConfig
 

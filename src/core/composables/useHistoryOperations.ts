@@ -16,8 +16,8 @@ import {
   RemoveASRRequestCommand,
   StartASRRequestCommand,
   MoveTimelineItemCommand,
-  UpdateTransitionOutCommand,
-  UpdateFilterEffectCommand,
+  UpdateTransitionConfigCommand,
+  UpdateFilterConfigCommand,
   SplitTimelineItemCommand,
   ResizeTimelineItemCommand,
   AddTrackCommand,
@@ -245,9 +245,9 @@ export function useHistoryOperations(
     await unifiedHistoryModule.executeCommand(command)
   }
 
-  async function updateTransitionOutWithHistory(
+  async function updateTransitionConfigWithHistory(
     timelineItemId: string,
-    nextTransitionOut?: ClipTransitionOutConfig,
+    nextTransitionConfig?: ClipTransitionOutConfig,
   ) {
     const timelineItem = getEditableTimelineItemOrWarn(timelineItemId, '更新转场')
     if (!timelineItem) {
@@ -257,90 +257,90 @@ export function useHistoryOperations(
     const currentTransitionOut = TimelineItemQueries.getTransition(timelineItem)
       ? normalizeClipTransitionOutConfig(TimelineItemQueries.getTransition(timelineItem))
       : undefined
-    const normalizedNextTransitionOut = nextTransitionOut
-      ? normalizeClipTransitionOutConfig(nextTransitionOut)
+    const normalizedNextTransitionConfig = nextTransitionConfig
+      ? normalizeClipTransitionOutConfig(nextTransitionConfig)
       : undefined
 
     const hasSameValue = areClipTransitionOutConfigsEqual(
       currentTransitionOut,
-      normalizedNextTransitionOut,
+      normalizedNextTransitionConfig,
     )
 
     if (hasSameValue) {
       return
     }
 
-    const command = new UpdateTransitionOutCommand(
+    const command = new UpdateTransitionConfigCommand(
       timelineItemId,
       currentTransitionOut,
-      normalizedNextTransitionOut,
+      normalizedNextTransitionConfig,
       unifiedTimelineModule,
     )
     await unifiedHistoryModule.executeCommand(command)
   }
 
-  async function updateFilterEffectWithHistory(
+  async function updateFilterConfigWithHistory(
     timelineItemId: string,
-    nextFilterEffect?: ClipFilterConfig,
+    nextFilterConfig?: ClipFilterConfig,
   ) {
     const timelineItem = getEditableTimelineItemOrWarn(timelineItemId, '更新滤镜')
     if (!timelineItem) {
       return
     }
 
-    const currentFilterEffect = timelineItem.exRenderConfig?.filter
+    const currentFilterConfig = timelineItem.exRenderConfig?.filter
       ? normalizeClipFilterConfig(timelineItem.exRenderConfig.filter)
       : undefined
-    const normalizedNextFilterEffect = nextFilterEffect
-      ? normalizeClipFilterConfig(nextFilterEffect)
+    const normalizedNextFilterConfig = nextFilterConfig
+      ? normalizeClipFilterConfig(nextFilterConfig)
       : undefined
 
     const hasSameValue = areClipFilterConfigsEqual(
-      currentFilterEffect,
-      normalizedNextFilterEffect,
+      currentFilterConfig,
+      normalizedNextFilterConfig,
     )
 
     if (hasSameValue) {
       return
     }
 
-    await commitFilterEffectWithHistory(
+    await commitFilterConfigWithHistory(
       timelineItemId,
-      currentFilterEffect,
-      normalizedNextFilterEffect,
+      currentFilterConfig,
+      normalizedNextFilterConfig,
     )
   }
 
-  async function commitFilterEffectWithHistory(
+  async function commitFilterConfigWithHistory(
     timelineItemId: string,
-    previousFilterEffect?: ClipFilterConfig,
-    nextFilterEffect?: ClipFilterConfig,
+    previousFilterConfig?: ClipFilterConfig,
+    nextFilterConfig?: ClipFilterConfig,
   ) {
     const timelineItem = getEditableTimelineItemOrWarn(timelineItemId, '提交滤镜')
     if (!timelineItem) {
       return
     }
 
-    const normalizedPreviousFilterEffect = previousFilterEffect
-      ? normalizeClipFilterConfig(previousFilterEffect)
+    const normalizedPreviousFilterConfig = previousFilterConfig
+      ? normalizeClipFilterConfig(previousFilterConfig)
       : undefined
-    const normalizedNextFilterEffect = nextFilterEffect
-      ? normalizeClipFilterConfig(nextFilterEffect)
+    const normalizedNextFilterConfig = nextFilterConfig
+      ? normalizeClipFilterConfig(nextFilterConfig)
       : undefined
 
     const hasSameValue = areClipFilterConfigsEqual(
-      normalizedPreviousFilterEffect,
-      normalizedNextFilterEffect,
+      normalizedPreviousFilterConfig,
+      normalizedNextFilterConfig,
     )
 
     if (hasSameValue) {
       return
     }
 
-    const command = new UpdateFilterEffectCommand(
+    const command = new UpdateFilterConfigCommand(
       timelineItemId,
-      normalizedPreviousFilterEffect,
-      normalizedNextFilterEffect,
+      normalizedPreviousFilterConfig,
+      normalizedNextFilterConfig,
       unifiedTimelineModule,
       unifiedMediaModule,
     )
@@ -370,7 +370,7 @@ export function useHistoryOperations(
     const batch = unifiedHistoryModule.startBatch('移除片段滤镜')
 
     if (currentFilterEffect) {
-      batch.addCommand(new UpdateFilterEffectCommand(
+      batch.addCommand(new UpdateFilterConfigCommand(
         timelineItemId,
         currentFilterEffect,
         undefined,
@@ -792,9 +792,9 @@ export function useHistoryOperations(
     startASRRequestWithHistory,
     moveTimelineItemWithHistory,
     updatePlaybackRateWithHistory,
-    updateTransitionOutWithHistory,
-    updateFilterEffectWithHistory,
-    commitFilterEffectWithHistory,
+    updateTransitionConfigWithHistory,
+    updateFilterConfigWithHistory,
+    commitFilterConfigWithHistory,
     removeFilterEffectWithHistory,
     splitTimelineItemAtTimeWithHistory,
     duplicateTimelineItemWithHistory,

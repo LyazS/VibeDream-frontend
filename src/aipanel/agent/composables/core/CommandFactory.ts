@@ -19,7 +19,12 @@ import { ToggleTrackMuteCommand } from '@/core/modules/commands/ToggleTrackMuteC
 import { ToggleTrackVisibilityCommand } from '@/core/modules/commands/ToggleTrackVisibilityCommand'
 import { SplitTimelineItemCommand } from '@/core/modules/commands/SplitTimelineItemCommand'
 import type { MediaType } from '@/core/mediaitem/types'
-import type { UnifiedTimelineItemData } from '@/core/timelineitem/type'
+import type {
+  AudioMediaConfig,
+  ImageMediaConfig,
+  UnifiedTimelineItemData,
+  VideoMediaConfig,
+} from '@/core/timelineitem/type'
 import { createDefaultTimelineExtraRenderConfig } from '@/core/timelineitem/type'
 import { MediaItemQueries } from '@/core/mediaitem'
 import { generateTimelineItemId } from '@/core/utils/idGenerator'
@@ -30,6 +35,7 @@ import { FRAME_RATE } from '@/constants/TimeConstants'
 import type { UnifiedTrackType } from '@/core/track/TrackTypes'
 import type { UnifiedTimeRange } from '@/core/types/timeRange'
 import { DEFAULT_BLEND_MODE } from '@/core/timelineitem'
+import { TimelineItemQueries } from '@/core/timelineitem/queries'
 
 type OperationParams<T extends OperationConfig['type']> = Extract<
   OperationConfig,
@@ -159,8 +165,10 @@ export class CommandFactory {
 
     // ✅ 从 textBitmap 获取实际宽高并设置到 config
     if (timelineItem.runtime.textBitmap) {
-      timelineItem.config.width = timelineItem.runtime.textBitmap.width
-      timelineItem.config.height = timelineItem.runtime.textBitmap.height
+      TimelineItemQueries.patchVisualRenderConfig(timelineItem, {
+        width: timelineItem.runtime.textBitmap.width,
+        height: timelineItem.runtime.textBitmap.height,
+      })
     }
 
     // 获取模块引用
@@ -455,7 +463,7 @@ export class CommandFactory {
     }
 
     // 创建默认配置
-    const config = this.createDefaultTimelineItemConfig(mediaItem.mediaType, originalResolution)
+    const baseRenderConfig = this.createDefaultTimelineItemConfig(mediaItem.mediaType, originalResolution)
 
     // 创建时间轴项目数据
     const timelineItemData: UnifiedTimelineItemData = {
@@ -469,7 +477,7 @@ export class CommandFactory {
         clipStartTime: clipStartFrames,
         clipEndTime: clipEndFrames,
       },
-      config: config,
+      baseRenderConfig,
       exRenderConfig: createDefaultTimelineExtraRenderConfig(),
       animation: undefined,
       timelineStatus: 'loading', // 新项目为 loading 状态
@@ -489,26 +497,27 @@ export class CommandFactory {
   private createDefaultTimelineItemConfig(
     mediaType: Exclude<MediaType, 'text'>,
     originalResolution: { width: number; height: number } | null,
-  ): UnifiedTimelineItemData<Exclude<MediaType, 'text'>>['config'] {
+  ): VideoMediaConfig | ImageMediaConfig | AudioMediaConfig {
     switch (mediaType) {
       case 'video': {
         const defaultWidth = originalResolution?.width || 1920
         const defaultHeight = originalResolution?.height || 1080
 
         return {
-          // 视觉属性
-          x: 0, // 居中位置
-          y: 0, // 居中位置
-          width: defaultWidth,
-          height: defaultHeight,
-          rotation: 0,
-          opacity: 1,
-          blendMode: DEFAULT_BLEND_MODE,
-          // 等比缩放状态（默认开启）
-          proportionalScale: true,
-          // 音频属性
-          volume: 1,
-          isMuted: false,
+          visual: {
+            x: 0,
+            y: 0,
+            width: defaultWidth,
+            height: defaultHeight,
+            rotation: 0,
+            opacity: 1,
+            blendMode: DEFAULT_BLEND_MODE,
+            proportionalScale: true,
+          },
+          audio: {
+            volume: 1,
+            isMuted: false,
+          },
         }
       }
 
@@ -517,24 +526,25 @@ export class CommandFactory {
         const defaultHeight = originalResolution?.height || 1080
 
         return {
-          // 视觉属性
-          x: 0,
-          y: 0,
-          width: defaultWidth,
-          height: defaultHeight,
-          rotation: 0,
-          opacity: 1,
-          blendMode: DEFAULT_BLEND_MODE,
-          // 等比缩放状态（默认开启）
-          proportionalScale: true,
+          visual: {
+            x: 0,
+            y: 0,
+            width: defaultWidth,
+            height: defaultHeight,
+            rotation: 0,
+            opacity: 1,
+            blendMode: DEFAULT_BLEND_MODE,
+            proportionalScale: true,
+          },
         }
       }
 
       case 'audio': {
         return {
-          // 音频属性
-          volume: 1,
-          isMuted: false,
+          audio: {
+            volume: 1,
+            isMuted: false,
+          },
         }
       }
 

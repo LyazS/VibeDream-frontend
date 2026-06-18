@@ -41,9 +41,9 @@ export class ChainBuilder {
   constructor(private readonly params: ChainBuilderParams) {}
 
   private resolveLoadedFilterPackage(item: VisualTimelineItem) {
-    const filterEffect = TimelineItemQueries.getRenderFilter(item)
-    return filterEffect?.effectPackageId
-      ? effectTemplateRegistry.getReadyPackage(filterEffect.effectPackageId)
+    const filterConfig = TimelineItemQueries.getRenderFilter(item)
+    return filterConfig?.effectPackageId
+      ? effectTemplateRegistry.getReadyPackage(filterConfig.effectPackageId)
       : null
   }
 
@@ -60,11 +60,11 @@ export class ChainBuilder {
       : 0
 
     const renderConfig = TimelineItemQueries.getRenderConfig(item)
-    const renderFilterEffect = TimelineItemQueries.getRenderFilter(item)
+    const renderFilterConfig = TimelineItemQueries.getRenderFilter(item)
     const renderMask = TimelineItemQueries.getRenderMask(item)
     const hasMask = Boolean(renderMask?.enabled)
     const loadedFilterPackage = this.resolveLoadedFilterPackage(item)
-    const hasFilter = Boolean(renderFilterEffect && loadedFilterPackage)
+    const hasFilter = Boolean(renderFilterConfig && loadedFilterPackage)
     const getEffectEvaluationFrame = () => this.params.getCurrentFrame()
 
     const passes = [
@@ -85,8 +85,8 @@ export class ChainBuilder {
         () => {
           const config = TimelineItemQueries.getRenderConfig(item)
           return {
-            width: config.width,
-            height: config.height,
+            width: config.visual.width,
+            height: config.visual.height,
           }
         },
       ),
@@ -121,14 +121,14 @@ export class ChainBuilder {
         this.params.programs,
         `composite:${item.id}`,
         hasFilter ? filteredItemTextureId : (hasMask ? maskedItemTextureId : itemTargetTextureId),
-        renderConfig.blendMode ?? DEFAULT_BLEND_MODE,
+        renderConfig.visual.blendMode ?? DEFAULT_BLEND_MODE,
         () => {
           const config = TimelineItemQueries.getRenderConfig(item)
           return {
-            x: config.x,
-            y: config.y,
-            rotationRadians: degreesToRadians(-config.rotation),
-            opacity: config.opacity ?? 1,
+            x: config.visual.x,
+            y: config.visual.y,
+            rotationRadians: degreesToRadians(-config.visual.rotation),
+            opacity: config.visual.opacity ?? 1,
           }
         },
       ),
@@ -143,7 +143,7 @@ export class ChainBuilder {
     const loadedFilterPackage = this.resolveLoadedFilterPackage(item)
     return [
       `mask:${mask?.enabled ? 'on' : 'off'}:${mask?.type ?? 'rectangle'}`,
-      `blend:${config.blendMode ?? DEFAULT_BLEND_MODE}`,
+      `blend:${config.visual.blendMode ?? DEFAULT_BLEND_MODE}`,
       `filter:${TimelineItemQueries.getRenderFilter(item)?.effectPackageId ?? ''}`,
       `filter-installed:${loadedFilterPackage ? 'ready' : 'missing'}`,
       `filter-version:${loadedFilterPackage?.payload.version ?? TimelineItemQueries.getRenderFilter(item)?.packagePayload?.version ?? ''}`,

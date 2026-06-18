@@ -395,9 +395,9 @@ export const useUnifiedStore = defineStore('unified', () => {
     startASRRequestWithHistory: historyOperations.startASRRequestWithHistory,
     moveTimelineItemWithHistory: historyOperations.moveTimelineItemWithHistory,
     updatePlaybackRateWithHistory: historyOperations.updatePlaybackRateWithHistory,
-    updateTransitionOutWithHistory: historyOperations.updateTransitionOutWithHistory,
-    updateFilterEffectWithHistory: historyOperations.updateFilterEffectWithHistory,
-    commitFilterEffectWithHistory: historyOperations.commitFilterEffectWithHistory,
+    updateTransitionConfigWithHistory: historyOperations.updateTransitionConfigWithHistory,
+    updateFilterConfigWithHistory: historyOperations.updateFilterConfigWithHistory,
+    commitFilterConfigWithHistory: historyOperations.commitFilterConfigWithHistory,
     removeFilterEffectWithHistory: historyOperations.removeFilterEffectWithHistory,
     splitTimelineItemAtTimeWithHistory: historyOperations.splitTimelineItemAtTimeWithHistory,
     duplicateTimelineItemWithHistory: historyOperations.duplicateTimelineItemWithHistory,
@@ -504,10 +504,10 @@ export const useUnifiedStore = defineStore('unified', () => {
     getReadyTimelineItem: unifiedTimelineModule.getReadyTimelineItem,
     updateTimelineItemPosition: unifiedTimelineModule.updateTimelineItemPosition,
     setTimelineItemTimeRangeForCmd: unifiedTimelineModule.setTimelineItemTimeRangeForCmd,
-    setTimelineItemTransitionOutForCmd:
-      unifiedTimelineModule.setTimelineItemTransitionOutForCmd,
-    setTimelineItemFilterEffectForCmd:
-      unifiedTimelineModule.setTimelineItemFilterEffectForCmd,
+    setTimelineItemTransitionConfigForCmd:
+      unifiedTimelineModule.setTimelineItemTransitionConfigForCmd,
+    setTimelineItemFilterConfigForCmd:
+      unifiedTimelineModule.setTimelineItemFilterConfigForCmd,
     refreshTransitionItems: unifiedTimelineModule.refreshTransitionItems,
     getTransitionOverlay: unifiedTimelineModule.getTransitionOverlay,
     getTransitionOverlaysByTrack: unifiedTimelineModule.getTransitionOverlaysByTrack,

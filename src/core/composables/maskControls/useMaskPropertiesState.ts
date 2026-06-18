@@ -19,9 +19,8 @@ export function useMaskPropertiesState(options: UnifiedMaskKeyframeControlsOptio
       return { width: 0, height: 0 }
     }
 
-    const renderConfig = TimelineItemQueries.getRenderConfig(item)
-    if ('width' in renderConfig && 'height' in renderConfig) {
-      return renderConfig
+    if (TimelineItemQueries.hasVisualProperties(item)) {
+      return TimelineItemQueries.getRenderConfig(item).visual
     }
 
     return { width: 0, height: 0 }

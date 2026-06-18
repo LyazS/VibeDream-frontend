@@ -110,7 +110,7 @@ export class ClipFilterDropTargetHandler implements DropTargetHandler {
     const store = useUnifiedStore()
     cancelFilterDeferredInteractionByTimelineItemId(timelineItemId)
     store.pause()
-    await store.updateFilterEffectWithHistory(timelineItemId, {
+    await store.updateFilterConfigWithHistory(timelineItemId, {
       effectPackageId,
       templateId: mediaData.templateId ?? templatePayload.packageId,
       packageVersion: mediaData.packageVersion ?? templatePayload.version,

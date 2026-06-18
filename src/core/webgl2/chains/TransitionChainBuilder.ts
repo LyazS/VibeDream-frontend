@@ -13,7 +13,7 @@ import {
 import type { UnifiedTimelineItemData } from '@/core/timelineitem/type'
 import {
   resolveRenderConfigAtFrame,
-  resolveRenderFilterEffectAtFrame,
+  resolveRenderFilterConfigAtFrame,
   resolveRenderMaskAtFrame,
 } from '@/core/utils/animationInterpolation'
 import { CompositeToMainPass } from '@/core/webgl2/passes/CompositeToMainPass'
@@ -50,9 +50,9 @@ export class TransitionChainBuilder {
   }
 
   private resolveLoadedFilterPackage(item: TransitionItem) {
-    const filterEffect = TimelineItemQueries.getRenderFilter(item)
-    return filterEffect?.effectPackageId
-      ? effectTemplateRegistry.getReadyPackage(filterEffect.effectPackageId)
+    const filterConfig = TimelineItemQueries.getRenderFilter(item)
+    return filterConfig?.effectPackageId
+      ? effectTemplateRegistry.getReadyPackage(filterConfig.effectPackageId)
       : null
   }
 
@@ -75,7 +75,7 @@ export class TransitionChainBuilder {
         getSourceTextureId: () => this.params.getSourceTextureId(transitionItem.id),
         getRenderConfig: () => TimelineItemQueries.getRenderConfig(transitionItem),
         getRenderMask: () => TimelineItemQueries.getRenderMask(transitionItem),
-        getRenderFilterEffect: () => TimelineItemQueries.getRenderFilter(transitionItem),
+        getRenderFilterConfig: () => TimelineItemQueries.getRenderFilter(transitionItem),
         getEffectEvaluationFrame: () => this.params.getCurrentFrame(),
       }),
       ...this.buildBranchPasses({
@@ -92,8 +92,8 @@ export class TransitionChainBuilder {
             transitionItem,
             resolveTransitionBoundaryFrames(transitionItem).timelineTailFrame,
           ),
-        getRenderFilterEffect: () =>
-          resolveRenderFilterEffectAtFrame(
+        getRenderFilterConfig: () =>
+          resolveRenderFilterConfigAtFrame(
             transitionItem,
             resolveTransitionBoundaryFrames(transitionItem).timelineTailFrame,
           ),
@@ -105,7 +105,7 @@ export class TransitionChainBuilder {
         getSourceTextureId: () => this.params.getSourceTextureId(rightItem.id),
         getRenderConfig: () => TimelineItemQueries.getRenderConfig(rightItem),
         getRenderMask: () => TimelineItemQueries.getRenderMask(rightItem),
-        getRenderFilterEffect: () => TimelineItemQueries.getRenderFilter(rightItem),
+        getRenderFilterConfig: () => TimelineItemQueries.getRenderFilter(rightItem),
         getEffectEvaluationFrame: () => this.params.getCurrentFrame(),
       }),
       ...this.buildBranchPasses({
@@ -122,8 +122,8 @@ export class TransitionChainBuilder {
             rightItem,
             resolveTransitionBoundaryFrames(rightItem).timelineHeadFrame,
           ),
-        getRenderFilterEffect: () =>
-          resolveRenderFilterEffectAtFrame(
+        getRenderFilterConfig: () =>
+          resolveRenderFilterConfigAtFrame(
             rightItem,
             resolveTransitionBoundaryFrames(rightItem).timelineHeadFrame,
           ),
@@ -214,7 +214,7 @@ export class TransitionChainBuilder {
     getSourceTextureId: () => string | null
     getRenderConfig: () => any
     getRenderMask: () => ReturnType<typeof TimelineItemQueries.getRenderMask>
-    getRenderFilterEffect: () => ReturnType<typeof TimelineItemQueries.getRenderFilter>
+    getRenderFilterConfig: () => ReturnType<typeof TimelineItemQueries.getRenderFilter>
     getEffectEvaluationFrame: () => number
   }) {
     const rotatedTextureId = `${params.prefix}:rotated`
@@ -223,7 +223,7 @@ export class TransitionChainBuilder {
     const filteredTextureId = `${params.prefix}:filtered`
     const projectedTextureId = `${params.prefix}:projected`
     const loadedFilterPackage = this.resolveLoadedFilterPackage(params.item)
-    const hasFilter = Boolean(params.getRenderFilterEffect() && loadedFilterPackage)
+    const hasFilter = Boolean(params.getRenderFilterConfig() && loadedFilterPackage)
     const hasMask = Boolean(params.getRenderMask()?.enabled)
 
     return [
@@ -265,10 +265,10 @@ export class TransitionChainBuilder {
             loadedFilterPackage,
             filteredTextureId,
             params.getEffectEvaluationFrame,
-            () => params.getRenderFilterEffect()?.intensity ?? 1,
+            () => params.getRenderFilterConfig()?.intensity ?? 1,
             () => ({
               ...loadedFilterPackage.payload.defaultParams,
-              ...(params.getRenderFilterEffect()?.params ?? {}),
+              ...(params.getRenderFilterConfig()?.params ?? {}),
             }),
             () => (hasMask ? maskedTextureId : itemLocalTextureId),
             (name) => `${params.prefix}:filter:${name}`,
@@ -283,14 +283,9 @@ export class TransitionChainBuilder {
           ? filteredTextureId
           : (hasMask ? maskedTextureId : itemLocalTextureId),
         projectedTextureId,
-        params.item.config.blendMode ?? DEFAULT_BLEND_MODE,
+        params.getRenderConfig().visual.blendMode ?? DEFAULT_BLEND_MODE,
         () => {
-          const config = params.getRenderConfig() as {
-            x: number
-            y: number
-            rotation: number
-            opacity?: number
-          }
+          const config = params.getRenderConfig().visual
           return {
             x: config.x,
             y: config.y,
@@ -318,7 +313,7 @@ export class TransitionChainBuilder {
     const mask = TimelineItemQueries.getRenderMask(item)
     const loadedFilterPackage = this.resolveLoadedFilterPackage(item)
     return [
-      `blend:${item.config.blendMode ?? DEFAULT_BLEND_MODE}`,
+      `blend:${TimelineItemQueries.getRenderConfig(item).visual.blendMode ?? DEFAULT_BLEND_MODE}`,
       `mask:${mask?.enabled ? 'on' : 'off'}:${mask?.type ?? 'rectangle'}`,
       `filter:${TimelineItemQueries.getRenderFilter(item)?.effectPackageId ?? ''}`,
       `filter-installed:${loadedFilterPackage ? 'ready' : 'missing'}`,

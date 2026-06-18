@@ -7,28 +7,28 @@ import type { UnifiedFilterControlsOptions } from './types'
 export function useFilterPropertiesState(options: UnifiedFilterControlsOptions) {
   const { selectedTimelineItem, currentFrame } = options
 
-  const filterEffect = computed(() =>
+  const filterConfig = computed(() =>
     selectedTimelineItem.value
       ? TimelineItemQueries.getRenderFilter(selectedTimelineItem.value)
       : undefined,
   )
 
-  const filterConfig = computed(() =>
-    normalizeClipFilterConfig(filterEffect.value),
+  const normalizedFilterConfig = computed(() =>
+    normalizeClipFilterConfig(filterConfig.value),
   )
 
-  const hasFilterEffect = computed(() => Boolean(filterEffect.value))
+  const hasFilterConfig = computed(() => Boolean(filterConfig.value))
 
   const canOperateFilterNumbers = computed(() => {
     const item = selectedTimelineItem.value
-    if (!item || !hasFilterEffect.value) return false
+    if (!item || !hasFilterConfig.value) return false
     return isPlayheadInTimelineItem(item, currentFrame.value)
   })
 
   return {
-    filterEffect,
     filterConfig,
-    hasFilterEffect,
+    normalizedFilterConfig,
+    hasFilterConfig,
     canOperateFilterNumbers,
   }
 }

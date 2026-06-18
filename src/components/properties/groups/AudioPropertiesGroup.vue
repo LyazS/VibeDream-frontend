@@ -55,7 +55,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useAppI18n } from '@/core/composables/useI18n'
-import { hasAudioProperties } from '@/core/timelineitem/queries'
+import { TimelineItemQueries, hasAudioProperties } from '@/core/timelineitem/queries'
 import { useUnifiedKeyframeTransformControls } from '@/core/composables'
 import { IconComponents, getMuteIcon } from '@/constants/iconComponents'
 import type { UnifiedTimelineItemData } from '@/core/timelineitem/type'
@@ -99,12 +99,12 @@ const getAnimatedLabelClass = (state: string) => ({
   'animated-property-label--between-keyframes': state === 'between-keyframes',
 })
 
-// isMuted 不使用关键帧系统，直接从 config 读取
+// isMuted 不使用关键帧系统，直接从基础音频配置读取
 const isMuted = computed(() => {
   if (!props.selectedTimelineItem || !hasAudioProperties(props.selectedTimelineItem)) {
     return false
   }
-  return props.selectedTimelineItem.config.isMuted ?? false
+  return TimelineItemQueries.getAudioRenderConfig(props.selectedTimelineItem)?.isMuted ?? false
 })
 
 // 切换静音（不使用关键帧系统）

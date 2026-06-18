@@ -12,7 +12,7 @@ import type {
   ImageMediaConfig,
   AudioMediaConfig,
   TextMediaConfig,
-  GetConfigs,
+  TimelineBaseRenderConfig,
 } from '@/core/timelineitem/type'
 import type { UnifiedTimeRange } from '@/core/types/timeRange'
 import type { UnifiedTimelineItemData, TimelineItemStatus } from '@/core/timelineitem/type'
@@ -36,7 +36,7 @@ export function cloneTimelineItem<T extends MediaType>(
     mediaItemId?: string
     trackId?: string
     timeRange?: UnifiedTimeRange
-    config?: GetConfigs<T>
+    baseRenderConfig?: TimelineBaseRenderConfig<T>
     timelineStatus?: 'loading' | 'ready' | 'error'
     animation?: GetAnimation<T>
   },
@@ -60,7 +60,9 @@ export function cloneTimelineItem<T extends MediaType>(
     trackId: overrides?.trackId || cloned.trackId,
     timelineStatus: overrides?.timelineStatus || cloned.timelineStatus,
     timeRange: overrides?.timeRange ? cloneDeep(overrides.timeRange) : cloned.timeRange,
-    config: overrides?.config ? cloneDeep(overrides.config) : cloned.config,
+    baseRenderConfig: overrides?.baseRenderConfig
+      ? cloneDeep(overrides.baseRenderConfig)
+      : cloned.baseRenderConfig,
     animation: overrides?.animation ? cloneDeep(overrides.animation) : cloned.animation,
   }
 
@@ -129,7 +131,7 @@ export function validateTimelineItem<T extends MediaType>(
   }
 
   // 配置验证（根据媒体类型进行不同的验证）
-  if (!item.config) {
+  if (!item.baseRenderConfig) {
     errors.push('缺少配置信息')
   }
 

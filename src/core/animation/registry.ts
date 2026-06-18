@@ -80,7 +80,11 @@ function interpolateNumericRecord<T>(from: T, to: T, t: number): T {
 }
 
 function getVisualConfigRecord(item: UnifiedTimelineItemData<MediaType>): Record<string, any> {
-  return TimelineItemQueries.getRenderConfig(item) as unknown as Record<string, any>
+  return (TimelineItemQueries.getRenderConfig(item) as Record<string, any>).visual ?? {}
+}
+
+function getAudioConfigRecord(item: UnifiedTimelineItemData<MediaType>): Record<string, any> {
+  return (TimelineItemQueries.getRenderConfig(item) as Record<string, any>).audio ?? {}
 }
 
 function assertDynamicFilterParamNumber(value: unknown, parameterKey: string): number {
@@ -124,11 +128,11 @@ function createDynamicFilterParamDefinition(
       TimelineItemQueries.supportsClipFilter(item) &&
       (getParameterType(item) === 'number' || getParameterType(item) === 'vec2'),
     getBaseValue: (item): DynamicFilterParamValue => {
-      const filterEffect = TimelineItemQueries.getRenderFilter(item)
-      if (!filterEffect) {
+      const filterConfig = TimelineItemQueries.getRenderFilter(item)
+      if (!filterConfig) {
         throw new Error(`滤镜效果不存在，无法读取动态参数: ${parameterKey}`)
       }
-      const currentValue = filterEffect.params[parameterKey]
+      const currentValue = filterConfig.params[parameterKey]
       const parameterType = getParameterType(item)
       if (parameterType === 'vec2') {
         return assertDynamicFilterParamVec2(currentValue, parameterKey)
@@ -259,7 +263,7 @@ const animationGroupDefinitions: {
     scope: 'audio',
     supports: (item) => TimelineItemQueries.hasAudioProperties(item),
     isEnabled: (item) => TimelineItemQueries.hasAudioProperties(item),
-    getBaseValue: (item) => ({ volume: getVisualConfigRecord(item).volume ?? 1 }),
+    getBaseValue: (item) => ({ volume: getAudioConfigRecord(item).volume ?? 1 }),
     applyValueToConfig: (config, value) => {
       Object.assign(config, value)
     },

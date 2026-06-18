@@ -6,6 +6,7 @@ import type { ResolveCheckContext, ResolveContext, ResourceResolver } from '../R
 import type { ResourcePolicy, ResourceRequest } from '../ResourceTypes'
 import { createTextTimelineItem } from '@/core/utils/textTimelineUtils'
 import { setupTimelineItemBunny } from '@/core/bunnyUtils/timelineItemSetup'
+import { TimelineItemQueries } from '@/core/timelineitem/queries'
 import { splitAllUtterancesToSubtitles } from '@/core/utils/subtitleSplitter'
 import {
   ASRStreamEventType,
@@ -346,8 +347,10 @@ async function materializeASRSubtitles(
     textItem.timelineStatus = 'loading'
     await setupTimelineItemBunny(textItem)
     if (textItem.runtime.textBitmap) {
-      textItem.config.width = textItem.runtime.textBitmap.width
-      textItem.config.height = textItem.runtime.textBitmap.height
+      TimelineItemQueries.patchVisualRenderConfig(textItem, {
+        width: textItem.runtime.textBitmap.width,
+        height: textItem.runtime.textBitmap.height,
+      })
     }
     textItem.provenance = {
       ...textItem.provenance,
@@ -442,4 +445,3 @@ async function waitForASRCompletion(
 
   return resolvedResult
 }
-

@@ -64,8 +64,9 @@ function normalizeTrack(track: unknown): TimelineEntity {
 
 function normalizeTransform(item: Record<string, unknown>): Record<string, unknown> | undefined {
   const transform = asRecord(item.transform)
-  const config = asRecord(item.config)
-  const source = Object.keys(transform).length > 0 ? transform : config
+  const baseRenderConfig = asRecord(item.baseRenderConfig)
+  const visual = asRecord(baseRenderConfig.visual)
+  const source = Object.keys(transform).length > 0 ? transform : visual
   const normalized = {
     x: optionalNumber(source.x) ?? 0,
     y: optionalNumber(source.y) ?? 0,
@@ -84,14 +85,15 @@ function normalizeText(item: Record<string, unknown>): Record<string, unknown> |
   if (item.text !== undefined) return item.text as Record<string, unknown> | string
   if (item.mediaType !== 'text') return undefined
 
-  const config = asRecord(item.config)
-  if (config.text === undefined && config.fontSize === undefined && config.color === undefined) {
+  const textConfig = asRecord(asRecord(item.baseRenderConfig).text)
+  const style = asRecord(textConfig.style)
+  if (textConfig.text === undefined && style.fontSize === undefined && style.color === undefined) {
     return undefined
   }
   return {
-    content: config.text ?? '',
-    fontSize: config.fontSize ?? 48,
-    color: config.color ?? '#ffffff',
+    content: textConfig.text ?? '',
+    fontSize: style.fontSize ?? 48,
+    color: style.color ?? '#ffffff',
   }
 }
 
