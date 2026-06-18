@@ -16,6 +16,7 @@ import {
   getKeyframeButtonState as getGroupKeyframeButtonState,
   getNextKeyframeFrame as getNextGroupKeyframeFrame,
   getPreviousKeyframeFrame as getPreviousGroupKeyframeFrame,
+  getTrack,
   hasAnimation as hasGroupAnimation,
   initializeAnimation as initializeAnimationGroups,
   isCurrentFrameOnKeyframe as isGroupCurrentFrameOnKeyframe,
@@ -26,6 +27,10 @@ import {
   adjustGroupKeyframesForDurationChange,
 } from '@/core/animation/engine'
 import type { KeyframeButtonState, KeyframeUIState } from '@/core/timelineitem/animationtypes'
+
+type TimelineKeyframeTrack = {
+  keyframes?: Array<{ frame: number; cachedFrame: number; position: number }>
+}
 
 export function absoluteFrameToRelativeFrame(
   absoluteFrame: number,
@@ -194,14 +199,14 @@ export function getAllKeyframeFrames(
   if (channel) {
     const groupId = normalizeAnimationGroupId(channel)
     if (!groupId) return []
-    const track = (item.animation.groups as Record<string, any>)[groupId]
-    return ((track?.keyframes ?? []) as Array<{ frame: number }>)
+    const track = getTrack(item as UnifiedTimelineItemData<MediaType>, groupId)
+    return (track?.keyframes ?? [])
       .map((keyframe) => relativeFrameToAbsoluteFrame(keyframe.frame, item.timeRange))
       .sort((a, b) => a - b)
   }
-  return Object.values(item.animation.groups as Record<string, any>)
-    .flatMap((track: any) => track?.keyframes ?? [])
-    .map((keyframe: any) => relativeFrameToAbsoluteFrame(keyframe.frame, item.timeRange))
+  return Object.values(item.animation.groups as Record<string, TimelineKeyframeTrack | undefined>)
+    .flatMap((track) => track?.keyframes ?? [])
+    .map((keyframe) => relativeFrameToAbsoluteFrame(keyframe.frame, item.timeRange))
     .sort((a, b) => a - b)
 }
 
@@ -211,8 +216,10 @@ export function getVisibleKeyframesForTimeline(
   if (!item.animation?.groups) return []
 
   const merged = new Map<number, { frame: number; cachedFrame: number; position: number; groupIds: string[] }>()
-  for (const [groupId, track] of Object.entries(item.animation.groups as Record<string, any>)) {
-    for (const keyframe of (track?.keyframes ?? []) as Array<{ frame: number; cachedFrame: number; position: number }>) {
+  for (const [groupId, track] of Object.entries(
+    item.animation.groups as Record<string, TimelineKeyframeTrack | undefined>,
+  )) {
+    for (const keyframe of track?.keyframes ?? []) {
       const existing = merged.get(keyframe.frame)
       if (existing) {
         existing.groupIds.push(groupId)
@@ -253,7 +260,8 @@ export function clearChannelKeyframes(item: UnifiedTimelineItemData, channel: An
 export function removeChannel(item: UnifiedTimelineItemData, channel: AnimationChannelKey): void {
   const groupId = normalizeAnimationGroupId(channel)
   if (!groupId || !item.animation?.groups) return
-  delete (item.animation.groups as Record<string, unknown>)[groupId]
+  const groups = item.animation.groups as Record<string, unknown>
+  delete groups[groupId]
   removeEmptyTrack(item as UnifiedTimelineItemData<MediaType>, groupId)
 }
 

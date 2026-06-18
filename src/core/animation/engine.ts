@@ -108,10 +108,7 @@ export function sortGroupKeyframes(
 
 export function removeEmptyTrack(item: UnifiedTimelineItemData<MediaType>, groupId: PropertyAnimationGroupId): void {
   if (!item.animation?.groups) return
-  const track = (item.animation.groups as Record<string, any>)[groupId] as AnimationGroupTrack<
-    MediaType,
-    PropertyAnimationGroupId
-  > | undefined
+  const track = getTrack(item, groupId)
   const groups = item.animation.groups as Record<string, unknown>
   if (track && track.keyframes.length === 0) {
     delete groups[groupId]
@@ -264,7 +261,7 @@ export function getCurrentGroupValue<G extends PropertyAnimationGroupId>(
   if (before && after) {
     const span = Math.max(after.frame - before.frame, 1)
     const t = (relativeFrame - before.frame) / span
-    return definition.interpolate(before.value, after.value, t)
+    return definition.interpolate(before.value, after.value, t) as PropertyAnimationValueByGroup<G>
   }
   if (before) return cloneValue(before.value) as PropertyAnimationValueByGroup<G>
   if (after) return cloneValue(after.value) as PropertyAnimationValueByGroup<G>

@@ -148,7 +148,7 @@ export function useTimelineDragHandlers(
                 type: 'clip-end',
                 frame: finalFrame,
                 priority: 1,
-                clipId: (candidate as any).sourceItemId!,
+                clipId: candidate.sourceItemId!,
                 clipName: '',
               },
               distance: Math.abs(finalFrame - originalFrame),

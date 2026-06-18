@@ -12,8 +12,8 @@ import { parseTimelineSelectionId, type TimelineSelectionId } from '@/core/types
 export class SelectTimelineSelectionsCommand implements SimpleCommand {
   public readonly id: string
   public readonly description: string
-  private previousSelection: Set<string> // 保存操作前的选择状态
-  private newSelection: Set<string> // 保存操作后的选择状态
+  private previousSelection: Set<TimelineSelectionId> // 保存操作前的选择状态
+  private newSelection: Set<TimelineSelectionId> // 保存操作后的选择状态
   private _isDisposed = false
 
   constructor(
@@ -51,7 +51,7 @@ export class SelectTimelineSelectionsCommand implements SimpleCommand {
   /**
    * 计算新的选择状态
    */
-  private calculateNewSelection(): Set<string> {
+  private calculateNewSelection(): Set<TimelineSelectionId> {
     const newSelection = new Set(this.previousSelection)
 
     if (this.mode === 'replace') {
@@ -144,11 +144,9 @@ export class SelectTimelineSelectionsCommand implements SimpleCommand {
   /**
    * 应用选择状态（不触发历史记录）
    */
-  private applySelection(selection: Set<string>): void {
+  private applySelection(selection: Set<TimelineSelectionId>): void {
     this.selectionModule.selectedTimelineSelectionIds.value.clear()
-    selection.forEach((id) =>
-      this.selectionModule.selectedTimelineSelectionIds.value.add(id as TimelineSelectionId),
-    )
+    selection.forEach((id) => this.selectionModule.selectedTimelineSelectionIds.value.add(id))
   }
 
   /**

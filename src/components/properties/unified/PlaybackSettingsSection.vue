@@ -64,13 +64,6 @@ const props = defineProps<Props>()
 const { t } = useAppI18n()
 const unifiedStore = useUnifiedStore()
 
-function throwClipPropertyPhase0Todo(action: string): never {
-  throw new Error(
-    `[ClipProperty Phase 0 TODO] 属性区入口 "${action}" 仍在 PlaybackSettingsSection 内部实现提交分流或时间范围组装，` +
-      '需先收敛到统一的属性提交入口后再恢复。',
-  )
-}
-
 // 时间轴时长（帧数）
 const timelineDurationFrames = computed(() => {
   if (!props.selectedTimelineItem) return 0

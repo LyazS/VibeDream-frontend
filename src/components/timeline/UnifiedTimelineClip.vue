@@ -62,6 +62,7 @@ import type { UnifiedTimelineClipProps, ContentTemplateProps } from '@/core/type
 import type { UnifiedTimeRange } from '@/core/types/timeRange'
 import { ContentRendererFactory } from '@/components/cliprenderers/ContentRendererFactory'
 import { effectTemplateRegistry } from '@/core/effect-template/EffectTemplateRegistry'
+import type { SnapResultState } from '@/core/composables/useTimelineSnap'
 import { TimelineItemQueries } from '@/core/timelineitem/queries'
 import { useUnifiedStore } from '@/core/unifiedStore'
 import { useAppI18n } from '@/core/composables/useI18n'
@@ -121,7 +122,7 @@ const emit = defineEmits<{
   doubleClick: [id: string]
   contextMenu: [event: MouseEvent, id: string]
   resizeStart: [event: MouseEvent, id: string, direction: 'left' | 'right']
-  updateSnapResult: [snapResult: any]
+  updateSnapResult: [snapResult: SnapResultState | null]
 }>()
 
 // ==================== 计算属性 ====================

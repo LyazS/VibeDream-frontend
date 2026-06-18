@@ -217,10 +217,34 @@ const contextMenuOptions = ref({
   zIndex: 1000,
 })
 
+type IconComponent = (typeof IconComponents)[keyof typeof IconComponents]
+
+interface ScaleStartEventPayload {
+  handleType: 'corner' | 'edge'
+  handlePosition:
+    | 'top-left'
+    | 'top-right'
+    | 'bottom-left'
+    | 'bottom-right'
+    | 'top'
+    | 'bottom'
+    | 'left'
+    | 'right'
+  isProportional: boolean
+  clientX: number
+  clientY: number
+}
+
+interface RotateStartEventPayload {
+  centerPoint: { x: number; y: number }
+  clientX: number
+  clientY: number
+}
+
 type MenuItem =
   | {
       label: string
-      icon: any
+      icon: IconComponent
       onClick?: () => void
       disabled?: boolean
     }
@@ -422,7 +446,7 @@ async function handleGlobalMouseUp(event: MouseEvent) {
   await handleDragEnd(event)
 }
 
-function handleScaleStart(event: any) {
+function handleScaleStart(event: ScaleStartEventPayload) {
   if (!selectedClipTimelineItemId.value) return
 
   const item = selectedItem.value
@@ -509,7 +533,7 @@ async function handleGlobalScaleEnd(event: MouseEvent) {
   await handleScaleEnd(event)
 }
 
-function handleRotateStart(event: any) {
+function handleRotateStart(event: RotateStartEventPayload) {
   if (!selectedClipTimelineItemId.value) return
 
   const item = selectedItem.value

@@ -95,7 +95,7 @@ export class MediaIndexTaskSubmitResolver
         createVideoSegmentOssUploadsRequest(ctx.input.mediaId),
       )
       segments = uploadResult.segments
-    } else {
+    } else if (mediaItem.mediaType === 'image') {
       await this.module.ensureMediaReady(mediaItem.id)
       ctx.update({
         progress: 0.05,
@@ -105,7 +105,7 @@ export class MediaIndexTaskSubmitResolver
 
       const exportSize = buildImageIndexingExportSize(mediaItem)
       const imageBlob = await exportMediaItem({
-        mediaItem: mediaItem as any,
+        mediaItem,
         ...exportSize,
       })
 
@@ -157,6 +157,8 @@ export class MediaIndexTaskSubmitResolver
           embeddingImageUrl: embeddingResult.url,
         },
       ]
+    } else {
+      throw new Error('不支持的索引素材类型')
     }
 
     setIndexingMetadata(mediaItem, {

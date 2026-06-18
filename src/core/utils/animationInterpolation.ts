@@ -9,6 +9,7 @@ import { AnimationRegistry } from '@/core/animation/registry'
 import { TimelineItemQueries } from '@/core/timelineitem/queries'
 import {
   getCurrentGroupValue,
+  getTrack,
   getSupportedAnimationGroups,
 } from '@/core/animation/engine'
 import {
@@ -45,7 +46,7 @@ function getActiveAnimationGroups(item: UnifiedTimelineItemData<MediaType>): Pro
   if (!item.animation?.groups) return []
   return getSupportedAnimationGroups(item).filter((groupId) => {
     const definition = AnimationRegistry.get(groupId)
-    const track = (item.animation?.groups as Record<string, any> | undefined)?.[groupId]
+    const track = getTrack(item, groupId)
     return definition.isEnabled(item) && Boolean(track && track.keyframes.length > 0)
   })
 }
@@ -74,17 +75,23 @@ export function resolveRenderConfigAtFrame<T extends MediaType>(
   for (const groupId of getActiveAnimationGroups(item)) {
     const definition = AnimationRegistry.get(groupId)
     if (definition.scope === 'transform') {
-      const visualConfig = (renderConfig as Record<string, any>).visual
+      if (!TimelineItemQueries.hasVisualProperties(item)) {
+        continue
+      }
+      const visualConfig = (renderConfig as TimelineBaseRenderConfig<'video' | 'image' | 'text'>).visual
       if (!visualConfig) continue
       definition.applyValueToConfig(
-        visualConfig,
+        visualConfig as object,
         getCurrentGroupValue(item, currentAbsoluteFrame, groupId),
       )
     } else if (definition.scope === 'audio') {
-      const audioConfig = (renderConfig as Record<string, any>).audio
+      if (!TimelineItemQueries.hasAudioProperties(item)) {
+        continue
+      }
+      const audioConfig = (renderConfig as TimelineBaseRenderConfig<'video' | 'audio'>).audio
       if (!audioConfig) continue
       definition.applyValueToConfig(
-        audioConfig,
+        audioConfig as object,
         getCurrentGroupValue(item, currentAbsoluteFrame, groupId),
       )
     }
@@ -104,20 +111,20 @@ export function resolveRenderMaskAtFrame(
   }
 
   const visualConfig = TimelineItemQueries.getVisualRenderConfig(item)
-  const mutableMask = renderMask as unknown as Record<string, unknown>
+  const mutableMask = renderMask as Partial<MaskConfig>
   for (const groupId of getActiveAnimationGroups(item)) {
     const definition = AnimationRegistry.get(groupId)
     if (definition.scope !== 'mask') {
       continue
     }
     definition.applyValueToConfig(
-      mutableMask,
+      mutableMask as Record<string, unknown>,
       getCurrentGroupValue(item, currentAbsoluteFrame, groupId),
     )
   }
 
   return normalizeMaskConfig(
-    mutableMask as Partial<MaskConfig>,
+    mutableMask,
     getItemLocalSize(visualConfig?.width ?? 0, visualConfig?.height ?? 0),
   )
 }
@@ -132,19 +139,19 @@ export function resolveRenderFilterConfigAtFrame(
     return renderFilterConfig
   }
 
-  const mutableFilterConfig = renderFilterConfig as unknown as Record<string, unknown>
+  const mutableFilterConfig: Partial<ClipFilterConfig> = renderFilterConfig
   for (const groupId of getActiveAnimationGroups(item)) {
     const definition = AnimationRegistry.get(groupId)
     if (definition.scope !== 'filter') {
       continue
     }
     definition.applyValueToConfig(
-      mutableFilterConfig,
+      mutableFilterConfig as Record<string, unknown>,
       getCurrentGroupValue(item, currentAbsoluteFrame, groupId),
     )
   }
 
-  const resolvedFilterConfig = normalizeClipFilterConfig(mutableFilterConfig as Partial<ClipFilterConfig>)
+  const resolvedFilterConfig = normalizeClipFilterConfig(mutableFilterConfig)
   const filterIntensityOverlay = getFilterIntensityOverlay(item.id)
   const filterParamOverlay = getFilterParamOverlay(item.id)
 

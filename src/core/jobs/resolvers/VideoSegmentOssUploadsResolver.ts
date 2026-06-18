@@ -1,4 +1,5 @@
 import { DashScopeTemporaryFileUploader } from '@/core/utils/dashscopeTemporaryFileUploader'
+import { TimelineItemQueries } from '@/core/timelineitem/queries'
 import { exportMediaItem, exportTimelineItem, exportVideoFrames } from '@/core/utils/mediaExporter'
 import type { ResolveContext, ResourceResolver } from '../ResourceResolver'
 import type { ResourceRequest } from '../ResourceTypes'
@@ -58,6 +59,9 @@ export class VideoSegmentOssUploadsResolver
         if (!timelineItem) {
           throw new Error(`找不到时间轴项: ${plan.fileData.timelineItemId}`)
         }
+        if (!TimelineItemQueries.isVideoTimelineItem(timelineItem)) {
+          throw new Error(`仅视频时间轴项支持导出帧: ${plan.fileData.timelineItemId}`)
+        }
 
         const videoBlob = await exportTimelineItem({
           timelineItem,
@@ -84,7 +88,7 @@ export class VideoSegmentOssUploadsResolver
         }
 
         const frameBlobs = await exportVideoFrames({
-          timelineItem: timelineItem as any,
+          timelineItem,
           getMediaItem: this.module.getMediaItem,
           timestampsMs: plan.frameExportOptions.timestampsMs,
           outputWidth: plan.frameExportOptions.outputWidth,
@@ -131,8 +135,12 @@ export class VideoSegmentOssUploadsResolver
         })
       } else {
         const timelineItem = getTimelineItem(plan.fileData.timelineItemId!)
+        if (!timelineItem) {
+          throw new Error(`找不到时间轴项: ${plan.fileData.timelineItemId}`)
+        }
+
         const videoBlob = await exportTimelineItem({
-          timelineItem: timelineItem || ({} as any),
+          timelineItem,
           getMediaItem: this.module.getMediaItem,
           ...plan.exportOptions,
         })

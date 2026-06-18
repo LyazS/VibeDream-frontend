@@ -36,12 +36,12 @@ interface UnifiedKeyframeTransformControlsOptions {
   currentFrame: Ref<number>
 }
 
-function throwClipPropertyPhase0Todo(action: string): never {
-  throw new Error(
-    `[ClipProperty Phase 0 TODO] 属性区入口 "${action}" 仍在 useUnifiedKeyframeTransformControls 内部实现提交分流，` +
-      '需先收敛到统一的属性提交入口后再恢复。',
-  )
-}
+type TransformKeyframeChannel =
+  | 'audio.volume'
+  | 'transform.opacity'
+  | 'transform.size'
+  | 'transform.position'
+  | 'transform.rotation'
 
 function isFiniteNumber(value: unknown): value is number {
   return typeof value === 'number' && Number.isFinite(value)
@@ -66,12 +66,20 @@ export function useUnifiedKeyframeTransformControls(
     return isPlayheadInTimelineItem(selectedTimelineItem.value, currentFrame.value)
   })
 
-  const renderConfig = computed(() => {
-    if (!selectedTimelineItem.value) return null
-    return TimelineItemQueries.getRenderConfig(selectedTimelineItem.value)
+  const visualRenderConfig = computed(() => {
+    const item = selectedTimelineItem.value
+    if (!item || !TimelineItemQueries.hasVisualProperties(item)) {
+      return null
+    }
+    return TimelineItemQueries.getRenderConfig(item).visual
   })
-  const visualRenderConfig = computed(() => (renderConfig.value as any)?.visual ?? null)
-  const audioRenderConfig = computed(() => (renderConfig.value as any)?.audio ?? null)
+  const audioRenderConfig = computed(() => {
+    const item = selectedTimelineItem.value
+    if (!item || !TimelineItemQueries.hasAudioProperties(item)) {
+      return null
+    }
+    return TimelineItemQueries.getRenderConfig(item).audio
+  })
 
   function getOriginalDimensions() {
     const item = selectedTimelineItem.value
@@ -174,44 +182,44 @@ export function useUnifiedKeyframeTransformControls(
     if (frame !== null) unifiedStore.seekToFrame(frame)
   }
 
-  const toggleChannelKeyframe = async (groupId: AnimationChannelKey) => {
-    if (groupId === 'audio.volume') {
-      const item = selectedTimelineItem.value
-      if (!item || !canOperateTransforms.value) return
-      await propertyMutationCommitter.toggleKeyframe(getCommitContext(item), 'audio.volume')
-      return
+  const toggleChannelKeyframe = async (groupId: TransformKeyframeChannel) => {
+    switch (groupId) {
+      case 'audio.volume': {
+        const item = selectedTimelineItem.value
+        if (!item || !canOperateTransforms.value) return
+        await propertyMutationCommitter.toggleKeyframe(getCommitContext(item), 'audio.volume')
+        return
+      }
+      case 'transform.opacity': {
+        const item = selectedTimelineItem.value
+        if (!item || !canOperateTransforms.value) return
+        await propertyMutationCommitter.toggleKeyframe(getCommitContext(item), 'transform.opacity')
+        return
+      }
+      case 'transform.size': {
+        const item = selectedTimelineItem.value
+        if (!item || !canOperateTransforms.value) return
+        await propertyMutationCommitter.toggleKeyframe(getCommitContext(item), 'transform.size')
+        return
+      }
+      case 'transform.position': {
+        const item = selectedTimelineItem.value
+        if (!item || !canOperateTransforms.value) return
+        await propertyMutationCommitter.toggleKeyframe(getCommitContext(item), 'transform.position')
+        return
+      }
+      case 'transform.rotation': {
+        const item = selectedTimelineItem.value
+        if (!item || !canOperateTransforms.value) return
+        clearTransformRotationOverlay(item.id)
+        await propertyMutationCommitter.toggleKeyframe(getCommitContext(item), 'transform.rotation')
+        return
+      }
+      default: {
+        const unreachableGroupId: never = groupId
+        return unreachableGroupId
+      }
     }
-
-    if (groupId === 'transform.opacity') {
-      const item = selectedTimelineItem.value
-      if (!item || !canOperateTransforms.value) return
-      await propertyMutationCommitter.toggleKeyframe(getCommitContext(item), 'transform.opacity')
-      return
-    }
-
-    if (groupId === 'transform.size') {
-      const item = selectedTimelineItem.value
-      if (!item || !canOperateTransforms.value) return
-      await propertyMutationCommitter.toggleKeyframe(getCommitContext(item), 'transform.size')
-      return
-    }
-
-    if (groupId === 'transform.position') {
-      const item = selectedTimelineItem.value
-      if (!item || !canOperateTransforms.value) return
-      await propertyMutationCommitter.toggleKeyframe(getCommitContext(item), 'transform.position')
-      return
-    }
-
-    if (groupId === 'transform.rotation') {
-      const item = selectedTimelineItem.value
-      if (!item || !canOperateTransforms.value) return
-      clearTransformRotationOverlay(item.id)
-      await propertyMutationCommitter.toggleKeyframe(getCommitContext(item), 'transform.rotation')
-      return
-    }
-
-    throwClipPropertyPhase0Todo(`transform.keyframe.toggle.${groupId}`)
   }
 
   const getChannelKeyframeTooltip = (groupId: AnimationChannelKey) => {

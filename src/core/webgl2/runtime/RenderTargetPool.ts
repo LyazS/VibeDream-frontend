@@ -148,6 +148,10 @@ export class RenderTargetPool {
   }
 
   private createRenderTarget(textureId: string, width: number, height: number): RenderTarget {
+    if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) {
+      throw new Error(`Invalid render target size for ${textureId}: ${width}x${height}`)
+    }
+
     const textureResource = this.textures.ensureTexture(textureId, width, height)
     const framebuffer = this.gl.createFramebuffer()
     if (!framebuffer) {

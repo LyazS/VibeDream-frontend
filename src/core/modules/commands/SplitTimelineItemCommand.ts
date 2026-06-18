@@ -27,8 +27,8 @@ import { sliceKeyframesToSegment } from '@/core/utils/keyframePositionUtils'
 
 import { TimelineItemFactory, TimelineItemQueries } from '@/core/timelineitem'
 
-type SplitKeyframe = AnimateKeyframe<any, AnimationGroupId>
-type SplitChannelEntry = AnimationGroupTrack<any, AnimationGroupId>
+type SplitKeyframe = AnimateKeyframe<MediaType, AnimationGroupId>
+type SplitChannelEntry = AnimationGroupTrack<MediaType, AnimationGroupId>
 type SplitChannelMap = Partial<Record<AnimationGroupId, SplitChannelEntry>>
 const sliceChannelKeyframes = sliceKeyframesToSegment as <T extends SplitKeyframe>(
   keyframes: T[],

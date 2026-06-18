@@ -281,7 +281,7 @@ const mediaMultiSelectInfo = computed(() => {
 })
 
 // 获取项目显示名称
-const getItemDisplayName = (item: any) => {
+const getItemDisplayName = (item: UnifiedTimelineItemData) => {
   if (!item) return '未知素材'
 
   if (item.mediaType === 'text') {

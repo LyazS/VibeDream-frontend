@@ -45,13 +45,6 @@ interface MaskKeyframeActionsOptions extends UnifiedMaskKeyframeControlsOptions 
   canOperateMaskNumbers: ComputedRef<boolean>
 }
 
-function throwClipPropertyPhase0Todo(action: string): never {
-  throw new Error(
-    `[ClipProperty Phase 0 TODO] 属性区入口 "${action}" 仍在 mask controls 内部实现提交分流，` +
-      '需先收敛到统一的属性提交入口后再恢复。',
-  )
-}
-
 export function useMaskKeyframeActions(options: MaskKeyframeActionsOptions) {
   const { selectedTimelineItem, currentFrame, unifiedStore, canOperateMaskNumbers } = options
   const { t } = useAppI18n()
@@ -173,81 +166,81 @@ export function useMaskKeyframeActions(options: MaskKeyframeActionsOptions) {
   }
 
   async function setMaskProperty(path: MaskPropertyPath, value: number) {
-    if (path === 'mask.decayRate') {
-      const item = selectedTimelineItem.value
-      if (!item || !canOperateMaskNumbers.value) return
-      clearMaskIntensityOverlay(item.id)
-      await propertyMutationCommitter.commitDirect(getCommitContext(item), 'mask.intensity', value)
-      return
+    switch (path) {
+      case 'mask.decayRate': {
+        const item = selectedTimelineItem.value
+        if (!item || !canOperateMaskNumbers.value) return
+        clearMaskIntensityOverlay(item.id)
+        await propertyMutationCommitter.commitDirect(getCommitContext(item), 'mask.intensity', value)
+        return
+      }
+      case 'mask.outerRange': {
+        const item = selectedTimelineItem.value
+        if (!item || !canOperateMaskNumbers.value) return
+        clearMaskFeatherOverlay(item.id)
+        await propertyMutationCommitter.commitDirect(getCommitContext(item), 'mask.feather', value)
+        return
+      }
+      case 'mask.width':
+      case 'mask.height': {
+        const item = selectedTimelineItem.value
+        if (!item || !canOperateMaskNumbers.value) return
+        clearMaskRectangleSizeOverlay(item.id)
+        await propertyMutationCommitter.commitDirect(getCommitContext(item), 'mask.rectangle.size', {
+          [path === 'mask.width' ? 'width' : 'height']: value,
+        })
+        return
+      }
+      case 'mask.ellipseWidth':
+      case 'mask.ellipseHeight': {
+        const item = selectedTimelineItem.value
+        if (!item || !canOperateMaskNumbers.value) return
+        clearMaskEllipseSizeOverlay(item.id)
+        await propertyMutationCommitter.commitDirect(getCommitContext(item), 'mask.ellipse.size', {
+          [path === 'mask.ellipseWidth' ? 'ellipseWidth' : 'ellipseHeight']: value,
+        })
+        return
+      }
+      case 'mask.centerX':
+      case 'mask.centerY': {
+        const item = selectedTimelineItem.value
+        if (!item || !canOperateMaskNumbers.value) return
+        clearMaskCenterOverlay(item.id)
+        await propertyMutationCommitter.commitDirect(getCommitContext(item), 'mask.center', {
+          [path === 'mask.centerX' ? 'centerX' : 'centerY']: value,
+        })
+        return
+      }
+      case 'mask.rotation': {
+        const item = selectedTimelineItem.value
+        if (!item || !canOperateMaskNumbers.value) return
+        clearMaskRotationOverlay(item.id)
+        await propertyMutationCommitter.commitDirect(getCommitContext(item), 'mask.rotation', value)
+        return
+      }
+      case 'mask.cornerRadius': {
+        const item = selectedTimelineItem.value
+        if (!item || !canOperateMaskNumbers.value) return
+        clearMaskRectangleCornerRadiusOverlay(item.id)
+        await propertyMutationCommitter.commitDirect(
+          getCommitContext(item),
+          'mask.rectangle.cornerRadius',
+          value,
+        )
+        return
+      }
+      case 'mask.length': {
+        const item = selectedTimelineItem.value
+        if (!item || !canOperateMaskNumbers.value) return
+        clearMaskMirrorLengthOverlay(item.id)
+        await propertyMutationCommitter.commitDirect(getCommitContext(item), 'mask.mirror.length', value)
+        return
+      }
+      default: {
+        const unreachablePath: never = path
+        return unreachablePath
+      }
     }
-
-    if (path === 'mask.outerRange') {
-      const item = selectedTimelineItem.value
-      if (!item || !canOperateMaskNumbers.value) return
-      clearMaskFeatherOverlay(item.id)
-      await propertyMutationCommitter.commitDirect(getCommitContext(item), 'mask.feather', value)
-      return
-    }
-
-    if (path === 'mask.width' || path === 'mask.height') {
-      const item = selectedTimelineItem.value
-      if (!item || !canOperateMaskNumbers.value) return
-      clearMaskRectangleSizeOverlay(item.id)
-      await propertyMutationCommitter.commitDirect(getCommitContext(item), 'mask.rectangle.size', {
-        [path === 'mask.width' ? 'width' : 'height']: value,
-      })
-      return
-    }
-
-    if (path === 'mask.ellipseWidth' || path === 'mask.ellipseHeight') {
-      const item = selectedTimelineItem.value
-      if (!item || !canOperateMaskNumbers.value) return
-      clearMaskEllipseSizeOverlay(item.id)
-      await propertyMutationCommitter.commitDirect(getCommitContext(item), 'mask.ellipse.size', {
-        [path === 'mask.ellipseWidth' ? 'ellipseWidth' : 'ellipseHeight']: value,
-      })
-      return
-    }
-
-    if (path === 'mask.centerX' || path === 'mask.centerY') {
-      const item = selectedTimelineItem.value
-      if (!item || !canOperateMaskNumbers.value) return
-      clearMaskCenterOverlay(item.id)
-      await propertyMutationCommitter.commitDirect(getCommitContext(item), 'mask.center', {
-        [path === 'mask.centerX' ? 'centerX' : 'centerY']: value,
-      })
-      return
-    }
-
-    if (path === 'mask.rotation') {
-      const item = selectedTimelineItem.value
-      if (!item || !canOperateMaskNumbers.value) return
-      clearMaskRotationOverlay(item.id)
-      await propertyMutationCommitter.commitDirect(getCommitContext(item), 'mask.rotation', value)
-      return
-    }
-
-    if (path === 'mask.cornerRadius') {
-      const item = selectedTimelineItem.value
-      if (!item || !canOperateMaskNumbers.value) return
-      clearMaskRectangleCornerRadiusOverlay(item.id)
-      await propertyMutationCommitter.commitDirect(
-        getCommitContext(item),
-        'mask.rectangle.cornerRadius',
-        value,
-      )
-      return
-    }
-
-    if (path === 'mask.length') {
-      const item = selectedTimelineItem.value
-      if (!item || !canOperateMaskNumbers.value) return
-      clearMaskMirrorLengthOverlay(item.id)
-      await propertyMutationCommitter.commitDirect(getCommitContext(item), 'mask.mirror.length', value)
-      return
-    }
-
-    throwClipPropertyPhase0Todo(`mask.property.set.${path}`)
   }
 
   async function setEnabled(value: boolean) {
@@ -270,74 +263,71 @@ export function useMaskKeyframeActions(options: MaskKeyframeActionsOptions) {
   }
 
   async function toggleMaskKeyframe(channel: MaskChannelKey) {
-    if (channel === 'mask.intensity') {
-      const item = selectedTimelineItem.value
-      if (!item || !canOperateMaskNumbers.value) return
-      clearMaskIntensityOverlay(item.id)
-      await propertyMutationCommitter.toggleKeyframe(getCommitContext(item), 'mask.intensity')
-      return
+    switch (channel) {
+      case 'mask.intensity': {
+        const item = selectedTimelineItem.value
+        if (!item || !canOperateMaskNumbers.value) return
+        clearMaskIntensityOverlay(item.id)
+        await propertyMutationCommitter.toggleKeyframe(getCommitContext(item), 'mask.intensity')
+        return
+      }
+      case 'mask.feather': {
+        const item = selectedTimelineItem.value
+        if (!item || !canOperateMaskNumbers.value) return
+        clearMaskFeatherOverlay(item.id)
+        await propertyMutationCommitter.toggleKeyframe(getCommitContext(item), 'mask.feather')
+        return
+      }
+      case 'mask.center': {
+        const item = selectedTimelineItem.value
+        if (!item || !canOperateMaskNumbers.value) return
+        clearMaskCenterOverlay(item.id)
+        await propertyMutationCommitter.toggleKeyframe(getCommitContext(item), 'mask.center')
+        return
+      }
+      case 'mask.rectangle.size': {
+        const item = selectedTimelineItem.value
+        if (!item || !canOperateMaskNumbers.value) return
+        clearMaskRectangleSizeOverlay(item.id)
+        await propertyMutationCommitter.toggleKeyframe(getCommitContext(item), 'mask.rectangle.size')
+        return
+      }
+      case 'mask.ellipse.size': {
+        const item = selectedTimelineItem.value
+        if (!item || !canOperateMaskNumbers.value) return
+        clearMaskEllipseSizeOverlay(item.id)
+        await propertyMutationCommitter.toggleKeyframe(getCommitContext(item), 'mask.ellipse.size')
+        return
+      }
+      case 'mask.rotation': {
+        const item = selectedTimelineItem.value
+        if (!item || !canOperateMaskNumbers.value) return
+        clearMaskRotationOverlay(item.id)
+        await propertyMutationCommitter.toggleKeyframe(getCommitContext(item), 'mask.rotation')
+        return
+      }
+      case 'mask.rectangle.cornerRadius': {
+        const item = selectedTimelineItem.value
+        if (!item || !canOperateMaskNumbers.value) return
+        clearMaskRectangleCornerRadiusOverlay(item.id)
+        await propertyMutationCommitter.toggleKeyframe(
+          getCommitContext(item),
+          'mask.rectangle.cornerRadius',
+        )
+        return
+      }
+      case 'mask.mirror.length': {
+        const item = selectedTimelineItem.value
+        if (!item || !canOperateMaskNumbers.value) return
+        clearMaskMirrorLengthOverlay(item.id)
+        await propertyMutationCommitter.toggleKeyframe(getCommitContext(item), 'mask.mirror.length')
+        return
+      }
+      default: {
+        const unreachableChannel: never = channel
+        return unreachableChannel
+      }
     }
-
-    if (channel === 'mask.feather') {
-      const item = selectedTimelineItem.value
-      if (!item || !canOperateMaskNumbers.value) return
-      clearMaskFeatherOverlay(item.id)
-      await propertyMutationCommitter.toggleKeyframe(getCommitContext(item), 'mask.feather')
-      return
-    }
-
-    if (channel === 'mask.center') {
-      const item = selectedTimelineItem.value
-      if (!item || !canOperateMaskNumbers.value) return
-      clearMaskCenterOverlay(item.id)
-      await propertyMutationCommitter.toggleKeyframe(getCommitContext(item), 'mask.center')
-      return
-    }
-
-    if (channel === 'mask.rectangle.size') {
-      const item = selectedTimelineItem.value
-      if (!item || !canOperateMaskNumbers.value) return
-      clearMaskRectangleSizeOverlay(item.id)
-      await propertyMutationCommitter.toggleKeyframe(getCommitContext(item), 'mask.rectangle.size')
-      return
-    }
-
-    if (channel === 'mask.ellipse.size') {
-      const item = selectedTimelineItem.value
-      if (!item || !canOperateMaskNumbers.value) return
-      clearMaskEllipseSizeOverlay(item.id)
-      await propertyMutationCommitter.toggleKeyframe(getCommitContext(item), 'mask.ellipse.size')
-      return
-    }
-
-    if (channel === 'mask.rotation') {
-      const item = selectedTimelineItem.value
-      if (!item || !canOperateMaskNumbers.value) return
-      clearMaskRotationOverlay(item.id)
-      await propertyMutationCommitter.toggleKeyframe(getCommitContext(item), 'mask.rotation')
-      return
-    }
-
-    if (channel === 'mask.rectangle.cornerRadius') {
-      const item = selectedTimelineItem.value
-      if (!item || !canOperateMaskNumbers.value) return
-      clearMaskRectangleCornerRadiusOverlay(item.id)
-      await propertyMutationCommitter.toggleKeyframe(
-        getCommitContext(item),
-        'mask.rectangle.cornerRadius',
-      )
-      return
-    }
-
-    if (channel === 'mask.mirror.length') {
-      const item = selectedTimelineItem.value
-      if (!item || !canOperateMaskNumbers.value) return
-      clearMaskMirrorLengthOverlay(item.id)
-      await propertyMutationCommitter.toggleKeyframe(getCommitContext(item), 'mask.mirror.length')
-      return
-    }
-
-    throwClipPropertyPhase0Todo(`mask.keyframe.toggle.${channel}`)
   }
 
   function goToPreviousMaskKeyframe(channel: MaskChannelKey) {

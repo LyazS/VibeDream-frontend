@@ -1,5 +1,9 @@
 import type { MediaType } from '@/core/mediaitem'
-import type { UnifiedTimelineItemData } from '@/core/timelineitem/type'
+import type {
+  AudioProps,
+  UnifiedTimelineItemData,
+  VisualProps,
+} from '@/core/timelineitem/type'
 import {
   ALL_ANIMATION_GROUPS,
   isDynamicFilterParamAnimationGroupId,
@@ -43,16 +47,13 @@ export interface AnimationGroupDefinition<G extends PropertyAnimationGroupId = A
   scope: AnimationScope
   supports: (item: UnifiedTimelineItemData<MediaType>) => boolean
   isEnabled: (item: UnifiedTimelineItemData<MediaType>) => boolean
-  getBaseValue: (item: UnifiedTimelineItemData<MediaType>) => PropertyAnimationValueByGroup<G> | any
-  applyValueToConfig: (
-    config: Record<string, unknown>,
-    value: PropertyAnimationValueByGroup<G> | Record<string, number>,
-  ) => void
+  getBaseValue: (item: UnifiedTimelineItemData<MediaType>) => PropertyAnimationValueByGroup<G>
+  applyValueToConfig: (config: object, value: PropertyAnimationValueByGroup<G> | Record<string, number>) => void
   interpolate: (
     from: PropertyAnimationValueByGroup<G> | Record<string, number>,
     to: PropertyAnimationValueByGroup<G> | Record<string, number>,
     t: number,
-  ) => PropertyAnimationValueByGroup<G> | any
+  ) => PropertyAnimationValueByGroup<G> | Record<string, number>
   uiMeta: {
     order: number
     allowDeferred: boolean
@@ -63,28 +64,79 @@ export interface AnimationGroupDefinition<G extends PropertyAnimationGroupId = A
   }
 }
 
+type StaticAnimationGroupDefinition = {
+  [G in AnimationGroupId]: AnimationGroupDefinition<G>
+}[AnimationGroupId]
+
 function lerp(start: number, end: number, t: number): number {
   return start + (end - start) * t
 }
 
-function interpolateObject<T extends Record<string, number>>(from: T, to: T, t: number): T {
-  const next = {} as T
-  for (const key of Object.keys(from) as Array<keyof T>) {
-    ;(next as any)[key] = lerp(from[key], to[key], t)
+function interpolateObject<K extends string>(
+  from: Record<K, number>,
+  to: Record<K, number>,
+  t: number,
+): Record<K, number> {
+  const next = {} as Record<K, number>
+  for (const key of Object.keys(from) as K[]) {
+    next[key] = lerp(from[key], to[key], t)
   }
   return next
 }
 
 function interpolateNumericRecord<T>(from: T, to: T, t: number): T {
-  return interpolateObject(from as Record<string, number>, to as Record<string, number>, t) as T
+  return interpolateObject(
+    from as Record<keyof T & string, number>,
+    to as Record<keyof T & string, number>,
+    t,
+  ) as T
 }
 
-function getVisualConfigRecord(item: UnifiedTimelineItemData<MediaType>): Record<string, any> {
-  return (TimelineItemQueries.getRenderConfig(item) as Record<string, any>).visual ?? {}
+function getVisualConfigRecord(item: UnifiedTimelineItemData<MediaType>): VisualProps {
+  if (!TimelineItemQueries.hasVisualProperties(item)) {
+    throw new Error(`时间轴项缺少视觉配置: ${item.id}`)
+  }
+  return TimelineItemQueries.getRenderConfig(item).visual
 }
 
-function getAudioConfigRecord(item: UnifiedTimelineItemData<MediaType>): Record<string, any> {
-  return (TimelineItemQueries.getRenderConfig(item) as Record<string, any>).audio ?? {}
+function getAudioConfigRecord(item: UnifiedTimelineItemData<MediaType>): AudioProps {
+  if (!TimelineItemQueries.hasAudioProperties(item)) {
+    throw new Error(`时间轴项缺少音频配置: ${item.id}`)
+  }
+  return TimelineItemQueries.getRenderConfig(item).audio
+}
+
+function getDynamicFilterParameterTypeFromConfig(
+  config: Record<string, unknown>,
+  parameterKey: string,
+): 'number' | 'vec2' | undefined {
+  const packagePayload = config.packagePayload as Record<string, unknown> | undefined
+  if (typeof packagePayload !== 'object' || packagePayload === null || Array.isArray(packagePayload)) {
+    return undefined
+  }
+
+  const parameterSchema = packagePayload.parameterSchema as Record<string, unknown> | undefined
+  if (
+    typeof parameterSchema !== 'object' ||
+    parameterSchema === null ||
+    Array.isArray(parameterSchema)
+  ) {
+    return undefined
+  }
+
+  const parameterDefinition = parameterSchema[parameterKey]
+  if (
+    typeof parameterDefinition !== 'object' ||
+    parameterDefinition === null ||
+    Array.isArray(parameterDefinition)
+  ) {
+    return undefined
+  }
+
+  const parameterType = (parameterDefinition as { type?: unknown }).type
+  return parameterType === 'number' || parameterType === 'vec2'
+    ? parameterType
+    : undefined
 }
 
 function assertDynamicFilterParamNumber(value: unknown, parameterKey: string): number {
@@ -145,28 +197,24 @@ function createDynamicFilterParamDefinition(
       }
     },
     applyValueToConfig: (config, value) => {
-      if (typeof config.params !== 'object' || !config.params || Array.isArray(config.params)) {
+      const mutableConfig = config as Record<string, unknown>
+      if (
+        typeof mutableConfig.params !== 'object' ||
+        !mutableConfig.params ||
+        Array.isArray(mutableConfig.params)
+      ) {
         throw new Error(`滤镜参数容器非法，无法写入动态参数: ${parameterKey}`)
       }
-      const parameterSchema = config.packagePayload &&
-        typeof config.packagePayload === 'object' &&
-        !Array.isArray(config.packagePayload)
-        ? (config.packagePayload as Record<string, any>).parameterSchema
-        : null
-      const parameterType = parameterSchema &&
-        typeof parameterSchema === 'object' &&
-        !Array.isArray(parameterSchema)
-        ? (parameterSchema as Record<string, any>)[parameterKey]?.type
-        : undefined
+      const parameterType = getDynamicFilterParameterTypeFromConfig(mutableConfig, parameterKey)
       if (parameterType !== 'number' && parameterType !== 'vec2') {
         throw new Error(`滤镜参数类型不支持关键帧: ${parameterKey}`)
       }
       const nextValue = parameterType === 'vec2'
         ? assertDynamicFilterParamVec2(value, parameterKey)
         : assertDynamicFilterParamNumber((value as DynamicFilterParamNumberValue).value, parameterKey)
-      const currentParams = config.params as Record<string, unknown>
+      const currentParams = mutableConfig.params as Record<string, unknown>
       const nextFilterEffect = normalizeClipFilterConfig({
-        ...(config as Record<string, unknown>),
+        ...mutableConfig,
         params: {
           ...currentParams,
           [parameterKey]: nextValue,
@@ -180,7 +228,7 @@ function createDynamicFilterParamDefinition(
   }
 }
 
-function getMaskTextureSizeFromConfig(config: Record<string, unknown>) {
+function getMaskTextureSizeFromConfig(config: Pick<VisualProps, 'width' | 'height'>) {
   const width = typeof config.width === 'number' ? config.width : 0
   const height = typeof config.height === 'number' ? config.height : 0
   return getItemLocalSize(width, height)
@@ -303,7 +351,7 @@ const animationGroupDefinitions: {
       return getMaskCenterValue(TimelineItemQueries.getRenderMask(item), getMaskTextureSizeFromItem(item))
     },
     applyValueToConfig: (maskConfig, value) => {
-      Object.assign(maskConfig, applyMaskCenterValue(maskConfig as never, value))
+      Object.assign(maskConfig, applyMaskCenterValue(maskConfig as Partial<ReturnType<typeof normalizeMaskConfig>>, value))
     },
     interpolate: interpolateNumericRecord,
     uiMeta: { order: 60, allowDeferred: true, allowNavigation: true },
@@ -320,7 +368,7 @@ const animationGroupDefinitions: {
       return getMaskRotationValue(TimelineItemQueries.getRenderMask(item), getMaskTextureSizeFromItem(item))
     },
     applyValueToConfig: (maskConfig, value) => {
-      Object.assign(maskConfig, applyMaskRotationValue(maskConfig as never, value))
+      Object.assign(maskConfig, applyMaskRotationValue(maskConfig as Partial<ReturnType<typeof normalizeMaskConfig>>, value))
     },
     interpolate: interpolateNumericRecord,
     uiMeta: { order: 70, allowDeferred: true, allowNavigation: true },
@@ -337,7 +385,7 @@ const animationGroupDefinitions: {
       return getMaskFeatherValue(TimelineItemQueries.getRenderMask(item), getMaskTextureSizeFromItem(item))
     },
     applyValueToConfig: (maskConfig, value) => {
-      Object.assign(maskConfig, applyMaskFeatherValue(maskConfig as never, value))
+      Object.assign(maskConfig, applyMaskFeatherValue(maskConfig as Partial<ReturnType<typeof normalizeMaskConfig>>, value))
     },
     interpolate: interpolateNumericRecord,
     uiMeta: { order: 70, allowDeferred: true, allowNavigation: true },
@@ -354,7 +402,7 @@ const animationGroupDefinitions: {
       return getMaskIntensityValue(TimelineItemQueries.getRenderMask(item), getMaskTextureSizeFromItem(item))
     },
     applyValueToConfig: (maskConfig, value) => {
-      Object.assign(maskConfig, applyMaskIntensityValue(maskConfig as never, value))
+      Object.assign(maskConfig, applyMaskIntensityValue(maskConfig as Partial<ReturnType<typeof normalizeMaskConfig>>, value))
     },
     interpolate: interpolateNumericRecord,
     uiMeta: { order: 80, allowDeferred: true, allowNavigation: true },
@@ -374,7 +422,7 @@ const animationGroupDefinitions: {
       )
     },
     applyValueToConfig: (maskConfig, value) => {
-      Object.assign(maskConfig, applyMaskRectangleSizeValue(maskConfig as never, value))
+      Object.assign(maskConfig, applyMaskRectangleSizeValue(maskConfig as Partial<ReturnType<typeof normalizeMaskConfig>>, value))
     },
     interpolate: interpolateNumericRecord,
     uiMeta: { order: 90, allowDeferred: true, allowNavigation: true },
@@ -394,7 +442,10 @@ const animationGroupDefinitions: {
       )
     },
     applyValueToConfig: (maskConfig, value) => {
-      Object.assign(maskConfig, applyMaskRectangleCornerRadiusValue(maskConfig as never, value))
+      Object.assign(
+        maskConfig,
+        applyMaskRectangleCornerRadiusValue(maskConfig as Partial<ReturnType<typeof normalizeMaskConfig>>, value),
+      )
     },
     interpolate: interpolateNumericRecord,
     uiMeta: { order: 100, allowDeferred: true, allowNavigation: true },
@@ -414,7 +465,7 @@ const animationGroupDefinitions: {
       )
     },
     applyValueToConfig: (maskConfig, value) => {
-      Object.assign(maskConfig, applyMaskEllipseSizeValue(maskConfig as never, value))
+      Object.assign(maskConfig, applyMaskEllipseSizeValue(maskConfig as Partial<ReturnType<typeof normalizeMaskConfig>>, value))
     },
     interpolate: interpolateNumericRecord,
     uiMeta: { order: 110, allowDeferred: true, allowNavigation: true },
@@ -429,7 +480,7 @@ const animationGroupDefinitions: {
       normalizeMaskConfig(TimelineItemQueries.getRenderMask(item), getMaskTextureSizeFromItem(item)).type === 'linear',
     getBaseValue: () => ({}),
     applyValueToConfig: () => {},
-    interpolate: (from) => from,
+    interpolate: (from) => from as Record<string, never>,
     uiMeta: { order: 120, allowDeferred: false, allowNavigation: false },
     historyMeta: { description: '线性蒙版关键帧' },
   },
@@ -444,7 +495,7 @@ const animationGroupDefinitions: {
       return getMaskMirrorValue(TimelineItemQueries.getRenderMask(item), getMaskTextureSizeFromItem(item))
     },
     applyValueToConfig: (maskConfig, value) => {
-      Object.assign(maskConfig, applyMaskMirrorValue(maskConfig as never, value))
+      Object.assign(maskConfig, applyMaskMirrorValue(maskConfig as Partial<ReturnType<typeof normalizeMaskConfig>>, value))
     },
     interpolate: interpolateNumericRecord,
     uiMeta: { order: 130, allowDeferred: true, allowNavigation: true },
@@ -460,7 +511,9 @@ export const AnimationRegistry = {
     }
     return animationGroupDefinitions[groupId as AnimationGroupId] as AnimationGroupDefinition<G>
   },
-  list(): AnimationGroupDefinition[] {
-    return ALL_ANIMATION_GROUPS.map((groupId) => animationGroupDefinitions[groupId]) as any
+  list(): StaticAnimationGroupDefinition[] {
+    return ALL_ANIMATION_GROUPS.map(
+      (groupId) => animationGroupDefinitions[groupId as AnimationGroupId],
+    )
   },
 }

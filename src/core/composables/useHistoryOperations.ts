@@ -38,6 +38,7 @@ import {
   type PlaybackControls,
 } from '@/core/modules/commands/keyframeCommands'
 import type { ClipTransitionOutConfig } from '@/core/transition/types'
+import type { TimelineSelectionId } from '@/core/types/timelineSelection'
 import {
   areClipTransitionOutConfigsEqual,
   normalizeClipTransitionOutConfig,
@@ -49,6 +50,7 @@ import {
 } from '@/core/timelineitem/filter'
 import { RENDERER_FPS } from '@/core/mediabunny/constant'
 import type { ChangePlan } from '@/core/property-system'
+import type { AnimationChannelKey } from '@/core/timelineitem/bunnytype'
 
 interface PlaybackRateUpdate {
   playbackRate: number
@@ -655,7 +657,7 @@ export function useHistoryOperations(
    * @param selectionModule 选择模块实例，提供选择状态和方法
    */
   async function selectTimelineSelectionsWithHistory(
-    itemIds: string[],
+    itemIds: TimelineSelectionId[],
     mode: 'replace' | 'toggle' = 'replace',
   ) {
     const currentSelection = new Set(unifiedSelectionModule.selectedTimelineSelectionIds.value)
@@ -677,7 +679,7 @@ export function useHistoryOperations(
 
       // 创建选择命令
       const command = new SelectTimelineSelectionsCommand(
-        itemIds as any,
+        itemIds,
         mode,
         unifiedSelectionModule,
         unifiedTimelineModule,
@@ -698,10 +700,10 @@ export function useHistoryOperations(
    * 计算新的选择状态
    */
   function calculateNewSelection(
-    itemIds: string[],
+    itemIds: TimelineSelectionId[],
     mode: 'replace' | 'toggle',
-    currentSelection: Set<string>,
-  ): Set<string> {
+    currentSelection: Set<TimelineSelectionId>,
+  ): Set<TimelineSelectionId> {
     const newSelection = new Set(currentSelection)
 
     if (mode === 'replace') {
@@ -761,7 +763,10 @@ export function useHistoryOperations(
    * 带历史记录的清除所有关键帧方法
    * @param timelineItemId 时间轴项目ID
    */
-  async function clearAllKeyframesWithHistory(timelineItemId: string, channel?: any) {
+  async function clearAllKeyframesWithHistory(
+    timelineItemId: string,
+    channel?: AnimationChannelKey,
+  ) {
     if (!getEditableTimelineItemOrWarn(timelineItemId, '清除关键帧')) {
       return
     }

@@ -22,6 +22,7 @@ import type { UnifiedTimelineModule } from './UnifiedTimelineModule'
 import type { UnifiedPlaybackModule } from './UnifiedPlaybackModule'
 import type { UnifiedConfigModule } from './UnifiedConfigModule'
 import type { UnifiedMediaModule } from './UnifiedMediaModule'
+import type { UnifiedViewportModule } from './UnifiedViewportModule'
 
 /**
  * 吸附缓存接口
@@ -58,12 +59,12 @@ export function createUnifiedSnapModule(registry: ModuleRegistry) {
   const currentFrame = playbackModule.currentFrame
   
   // 延迟获取 viewport 模块（避免循环依赖）
-  let viewportModule: any = null
-  const getViewportModule = () => {
+  let viewportModule: UnifiedViewportModule | null = null
+  const getViewportModule = (): UnifiedViewportModule => {
     if (!viewportModule) {
       viewportModule = registry.get(MODULE_NAMES.VIEWPORT)
     }
-    return viewportModule
+    return viewportModule as UnifiedViewportModule
   }
   // ==================== 状态定义 ====================
 

@@ -4,15 +4,23 @@
  */
 
 import { DragSourceType } from '@/core/types/drag'
+import type {
+  MediaItemDragData,
+  TimelineItemDragData,
+  UnifiedDragData,
+} from '@/core/types/drag'
 import { getDefaultTrackHeight } from '@/core/track/TrackUtils'
+import type { UnifiedTrackData } from '@/core/track/TrackTypes'
 import type { EffectTemplatePreviewData } from '@/core/effect-template/types'
+import type { UnifiedMediaItemData } from '@/core/mediaitem/types'
+import type { UnifiedTimelineItemData } from '@/core/timelineitem/type'
 
 interface TimelineDragPreviewDeps {
   frameToPixel: (frames: number) => number
-  getCurrentDragData: (event: DragEvent) => any
-  getMediaItem: (id: string) => any
-  getTimelineItemsByTrack: (trackId: string) => any[]
-  getTrack: (trackId: string) => any
+  getCurrentDragData: (event: DragEvent) => UnifiedDragData | null
+  getMediaItem: (id: string) => UnifiedMediaItemData | undefined
+  getTimelineItemsByTrack: (trackId: string) => UnifiedTimelineItemData[]
+  getTrack: (trackId: string) => UnifiedTrackData | undefined
 }
 
 /**
@@ -241,7 +249,7 @@ export function useTimelineDragPreview(deps: TimelineDragPreviewDeps) {
    * 处理素材拖拽预览
    */
   function handleMediaItemPreview(
-    dragData: any,
+    dragData: MediaItemDragData,
     targetTrackId: string,
     dropTime: number,
     effectPreview?: EffectTemplatePreviewData | null,
@@ -273,8 +281,10 @@ export function useTimelineDragPreview(deps: TimelineDragPreviewDeps) {
       // 检查轨道兼容性
       const isCompatible = checkTrackCompatibility(mediaItem.mediaType, track.type)
 
+      const duration = dragData.duration ?? 0
+
       // 检查时间冲突
-      const hasTimeConflict = hasConflict(targetTrackId, dropTime, dragData.duration)
+      const hasTimeConflict = hasConflict(targetTrackId, dropTime, duration)
 
       // 确定预览状态
       let status: 'compatible' | 'conflict' | 'incompatible'
@@ -286,7 +296,7 @@ export function useTimelineDragPreview(deps: TimelineDragPreviewDeps) {
         status = 'compatible' // 蓝色：可以放置
       }
 
-      showPreview(targetTrackId, dropTime, dragData.duration, dragData.name, status)
+      showPreview(targetTrackId, dropTime, duration, dragData.name, status)
     } catch (error) {
       console.error('[TimelineDragPreview] 素材预览失败:', error)
       hidePreview()
@@ -296,7 +306,11 @@ export function useTimelineDragPreview(deps: TimelineDragPreviewDeps) {
   /**
    * 处理时间轴项目拖拽预览
    */
-  function handleTimelineItemPreview(dragData: any, targetTrackId: string, dropTime: number) {
+  function handleTimelineItemPreview(
+    dragData: TimelineItemDragData,
+    targetTrackId: string,
+    dropTime: number,
+  ) {
     try {
       const timelineItem = deps
         .getTimelineItemsByTrack(dragData.trackId)
@@ -340,7 +354,8 @@ export function useTimelineDragPreview(deps: TimelineDragPreviewDeps) {
       }
 
       // 使用时间轴项目的名称，如果没有则使用默认名称
-      const itemName = timelineItem.name || timelineItem.mediaType || '片段'
+      const mediaItem = timelineItem.mediaItemId ? deps.getMediaItem(timelineItem.mediaItemId) : undefined
+      const itemName = mediaItem?.name || timelineItem.mediaType || '片段'
 
       showPreview(targetTrackId, dropTime, duration, itemName, status)
     } catch (error) {

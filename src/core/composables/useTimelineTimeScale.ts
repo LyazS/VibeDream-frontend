@@ -2,6 +2,7 @@ import { ref, computed, type Ref } from 'vue'
 import { useUnifiedStore } from '@/core/unifiedStore'
 import { calculateVisibleFrameRange } from '@/core/utils/timelineScaleUtils'
 import { framesToTimecode } from '@/core/utils/timeUtils'
+import type { SnapPoint } from '@/types/snap'
 import { useTimelineWheelHandler, TimelineWheelSource } from './useTimelineWheelHandler'
 
 /**
@@ -111,7 +112,7 @@ export function useTimelineTimeScale(scaleContainer: Ref<HTMLElement | undefined
   const currentSnapResult = ref<{
     snapped: boolean
     frame: number
-    snapPoint?: any
+    snapPoint?: SnapPoint
     distance?: number
   } | null>(null)
 

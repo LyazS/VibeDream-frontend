@@ -10,7 +10,7 @@ import {
   resolveClipTransitionPlaybackState,
   resolveTransitionBoundaryFrames,
 } from '@/core/timelineitem/transition'
-import type { UnifiedTimelineItemData } from '@/core/timelineitem/type'
+import type { TimelineBaseRenderConfig, UnifiedTimelineItemData } from '@/core/timelineitem/type'
 import {
   resolveRenderConfigAtFrame,
   resolveRenderFilterConfigAtFrame,
@@ -68,6 +68,9 @@ export class TransitionChainBuilder {
       throw new Error(`转场片段缺少已安装的 effect package: ${transitionItem.id}`)
     }
 
+    const leftBoundaryFrames = resolveTransitionBoundaryFrames(transitionItem)
+    const rightBoundaryFrames = resolveTransitionBoundaryFrames(rightItem)
+
     const passes = [
       ...this.buildBranchPasses({
         prefix: `transition-left-current:${transitionItem.id}`,
@@ -85,19 +88,19 @@ export class TransitionChainBuilder {
         getRenderConfig: () =>
           resolveRenderConfigAtFrame(
             transitionItem,
-            resolveTransitionBoundaryFrames(transitionItem).timelineTailFrame,
+            leftBoundaryFrames.timelineTailFrame,
           ),
         getRenderMask: () =>
           resolveRenderMaskAtFrame(
             transitionItem,
-            resolveTransitionBoundaryFrames(transitionItem).timelineTailFrame,
+            leftBoundaryFrames.timelineTailFrame,
           ),
         getRenderFilterConfig: () =>
           resolveRenderFilterConfigAtFrame(
             transitionItem,
-            resolveTransitionBoundaryFrames(transitionItem).timelineTailFrame,
+            leftBoundaryFrames.timelineTailFrame,
           ),
-        getEffectEvaluationFrame: () => resolveTransitionBoundaryFrames(transitionItem).timelineTailFrame,
+        getEffectEvaluationFrame: () => leftBoundaryFrames.timelineTailFrame,
       }),
       ...this.buildBranchPasses({
         prefix: `transition-right-current:${transitionItem.id}`,
@@ -115,19 +118,19 @@ export class TransitionChainBuilder {
         getRenderConfig: () =>
           resolveRenderConfigAtFrame(
             rightItem,
-            resolveTransitionBoundaryFrames(rightItem).timelineHeadFrame,
+            rightBoundaryFrames.timelineHeadFrame,
           ),
         getRenderMask: () =>
           resolveRenderMaskAtFrame(
             rightItem,
-            resolveTransitionBoundaryFrames(rightItem).timelineHeadFrame,
+            rightBoundaryFrames.timelineHeadFrame,
           ),
         getRenderFilterConfig: () =>
           resolveRenderFilterConfigAtFrame(
             rightItem,
-            resolveTransitionBoundaryFrames(rightItem).timelineHeadFrame,
+            rightBoundaryFrames.timelineHeadFrame,
           ),
-        getEffectEvaluationFrame: () => resolveTransitionBoundaryFrames(rightItem).timelineHeadFrame,
+        getEffectEvaluationFrame: () => rightBoundaryFrames.timelineHeadFrame,
       }),
       new EffectPackageTransitionPass(
         `transition-package:${transitionItem.id}`,
@@ -140,9 +143,14 @@ export class TransitionChainBuilder {
           ...(TimelineItemQueries.getRenderTransition(transitionItem)?.params ?? {}),
         }),
         () => {
+          const transitionRuntime = transitionItem.runtime.transition
+          if (!transitionRuntime) {
+            throw new Error(`转场运行时信息缺失: ${transitionItem.id}`)
+          }
+
           const playbackState = resolveClipTransitionPlaybackState(
             transitionItem,
-            transitionItem.runtime.transition!,
+            transitionRuntime,
             this.params.getCurrentFrame(),
           )
 
@@ -212,7 +220,7 @@ export class TransitionChainBuilder {
     prefix: string
     item: TransitionItem
     getSourceTextureId: () => string | null
-    getRenderConfig: () => any
+    getRenderConfig: () => TimelineBaseRenderConfig<'video'> | TimelineBaseRenderConfig<'image'>
     getRenderMask: () => ReturnType<typeof TimelineItemQueries.getRenderMask>
     getRenderFilterConfig: () => ReturnType<typeof TimelineItemQueries.getRenderFilter>
     getEffectEvaluationFrame: () => number
@@ -225,6 +233,7 @@ export class TransitionChainBuilder {
     const loadedFilterPackage = this.resolveLoadedFilterPackage(params.item)
     const hasFilter = Boolean(params.getRenderFilterConfig() && loadedFilterPackage)
     const hasMask = Boolean(params.getRenderMask()?.enabled)
+    const getVisualRenderConfig = () => params.getRenderConfig().visual
 
     return [
       new RotateSourcePass(
@@ -242,10 +251,10 @@ export class TransitionChainBuilder {
         this.params.targets,
         () => rotatedTextureId,
         () => {
-          const config = params.getRenderConfig() as { width: number; height: number }
+          const config = getVisualRenderConfig()
           return {
-            width: config.width,
-            height: config.height,
+            width: config.width ?? 0,
+            height: config.height ?? 0,
           }
         },
       ),
@@ -283,9 +292,9 @@ export class TransitionChainBuilder {
           ? filteredTextureId
           : (hasMask ? maskedTextureId : itemLocalTextureId),
         projectedTextureId,
-        params.getRenderConfig().visual.blendMode ?? DEFAULT_BLEND_MODE,
+        getVisualRenderConfig().blendMode ?? DEFAULT_BLEND_MODE,
         () => {
-          const config = params.getRenderConfig().visual
+          const config = getVisualRenderConfig()
           return {
             x: config.x,
             y: config.y,

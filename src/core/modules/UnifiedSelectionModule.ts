@@ -74,68 +74,83 @@ export function createUnifiedSelectionModule(registry: ModuleRegistry) {
   const isLibraryAssetMultiSelectMode = computed(() => selectedLibraryAssetIds.value.size > 1)
   const hasLibraryAssetSelection = computed(() => selectedLibraryAssetIds.value.size > 0)
 
-  function selectItems(
-    itemIds: string[],
-    mode: SelectionMode = 'replace',
-    itemType: SelectionItemType,
+  function applySelection<T extends string>(
+    targetSet: Set<T>,
+    itemIds: T[],
+    mode: Exclude<SelectionMode, 'range'>,
   ) {
-    const targetSet =
-      itemType === 'timeline-selection'
-        ? (selectedTimelineSelectionIds.value as unknown as Set<string>)
-        : selectedLibraryAssetIds.value
+    if (mode === 'replace') {
+      targetSet.clear()
+      itemIds.forEach((id) => targetSet.add(id))
+      return
+    }
 
-    const oldSelection = new Set(targetSet)
+    itemIds.forEach((id) => {
+      if (targetSet.has(id)) {
+        targetSet.delete(id)
+      } else {
+        targetSet.add(id)
+      }
+    })
+  }
 
-    if (itemType === 'timeline-selection' && selectedLibraryAssetIds.value.size > 0) {
+  function selectTimelineItems(itemIds: TimelineSelectionId[], mode: SelectionMode = 'replace') {
+    const oldSelection = new Set(selectedTimelineSelectionIds.value)
+
+    if (selectedLibraryAssetIds.value.size > 0) {
       selectedLibraryAssetIds.value.clear()
       lastSelectedLibraryAssetId.value = null
-    } else if (itemType === 'library-asset' && selectedTimelineSelectionIds.value.size > 0) {
+    }
+
+    if (mode === 'range') {
+      console.warn('⚠️ 时间轴选择不支持范围选择模式')
+      return
+    }
+
+    applySelection(selectedTimelineSelectionIds.value, itemIds, mode)
+
+    if (selectedTimelineSelectionIds.value.size === 0) {
+      lastSelectedTimelineSelectionId.value = null
+    } else if (itemIds.length > 0) {
+      lastSelectedTimelineSelectionId.value = itemIds[itemIds.length - 1]
+    }
+
+    console.log('🎯 统一选择操作:', {
+      itemType: 'timeline-selection',
+      mode,
+      itemIds,
+      oldSize: oldSelection.size,
+      newSize: selectedTimelineSelectionIds.value.size,
+    })
+  }
+
+  function selectLibraryItems(itemIds: string[], mode: SelectionMode = 'replace') {
+    const oldSelection = new Set(selectedLibraryAssetIds.value)
+
+    if (selectedTimelineSelectionIds.value.size > 0) {
       selectedTimelineSelectionIds.value.clear()
       lastSelectedTimelineSelectionId.value = null
     }
 
     if (mode === 'range') {
-      if (itemType === 'library-asset') {
-        handleLibraryAssetRangeSelection(itemIds[0])
-      } else {
-        console.warn('⚠️ 时间轴选择不支持范围选择模式')
-      }
+      handleLibraryAssetRangeSelection(itemIds[0])
       return
     }
 
-    if (mode === 'replace') {
-      targetSet.clear()
-      itemIds.forEach((id) => targetSet.add(id))
-    } else {
-      itemIds.forEach((id) => {
-        if (targetSet.has(id)) {
-          targetSet.delete(id)
-        } else {
-          targetSet.add(id)
-        }
-      })
-    }
+    applySelection(selectedLibraryAssetIds.value, itemIds, mode)
 
-    if (targetSet.size === 0) {
-      if (itemType === 'timeline-selection') {
-        lastSelectedTimelineSelectionId.value = null
-      } else {
-        lastSelectedLibraryAssetId.value = null
-      }
+    if (selectedLibraryAssetIds.value.size === 0) {
+      lastSelectedLibraryAssetId.value = null
     } else if (itemIds.length > 0) {
-      if (itemType === 'timeline-selection') {
-        lastSelectedTimelineSelectionId.value = itemIds[itemIds.length - 1] as TimelineSelectionId
-      } else {
-        lastSelectedLibraryAssetId.value = itemIds[itemIds.length - 1]
-      }
+      lastSelectedLibraryAssetId.value = itemIds[itemIds.length - 1]
     }
 
     console.log('🎯 统一选择操作:', {
-      itemType,
+      itemType: 'library-asset',
       mode,
       itemIds,
       oldSize: oldSelection.size,
-      newSize: targetSet.size,
+      newSize: selectedLibraryAssetIds.value.size,
     })
   }
 
@@ -147,7 +162,7 @@ export function createUnifiedSelectionModule(registry: ModuleRegistry) {
     const startItemId = lastSelectedLibraryAssetId.value
 
     if (!startItemId) {
-      selectItems([endItemId], 'replace', 'library-asset')
+      selectLibraryItems([endItemId], 'replace')
       return
     }
 
@@ -155,14 +170,14 @@ export function createUnifiedSelectionModule(registry: ModuleRegistry) {
     const endIndex = allItems.findIndex((item) => item.id === endItemId)
 
     if (startIndex === -1 || endIndex === -1) {
-      selectItems([endItemId], 'replace', 'library-asset')
+      selectLibraryItems([endItemId], 'replace')
       return
     }
 
     const [minIndex, maxIndex] = [Math.min(startIndex, endIndex), Math.max(startIndex, endIndex)]
     const rangeItems = allItems.slice(minIndex, maxIndex + 1).map((item) => item.id)
 
-    selectItems(rangeItems, 'replace', 'library-asset')
+    selectLibraryItems(rangeItems, 'replace')
   }
 
   function sortDisplayItems(
@@ -232,7 +247,7 @@ export function createUnifiedSelectionModule(registry: ModuleRegistry) {
     itemIds: TimelineSelectionId[],
     mode: 'replace' | 'toggle' = 'replace',
   ) {
-    return selectItems(itemIds, mode, 'timeline-selection')
+    return selectTimelineItems(itemIds, mode)
   }
 
   function selectTimelineSelection(selectionId: TimelineSelectionId | null) {
@@ -244,7 +259,7 @@ export function createUnifiedSelectionModule(registry: ModuleRegistry) {
   }
 
   function selectLibraryAssets(itemIds: string[], mode: SelectionMode = 'replace') {
-    return selectItems(itemIds, mode, 'library-asset')
+    return selectLibraryItems(itemIds, mode)
   }
 
   function selectLibraryAsset(libraryAssetId: string | null) {

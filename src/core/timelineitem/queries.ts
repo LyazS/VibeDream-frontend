@@ -221,13 +221,29 @@ export function getBaseRenderConfig<T extends MediaType>(
   return item.baseRenderConfig
 }
 
+function getTypedVisualRenderConfig(
+  item: UnifiedTimelineItemData<'video'> | UnifiedTimelineItemData<'image'> | UnifiedTimelineItemData<'text'>,
+): VisualProps {
+  return item.baseRenderConfig.visual
+}
+
+function getTypedAudioRenderConfig(
+  item: UnifiedTimelineItemData<'video'> | UnifiedTimelineItemData<'audio'>,
+): AudioProps {
+  return item.baseRenderConfig.audio
+}
+
+function getTypedTextRenderConfig(item: UnifiedTimelineItemData<'text'>): TextProps {
+  return item.baseRenderConfig.text
+}
+
 export function getVisualRenderConfig(
   item: UnifiedTimelineItemData<MediaType>,
 ): VisualProps | undefined {
   if (!hasVisualProperties(item)) {
     return undefined
   }
-  return (item.baseRenderConfig as { visual: VisualProps }).visual
+  return getTypedVisualRenderConfig(item)
 }
 
 export function getAudioRenderConfig(
@@ -236,7 +252,7 @@ export function getAudioRenderConfig(
   if (!hasAudioProperties(item)) {
     return undefined
   }
-  return (item.baseRenderConfig as { audio: AudioProps }).audio
+  return getTypedAudioRenderConfig(item)
 }
 
 export function getTextRenderConfig(
@@ -245,7 +261,7 @@ export function getTextRenderConfig(
   if (!isTextTimelineItem(item)) {
     return undefined
   }
-  return (item.baseRenderConfig as { text: TextProps }).text
+  return getTypedTextRenderConfig(item)
 }
 
 export function patchVisualRenderConfig(
@@ -255,7 +271,7 @@ export function patchVisualRenderConfig(
   if (!hasVisualProperties(item)) {
     return
   }
-  Object.assign((item.baseRenderConfig as { visual: VisualProps }).visual, patch)
+  Object.assign(getTypedVisualRenderConfig(item), patch)
 }
 
 export function patchAudioRenderConfig(
@@ -265,7 +281,7 @@ export function patchAudioRenderConfig(
   if (!hasAudioProperties(item)) {
     return
   }
-  Object.assign((item.baseRenderConfig as { audio: AudioProps }).audio, patch)
+  Object.assign(getTypedAudioRenderConfig(item), patch)
 }
 
 export function patchTextRenderConfig(
@@ -275,7 +291,7 @@ export function patchTextRenderConfig(
   if (!isTextTimelineItem(item)) {
     return
   }
-  Object.assign((item.baseRenderConfig as { text: TextProps }).text, patch)
+  Object.assign(getTypedTextRenderConfig(item), patch)
 }
 
 export function getExtraRenderConfig(item: UnifiedTimelineItemData<MediaType>) {
@@ -352,10 +368,10 @@ export function getRenderConfig<T extends MediaType>(
   }
 
   const visualRenderConfig = hasVisualProperties(item)
-    ? (renderConfig as Record<string, any>).visual as VisualProps
+    ? (item.runtime.renderConfig ?? item.baseRenderConfig).visual
     : null
   const audioRenderConfig = hasAudioProperties(item)
-    ? (renderConfig as Record<string, any>).audio as AudioProps
+    ? (item.runtime.renderConfig ?? item.baseRenderConfig).audio
     : null
   const nextVisualRenderConfig = visualRenderConfig
     ? {
@@ -434,8 +450,8 @@ export function getRenderMask(
   }
 
   const normalizedMask = normalizeMaskConfig(renderMask, {
-    width: (renderConfig as Record<string, any>).visual?.width ?? 0,
-    height: (renderConfig as Record<string, any>).visual?.height ?? 0,
+    width: hasVisualProperties(item) ? renderConfig.visual.width ?? 0 : 0,
+    height: hasVisualProperties(item) ? renderConfig.visual.height ?? 0 : 0,
   })
 
   return {

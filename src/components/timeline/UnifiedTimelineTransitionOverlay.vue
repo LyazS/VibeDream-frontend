@@ -40,6 +40,7 @@ import { IconComponents } from '@/constants/iconComponents'
 import { DEFAULT_TRACK_PADDING } from '@/constants/TrackConstants'
 import { THUMBNAIL_CONSTANTS } from '@/constants/ThumbnailConstants'
 import type { TimelineTransitionOverlayViewModel } from '@/core/timelineitem/transitionOverlay'
+import type { TimelineSelectionId } from '@/core/types/timelineSelection'
 import { alignFramesToFrame } from '@/core/utils/timeUtils'
 import { normalizeClipTransitionOutConfig } from '@/core/timelineitem/transition'
 import { TimelineItemQueries } from '@/core/timelineitem/queries'
@@ -54,7 +55,7 @@ interface Props {
 
 const props = defineProps<Props>()
 const emit = defineEmits<{
-  select: [event: MouseEvent, selectionId: string]
+  select: [event: MouseEvent, selectionId: TimelineSelectionId]
   contextMenu: [event: MouseEvent, sourceItemId: string]
   updateSnapResult: [snapResult: SnapResultState | null]
 }>()

@@ -310,7 +310,7 @@ import { useTimelineTimeScale } from '@/core/composables/useTimelineTimeScale'
 import { useTimelineDragPreview } from '@/core/composables/useTimelineDragPreview'
 import { useTimelineSnap } from '@/core/composables/useTimelineSnap'
 import { useTimelineDragHandlers } from '@/core/composables/useTimelineDragHandlers'
-import { buildClipSelectionId } from '@/core/types/timelineSelection'
+import { buildClipSelectionId, type TimelineSelectionId } from '@/core/types/timelineSelection'
 
 // Component name for Vue DevTools
 defineOptions({
@@ -483,7 +483,7 @@ function renderTimelineItem(item: UnifiedTimelineItemData, track: UnifiedTrackDa
     onContextMenu: (event: MouseEvent, id: string) => handleTimelineItemContextMenu(event, id),
     onResizeStart: handleTimelineItemResizeStart,
     // 监听吸附结果更新（用于resize期间的吸附指示器）
-    onUpdateSnapResult: (snapResult: SnapResultState) => {
+    onUpdateSnapResult: (snapResult: SnapResultState | null) => {
       currentSnapResult.value = snapResult
     },
   }
@@ -492,13 +492,13 @@ function renderTimelineItem(item: UnifiedTimelineItemData, track: UnifiedTrackDa
   return h(UnifiedTimelineClip, commonProps)
 }
 
-function handleSelectTransition(event: MouseEvent, selectionId: string) {
+function handleSelectTransition(event: MouseEvent, selectionId: TimelineSelectionId) {
   if (event.ctrlKey || event.metaKey) {
-    unifiedStore.selectTimelineSelections([selectionId as any], 'toggle')
+    unifiedStore.selectTimelineSelections([selectionId], 'toggle')
     return
   }
 
-  unifiedStore.selectTimelineSelections([selectionId as any], 'replace')
+  unifiedStore.selectTimelineSelections([selectionId], 'replace')
 }
 
 // ========== 轨道拖拽排序 ==========
