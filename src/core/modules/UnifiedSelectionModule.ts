@@ -1,5 +1,5 @@
 import { ref, computed } from 'vue'
-import type { UnifiedTimelineItemData } from '@/core/timelineitem/type'
+import type { UnifiedTimelineItemData } from '@/core/timelineitem/model/timelineItem'
 import type { ModuleRegistry } from './ModuleRegistry'
 import { MODULE_NAMES } from './ModuleRegistry'
 import type { UnifiedTimelineModule } from './UnifiedTimelineModule'
@@ -13,7 +13,7 @@ import {
   parseTimelineSelectionId,
   type TimelineSelectionId,
 } from '@/core/types/timelineSelection'
-import type { TimelineTransitionOverlayViewModel } from '@/core/timelineitem/transitionOverlay'
+import type { TimelineTransitionOverlayViewModel } from '@/core/timelineitem/ui/transitionOverlay'
 
 export type SelectionItemType = 'timeline-selection' | 'library-asset'
 export type SelectionMode = 'replace' | 'toggle' | 'range'

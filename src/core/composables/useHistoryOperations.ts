@@ -1,5 +1,5 @@
 import type { MediaType } from '@/core'
-import type { UnifiedTimelineItemData, VideoMediaConfig, AudioMediaConfig } from '@/core/timelineitem'
+import type { UnifiedTimelineItemData, VideoMediaConfig, AudioMediaConfig } from '@/core/timelineitem/model/timelineItem'
 import type { UnifiedTimeRange } from '@/core/types/timeRange'
 import type { UnifiedTrackType, UnifiedTrackData } from '@/core/track/TrackTypes'
 import type {
@@ -30,8 +30,8 @@ import {
 import { ApplyChangePlanCommand } from '@/core/modules/commands/ApplyChangePlanCommand'
 import { BatchAutoArrangeTrackCommand } from '@/core/modules/commands/batchCommands'
 import { MoveTrackCommand } from '@/core/modules/commands/MoveTrackCommand'
-import { TimelineItemQueries } from '@/core/timelineitem/'
-import { duplicateTimelineItem } from '@/core/timelineitem/factory'
+import { TimelineItemQueries } from '@/core/timelineitem/queries'
+import { duplicateTimelineItem } from '@/core/timelineitem/runtime/factory'
 import {
   ClearAllKeyframesCommand,
   type TimelineModule as KeyframeTimelineModule,
@@ -42,15 +42,15 @@ import type { TimelineSelectionId } from '@/core/types/timelineSelection'
 import {
   areClipTransitionOutConfigsEqual,
   normalizeClipTransitionOutConfig,
-} from '@/core/timelineitem/transition'
+} from '@/core/timelineitem/features/transition'
 import type { ClipFilterConfig } from '@/core/filter/types'
 import {
   areClipFilterConfigsEqual,
   normalizeClipFilterConfig,
-} from '@/core/timelineitem/filter'
+} from '@/core/timelineitem/features/filter'
 import { RENDERER_FPS } from '@/core/mediabunny/constant'
 import type { ChangePlan } from '@/core/property-system'
-import type { AnimationChannelKey } from '@/core/timelineitem/bunnytype'
+import type { AnimationChannelKey } from '@/core/timelineitem/model/render'
 
 interface PlaybackRateUpdate {
   playbackRate: number

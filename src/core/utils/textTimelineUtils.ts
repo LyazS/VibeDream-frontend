@@ -1,12 +1,12 @@
 import { reactive } from 'vue'
 import { generateTimelineItemId } from '@/core/utils/idGenerator'
-import type { UnifiedTimelineItemData } from '@/core/timelineitem/type'
-import type { TextMediaConfig } from '@/core/timelineitem/type'
-import type { TextStyleConfig } from '@/core/timelineitem/texttype'
+import type { UnifiedTimelineItemData } from '@/core/timelineitem/model/timelineItem'
+import type { TextMediaConfig } from '@/core/timelineitem/model/timelineItem'
+import type { TextStyleConfig } from '@/core/timelineitem/model/textStyle'
 import type { UnifiedTimeRange } from '@/core/types/timeRange'
-import { DEFAULT_TEXT_STYLE } from '@/core/timelineitem/texttype'
-import { DEFAULT_BLEND_MODE } from '@/core/timelineitem'
-import { createDefaultTimelineExtraRenderConfig } from '@/core/timelineitem/type'
+import { DEFAULT_TEXT_STYLE } from '@/core/timelineitem/model/textStyle'
+import { DEFAULT_BLEND_MODE } from '@/core/timelineitem/model/blendMode'
+import { createDefaultTimelineExtraRenderConfig } from '@/core/timelineitem/model/timelineItem'
 
 /**
  * 统一架构下的文本时间轴工具函数

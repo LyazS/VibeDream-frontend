@@ -7,9 +7,9 @@ import { useUnifiedStore } from '@/core/unifiedStore'
 import { framesToTimecode } from '@/core/utils/timeUtils'
 import { MediaItemQueries } from '@/core/mediaitem/queries'
 import type { ToolDefinition } from '../core/toolTypes'
-import type { UnifiedTimelineItemData } from '@/core/timelineitem/type'
+import type { UnifiedTimelineItemData } from '@/core/timelineitem/model/timelineItem'
 import { TimelineItemQueries } from '@/core/timelineitem/queries'
-import type { VisualProps, AudioProps, TextProps } from '@/core/timelineitem/bunnytype'
+import type { VisualProps, AudioProps, TextProps } from '@/core/timelineitem/model/render'
 
 /**
  * 时间范围信息

@@ -1,7 +1,7 @@
 import { degreesToRadians } from '@/core/utils/rotationTransform'
 import { domToCanvasCoordinates } from '@/core/utils/canvasClickUtils'
-import type { MaskConfig, MaskPropertyPath, MaskType, RectangleMaskConfig } from '@/core/timelineitem/mask'
-import type { UnifiedTimelineItemData } from '@/core/timelineitem/type'
+import type { MaskConfig, MaskPropertyPath, MaskType, RectangleMaskConfig } from '@/core/timelineitem/features/mask'
+import type { UnifiedTimelineItemData } from '@/core/timelineitem/model/timelineItem'
 
 export interface Point2D {
   x: number

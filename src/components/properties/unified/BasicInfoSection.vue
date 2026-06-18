@@ -23,7 +23,7 @@ import { computed } from 'vue'
 import { useAppI18n } from '@/core/composables/useI18n'
 import { useUnifiedStore } from '@/core/unifiedStore'
 import { TimelineItemQueries, hasVisualProperties } from '@/core/timelineitem/queries'
-import type { UnifiedTimelineItemData } from '@/core/timelineitem/type'
+import type { UnifiedTimelineItemData } from '@/core/timelineitem/model/timelineItem'
 
 interface Props {
   selectedTimelineItem: UnifiedTimelineItemData | null

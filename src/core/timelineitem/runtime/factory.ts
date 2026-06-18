@@ -13,11 +13,11 @@ import type {
   AudioMediaConfig,
   TextMediaConfig,
   TimelineBaseRenderConfig,
-} from '@/core/timelineitem/type'
+} from '@/core/timelineitem/model/timelineItem'
 import type { UnifiedTimeRange } from '@/core/types/timeRange'
-import type { UnifiedTimelineItemData, TimelineItemStatus } from '@/core/timelineitem/type'
-import { createDefaultTimelineExtraRenderConfig } from '@/core/timelineitem/type'
-import type { GetAnimation } from './bunnytype'
+import type { UnifiedTimelineItemData, TimelineItemStatus } from '@/core/timelineitem/model/timelineItem'
+import { createDefaultTimelineExtraRenderConfig } from '@/core/timelineitem/model/timelineItem'
+import type { GetAnimation } from '../model/render'
 import { TimelineItemQueries } from '@/core/timelineitem/queries'
 import { MediaItemQueries } from '@/core/mediaitem'
 import { createTextTimelineItem as createTextTimelineItemFromUtils } from '@/core/utils/textTimelineUtils'

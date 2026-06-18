@@ -4,25 +4,25 @@ import type {
   UnifiedTimelineItemData,
   VisualPropPatch,
   AudioPropPatch,
-} from '@/core/timelineitem/type'
+} from '@/core/timelineitem/model/timelineItem'
 import { TimelineItemQueries } from '@/core/timelineitem/queries'
 import type { MediaType } from '@/core/mediaitem/types'
 import type { UnifiedTimeRange } from '@/core/types/timeRange'
 import { ModuleRegistry, MODULE_NAMES } from './ModuleRegistry'
 import type { UnifiedSelectionModule } from './UnifiedSelectionModule'
 
-import { TimelineItemFactory } from '../timelineitem'
+import { TimelineItemFactory } from '@/core/timelineitem/runtime/factory'
 import {
   normalizeClipTransitionOutConfig,
   refreshClipTransitionsForItems,
-} from '@/core/timelineitem/transition'
-import { normalizeClipFilterConfig } from '@/core/timelineitem/filter'
+} from '@/core/timelineitem/features/transition'
+import { normalizeClipFilterConfig } from '@/core/timelineitem/features/filter'
 import type { ClipTransitionOutConfig } from '@/core/transition/types'
 import type { ClipFilterConfig } from '@/core/filter/types'
 import {
   createTimelineTransitionOverlay,
   type TimelineTransitionOverlayViewModel,
-} from '@/core/timelineitem/transitionOverlay'
+} from '@/core/timelineitem/ui/transitionOverlay'
 
 /**
  * 统一时间轴核心管理模块

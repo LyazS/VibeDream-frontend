@@ -3,8 +3,8 @@ import type {
   MaskConfig,
   MirrorMaskConfig,
   RectangleMaskConfig,
-} from '@/core/timelineitem/mask'
-import { normalizeMaskConfig } from '@/core/timelineitem/mask'
+} from '@/core/timelineitem/features/mask'
+import { normalizeMaskConfig } from '@/core/timelineitem/features/mask'
 import type { RenderPass } from '@/core/webgl2/renderchain/RenderPass'
 import type { RenderPassContext } from '@/core/webgl2/renderchain/RenderPassContext'
 import type { ProgramManager } from '@/core/webgl2/runtime/ProgramManager'

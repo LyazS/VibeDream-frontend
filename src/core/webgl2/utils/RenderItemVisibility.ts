@@ -1,5 +1,5 @@
 import { TimelineItemQueries } from '@/core/timelineitem/queries'
-import type { UnifiedTimelineItemData } from '@/core/timelineitem/type'
+import type { UnifiedTimelineItemData } from '@/core/timelineitem/model/timelineItem'
 import type { MediaType, UnifiedMediaItemData } from '@/core/mediaitem/types'
 import type { FrameData } from '@/core/webgl2/types'
 

@@ -12,9 +12,9 @@
  */
 
 import type { Component } from 'vue'
-import type { UnifiedTimelineItemData } from '@/core/timelineitem/type'
+import type { UnifiedTimelineItemData } from '@/core/timelineitem/model/timelineItem'
 import type { MediaType } from '@/core/mediaitem/types'
-import type { TimelineItemStatus } from '@/core/timelineitem/type'
+import type { TimelineItemStatus } from '@/core/timelineitem/model/timelineItem'
 
 // 导入模板组件
 import VideoContent from '@/components/cliprenderers/VideoContent.vue'

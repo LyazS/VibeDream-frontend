@@ -29,8 +29,8 @@ import {
   setMaskRotationOverlay,
 } from '@/core/property-system/render-state'
 import { TimelineItemQueries } from '@/core/timelineitem/queries'
-import type { MaskPropertyPath, MaskType } from '@/core/timelineitem/mask'
-import { getItemLocalSize, normalizeMaskConfig, replaceMaskType } from '@/core/timelineitem/mask'
+import type { MaskPropertyPath, MaskType } from '@/core/timelineitem/features/mask'
+import { getItemLocalSize, normalizeMaskConfig, replaceMaskType } from '@/core/timelineitem/features/mask'
 import {
   getKeyframeButtonState,
   getNextKeyframeFrame,

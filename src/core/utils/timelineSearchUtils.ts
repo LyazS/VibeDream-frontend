@@ -3,7 +3,7 @@
  * 适配自旧架构的 timelineSearchUtils，支持统一类型系统
  */
 
-import type { UnifiedTimelineItemData } from '@/core/timelineitem/type'
+import type { UnifiedTimelineItemData } from '@/core/timelineitem/model/timelineItem'
 import type { MediaTypeOrUnknown, UnifiedMediaItemData } from '@/core/mediaitem'
 
 // ==================== 查找工具 ====================

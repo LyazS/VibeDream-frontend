@@ -7,7 +7,7 @@ import { cloneDeep } from 'lodash'
 import { exportMediaItem, exportTimelineItem } from './mediaExporter'
 import type { FileData } from '@/core/datasource/providers/ai-generation/types'
 import type { UnifiedMediaItemData } from '@/core/mediaitem/types'
-import type { UnifiedTimelineItemData } from '@/core/timelineitem'
+import type { UnifiedTimelineItemData } from '@/core/timelineitem/model/timelineItem'
 import type { MediaType } from '@/core/mediaitem'
 
 // API 配置

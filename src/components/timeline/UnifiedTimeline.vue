@@ -277,7 +277,7 @@ import { calculateViewportFrameRange } from '@/core/utils/thumbnailLayout'
 import { useUnifiedStore } from '@/core/unifiedStore'
 import { useAppI18n } from '@/core/composables/useI18n'
 import { NScrollbar } from 'naive-ui'
-import type { UnifiedTimelineItemData } from '@/core/timelineitem/type'
+import type { UnifiedTimelineItemData } from '@/core/timelineitem/model/timelineItem'
 import type { UnifiedTrackData } from '@/core/track/TrackTypes'
 import type { SnapResultState } from '@/core/composables/useTimelineSnap'
 

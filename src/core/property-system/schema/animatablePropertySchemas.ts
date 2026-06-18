@@ -1,4 +1,4 @@
-import type { PropertyAnimationGroupId } from '@/core/timelineitem/bunnytype'
+import type { PropertyAnimationGroupId } from '@/core/timelineitem/model/render'
 import type { DirectPropertyId } from '@/core/property-system/mutation/types'
 import { normalizeAngle } from '@/core/utils/rotationTransform'
 

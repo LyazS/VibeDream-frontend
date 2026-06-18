@@ -1,5 +1,5 @@
 import type { UnifiedLibraryAssetData } from '@/core/asset/types'
-import type { UnifiedTimelineItemData } from '@/core/timelineitem/type'
+import type { UnifiedTimelineItemData } from '@/core/timelineitem/model/timelineItem'
 import type { MediaType, UnifiedMediaItemData } from '@/core/mediaitem/types'
 import { WebGL2Runtime } from '@/core/webgl2/runtime/WebGL2Runtime'
 import { ClearMainPass } from '@/core/webgl2/passes/ClearMainPass'
@@ -16,7 +16,7 @@ import { TimelineItemQueries } from '@/core/timelineitem/queries'
 import {
   hasEnabledClipTransitionOut,
   resolveClipTransitionPlaybackState,
-} from '@/core/timelineitem/transition'
+} from '@/core/timelineitem/features/transition'
 
 /**
  * 渲染器构造所需的宿主依赖。

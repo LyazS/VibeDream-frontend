@@ -2,18 +2,18 @@ import { useUnifiedStore } from '@/core/unifiedStore'
 import { MediaItemQueries } from '@/core/mediaitem'
 import { generateTimelineItemId } from '@/core/utils/idGenerator'
 import type { MediaType } from '@/core/mediaitem/types'
-import type { UnifiedTimelineItemData, TimelineItemStatus } from '@/core/timelineitem/type'
+import type { UnifiedTimelineItemData, TimelineItemStatus } from '@/core/timelineitem/model/timelineItem'
 import type {
   VideoMediaConfig,
   ImageMediaConfig,
   AudioMediaConfig,
-} from '@/core/timelineitem/type'
-import { DEFAULT_BLEND_MODE } from '@/core/timelineitem'
+} from '@/core/timelineitem/model/timelineItem'
+import { DEFAULT_BLEND_MODE } from '@/core/timelineitem/model/blendMode'
 import { TimelineItemQueries } from '@/core/timelineitem/queries'
 import { createTextTimelineItem } from '@/core/utils/textTimelineUtils'
 import { setupTimelineItemBunny } from '@/core/bunnyUtils/timelineItemSetup'
 import { buildClipSelectionId } from '@/core/types/timelineSelection'
-import { createDefaultTimelineExtraRenderConfig } from '@/core/timelineitem/type'
+import { createDefaultTimelineExtraRenderConfig } from '@/core/timelineitem/model/timelineItem'
 
 /**
  * 时间轴项目操作模块

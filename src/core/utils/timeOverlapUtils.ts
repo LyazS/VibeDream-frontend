@@ -3,7 +3,7 @@
  * 统一处理所有时间范围重叠检测的逻辑，避免代码重复
  */
 import type { MediaType } from '@/core/mediaitem'
-import type { UnifiedTimelineItemData } from '@/core/timelineitem'
+import type { UnifiedTimelineItemData } from '@/core/timelineitem/model/timelineItem'
 import type { UnifiedTimeRange } from '@/core/types/timeRange'
 import type { OverlapTimeRange, OverlapResult, ConflictInfo } from '@/core/types'
 

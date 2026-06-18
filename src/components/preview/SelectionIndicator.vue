@@ -73,7 +73,7 @@
 import { computed, ref, onMounted, onUnmounted, type CSSProperties } from 'vue'
 import { useUnifiedStore } from '@/core/unifiedStore'
 import { TimelineItemQueries } from '@/core/timelineitem/queries'
-import type { VisualProps } from '@/core/timelineitem/bunnytype'
+import type { VisualProps } from '@/core/timelineitem/model/render'
 import type { MediaType } from '@/core/mediaitem'
 import { degreesToRadians } from '@/core/utils/rotationTransform'
 

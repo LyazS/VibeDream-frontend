@@ -240,8 +240,8 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useAppI18n, useUnifiedMaskKeyframeControls } from '@/core/composables'
-import type { UnifiedTimelineItemData } from '@/core/timelineitem/type'
-import type { MaskType } from '@/core/timelineitem/mask'
+import type { UnifiedTimelineItemData } from '@/core/timelineitem/model/timelineItem'
+import type { MaskType } from '@/core/timelineitem/features/mask'
 import KeyframedDualNumberField from '@/components/properties/common/KeyframedDualNumberField.vue'
 import KeyframedSliderField from '@/components/properties/common/KeyframedSliderField.vue'
 

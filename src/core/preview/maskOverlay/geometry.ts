@@ -5,13 +5,13 @@ import type {
   MaskConfig,
   MirrorMaskConfig,
   RectangleMaskConfig,
-} from '@/core/timelineitem/mask'
+} from '@/core/timelineitem/features/mask'
 import {
   isEllipseMaskConfig,
   isLinearMaskConfig,
   isMirrorMaskConfig,
   isRectangleMaskConfig,
-} from '@/core/timelineitem/mask'
+} from '@/core/timelineitem/features/mask'
 import type {
   MaskDeferredPatch,
   MaskGuideDescriptor,

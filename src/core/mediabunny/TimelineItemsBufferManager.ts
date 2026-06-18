@@ -5,7 +5,7 @@
  * 使用双缓冲机制避免更新与使用冲突
  */
 
-import type { UnifiedTimelineItemData } from '@/core/timelineitem/type'
+import type { UnifiedTimelineItemData } from '@/core/timelineitem/model/timelineItem'
 import type { MediaType } from '@/core/mediaitem/types'
 import { TimelineItemQueries } from '@/core/timelineitem/queries'
 

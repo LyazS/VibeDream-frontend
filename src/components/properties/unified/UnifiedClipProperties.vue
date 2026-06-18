@@ -46,7 +46,7 @@ import {
   isVideoTimelineItem,
   isAudioTimelineItem,
 } from '@/core/timelineitem/queries'
-import type { UnifiedTimelineItemData } from '@/core/timelineitem/type'
+import type { UnifiedTimelineItemData } from '@/core/timelineitem/model/timelineItem'
 
 import BasicInfoSection from './BasicInfoSection.vue'
 import PlaybackSettingsSection from './PlaybackSettingsSection.vue'

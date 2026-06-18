@@ -1,5 +1,5 @@
 import type { MediaType } from '@/core/mediaitem'
-import type { UnifiedTimelineItemData } from '@/core/timelineitem/type'
+import type { UnifiedTimelineItemData } from '@/core/timelineitem/model/timelineItem'
 import {
   normalizeAnimationGroupId,
   type AnimateKeyframe,
@@ -10,7 +10,7 @@ import {
   type PropertyAnimationGroupId,
   type PropertyAnimationValueByGroup,
   type GetAnimation,
-} from '@/core/timelineitem/bunnytype'
+} from '@/core/timelineitem/model/render'
 import { AnimationRegistry } from './registry'
 import { isFilterParamPropertyId } from '@/core/property-system/schema/propertyIds'
 

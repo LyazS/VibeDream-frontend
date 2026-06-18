@@ -9,7 +9,7 @@ import { framesToTimecode } from '@/core/utils/timeUtils'
 import type { SimpleCommand } from '@/core/modules/commands/types'
 
 // ==================== 新架构类型导入 ====================
-import type { UnifiedTimelineItemData } from '@/core/timelineitem/type'
+import type { UnifiedTimelineItemData } from '@/core/timelineitem/model/timelineItem'
 
 import type { UnifiedMediaItemData, MediaType } from '@/core/mediaitem/types'
 
@@ -20,12 +20,13 @@ import type {
   AnimationGroupId,
   AnimationGroupTrack,
   GetAnimation,
-} from '@/core/timelineitem/bunnytype'
+} from '@/core/timelineitem/model/render'
 import { sliceKeyframesToSegment } from '@/core/utils/keyframePositionUtils'
 
 // ==================== 新架构工具导入 ====================
 
-import { TimelineItemFactory, TimelineItemQueries } from '@/core/timelineitem'
+import { TimelineItemFactory } from '@/core/timelineitem/runtime/factory'
+import { TimelineItemQueries } from '@/core/timelineitem/queries'
 
 type SplitKeyframe = AnimateKeyframe<MediaType, AnimationGroupId>
 type SplitChannelEntry = AnimationGroupTrack<MediaType, AnimationGroupId>

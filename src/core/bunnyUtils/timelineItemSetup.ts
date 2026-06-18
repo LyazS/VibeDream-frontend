@@ -1,9 +1,9 @@
 import { markRaw } from 'vue'
-import type { UnifiedTimelineItemData } from '@/core/timelineitem/type'
+import type { UnifiedTimelineItemData } from '@/core/timelineitem/model/timelineItem'
 import type { UnifiedMediaItemData } from '@/core/mediaitem/types'
 import { BunnyClip } from '@/core/mediabunny/bunny-clip'
 import { textToImageBitmap, textToImageBitmap2 } from './ToBitmap'
-import { closeClipTransitionEdgeFrames } from '@/core/timelineitem/transition'
+import { closeClipTransitionEdgeFrames } from '@/core/timelineitem/features/transition'
 import { TimelineItemQueries } from '@/core/timelineitem/queries'
 
 /**

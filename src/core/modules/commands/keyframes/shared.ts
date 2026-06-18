@@ -3,17 +3,17 @@
  * 适配新架构的统一类型系统
  */
 
-import type { UnifiedTimelineItemData } from '@/core/timelineitem/type'
-import type { AnimateKeyframe, GetAnimation } from '@/core/timelineitem/bunnytype'
-import type { TimelineBaseRenderConfig } from '@/core/timelineitem/type'
+import type { UnifiedTimelineItemData } from '@/core/timelineitem/model/timelineItem'
+import type { AnimateKeyframe, GetAnimation } from '@/core/timelineitem/model/render'
+import type { TimelineBaseRenderConfig } from '@/core/timelineitem/model/timelineItem'
 import type { MediaType } from '@/core/mediaitem'
-import { createDefaultTimelineExtraRenderConfig } from '@/core/timelineitem/type'
+import { createDefaultTimelineExtraRenderConfig } from '@/core/timelineitem/model/timelineItem'
 import { isPlayheadInTimelineItem as checkPlayheadInTimelineItem } from '@/core/utils/timelineSearchUtils'
 import { cloneDeep } from 'lodash'
 import { useUnifiedStore } from '@/core/unifiedStore'
 import { isTextTimelineItem } from '@/core/timelineitem/queries'
 import { TimelineItemQueries } from '@/core/timelineitem/queries'
-import { rebuildTextRuntime } from '@/core/timelineitem/textRebuild'
+import { rebuildTextRuntime } from '@/core/timelineitem/runtime/textRuntime'
 
 // ==================== 关键帧数据快照接口 ====================
 

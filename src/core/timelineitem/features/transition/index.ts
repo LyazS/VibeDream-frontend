@@ -1,5 +1,10 @@
+/**
+ * 转场能力域实现。
+ * 从原 transition.ts 迁入，保留原有逻辑与注释语义。
+ */
+
 import type { MediaType } from '@/core/mediaitem'
-import type { UnifiedTimelineItemData } from '@/core/timelineitem/type'
+import type { UnifiedTimelineItemData } from '@/core/timelineitem/model/timelineItem'
 import {
   DEFAULT_CLIP_TRANSITION_DURATION_FRAMES,
   type ClipTransitionOutConfig,

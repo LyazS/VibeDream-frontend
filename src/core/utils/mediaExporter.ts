@@ -4,10 +4,10 @@
  */
 
 import { QUALITY_MEDIUM } from 'mediabunny'
-import type { AudioMediaConfig, UnifiedTimelineItemData, VideoMediaConfig } from '@/core/timelineitem/type'
-import { createDefaultTimelineExtraRenderConfig } from '@/core/timelineitem/type'
+import type { AudioMediaConfig, UnifiedTimelineItemData, VideoMediaConfig } from '@/core/timelineitem/model/timelineItem'
+import { createDefaultTimelineExtraRenderConfig } from '@/core/timelineitem/model/timelineItem'
 import type { UnifiedMediaItemData } from '@/core/mediaitem/types'
-import { DEFAULT_BLEND_MODE } from '@/core/timelineitem'
+import { DEFAULT_BLEND_MODE } from '@/core/timelineitem/model/blendMode'
 import { RENDERER_FPS } from '@/core/mediabunny/constant'
 import { BunnyClip } from '@/core/mediabunny/bunny-clip'
 import { ExportManager, type ExportProjectOptions } from './projectExporter'

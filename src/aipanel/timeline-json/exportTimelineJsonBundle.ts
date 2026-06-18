@@ -1,8 +1,8 @@
 import { cloneDeep } from 'lodash'
 import type { UnifiedTrackData } from '@/core/track/TrackTypes'
-import { TimelineItemFactory } from '@/core/timelineitem/factory'
-import type { UnifiedTimelineItemData } from '@/core/timelineitem/type'
-import { createDefaultTimelineExtraRenderConfig } from '@/core/timelineitem/type'
+import { TimelineItemFactory } from '@/core/timelineitem/runtime/factory'
+import type { UnifiedTimelineItemData } from '@/core/timelineitem/model/timelineItem'
+import { createDefaultTimelineExtraRenderConfig } from '@/core/timelineitem/model/timelineItem'
 import type { TimelineJsonBundle } from './types'
 
 function cloneTrack(track: UnifiedTrackData): UnifiedTrackData {

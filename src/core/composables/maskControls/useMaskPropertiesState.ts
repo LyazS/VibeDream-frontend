@@ -5,7 +5,7 @@ import {
   isMirrorMaskConfig,
   isRectangleMaskConfig,
   normalizeMaskConfig,
-} from '@/core/timelineitem/mask'
+} from '@/core/timelineitem/features/mask'
 import { TimelineItemQueries } from '@/core/timelineitem/queries'
 import { isPlayheadInTimelineItem } from '@/core/utils/timelineSearchUtils'
 import type { UnifiedMaskKeyframeControlsOptions } from './types'

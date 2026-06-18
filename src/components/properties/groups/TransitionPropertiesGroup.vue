@@ -40,8 +40,8 @@ import { useAppI18n } from '@/core/composables/useI18n'
 import { effectTemplateRegistry } from '@/core/effect-template/EffectTemplateRegistry'
 import { TimelineItemQueries } from '@/core/timelineitem/queries'
 import { useUnifiedStore } from '@/core/unifiedStore'
-import type { UnifiedTimelineItemData } from '@/core/timelineitem/type'
-import { normalizeClipTransitionOutConfig } from '@/core/timelineitem/transition'
+import type { UnifiedTimelineItemData } from '@/core/timelineitem/model/timelineItem'
+import { normalizeClipTransitionOutConfig } from '@/core/timelineitem/features/transition'
 
 interface Props {
   selectedTimelineItem: UnifiedTimelineItemData<'video'> | UnifiedTimelineItemData<'image'> | null

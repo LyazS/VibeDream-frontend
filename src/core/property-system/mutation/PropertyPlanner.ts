@@ -18,7 +18,7 @@ import {
   getPosition,
   getRelativeFrame,
 } from '@/core/animation/engine'
-import type { PropertyAnimationValueByGroup } from '@/core/timelineitem/bunnytype'
+import type { PropertyAnimationValueByGroup } from '@/core/timelineitem/model/render'
 
 export class PropertyPlanner {
   plan(intent: PropertyPlanIntent): ChangePlan {

@@ -2,7 +2,7 @@ import type { UnifiedLibraryAssetData } from '@/core/asset/types'
 import type { UnifiedMediaItemData } from '@/core/mediaitem/types'
 import type { FrameData } from '@/core/webgl2/types'
 import { TimelineWebGLRenderer } from '@/core/webgl2/renderer/TimelineWebGLRenderer'
-import type { UnifiedTimelineItemData } from '@/core/timelineitem/type'
+import type { UnifiedTimelineItemData } from '@/core/timelineitem/model/timelineItem'
 import type { MediaType } from '@/core/mediaitem/types'
 
 interface WebGLExportRendererOptions {

@@ -6,7 +6,7 @@
  */
 
 import type { VNode, Component } from 'vue'
-import type { UnifiedTimelineItemData } from '@/core/timelineitem/type'
+import type { UnifiedTimelineItemData } from '@/core/timelineitem/model/timelineItem'
 import type { MediaType } from '@/core/mediaitem/types'
 
 // ==================== 渲染器类型定义 ====================

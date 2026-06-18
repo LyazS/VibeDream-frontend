@@ -1,6 +1,6 @@
 import { fetchClient, sleepWithAbortSignal } from '@/utils/fetchClient'
 import { RENDERER_FPS } from '@/core/mediabunny/constant'
-import type { UnifiedTimelineItemData } from '@/core/timelineitem/type'
+import type { UnifiedTimelineItemData } from '@/core/timelineitem/model/timelineItem'
 import type { UnifiedTrackData } from '@/core/track/TrackTypes'
 import type { ResolveCheckContext, ResolveContext, ResourceResolver } from '../ResourceResolver'
 import type { ResourcePolicy, ResourceRequest } from '../ResourceTypes'

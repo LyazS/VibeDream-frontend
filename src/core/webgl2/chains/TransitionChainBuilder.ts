@@ -4,13 +4,13 @@ import { EffectPackageTransitionPass } from '@/core/effect-package/runtime/Effec
 import { effectTemplateRegistry } from '@/core/effect-template/EffectTemplateRegistry'
 import { degreesToRadians } from '@/core/utils/rotationTransform'
 import type { UnifiedMediaItemData } from '@/core/mediaitem/types'
-import { DEFAULT_BLEND_MODE } from '@/core/timelineitem'
+import { DEFAULT_BLEND_MODE } from '@/core/timelineitem/model/blendMode'
 import { TimelineItemQueries } from '@/core/timelineitem/queries'
 import {
   resolveClipTransitionPlaybackState,
   resolveTransitionBoundaryFrames,
-} from '@/core/timelineitem/transition'
-import type { TimelineBaseRenderConfig, UnifiedTimelineItemData } from '@/core/timelineitem/type'
+} from '@/core/timelineitem/features/transition'
+import type { TimelineBaseRenderConfig, UnifiedTimelineItemData } from '@/core/timelineitem/model/timelineItem'
 import {
   resolveRenderConfigAtFrame,
   resolveRenderFilterConfigAtFrame,

@@ -1,7 +1,7 @@
 import { textToImageBitmap2 } from '@/core/bunnyUtils/ToBitmap'
-import type { UnifiedTimelineItemData } from '@/core/timelineitem/type'
-import type { TextStyleConfig } from '@/core/timelineitem/texttype'
-import { DEFAULT_TEXT_STYLE } from '@/core/timelineitem/texttype'
+import type { UnifiedTimelineItemData } from '@/core/timelineitem/model/timelineItem'
+import type { TextStyleConfig } from '@/core/timelineitem/model/textStyle'
+import { DEFAULT_TEXT_STYLE } from '@/core/timelineitem/model/textStyle'
 import { TimelineItemQueries } from '@/core/timelineitem/queries'
 
 export interface RebuildTextRuntimeOptions {
@@ -9,6 +9,10 @@ export interface RebuildTextRuntimeOptions {
   stylePatch?: Partial<TextStyleConfig>
 }
 
+/**
+ * 重建文本片段运行时资源。
+ * 会同步更新文本内容、文本样式、视觉尺寸以及 bitmap 版本号。
+ */
 export async function rebuildTextRuntime(
   item: UnifiedTimelineItemData<'text'>,
   options: RebuildTextRuntimeOptions = {},

@@ -1,6 +1,6 @@
 import type { MediaType, UnifiedMediaItemData } from '@/core/mediaitem/types'
-import { TimelineItemQueries } from '@/core/timelineitem'
-import type { UnifiedTimelineItemData } from '@/core/timelineitem/type'
+import { TimelineItemQueries } from '@/core/timelineitem/queries'
+import type { UnifiedTimelineItemData } from '@/core/timelineitem/model/timelineItem'
 import { TimelineItemTransitioner } from '@/core/managers/sync/TimelineItemTransitioner'
 import type { ResolveCheckContext, ResolveContext, ResourceResolver } from '../ResourceResolver'
 import type { ResourcePolicy, ResourceRequest } from '../ResourceTypes'

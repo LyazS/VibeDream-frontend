@@ -1,5 +1,5 @@
 import { computed } from 'vue'
-import { normalizeClipFilterConfig } from '@/core/timelineitem/filter'
+import { normalizeClipFilterConfig } from '@/core/timelineitem/features/filter'
 import { TimelineItemQueries } from '@/core/timelineitem/queries'
 import { isPlayheadInTimelineItem } from '@/core/utils/timelineSearchUtils'
 import type { UnifiedFilterControlsOptions } from './types'

@@ -28,17 +28,17 @@ export interface AudioBufferWithVolume {
   /** 对应的音量值 (0-1) */
   volume: number
 }
-import type { UnifiedTimelineItemData } from '@/core/timelineitem/type'
+import type { UnifiedTimelineItemData } from '@/core/timelineitem/model/timelineItem'
 import type { UnifiedLibraryAssetData } from '@/core/asset/types'
 import type { MediaType } from '@/core/mediaitem'
 import type { UnifiedMediaItemData } from '@/core/mediaitem/types'
 import type { IClip } from '@/core/mediabunny/IClip'
-import { TimelineItemFactory } from '@/core/timelineitem/factory'
+import { TimelineItemFactory } from '@/core/timelineitem/runtime/factory'
 import { TimelineItemQueries } from '@/core/timelineitem/queries'
 import {
   closeClipTransitionEdgeFrames,
   refreshClipTransitionsForItems,
-} from '@/core/timelineitem/transition'
+} from '@/core/timelineitem/features/transition'
 import { AudioSegmentRenderer } from '@/core/mediabunny/audio-segment-renderer'
 import { RENDERER_FPS, AUDIO_DEFAULT_SAMPLE_RATE } from '@/core/mediabunny/constant'
 import { applyAnimationToConfig } from '@/core/utils/animationInterpolation'

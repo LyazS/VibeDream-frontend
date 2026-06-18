@@ -1,8 +1,8 @@
 import { computed, type Ref } from 'vue'
 import { useUnifiedStore } from '@/core/unifiedStore'
-import type { UnifiedTimelineItemData } from '@/core/timelineitem'
+import type { UnifiedTimelineItemData } from '@/core/timelineitem/model/timelineItem'
 import { TimelineItemQueries } from '@/core/timelineitem/queries'
-import type { AnimationChannelKey } from '@/core/timelineitem/bunnytype'
+import type { AnimationChannelKey } from '@/core/timelineitem/model/render'
 import {
   getKeyframeButtonState,
   getKeyframeUIState,
@@ -11,8 +11,8 @@ import {
 } from '@/core/utils/unifiedKeyframeUtils'
 import { isPlayheadInTimelineItem } from '@/core/utils/timelineSearchUtils'
 import { normalizeAngle } from '@/core/utils/rotationTransform'
-import type { BlendMode } from '@/core/timelineitem'
-import { isBlendMode } from '@/core/timelineitem'
+import type { BlendMode } from '@/core/timelineitem/model/blendMode'
+import { isBlendMode } from '@/core/timelineitem/model/blendMode'
 import { propertyMutationCommitter, type ChangeOperation } from '@/core/property-system'
 import {
   clearAudioVolumeOverlay,

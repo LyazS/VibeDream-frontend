@@ -13,14 +13,13 @@ import type { Raw } from 'vue'
 import type { MediaType } from '@/core/mediaitem'
 import type { UnifiedTimeRange } from '@/core/types/timeRange'
 import type { BunnyClip } from '@/core/mediabunny/bunny-clip'
-import type { GetAnimation, TimelineBaseRenderConfig } from './bunnytype'
-import type { BlendMode } from './blendMode'
-import type { ClipTransitionRuntime } from './transition'
 import type { ClipTransitionOutConfig } from '@/core/transition/types'
 import type { ClipFilterConfig } from '@/core/filter/types'
-import type { MaskConfig } from './mask'
+import type { BlendMode } from './blendMode'
+import type { GetAnimation, TimelineBaseRenderConfig } from './render'
+import type { ClipTransitionRuntime } from '../features/transition'
+import type { MaskConfig } from '../features/mask'
 
-// 重新导出 bunnytype 中的类型供其他模块使用
 export type {
   AnimationChannelKey,
   GetAnimation,
@@ -32,29 +31,21 @@ export type {
   ImageMediaConfig,
   AudioMediaConfig,
   TextMediaConfig,
-} from './bunnytype'
+} from './render'
 export type { BlendMode } from './blendMode'
-export type { MaskConfig, MaskType } from './mask'
+export type { MaskConfig, MaskType } from '../features/mask'
+
 import type {
-  AnimationChannelKey,
   VisualProps,
   AudioProps,
-  TextProps,
-  VideoMediaConfig,
-  ImageMediaConfig,
-  AudioMediaConfig,
-  TextMediaConfig,
-} from './bunnytype'
+} from './render'
 
 // ==================== 基础类型定义 ====================
 
 /**
  * 时间轴项目状态类型 - 3状态简化版
  */
-export type TimelineItemStatus =
-  | 'ready' // 完全就绪，可用于时间轴
-  | 'loading' // 正在处理中，包含下载、解析、等待
-  | 'error' // 不可用状态，包含错误、缺失、取消
+export type TimelineItemStatus = 'ready' | 'loading' | 'error'
 
 export interface PlaceholderTaskState {
   kind: 'asr-subtitles'
@@ -103,16 +94,15 @@ export function createDefaultTimelineExtraRenderConfig(): TimelineExtraRenderCon
  */
 export interface UnifiedTimelineItemRuntime<T extends MediaType = MediaType> {
   /** 与时间轴项目生命周期一致 */
-  bunnyClip?: Raw<BunnyClip> // mediabunny的clip对象
-  textBitmap?: ImageBitmap // 专门用于文本渲染的ImageBitmap
-  textBitmapVersion?: number // 文本位图重建版本，用于驱动 WebGL 纹理重新上传
+  bunnyClip?: Raw<BunnyClip>
+  textBitmap?: ImageBitmap
+  textBitmapVersion?: number
   /** 动画插值后的临时配置（运行时数据，不持久化） */
   renderConfig?: TimelineBaseRenderConfig<T>
   /** 扩展渲染配置的运行时结果（运行时数据，不持久化） */
   exRenderConfig: TimelineExtraRenderConfig
   /** 片段出场转场的运行时绑定与边界帧缓存 */
   transition?: ClipTransitionRuntime
-
   /**
    * 标识时间轴项目是否已经从 mediaItem 初始化过（必选字段）
    * - true: 已经初始化，不应该再从 mediaItem 同步数据
@@ -120,6 +110,7 @@ export interface UnifiedTimelineItemRuntime<T extends MediaType = MediaType> {
    */
   isInitialized: boolean
 }
+
 // ==================== 核心接口设计 ====================
 
 /**
@@ -143,29 +134,22 @@ export type MediaItemIdType<T extends MediaType> = T extends 'text' ? string | n
 export interface UnifiedTimelineItemData<T extends MediaType = MediaType> {
   // ==================== 核心属性 ====================
   readonly id: string
-  mediaItemId: MediaItemIdType<T> // 关联的统一媒体项目ID，类型根据 MediaType 自动推断
+  mediaItemId: MediaItemIdType<T>
   trackId: string
-
   // ==================== 状态管理 ====================
-  timelineStatus: TimelineItemStatus // 仅3状态：ready|loading|error
-
+  timelineStatus: TimelineItemStatus
   // ==================== 媒体信息 ====================
   mediaType: T
-
   // ==================== 时间范围 ====================
   timeRange: UnifiedTimeRange
-
   // ==================== 配置（类型安全） ====================
   baseRenderConfig: TimelineBaseRenderConfig<T>
   /** schema v2 迁移期扩展渲染配置 */
   exRenderConfig: TimelineExtraRenderConfig
-
   // ==================== 动画配置（类型安全） ====================
   animation?: GetAnimation<T>
-
   // ==================== 片段滤镜配置（持久化） ====================
   runtime: UnifiedTimelineItemRuntime<T>
-
   // ==================== 占位符标识（可选） ====================
   /**
    * 是否为占位符项目

@@ -1,7 +1,7 @@
 import { generateCommandId } from '@/core/utils/idGenerator'
 import type { SimpleCommand } from '@/core/modules/commands/types'
 import type { ChangePlan, ChangeOperation } from '@/core/property-system'
-import type { UnifiedTimelineItemData } from '@/core/timelineitem/type'
+import type { UnifiedTimelineItemData } from '@/core/timelineitem/model/timelineItem'
 import type {
   KeyframeSnapshot,
   PlaybackControls,
@@ -19,15 +19,15 @@ import {
   sortGroupKeyframes,
 } from '@/core/animation/engine'
 import { applyAnimationToConfig } from '@/core/utils/animationInterpolation'
-import { normalizeClipFilterConfig } from '@/core/timelineitem/filter'
+import { normalizeClipFilterConfig } from '@/core/timelineitem/features/filter'
 import { TimelineItemQueries } from '@/core/timelineitem/queries'
-import { rebuildTextRuntime } from '@/core/timelineitem/textRebuild'
-import type { AnimationGroupId } from '@/core/timelineitem/bunnytype'
-import type { AudioProps, VisualProps } from '@/core/timelineitem/type'
+import { rebuildTextRuntime } from '@/core/timelineitem/runtime/textRuntime'
+import type { AnimationGroupId } from '@/core/timelineitem/model/render'
+import type { AudioProps, VisualProps } from '@/core/timelineitem/model/timelineItem'
 import {
   applyMaskGroupValue,
   getItemLocalSize,
-} from '@/core/timelineitem/mask'
+} from '@/core/timelineitem/features/mask'
 
 export class ApplyChangePlanCommand implements SimpleCommand {
   public readonly id: string

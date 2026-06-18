@@ -11,9 +11,10 @@
  */
 
 import type { MediaType, UnifiedMediaItemData } from '@/core/mediaitem/types'
-import type { UnifiedTimelineItemData } from '@/core/timelineitem/type'
+import type { UnifiedTimelineItemData } from '@/core/timelineitem/model/timelineItem'
 import { MediaItemQueries } from '@/core/mediaitem'
-import { TimelineItemFactory, TimelineItemQueries } from '@/core/timelineitem'
+import { TimelineItemFactory } from '@/core/timelineitem/runtime/factory'
+import { TimelineItemQueries } from '@/core/timelineitem/queries'
 import { useUnifiedStore } from '@/core/unifiedStore'
 import { setupTimelineItemBunny } from '@/core/bunnyUtils/timelineItemSetup'
 

@@ -5,11 +5,11 @@
  */
 
 import type { SimpleCommand } from '@/core/modules/commands/types'
-import type { UnifiedTimelineItemData } from '@/core/timelineitem/type'
+import type { UnifiedTimelineItemData } from '@/core/timelineitem/model/timelineItem'
 import type { UnifiedMediaItemData, MediaType } from '@/core/mediaitem/types'
 
 // ==================== 新架构工具导入 ====================
-import { TimelineItemFactory } from '@/core/timelineitem'
+import { TimelineItemFactory } from '@/core/timelineitem/runtime/factory'
 import { TimelineItemQueries } from '@/core/timelineitem/queries'
 // ==================== 旧架构类型工具导入 ====================
 import { generateCommandId } from '@/core/utils/idGenerator'

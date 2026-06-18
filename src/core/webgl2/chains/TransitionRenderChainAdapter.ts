@@ -1,6 +1,6 @@
 import { RenderChain } from '@/core/webgl2/renderchain/RenderChain'
 import { TransitionChainBuilder } from '@/core/webgl2/chains/TransitionChainBuilder'
-import type { UnifiedTimelineItemData } from '@/core/timelineitem/type'
+import type { UnifiedTimelineItemData } from '@/core/timelineitem/model/timelineItem'
 
 type TransitionItem = UnifiedTimelineItemData<'video'> | UnifiedTimelineItemData<'image'>
 

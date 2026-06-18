@@ -1,12 +1,12 @@
 import type { MediaType } from '@/core/mediaitem'
 import type { UnifiedTimeRange } from '@/core/types/timeRange'
-import type { UnifiedTimelineItemData } from '@/core/timelineitem/type'
+import type { UnifiedTimelineItemData } from '@/core/timelineitem/model/timelineItem'
 import {
   normalizeAnimationGroupId,
   type AnimateKeyframe,
   type AnimationChannelKey,
   type PropertyAnimationGroupId,
-} from '@/core/timelineitem/bunnytype'
+} from '@/core/timelineitem/model/render'
 import {
   clearAllAnimationGroups,
   createEmptyAnimation,
@@ -26,7 +26,7 @@ import {
   toggleGroupKeyframe,
   adjustGroupKeyframesForDurationChange,
 } from '@/core/animation/engine'
-import type { KeyframeButtonState, KeyframeUIState } from '@/core/timelineitem/animationtypes'
+import type { KeyframeButtonState, KeyframeUIState } from '@/core/timelineitem/model/keyframeUi'
 
 type TimelineKeyframeTrack = {
   keyframes?: Array<{ frame: number; cachedFrame: number; position: number }>

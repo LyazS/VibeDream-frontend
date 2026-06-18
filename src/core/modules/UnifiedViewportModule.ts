@@ -10,7 +10,7 @@ import {
   calculateMaxVisibleDurationFrames,
   calculateTotalDurationFrames,
 } from '@/core/utils/timelineScaleUtils'
-import type { UnifiedTimelineItemData } from '@/core/timelineitem/type'
+import type { UnifiedTimelineItemData } from '@/core/timelineitem/model/timelineItem'
 import type { ModuleRegistry } from './ModuleRegistry'
 import { MODULE_NAMES } from './ModuleRegistry'
 import type { UnifiedTimelineModule } from './UnifiedTimelineModule'

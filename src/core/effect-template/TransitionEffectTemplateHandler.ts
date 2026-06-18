@@ -3,7 +3,7 @@ import { useUnifiedStore } from '@/core/unifiedStore'
 import {
   resolveTransitionTemplateDropCandidate,
   type TransitionTemplateDropCandidate,
-} from '@/core/timelineitem/transition'
+} from '@/core/timelineitem/features/transition'
 import { effectTemplateRegistry } from '@/core/effect-template/EffectTemplateRegistry'
 import type {
   EffectTemplateHandler,

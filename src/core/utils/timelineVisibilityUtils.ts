@@ -2,7 +2,7 @@
  * 时间轴可见性工具函数
  */
 
-import type { UnifiedTimelineItemData } from '@/core/timelineitem/type'
+import type { UnifiedTimelineItemData } from '@/core/timelineitem/model/timelineItem'
 import type { MediaType } from '@/core/mediaitem/types'
 import { TimelineItemQueries } from '@/core/timelineitem/queries'
 

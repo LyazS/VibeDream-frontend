@@ -9,7 +9,7 @@ import {
   getTrackTypeLabel,
 } from '@/constants/iconComponents'
 import type { UnifiedTrackType, UnifiedTrackData } from '@/core/track/TrackTypes'
-import type { UnifiedTimelineItemData } from '@/core/timelineitem/type'
+import type { UnifiedTimelineItemData } from '@/core/timelineitem/model/timelineItem'
 import { LayoutConstants } from '@/constants/LayoutConstants'
 import { detectScene } from '@/core/utils/scene-detector'
 import { detectSceneAdv } from '@/core/utils/scene-detector-adv'

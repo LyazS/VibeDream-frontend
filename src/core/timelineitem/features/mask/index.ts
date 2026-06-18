@@ -1,4 +1,4 @@
-import type { AnimationGroupId } from './bunnytype'
+import type { AnimationGroupId } from '../../model/render'
 
 export type MaskType = 'rectangle' | 'ellipse' | 'linear' | 'mirror'
 

@@ -3,7 +3,7 @@ import type {
   AudioProps,
   UnifiedTimelineItemData,
   VisualProps,
-} from '@/core/timelineitem/type'
+} from '@/core/timelineitem/model/timelineItem'
 import {
   ALL_ANIMATION_GROUPS,
   isDynamicFilterParamAnimationGroupId,
@@ -15,7 +15,7 @@ import {
   type DynamicFilterParamVec2Value,
   type PropertyAnimationGroupId,
   type PropertyAnimationValueByGroup,
-} from '@/core/timelineitem/bunnytype'
+} from '@/core/timelineitem/model/render'
 import { getFilterParamKey } from '@/core/property-system/schema/propertyIds'
 import { TimelineItemQueries } from '@/core/timelineitem/queries'
 import {
@@ -37,8 +37,8 @@ import {
   getMaskRectangleSizeValue,
   getMaskRotationValue,
   normalizeMaskConfig,
-} from '@/core/timelineitem/mask'
-import { normalizeClipFilterConfig } from '@/core/timelineitem/filter'
+} from '@/core/timelineitem/features/mask'
+import { normalizeClipFilterConfig } from '@/core/timelineitem/features/filter'
 
 export type AnimationScope = 'transform' | 'audio' | 'mask' | 'filter'
 

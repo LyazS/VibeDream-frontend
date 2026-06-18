@@ -24,8 +24,8 @@ import type {
   ImageMediaConfig,
   UnifiedTimelineItemData,
   VideoMediaConfig,
-} from '@/core/timelineitem/type'
-import { createDefaultTimelineExtraRenderConfig } from '@/core/timelineitem/type'
+} from '@/core/timelineitem/model/timelineItem'
+import { createDefaultTimelineExtraRenderConfig } from '@/core/timelineitem/model/timelineItem'
 import { MediaItemQueries } from '@/core/mediaitem'
 import { generateTimelineItemId } from '@/core/utils/idGenerator'
 import { computed } from 'vue'
@@ -34,7 +34,7 @@ import { setupTimelineItemBunny } from '@/core/bunnyUtils/timelineItemSetup'
 import { FRAME_RATE } from '@/constants/TimeConstants'
 import type { UnifiedTrackType } from '@/core/track/TrackTypes'
 import type { UnifiedTimeRange } from '@/core/types/timeRange'
-import { DEFAULT_BLEND_MODE } from '@/core/timelineitem'
+import { DEFAULT_BLEND_MODE } from '@/core/timelineitem/model/blendMode'
 import { TimelineItemQueries } from '@/core/timelineitem/queries'
 
 type OperationParams<T extends OperationConfig['type']> = Extract<

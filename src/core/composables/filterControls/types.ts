@@ -1,7 +1,7 @@
 import type { Ref } from 'vue'
 import type { ClipFilterConfig } from '@/core/filter/types'
 import type { DynamicFilterParamPropertyId } from '@/core/property-system/schema/propertyIds'
-import type { UnifiedTimelineItemData } from '@/core/timelineitem/type'
+import type { UnifiedTimelineItemData } from '@/core/timelineitem/model/timelineItem'
 
 export type FilterTimelineItem =
   | UnifiedTimelineItemData<'video'>

@@ -119,7 +119,7 @@ import { useAppI18n, useUnifiedFilterControls } from '@/core/composables'
 import { useDynamicFilterParamViewModels } from '@/core/composables/filterControls/useDynamicFilterParamViewModels'
 import { effectTemplateRegistry } from '@/core/effect-template/EffectTemplateRegistry'
 import { useUnifiedStore } from '@/core/unifiedStore'
-import type { UnifiedTimelineItemData } from '@/core/timelineitem/type'
+import type { UnifiedTimelineItemData } from '@/core/timelineitem/model/timelineItem'
 import type { FilterParamVec2Value } from '@/core/composables/filterControls/types'
 
 interface Props {

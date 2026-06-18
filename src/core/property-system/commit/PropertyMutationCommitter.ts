@@ -8,7 +8,7 @@ import type {
   DirectPropertyBatchPlanEntry,
 } from '@/core/property-system/mutation'
 import type { MediaType } from '@/core/mediaitem'
-import type { UnifiedTimelineItemData } from '@/core/timelineitem'
+import type { UnifiedTimelineItemData } from '@/core/timelineitem/model/timelineItem'
 
 export interface PropertyMutationCommitContext {
   item: UnifiedTimelineItemData<MediaType>

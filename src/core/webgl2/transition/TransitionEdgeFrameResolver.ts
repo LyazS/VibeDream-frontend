@@ -3,8 +3,8 @@ import {
   closeClipTransitionEdgeFrames,
   hasEnabledClipTransitionOut,
   resolveTransitionBoundaryFrames,
-} from '@/core/timelineitem/transition'
-import type { UnifiedTimelineItemData } from '@/core/timelineitem/type'
+} from '@/core/timelineitem/features/transition'
+import type { UnifiedTimelineItemData } from '@/core/timelineitem/model/timelineItem'
 import type { MediaType, UnifiedMediaItemData } from '@/core/mediaitem/types'
 
 interface PendingEntry {

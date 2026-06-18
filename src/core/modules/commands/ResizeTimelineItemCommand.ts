@@ -5,7 +5,7 @@ import { adjustKeyframesForDurationChange } from '@/core/utils/unifiedKeyframeUt
 import { hasAnimation } from '@/core/utils/unifiedKeyframeUtils'
 
 // 类型导入
-import type { UnifiedTimelineItemData } from '@/core/timelineitem/type'
+import type { UnifiedTimelineItemData } from '@/core/timelineitem/model/timelineItem'
 
 import type { UnifiedMediaItemData, MediaType } from '@/core/mediaitem/types'
 

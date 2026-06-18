@@ -1,7 +1,7 @@
 import type { MediaType } from '@/core/mediaitem'
 import type { EffectPackageParameterDefinition } from '@/core/effect-package/types'
-import type { UnifiedTimelineItemData } from '@/core/timelineitem'
-import { supportsClipFilter } from '@/core/timelineitem/filter'
+import type { UnifiedTimelineItemData } from '@/core/timelineitem/model/timelineItem'
+import { supportsClipFilter } from '@/core/timelineitem/features/filter'
 import { TimelineItemQueries } from '@/core/timelineitem/queries'
 import {
   createFilterParamPropertyId,

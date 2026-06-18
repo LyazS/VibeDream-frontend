@@ -30,7 +30,7 @@ import { useAppI18n } from '@/core/composables/useI18n'
 import { effectTemplateRegistry } from '@/core/effect-template/EffectTemplateRegistry'
 import { TimelineItemQueries } from '@/core/timelineitem/queries'
 import { useUnifiedStore } from '@/core/unifiedStore'
-import type { TimelineTransitionOverlayViewModel } from '@/core/timelineitem/transitionOverlay'
+import type { TimelineTransitionOverlayViewModel } from '@/core/timelineitem/ui/transitionOverlay'
 
 interface Props {
   overlay: TimelineTransitionOverlayViewModel

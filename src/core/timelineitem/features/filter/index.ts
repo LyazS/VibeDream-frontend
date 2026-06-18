@@ -1,9 +1,11 @@
+/**
+ * 片段滤镜配置与能力判断
+ * 从原 filter.ts 迁入，保留原有接口语义。
+ */
+
 import type { MediaType } from '@/core/mediaitem'
-import type { UnifiedTimelineItemData } from '@/core/timelineitem/type'
-import {
-  DEFAULT_CLIP_FILTER_INTENSITY,
-  type ClipFilterConfig,
-} from '@/core/filter/types'
+import type { UnifiedTimelineItemData } from '@/core/timelineitem/model/timelineItem'
+import { DEFAULT_CLIP_FILTER_INTENSITY, type ClipFilterConfig } from '@/core/filter/types'
 
 export type ClipFilterVisualTimelineItem =
   | UnifiedTimelineItemData<'video'>
@@ -34,10 +36,7 @@ export function createDefaultClipFilterConfig(): ClipFilterConfig {
       defaultParams: {},
       manifestSnapshot: {
         name: { zh: '', en: '' },
-        category: {
-          key: '',
-          label: { zh: '', en: '' },
-        },
+        category: { key: '', label: { zh: '', en: '' } },
         summary: { zh: '', en: '' },
         tags: { zh: [], en: [] },
         cover: null,
@@ -69,17 +68,9 @@ export function normalizeClipFilterConfig(
   }
 }
 
-export function areClipFilterConfigsEqual(
-  a?: ClipFilterConfig,
-  b?: ClipFilterConfig,
-): boolean {
-  if (!a && !b) {
-    return true
-  }
-
-  if (!a || !b) {
-    return false
-  }
+export function areClipFilterConfigsEqual(a?: ClipFilterConfig, b?: ClipFilterConfig): boolean {
+  if (!a && !b) return true
+  if (!a || !b) return false
 
   return a.effectPackageId === b.effectPackageId
     && a.templateId === b.templateId
@@ -89,9 +80,7 @@ export function areClipFilterConfigsEqual(
     && JSON.stringify(a.params ?? {}) === JSON.stringify(b.params ?? {})
 }
 
-export function supportsClipFilterMediaType(
-  mediaType: MediaType,
-): mediaType is 'video' | 'image' {
+export function supportsClipFilterMediaType(mediaType: MediaType): mediaType is 'video' | 'image' {
   return mediaType === 'video' || mediaType === 'image'
 }
 

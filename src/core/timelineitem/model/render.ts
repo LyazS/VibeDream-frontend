@@ -1,6 +1,11 @@
+/**
+ * 渲染配置与动画类型定义
+ * 从历史 bunnytype.ts 中拆出，保留原有类型语义与注释。
+ */
+
 import type { MediaType } from '@/core/mediaitem'
 import { isFilterParamPropertyId } from '@/core/property-system/schema/propertyIds'
-import type { TextStyleConfig } from './texttype'
+import type { TextStyleConfig } from './textStyle'
 import type { BlendMode } from './blendMode'
 import type {
   MaskCenterValue,
@@ -13,7 +18,7 @@ import type {
   MaskRectangleSizeValue,
   MaskRotationValue,
   MaskType,
-} from './mask'
+} from '../features/mask'
 
 export type {
   MaskConfig,
@@ -26,7 +31,7 @@ export type {
   MaskEllipseSizeValue,
   MaskMirrorValue,
   MaskType,
-} from './mask'
+} from '../features/mask'
 
 export interface VisualProps {
   x: number
@@ -297,9 +302,7 @@ export const PROPERTY_TO_GROUP_MAP = {
 
 export type AnimatablePropertyKey = keyof typeof PROPERTY_TO_GROUP_MAP
 
-export function getAnimationGroupForProperty(
-  property: string,
-): AnimationGroupId | undefined {
+export function getAnimationGroupForProperty(property: string): AnimationGroupId | undefined {
   return PROPERTY_TO_GROUP_MAP[property as AnimatablePropertyKey]
 }
 

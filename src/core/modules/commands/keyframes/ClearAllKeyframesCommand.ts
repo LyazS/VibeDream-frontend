@@ -18,7 +18,7 @@ import {
   clearChannelKeyframes,
   getAllKeyframeFrames,
 } from '@/core/utils/unifiedKeyframeUtils'
-import type { AnimationChannelKey } from '@/core/timelineitem/bunnytype'
+import type { AnimationChannelKey } from '@/core/timelineitem/model/render'
 
 export class ClearAllKeyframesCommand implements SimpleCommand {
   public readonly id: string

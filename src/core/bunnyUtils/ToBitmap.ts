@@ -1,5 +1,5 @@
 import { toPng } from 'html-to-image'
-import type { TextStyleConfig } from '@/core/timelineitem/texttype'
+import type { TextStyleConfig } from '@/core/timelineitem/model/textStyle'
 
 /**
  * 将文本渲染为 ImageBitmap

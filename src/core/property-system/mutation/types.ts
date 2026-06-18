@@ -6,11 +6,11 @@ import type {
   PropertyAnimationGroupId,
   PropertyAnimationValueByGroup,
   VisualProps,
-} from '@/core/timelineitem/bunnytype'
+} from '@/core/timelineitem/model/render'
 import type { AnimatablePropertyTarget } from '@/core/property-system/schema'
 import type { DynamicFilterParamPropertyId } from '@/core/property-system/schema/propertyIds'
 import type { MediaType } from '@/core/mediaitem'
-import type { TimelineExtraRenderConfig, UnifiedTimelineItemData } from '@/core/timelineitem'
+import type { TimelineExtraRenderConfig, UnifiedTimelineItemData } from '@/core/timelineitem/model/timelineItem'
 
 export type AnimatablePropertyId =
   | 'transform.rotation'

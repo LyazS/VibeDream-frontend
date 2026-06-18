@@ -13,7 +13,7 @@ import { getDefaultTrackHeight } from '@/core/track/TrackUtils'
 import type { UnifiedTrackData } from '@/core/track/TrackTypes'
 import type { EffectTemplatePreviewData } from '@/core/effect-template/types'
 import type { UnifiedMediaItemData } from '@/core/mediaitem/types'
-import type { UnifiedTimelineItemData } from '@/core/timelineitem/type'
+import type { UnifiedTimelineItemData } from '@/core/timelineitem/model/timelineItem'
 
 interface TimelineDragPreviewDeps {
   frameToPixel: (frames: number) => number

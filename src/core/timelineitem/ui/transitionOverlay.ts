@@ -1,13 +1,16 @@
 import type { MediaType } from '@/core/mediaitem'
-import type { UnifiedTimelineItemData } from '@/core/timelineitem/type'
+import type { UnifiedTimelineItemData } from '@/core/timelineitem/model/timelineItem'
 import {
   type ClipTransitionBindingState,
   normalizeClipTransitionOutConfig,
   supportsClipTransitionOut,
-} from '@/core/timelineitem/transition'
+} from '@/core/timelineitem/features/transition'
 import { TimelineItemQueries } from '@/core/timelineitem/queries'
 import { buildTransitionSelectionId, type TimelineSelectionId } from '@/core/types/timelineSelection'
 
+/**
+ * 时间轴转场覆盖层的展示模型。
+ */
 export interface TimelineTransitionOverlayViewModel {
   selectionId: TimelineSelectionId
   sourceItemId: string
@@ -18,6 +21,9 @@ export interface TimelineTransitionOverlayViewModel {
   displayEndFrame: number
 }
 
+/**
+ * 从片段数据创建转场 overlay view model。
+ */
 export function createTimelineTransitionOverlay(
   item: UnifiedTimelineItemData<MediaType>,
 ): TimelineTransitionOverlayViewModel | null {

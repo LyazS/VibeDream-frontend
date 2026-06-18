@@ -1,5 +1,5 @@
 import type { DrawSourceUniforms } from '@/core/webgl2/types'
-import type { BlendMode } from '@/core/timelineitem'
+import type { BlendMode } from '@/core/timelineitem/model/blendMode'
 import type { RenderPass } from '@/core/webgl2/renderchain/RenderPass'
 import type { RenderPassContext } from '@/core/webgl2/renderchain/RenderPassContext'
 import type { ProgramManager } from '@/core/webgl2/runtime/ProgramManager'

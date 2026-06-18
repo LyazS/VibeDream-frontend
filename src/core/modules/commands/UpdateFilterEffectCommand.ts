@@ -1,9 +1,9 @@
 import { generateCommandId } from '@/core/utils/idGenerator'
 import type { SimpleCommand } from '@/core/modules/commands/types'
-import type { UnifiedTimelineItemData } from '@/core/timelineitem/type'
+import type { UnifiedTimelineItemData } from '@/core/timelineitem/model/timelineItem'
 import type { MediaType } from '@/core/mediaitem/types'
 import type { ClipFilterConfig } from '@/core/filter/types'
-import { supportsClipFilter } from '@/core/timelineitem/filter'
+import { supportsClipFilter } from '@/core/timelineitem/features/filter'
 import {
   type UnifiedLibraryAssetData,
 } from '@/core/asset/types'

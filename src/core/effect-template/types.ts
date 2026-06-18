@@ -1,5 +1,5 @@
 import type { EffectType } from '@/core/asset/types'
-import type { UnifiedTimelineItemData } from '@/core/timelineitem/type'
+import type { UnifiedTimelineItemData } from '@/core/timelineitem/model/timelineItem'
 import type { MediaType } from '@/core/mediaitem'
 import type { UnifiedTrackData } from '@/core/track/TrackTypes'
 import type { MediaItemDragData, DropResult } from '@/core/types/drag'

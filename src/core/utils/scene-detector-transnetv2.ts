@@ -1,4 +1,4 @@
-import type { UnifiedTimelineItemData } from '@/core/timelineitem/type'
+import type { UnifiedTimelineItemData } from '@/core/timelineitem/model/timelineItem'
 import type { TransNetV2ProgressEvent } from './transnetv2/types'
 import TransNetV2Worker from './transnetv2/transnetv2.worker.ts?worker'
 

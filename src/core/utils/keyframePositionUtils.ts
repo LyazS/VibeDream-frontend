@@ -7,7 +7,7 @@ import type {
   AnimateKeyframe,
   AnimationGroupId,
   ChannelKeyForMedia,
-} from '@/core/timelineitem/bunnytype'
+} from '@/core/timelineitem/model/render'
 import type { MediaType } from '@/core/mediaitem'
 import { cloneDeep } from 'lodash'
 

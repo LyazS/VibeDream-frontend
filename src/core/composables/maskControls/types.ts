@@ -1,8 +1,8 @@
 import type { Ref } from 'vue'
 import type { MediaType } from '@/core/mediaitem'
-import type { AnimateKeyframe, AnimationChannelKey } from '@/core/timelineitem/bunnytype'
-import type { MaskPropertyPath } from '@/core/timelineitem/mask'
-import type { UnifiedTimelineItemData } from '@/core/timelineitem/type'
+import type { AnimateKeyframe, AnimationChannelKey } from '@/core/timelineitem/model/render'
+import type { MaskPropertyPath } from '@/core/timelineitem/features/mask'
+import type { UnifiedTimelineItemData } from '@/core/timelineitem/model/timelineItem'
 
 export interface UnifiedMaskKeyframeControlsOptions {
   selectedTimelineItem: Ref<UnifiedTimelineItemData | null>

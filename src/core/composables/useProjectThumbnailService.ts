@@ -1,6 +1,6 @@
 import { ref } from 'vue'
 import type { UnifiedMediaItemData } from '@/core/mediaitem'
-import type { UnifiedTimelineItemData } from '@/core/timelineitem'
+import type { UnifiedTimelineItemData } from '@/core/timelineitem/model/timelineItem'
 import { fileSystemService } from '@/core/managers/filesystem/fileSystemService'
 import { generateThumbnailForUnifiedMediaItemBunny } from '@/core/bunnyUtils/thumbGenerator'
 import { MediaItemQueries } from '@/core/mediaitem'
