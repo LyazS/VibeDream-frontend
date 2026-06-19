@@ -27,7 +27,7 @@ export interface TimelineTransitionOverlayViewModel {
 export function createTimelineTransitionOverlay(
   item: UnifiedTimelineItemData<MediaType>,
 ): TimelineTransitionOverlayViewModel | null {
-  const transitionConfig = TimelineItemQueries.getTransition(item)
+  const transitionConfig = TimelineItemQueries.getBaseTransition(item)
   if (!supportsClipTransitionOut(item) || !transitionConfig) {
     return null
   }

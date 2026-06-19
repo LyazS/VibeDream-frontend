@@ -10,6 +10,7 @@ import type {
 } from '@/core/timelineitem/model/timelineItem'
 import { DEFAULT_BLEND_MODE } from '@/core/timelineitem/model/blendMode'
 import { TimelineItemQueries } from '@/core/timelineitem/queries'
+import { TimelineItemMutations } from '@/core/timelineitem/mutations'
 import { createTextTimelineItem } from '@/core/utils/textTimelineUtils'
 import { setupTimelineItemBunny } from '@/core/bunnyUtils/timelineItemSetup'
 import { buildClipSelectionId } from '@/core/types/timelineSelection'
@@ -294,7 +295,7 @@ export function useTimelineItemOperations() {
 
       // ✅ 从 textBitmap 获取实际宽高并设置到 config
       if (textItem.runtime.textBitmap) {
-        TimelineItemQueries.patchVisualRenderConfig(textItem, {
+        TimelineItemMutations.patchBaseVisualConfig(textItem, {
           width: textItem.runtime.textBitmap.width,
           height: textItem.runtime.textBitmap.height,
         })
@@ -309,7 +310,7 @@ export function useTimelineItemOperations() {
 
       console.log('✅ [UnifiedTimeline] 文本项目创建成功:', {
         id: textItem.id,
-        text: TimelineItemQueries.getTextRenderConfig(textItem)?.text,
+        text: TimelineItemQueries.getBaseTextConfig(textItem)?.text,
         position: timePosition,
       })
 

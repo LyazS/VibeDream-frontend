@@ -36,7 +36,7 @@ export function createBaseRenderMask(item: UnifiedTimelineItemData<MediaType>): 
   }
 
   const maskConfig = item.exRenderConfig?.mask
-  const visualConfig = TimelineItemQueries.getVisualRenderConfig(item)
+  const visualConfig = TimelineItemQueries.getBaseVisualConfig(item)
   return maskConfig
     ? normalizeMaskConfig(maskConfig, getItemLocalSize(visualConfig?.width ?? 0, visualConfig?.height ?? 0))
     : undefined
@@ -110,7 +110,7 @@ export function resolveRenderMaskAtFrame(
     return renderMask
   }
 
-  const visualConfig = TimelineItemQueries.getVisualRenderConfig(item)
+  const visualConfig = TimelineItemQueries.getBaseVisualConfig(item)
   const mutableMask = renderMask as Partial<MaskConfig>
   for (const groupId of getActiveAnimationGroups(item)) {
     const definition = AnimationRegistry.get(groupId)

@@ -244,7 +244,7 @@ const multiSelectInfo = computed(() => {
       if (parsed.kind === 'transition') {
         const overlay = unifiedStore.getTransitionOverlay(parsed.sourceId)
         const sourceItem = overlay ? unifiedStore.getTimelineItem(overlay.sourceItemId) : null
-        const transitionConfig = TimelineItemQueries.getTransition(sourceItem)
+        const transitionConfig = TimelineItemQueries.getBaseTransition(sourceItem)
         const assetName = transitionConfig?.effectPackageId
           ? effectTemplateRegistry.getPackageState(transitionConfig.effectPackageId)?.meta?.name.zh
           : ''
@@ -286,7 +286,7 @@ const getItemDisplayName = (item: UnifiedTimelineItemData) => {
 
   if (item.mediaType === 'text') {
     // 文本项目显示文本内容
-    const text = TimelineItemQueries.getTextRenderConfig(item)?.text || '空文本'
+    const text = TimelineItemQueries.getBaseTextConfig(item)?.text || '空文本'
     return text.length > 15 ? text.substring(0, 15) + '...' : text
   } else {
     // 其他类型显示素材名称

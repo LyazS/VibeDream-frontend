@@ -818,7 +818,7 @@ function collectTimelineEffectDependencies(
   const unique = new Map<string, EffectPackageIdentity>()
 
   for (const item of timelineItems) {
-    const transitionConfig = TimelineItemQueries.getTransition(item)
+    const transitionConfig = TimelineItemQueries.getBaseTransition(item)
     if (transitionConfig?.effectPackageId) {
       const identity = normalizeEffectIdentity(
         transitionConfig.effectPackageId,

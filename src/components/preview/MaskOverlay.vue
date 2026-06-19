@@ -136,7 +136,7 @@ const shouldShowOverlay = computed(() => {
   if (!selectedItem.value) return false
   return (
     TimelineItemQueries.hasVisualProperties(selectedItem.value) &&
-    Boolean(TimelineItemQueries.getMask(selectedItem.value))
+    Boolean(TimelineItemQueries.getBaseMask(selectedItem.value))
   )
 })
 
@@ -148,13 +148,13 @@ const overlayContext = computed<MaskOverlayContext | null>(() => {
   ) {
     return null
   }
-  return {
-    item: selectedItem.value,
-    maskConfig: maskConfig.value,
-    visualConfig: TimelineItemQueries.getRenderConfig(selectedItem.value).visual,
-    itemLocalSize: itemLocalSize.value,
-    canvasResolution: props.canvasResolution,
-    canvasDisplaySize: props.canvasDisplaySize,
+    return {
+      item: selectedItem.value,
+      maskConfig: maskConfig.value,
+      visualConfig: TimelineItemQueries.getResolvedRenderConfig(selectedItem.value).visual,
+      itemLocalSize: itemLocalSize.value,
+      canvasResolution: props.canvasResolution,
+      canvasDisplaySize: props.canvasDisplaySize,
     containerSize: props.containerSize,
     previewTransform: props.previewTransform,
   }

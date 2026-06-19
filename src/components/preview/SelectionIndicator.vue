@@ -141,14 +141,14 @@ const selectedItem = computed(() => {
 const visualConfig = computed<VisualProps | null>(() => {
   if (!selectedItem.value) return null
   if (!TimelineItemQueries.hasVisualProperties(selectedItem.value)) return null
-  return TimelineItemQueries.getRenderConfig(selectedItem.value).visual
+  return TimelineItemQueries.getResolvedRenderConfig(selectedItem.value).visual
 })
 
 // 是否等比缩放
 const isProportionalScale = computed(() => {
   if (!selectedItem.value) return false
   if (!TimelineItemQueries.hasVisualProperties(selectedItem.value)) return false
-  return TimelineItemQueries.getRenderConfig(selectedItem.value).visual.proportionalScale ?? false
+  return TimelineItemQueries.getResolvedRenderConfig(selectedItem.value).visual.proportionalScale ?? false
 })
 
 // 计算指示器样式

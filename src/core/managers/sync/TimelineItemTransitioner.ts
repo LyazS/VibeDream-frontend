@@ -15,6 +15,7 @@ import type { UnifiedTimelineItemData } from '@/core/timelineitem/model/timeline
 import { MediaItemQueries } from '@/core/mediaitem'
 import { TimelineItemFactory } from '@/core/timelineitem/runtime/factory'
 import { TimelineItemQueries } from '@/core/timelineitem/queries'
+import { TimelineItemMutations } from '@/core/timelineitem/mutations'
 import { useUnifiedStore } from '@/core/unifiedStore'
 import { setupTimelineItemBunny } from '@/core/bunnyUtils/timelineItemSetup'
 
@@ -118,7 +119,7 @@ export class TimelineItemTransitioner {
       (TimelineItemQueries.isVideoTimelineItem(timelineItem) ||
         TimelineItemQueries.isImageTimelineItem(timelineItem))
     ) {
-      TimelineItemQueries.patchVisualRenderConfig(timelineItem, {
+      TimelineItemMutations.patchBaseVisualConfig(timelineItem, {
         width: originalSize.width,
         height: originalSize.height,
       })

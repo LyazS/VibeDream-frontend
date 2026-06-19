@@ -96,14 +96,14 @@ function getVisualConfigRecord(item: UnifiedTimelineItemData<MediaType>): Visual
   if (!TimelineItemQueries.hasVisualProperties(item)) {
     throw new Error(`时间轴项缺少视觉配置: ${item.id}`)
   }
-  return TimelineItemQueries.getRenderConfig(item).visual
+  return TimelineItemQueries.getResolvedRenderConfig(item).visual
 }
 
 function getAudioConfigRecord(item: UnifiedTimelineItemData<MediaType>): AudioProps {
   if (!TimelineItemQueries.hasAudioProperties(item)) {
     throw new Error(`时间轴项缺少音频配置: ${item.id}`)
   }
-  return TimelineItemQueries.getRenderConfig(item).audio
+  return TimelineItemQueries.getResolvedRenderConfig(item).audio
 }
 
 function getDynamicFilterParameterTypeFromConfig(
@@ -170,7 +170,7 @@ function createDynamicFilterParamDefinition(
 ): AnimationGroupDefinition<DynamicFilterParamAnimationGroupId> {
   const parameterKey = getFilterParamKey(groupId)
   const getParameterType = (item: UnifiedTimelineItemData<MediaType>) =>
-    TimelineItemQueries.getFilter(item)?.packagePayload.parameterSchema[parameterKey]?.type
+    TimelineItemQueries.getBaseFilter(item)?.packagePayload.parameterSchema[parameterKey]?.type
 
   return {
     id: groupId,
@@ -180,7 +180,7 @@ function createDynamicFilterParamDefinition(
       TimelineItemQueries.supportsClipFilter(item) &&
       (getParameterType(item) === 'number' || getParameterType(item) === 'vec2'),
     getBaseValue: (item): DynamicFilterParamValue => {
-      const filterConfig = TimelineItemQueries.getRenderFilter(item)
+      const filterConfig = TimelineItemQueries.getResolvedFilter(item)
       if (!filterConfig) {
         throw new Error(`滤镜效果不存在，无法读取动态参数: ${parameterKey}`)
       }
@@ -320,15 +320,15 @@ const animationGroupDefinitions: {
     historyMeta: { description: '修改音量关键帧' },
   },
   'filter.intensity': {
-    id: 'filter.intensity',
-    scope: 'filter',
-    supports: (item) => TimelineItemQueries.supportsClipFilter(item),
-    isEnabled: (item) =>
-      TimelineItemQueries.supportsClipFilter(item) &&
-      Boolean(TimelineItemQueries.getFilter(item)),
-    getBaseValue: (item) => ({
-      intensity: normalizeClipFilterConfig(TimelineItemQueries.getRenderFilter(item)).intensity,
-    }),
+      id: 'filter.intensity',
+      scope: 'filter',
+      supports: (item) => TimelineItemQueries.supportsClipFilter(item),
+      isEnabled: (item) =>
+        TimelineItemQueries.supportsClipFilter(item) &&
+      Boolean(TimelineItemQueries.getBaseFilter(item)),
+      getBaseValue: (item) => ({
+      intensity: normalizeClipFilterConfig(TimelineItemQueries.getResolvedFilter(item)).intensity,
+      }),
     applyValueToConfig: (config, value) => {
       const nextFilterEffect = normalizeClipFilterConfig({
         ...(config as Record<string, unknown>),
@@ -342,14 +342,14 @@ const animationGroupDefinitions: {
   },
   'mask.center': {
     id: 'mask.center',
-    scope: 'mask',
-    supports: (item) => TimelineItemQueries.hasVisualProperties(item),
-    isEnabled: (item) =>
-      TimelineItemQueries.hasVisualProperties(item) &&
-      normalizeMaskConfig(TimelineItemQueries.getRenderMask(item), getMaskTextureSizeFromItem(item)).enabled,
-    getBaseValue: (item) => {
-      return getMaskCenterValue(TimelineItemQueries.getRenderMask(item), getMaskTextureSizeFromItem(item))
-    },
+      scope: 'mask',
+      supports: (item) => TimelineItemQueries.hasVisualProperties(item),
+      isEnabled: (item) =>
+        TimelineItemQueries.hasVisualProperties(item) &&
+      normalizeMaskConfig(TimelineItemQueries.getResolvedMask(item), getMaskTextureSizeFromItem(item)).enabled,
+      getBaseValue: (item) => {
+      return getMaskCenterValue(TimelineItemQueries.getResolvedMask(item), getMaskTextureSizeFromItem(item))
+      },
     applyValueToConfig: (maskConfig, value) => {
       Object.assign(maskConfig, applyMaskCenterValue(maskConfig as Partial<ReturnType<typeof normalizeMaskConfig>>, value))
     },
@@ -359,14 +359,14 @@ const animationGroupDefinitions: {
   },
   'mask.rotation': {
     id: 'mask.rotation',
-    scope: 'mask',
-    supports: (item) => TimelineItemQueries.hasVisualProperties(item),
-    isEnabled: (item) =>
-      TimelineItemQueries.hasVisualProperties(item) &&
-      normalizeMaskConfig(TimelineItemQueries.getRenderMask(item), getMaskTextureSizeFromItem(item)).enabled,
-    getBaseValue: (item) => {
-      return getMaskRotationValue(TimelineItemQueries.getRenderMask(item), getMaskTextureSizeFromItem(item))
-    },
+      scope: 'mask',
+      supports: (item) => TimelineItemQueries.hasVisualProperties(item),
+      isEnabled: (item) =>
+        TimelineItemQueries.hasVisualProperties(item) &&
+      normalizeMaskConfig(TimelineItemQueries.getResolvedMask(item), getMaskTextureSizeFromItem(item)).enabled,
+      getBaseValue: (item) => {
+      return getMaskRotationValue(TimelineItemQueries.getResolvedMask(item), getMaskTextureSizeFromItem(item))
+      },
     applyValueToConfig: (maskConfig, value) => {
       Object.assign(maskConfig, applyMaskRotationValue(maskConfig as Partial<ReturnType<typeof normalizeMaskConfig>>, value))
     },
@@ -376,14 +376,14 @@ const animationGroupDefinitions: {
   },
   'mask.feather': {
     id: 'mask.feather',
-    scope: 'mask',
-    supports: (item) => TimelineItemQueries.hasVisualProperties(item),
-    isEnabled: (item) =>
-      TimelineItemQueries.hasVisualProperties(item) &&
-      normalizeMaskConfig(TimelineItemQueries.getRenderMask(item), getMaskTextureSizeFromItem(item)).enabled,
-    getBaseValue: (item) => {
-      return getMaskFeatherValue(TimelineItemQueries.getRenderMask(item), getMaskTextureSizeFromItem(item))
-    },
+      scope: 'mask',
+      supports: (item) => TimelineItemQueries.hasVisualProperties(item),
+      isEnabled: (item) =>
+        TimelineItemQueries.hasVisualProperties(item) &&
+      normalizeMaskConfig(TimelineItemQueries.getResolvedMask(item), getMaskTextureSizeFromItem(item)).enabled,
+      getBaseValue: (item) => {
+      return getMaskFeatherValue(TimelineItemQueries.getResolvedMask(item), getMaskTextureSizeFromItem(item))
+      },
     applyValueToConfig: (maskConfig, value) => {
       Object.assign(maskConfig, applyMaskFeatherValue(maskConfig as Partial<ReturnType<typeof normalizeMaskConfig>>, value))
     },
@@ -393,14 +393,14 @@ const animationGroupDefinitions: {
   },
   'mask.intensity': {
     id: 'mask.intensity',
-    scope: 'mask',
-    supports: (item) => TimelineItemQueries.hasVisualProperties(item),
-    isEnabled: (item) =>
-      TimelineItemQueries.hasVisualProperties(item) &&
-      normalizeMaskConfig(TimelineItemQueries.getRenderMask(item), getMaskTextureSizeFromItem(item)).enabled,
-    getBaseValue: (item) => {
-      return getMaskIntensityValue(TimelineItemQueries.getRenderMask(item), getMaskTextureSizeFromItem(item))
-    },
+      scope: 'mask',
+      supports: (item) => TimelineItemQueries.hasVisualProperties(item),
+      isEnabled: (item) =>
+        TimelineItemQueries.hasVisualProperties(item) &&
+      normalizeMaskConfig(TimelineItemQueries.getResolvedMask(item), getMaskTextureSizeFromItem(item)).enabled,
+      getBaseValue: (item) => {
+      return getMaskIntensityValue(TimelineItemQueries.getResolvedMask(item), getMaskTextureSizeFromItem(item))
+      },
     applyValueToConfig: (maskConfig, value) => {
       Object.assign(maskConfig, applyMaskIntensityValue(maskConfig as Partial<ReturnType<typeof normalizeMaskConfig>>, value))
     },
@@ -410,14 +410,14 @@ const animationGroupDefinitions: {
   },
   'mask.rectangle.size': {
     id: 'mask.rectangle.size',
-    scope: 'mask',
-    supports: (item) => TimelineItemQueries.hasVisualProperties(item),
-    isEnabled: (item) =>
-      TimelineItemQueries.hasVisualProperties(item) &&
-      normalizeMaskConfig(TimelineItemQueries.getRenderMask(item), getMaskTextureSizeFromItem(item)).type === 'rectangle',
-    getBaseValue: (item) => {
+      scope: 'mask',
+      supports: (item) => TimelineItemQueries.hasVisualProperties(item),
+      isEnabled: (item) =>
+        TimelineItemQueries.hasVisualProperties(item) &&
+      normalizeMaskConfig(TimelineItemQueries.getResolvedMask(item), getMaskTextureSizeFromItem(item)).type === 'rectangle',
+      getBaseValue: (item) => {
       return getMaskRectangleSizeValue(
-        TimelineItemQueries.getRenderMask(item),
+        TimelineItemQueries.getResolvedMask(item),
         getMaskTextureSizeFromItem(item),
       )
     },
@@ -430,14 +430,14 @@ const animationGroupDefinitions: {
   },
   'mask.rectangle.cornerRadius': {
     id: 'mask.rectangle.cornerRadius',
-    scope: 'mask',
-    supports: (item) => TimelineItemQueries.hasVisualProperties(item),
-    isEnabled: (item) =>
-      TimelineItemQueries.hasVisualProperties(item) &&
-      normalizeMaskConfig(TimelineItemQueries.getRenderMask(item), getMaskTextureSizeFromItem(item)).type === 'rectangle',
-    getBaseValue: (item) => {
+      scope: 'mask',
+      supports: (item) => TimelineItemQueries.hasVisualProperties(item),
+      isEnabled: (item) =>
+        TimelineItemQueries.hasVisualProperties(item) &&
+      normalizeMaskConfig(TimelineItemQueries.getResolvedMask(item), getMaskTextureSizeFromItem(item)).type === 'rectangle',
+      getBaseValue: (item) => {
       return getMaskRectangleCornerRadiusValue(
-        TimelineItemQueries.getRenderMask(item),
+        TimelineItemQueries.getResolvedMask(item),
         getMaskTextureSizeFromItem(item),
       )
     },
@@ -453,14 +453,14 @@ const animationGroupDefinitions: {
   },
   'mask.ellipse.size': {
     id: 'mask.ellipse.size',
-    scope: 'mask',
-    supports: (item) => TimelineItemQueries.hasVisualProperties(item),
-    isEnabled: (item) =>
-      TimelineItemQueries.hasVisualProperties(item) &&
-      normalizeMaskConfig(TimelineItemQueries.getRenderMask(item), getMaskTextureSizeFromItem(item)).type === 'ellipse',
-    getBaseValue: (item) => {
+      scope: 'mask',
+      supports: (item) => TimelineItemQueries.hasVisualProperties(item),
+      isEnabled: (item) =>
+        TimelineItemQueries.hasVisualProperties(item) &&
+      normalizeMaskConfig(TimelineItemQueries.getResolvedMask(item), getMaskTextureSizeFromItem(item)).type === 'ellipse',
+      getBaseValue: (item) => {
       return getMaskEllipseSizeValue(
-        TimelineItemQueries.getRenderMask(item),
+        TimelineItemQueries.getResolvedMask(item),
         getMaskTextureSizeFromItem(item),
       )
     },
@@ -473,11 +473,11 @@ const animationGroupDefinitions: {
   },
   'mask.linear': {
     id: 'mask.linear',
-    scope: 'mask',
-    supports: (item) => TimelineItemQueries.hasVisualProperties(item),
-    isEnabled: (item) =>
-      TimelineItemQueries.hasVisualProperties(item) &&
-      normalizeMaskConfig(TimelineItemQueries.getRenderMask(item), getMaskTextureSizeFromItem(item)).type === 'linear',
+      scope: 'mask',
+      supports: (item) => TimelineItemQueries.hasVisualProperties(item),
+      isEnabled: (item) =>
+        TimelineItemQueries.hasVisualProperties(item) &&
+      normalizeMaskConfig(TimelineItemQueries.getResolvedMask(item), getMaskTextureSizeFromItem(item)).type === 'linear',
     getBaseValue: () => ({}),
     applyValueToConfig: () => {},
     interpolate: (from) => from as Record<string, never>,
@@ -486,14 +486,14 @@ const animationGroupDefinitions: {
   },
   'mask.mirror.length': {
     id: 'mask.mirror.length',
-    scope: 'mask',
-    supports: (item) => TimelineItemQueries.hasVisualProperties(item),
-    isEnabled: (item) =>
-      TimelineItemQueries.hasVisualProperties(item) &&
-      normalizeMaskConfig(TimelineItemQueries.getRenderMask(item), getMaskTextureSizeFromItem(item)).type === 'mirror',
-    getBaseValue: (item) => {
-      return getMaskMirrorValue(TimelineItemQueries.getRenderMask(item), getMaskTextureSizeFromItem(item))
-    },
+      scope: 'mask',
+      supports: (item) => TimelineItemQueries.hasVisualProperties(item),
+      isEnabled: (item) =>
+        TimelineItemQueries.hasVisualProperties(item) &&
+      normalizeMaskConfig(TimelineItemQueries.getResolvedMask(item), getMaskTextureSizeFromItem(item)).type === 'mirror',
+      getBaseValue: (item) => {
+      return getMaskMirrorValue(TimelineItemQueries.getResolvedMask(item), getMaskTextureSizeFromItem(item))
+      },
     applyValueToConfig: (maskConfig, value) => {
       Object.assign(maskConfig, applyMaskMirrorValue(maskConfig as Partial<ReturnType<typeof normalizeMaskConfig>>, value))
     },

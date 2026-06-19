@@ -59,10 +59,10 @@ export function useMaskKeyframeActions(options: MaskKeyframeActionsOptions) {
 
   function getMaskPlanContext(item: NonNullable<typeof selectedTimelineItem.value>) {
     const visualConfig = TimelineItemQueries.hasVisualProperties(item)
-      ? TimelineItemQueries.getRenderConfig(item).visual
+      ? TimelineItemQueries.getResolvedRenderConfig(item).visual
       : undefined
     const itemLocalSize = getItemLocalSize(visualConfig?.width ?? 0, visualConfig?.height ?? 0)
-    const currentMask = normalizeMaskConfig(TimelineItemQueries.getMask(item), itemLocalSize)
+    const currentMask = normalizeMaskConfig(TimelineItemQueries.getBaseMask(item), itemLocalSize)
 
     return { currentMask, itemLocalSize }
   }

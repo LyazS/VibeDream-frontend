@@ -87,11 +87,11 @@ const sourceTimelineItem = computed(
 )
 
 const transitionConfig = computed(() =>
-  normalizeClipTransitionOutConfig(TimelineItemQueries.getTransition(sourceTimelineItem.value)),
+  normalizeClipTransitionOutConfig(TimelineItemQueries.getBaseTransition(sourceTimelineItem.value)),
 )
 
 const transitionLabel = computed(() => {
-  const transitionConfig = TimelineItemQueries.getTransition(sourceTimelineItem.value)
+  const transitionConfig = TimelineItemQueries.getBaseTransition(sourceTimelineItem.value)
   const effectPackageId = transitionConfig?.effectPackageId
   if (!effectPackageId) {
     return t('properties.transition.title')
@@ -103,7 +103,7 @@ const transitionLabel = computed(() => {
 })
 
 const hasPackageWarning = computed(() => {
-  const effectPackageId = TimelineItemQueries.getTransition(sourceTimelineItem.value)?.effectPackageId
+  const effectPackageId = TimelineItemQueries.getBaseTransition(sourceTimelineItem.value)?.effectPackageId
   if (!effectPackageId) {
     return false
   }

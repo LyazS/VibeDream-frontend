@@ -71,14 +71,14 @@ export function useUnifiedKeyframeTransformControls(
     if (!item || !TimelineItemQueries.hasVisualProperties(item)) {
       return null
     }
-    return TimelineItemQueries.getRenderConfig(item).visual
+    return TimelineItemQueries.getResolvedRenderConfig(item).visual
   })
   const audioRenderConfig = computed(() => {
     const item = selectedTimelineItem.value
     if (!item || !TimelineItemQueries.hasAudioProperties(item)) {
       return null
     }
-    return TimelineItemQueries.getRenderConfig(item).audio
+    return TimelineItemQueries.getResolvedRenderConfig(item).audio
   })
 
   function getOriginalDimensions() {
@@ -612,7 +612,7 @@ export function useUnifiedKeyframeTransformControls(
     const item = selectedTimelineItem.value
     if (!item || !canOperateTransforms.value || !TimelineItemQueries.hasVisualProperties(item)) return
 
-    const nextProportionalScale = !TimelineItemQueries.getRenderConfig(item).visual.proportionalScale
+    const nextProportionalScale = !TimelineItemQueries.getResolvedRenderConfig(item).visual.proportionalScale
     const operations: ChangeOperation[] = [
       {
         kind: 'visual-config-patch' as const,

@@ -105,7 +105,7 @@ const tempResizePositionFrames = ref(0)
 const isDragging = ref(false)
 
 const hasEffectWarning = computed(() => {
-  const transitionPackageId = TimelineItemQueries.getTransition(props.data)?.effectPackageId
+  const transitionPackageId = TimelineItemQueries.getBaseTransition(props.data)?.effectPackageId
   if (transitionPackageId && effectTemplateRegistry.getPackageState(transitionPackageId)?.status !== 'ready') {
     return true
   }

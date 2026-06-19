@@ -9,7 +9,7 @@ export function useFilterPropertiesState(options: UnifiedFilterControlsOptions) 
 
   const filterConfig = computed(() =>
     selectedTimelineItem.value
-      ? TimelineItemQueries.getRenderFilter(selectedTimelineItem.value)
+      ? TimelineItemQueries.getResolvedFilter(selectedTimelineItem.value)
       : undefined,
   )
 

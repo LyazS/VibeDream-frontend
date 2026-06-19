@@ -104,7 +104,7 @@ const isMuted = computed(() => {
   if (!props.selectedTimelineItem || !hasAudioProperties(props.selectedTimelineItem)) {
     return false
   }
-  return TimelineItemQueries.getAudioRenderConfig(props.selectedTimelineItem)?.isMuted ?? false
+  return TimelineItemQueries.getBaseAudioConfig(props.selectedTimelineItem)?.isMuted ?? false
 })
 
 // 切换静音（不使用关键帧系统）

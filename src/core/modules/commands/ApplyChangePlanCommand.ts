@@ -20,6 +20,7 @@ import {
 } from '@/core/animation/engine'
 import { applyAnimationToConfig } from '@/core/utils/animationInterpolation'
 import { normalizeClipFilterConfig } from '@/core/timelineitem/features/filter'
+import { TimelineItemMutations } from '@/core/timelineitem/mutations'
 import { TimelineItemQueries } from '@/core/timelineitem/queries'
 import { rebuildTextRuntime } from '@/core/timelineitem/runtime/textRuntime'
 import type { AnimationGroupId } from '@/core/timelineitem/model/render'
@@ -71,9 +72,9 @@ export class ApplyChangePlanCommand implements SimpleCommand {
       if (operation.kind === 'no-animation-group-patch') {
         this.applyStaticPatch(item, operation)
       } else if (operation.kind === 'visual-config-patch') {
-        TimelineItemQueries.patchVisualRenderConfig(item, operation.patch)
+        TimelineItemMutations.patchBaseVisualConfig(item, operation.patch)
       } else if (operation.kind === 'audio-config-patch') {
-        TimelineItemQueries.patchAudioRenderConfig(item, operation.patch)
+        TimelineItemMutations.patchBaseAudioConfig(item, operation.patch)
       } else if (operation.kind === 'extra-render-config-patch') {
         item.exRenderConfig = {
           ...item.exRenderConfig,
@@ -146,12 +147,12 @@ export class ApplyChangePlanCommand implements SimpleCommand {
     operation: Extract<ChangeOperation, { kind: 'no-animation-group-patch' }>,
   ): void {
     if (operation.target === 'visual') {
-      TimelineItemQueries.patchVisualRenderConfig(item, operation.patch as Partial<VisualProps>)
+      TimelineItemMutations.patchBaseVisualConfig(item, operation.patch as Partial<VisualProps>)
       return
     }
 
     if (operation.target === 'audio') {
-      TimelineItemQueries.patchAudioRenderConfig(item, operation.patch as Partial<AudioProps>)
+      TimelineItemMutations.patchBaseAudioConfig(item, operation.patch as Partial<AudioProps>)
       return
     }
 
@@ -161,7 +162,7 @@ export class ApplyChangePlanCommand implements SimpleCommand {
         return
       }
 
-      const currentMask = TimelineItemQueries.getMask(item)
+      const currentMask = TimelineItemQueries.getBaseMask(item)
       item.exRenderConfig = {
         ...item.exRenderConfig,
         mask: {
@@ -177,7 +178,7 @@ export class ApplyChangePlanCommand implements SimpleCommand {
     }
 
     if (operation.target === 'filter') {
-      const currentFilterEffect = TimelineItemQueries.getExtraRenderConfig(item)?.filter
+      const currentFilterEffect = TimelineItemQueries.getBaseExtraRenderConfig(item)?.filter
       if (!currentFilterEffect) {
         throw new Error(`滤镜效果不存在，无法更新属性: ${operation.timelineItemId}`)
       }
@@ -212,8 +213,8 @@ export class ApplyChangePlanCommand implements SimpleCommand {
   ): void {
     if (!TimelineItemQueries.hasVisualProperties(item)) return
 
-    const currentMask = TimelineItemQueries.getMask(item)
-    const visualConfig = TimelineItemQueries.getVisualRenderConfig(item)
+    const currentMask = TimelineItemQueries.getBaseMask(item)
+    const visualConfig = TimelineItemQueries.getBaseVisualConfig(item)
     const textureSize = getItemLocalSize(visualConfig?.width ?? 0, visualConfig?.height ?? 0)
     const nextMask = applyMaskGroupValue(currentMask, groupId, patch, textureSize)
 

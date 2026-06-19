@@ -36,6 +36,7 @@ import type { UnifiedTrackType } from '@/core/track/TrackTypes'
 import type { UnifiedTimeRange } from '@/core/types/timeRange'
 import { DEFAULT_BLEND_MODE } from '@/core/timelineitem/model/blendMode'
 import { TimelineItemQueries } from '@/core/timelineitem/queries'
+import { TimelineItemMutations } from '@/core/timelineitem/mutations'
 
 type OperationParams<T extends OperationConfig['type']> = Extract<
   OperationConfig,
@@ -165,7 +166,7 @@ export class CommandFactory {
 
     // ✅ 从 textBitmap 获取实际宽高并设置到 config
     if (timelineItem.runtime.textBitmap) {
-      TimelineItemQueries.patchVisualRenderConfig(timelineItem, {
+      TimelineItemMutations.patchBaseVisualConfig(timelineItem, {
         width: timelineItem.runtime.textBitmap.width,
         height: timelineItem.runtime.textBitmap.height,
       })

@@ -51,7 +51,7 @@ function isSupportedFilterParamValue(value: unknown): value is number | FilterPa
 }
 
 function hasFilterEffect(item: FilterTimelineItem | null | undefined): item is FilterTimelineItem {
-  return Boolean(item && TimelineItemQueries.getExtraRenderConfig(item)?.filter)
+  return Boolean(item && TimelineItemQueries.getBaseExtraRenderConfig(item)?.filter)
 }
 
 export function useFilterDeferredInteraction(options: FilterDeferredInteractionOptions) {
@@ -145,7 +145,7 @@ export function useFilterDeferredInteraction(options: FilterDeferredInteractionO
     if (!timelineItemId || !item) return
 
     const overlay = getFilterIntensityOverlay(timelineItemId)
-    const nextIntensity = overlay?.intensity ?? TimelineItemQueries.getRenderFilter(item)?.intensity
+    const nextIntensity = overlay?.intensity ?? TimelineItemQueries.getResolvedFilter(item)?.intensity
     const filterParamOverlay = getFilterParamOverlay(timelineItemId)
     const paramEntries = [...activeFilterParamKeys.value]
       .map((parameterKey) => [parameterKey, filterParamOverlay?.params[parameterKey]] as const)

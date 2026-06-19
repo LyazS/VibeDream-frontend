@@ -43,14 +43,14 @@ export class TransitionChainBuilder {
   constructor(private readonly params: TransitionChainBuilderParams) {}
 
   private resolveLoadedTransitionPackage(transitionItem: TransitionItem) {
-    const effectPackageId = TimelineItemQueries.getRenderTransition(transitionItem)?.effectPackageId
+    const effectPackageId = TimelineItemQueries.getResolvedTransition(transitionItem)?.effectPackageId
     return effectPackageId
       ? effectTemplateRegistry.getReadyPackage(effectPackageId)
       : null
   }
 
   private resolveLoadedFilterPackage(item: TransitionItem) {
-    const filterConfig = TimelineItemQueries.getRenderFilter(item)
+    const filterConfig = TimelineItemQueries.getResolvedFilter(item)
     return filterConfig?.effectPackageId
       ? effectTemplateRegistry.getReadyPackage(filterConfig.effectPackageId)
       : null
@@ -76,9 +76,9 @@ export class TransitionChainBuilder {
         prefix: `transition-left-current:${transitionItem.id}`,
         item: transitionItem,
         getSourceTextureId: () => this.params.getSourceTextureId(transitionItem.id),
-        getRenderConfig: () => TimelineItemQueries.getRenderConfig(transitionItem),
-        getRenderMask: () => TimelineItemQueries.getRenderMask(transitionItem),
-        getRenderFilterConfig: () => TimelineItemQueries.getRenderFilter(transitionItem),
+        getRenderConfig: () => TimelineItemQueries.getResolvedRenderConfig(transitionItem),
+        getRenderMask: () => TimelineItemQueries.getResolvedMask(transitionItem),
+        getRenderFilterConfig: () => TimelineItemQueries.getResolvedFilter(transitionItem),
         getEffectEvaluationFrame: () => this.params.getCurrentFrame(),
       }),
       ...this.buildBranchPasses({
@@ -106,9 +106,9 @@ export class TransitionChainBuilder {
         prefix: `transition-right-current:${transitionItem.id}`,
         item: rightItem,
         getSourceTextureId: () => this.params.getSourceTextureId(rightItem.id),
-        getRenderConfig: () => TimelineItemQueries.getRenderConfig(rightItem),
-        getRenderMask: () => TimelineItemQueries.getRenderMask(rightItem),
-        getRenderFilterConfig: () => TimelineItemQueries.getRenderFilter(rightItem),
+        getRenderConfig: () => TimelineItemQueries.getResolvedRenderConfig(rightItem),
+        getRenderMask: () => TimelineItemQueries.getResolvedMask(rightItem),
+        getRenderFilterConfig: () => TimelineItemQueries.getResolvedFilter(rightItem),
         getEffectEvaluationFrame: () => this.params.getCurrentFrame(),
       }),
       ...this.buildBranchPasses({
@@ -140,7 +140,7 @@ export class TransitionChainBuilder {
         () => this.getTransitionProgress(transitionItem),
         () => ({
           ...loadedPackage.payload.defaultParams,
-          ...(TimelineItemQueries.getRenderTransition(transitionItem)?.params ?? {}),
+          ...(TimelineItemQueries.getResolvedTransition(transitionItem)?.params ?? {}),
         }),
         () => {
           const transitionRuntime = transitionItem.runtime.transition
@@ -189,13 +189,13 @@ export class TransitionChainBuilder {
     return [
       `left:${this.getBranchSignature(transitionItem)}`,
       `right:${this.getBranchSignature(rightItem)}`,
-      TimelineItemQueries.getRenderTransition(transitionItem)?.effectPackageId ?? '',
+      TimelineItemQueries.getResolvedTransition(transitionItem)?.effectPackageId ?? '',
       `transition-installed:${loadedTransitionPackage ? 'ready' : 'missing'}`,
       loadedTransitionPackage?.payload.version
-        ?? TimelineItemQueries.getRenderTransition(transitionItem)?.packagePayload?.version
+        ?? TimelineItemQueries.getResolvedTransition(transitionItem)?.packagePayload?.version
         ?? '',
       loadedTransitionPackage?.payload.scriptHash
-        ?? TimelineItemQueries.getRenderTransition(transitionItem)?.packagePayload?.scriptHash
+        ?? TimelineItemQueries.getResolvedTransition(transitionItem)?.packagePayload?.scriptHash
         ?? '',
     ].join('|')
   }
@@ -221,8 +221,8 @@ export class TransitionChainBuilder {
     item: TransitionItem
     getSourceTextureId: () => string | null
     getRenderConfig: () => TimelineBaseRenderConfig<'video'> | TimelineBaseRenderConfig<'image'>
-    getRenderMask: () => ReturnType<typeof TimelineItemQueries.getRenderMask>
-    getRenderFilterConfig: () => ReturnType<typeof TimelineItemQueries.getRenderFilter>
+    getRenderMask: () => ReturnType<typeof TimelineItemQueries.getResolvedMask>
+    getRenderFilterConfig: () => ReturnType<typeof TimelineItemQueries.getResolvedFilter>
     getEffectEvaluationFrame: () => number
   }) {
     const rotatedTextureId = `${params.prefix}:rotated`
@@ -319,15 +319,15 @@ export class TransitionChainBuilder {
   }
 
   private getBranchSignature(item: TransitionItem): string {
-    const mask = TimelineItemQueries.getRenderMask(item)
+    const mask = TimelineItemQueries.getResolvedMask(item)
     const loadedFilterPackage = this.resolveLoadedFilterPackage(item)
     return [
-      `blend:${TimelineItemQueries.getRenderConfig(item).visual.blendMode ?? DEFAULT_BLEND_MODE}`,
+      `blend:${TimelineItemQueries.getResolvedRenderConfig(item).visual.blendMode ?? DEFAULT_BLEND_MODE}`,
       `mask:${mask?.enabled ? 'on' : 'off'}:${mask?.type ?? 'rectangle'}`,
-      `filter:${TimelineItemQueries.getRenderFilter(item)?.effectPackageId ?? ''}`,
+      `filter:${TimelineItemQueries.getResolvedFilter(item)?.effectPackageId ?? ''}`,
       `filter-installed:${loadedFilterPackage ? 'ready' : 'missing'}`,
-      `filter-version:${loadedFilterPackage?.payload.version ?? TimelineItemQueries.getRenderFilter(item)?.packagePayload?.version ?? ''}`,
-      `filter-script:${loadedFilterPackage?.payload.scriptHash ?? TimelineItemQueries.getRenderFilter(item)?.packagePayload?.scriptHash ?? ''}`,
+      `filter-version:${loadedFilterPackage?.payload.version ?? TimelineItemQueries.getResolvedFilter(item)?.packagePayload?.version ?? ''}`,
+      `filter-script:${loadedFilterPackage?.payload.scriptHash ?? TimelineItemQueries.getResolvedFilter(item)?.packagePayload?.scriptHash ?? ''}`,
     ].join(':')
   }
 }

@@ -248,7 +248,7 @@ export class ExportManager {
           // 获取轨道静音状态
           const track = this.config.tracks.find((t) => t.id === item.trackId)
           const isTrackMuted = track?.isMuted ?? false
-          const isItemMuted = TimelineItemQueries.getRenderConfig(item).audio.isMuted ?? false
+          const isItemMuted = TimelineItemQueries.getResolvedRenderConfig(item).audio.isMuted ?? false
           const shouldRequestAudio = !isTrackMuted && !isItemMuted
 
           // 调用 tickN 获取音视频数据（使用 30fps 的帧数）
@@ -274,7 +274,7 @@ export class ExportManager {
             // 收集音频缓冲（使用 item.id 作为键）
             if (shouldRequestAudio && audio && audio.length > 0) {
               // ✅ 使用辅助函数获取当前音量值（应用了动画插值）
-              const config = TimelineItemQueries.getRenderConfig(item)
+              const config = TimelineItemQueries.getResolvedRenderConfig(item)
               const currentVolume = config.audio.volume ?? 1.0
               audioBuffersMap.set(item.id, {
                 buffers: audio,
@@ -338,7 +338,7 @@ export class ExportManager {
           // 获取轨道静音状态
           const track = this.config.tracks.find((t) => t.id === item.trackId)
           const isTrackMuted = track?.isMuted ?? false
-          const isItemMuted = TimelineItemQueries.getRenderConfig(item).audio.isMuted ?? false
+          const isItemMuted = TimelineItemQueries.getResolvedRenderConfig(item).audio.isMuted ?? false
           const shouldRequestAudio = !isTrackMuted && !isItemMuted
 
           // 调用 tickN 获取音频数据（不请求视频）
@@ -351,7 +351,7 @@ export class ExportManager {
 
           if (state === 'success' && shouldRequestAudio && audio && audio.length > 0) {
             // 获取当前音量值（应用了动画插值）
-            const config = TimelineItemQueries.getRenderConfig(item)
+            const config = TimelineItemQueries.getResolvedRenderConfig(item)
             const currentVolume = config.audio.volume ?? 1.0
             audioBuffersMap.set(item.id, {
               buffers: audio,

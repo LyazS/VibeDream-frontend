@@ -169,9 +169,9 @@ function formatTimelineItemDetail(item: UnifiedTimelineItemData, originalInfo: O
   }
 
   // 4. 变换属性
-  const visualConfig = TimelineItemQueries.getVisualRenderConfig(item)
-  const audioConfig = TimelineItemQueries.getAudioRenderConfig(item)
-  const textConfig = TimelineItemQueries.getTextRenderConfig(item)
+  const visualConfig = TimelineItemQueries.getBaseVisualConfig(item)
+  const audioConfig = TimelineItemQueries.getBaseAudioConfig(item)
+  const textConfig = TimelineItemQueries.getBaseTextConfig(item)
   const transformConfig = {
     ...(visualConfig ?? {}),
     ...(audioConfig ?? {}),

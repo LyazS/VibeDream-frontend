@@ -14,7 +14,7 @@ import { TimelineItemQueries } from '@/core/timelineitem/queries'
 export function getTimelineItemDisplayName(data: UnifiedTimelineItemData<MediaType>): string {
   // 对于文本类型，优先显示文本内容
   if (data.mediaType === 'text') {
-    const textContent = TimelineItemQueries.getTextRenderConfig(data)?.text
+    const textContent = TimelineItemQueries.getBaseTextConfig(data)?.text
     if (textContent && typeof textContent === 'string') {
       return textContent.length > 20 ? textContent.substring(0, 20) + '...' : textContent
     }

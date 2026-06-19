@@ -602,7 +602,7 @@ export function createUnifiedMediaModule(registry: ModuleRegistry) {
       }
 
       const relatedTransitionItems = timelineModule.timelineItems.value.filter(
-        (item: UnifiedTimelineItemData) => TimelineItemQueries.getTransition(item)?.effectPackageId === assetId,
+        (item: UnifiedTimelineItemData) => TimelineItemQueries.getBaseTransition(item)?.effectPackageId === assetId,
       )
 
       for (const timelineItem of relatedTransitionItems) {

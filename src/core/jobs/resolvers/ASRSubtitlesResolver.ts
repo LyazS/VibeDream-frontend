@@ -7,6 +7,7 @@ import type { ResourcePolicy, ResourceRequest } from '../ResourceTypes'
 import { createTextTimelineItem } from '@/core/utils/textTimelineUtils'
 import { setupTimelineItemBunny } from '@/core/bunnyUtils/timelineItemSetup'
 import { TimelineItemQueries } from '@/core/timelineitem/queries'
+import { TimelineItemMutations } from '@/core/timelineitem/mutations'
 import { splitAllUtterancesToSubtitles } from '@/core/utils/subtitleSplitter'
 import {
   ASRStreamEventType,
@@ -347,7 +348,7 @@ async function materializeASRSubtitles(
     textItem.timelineStatus = 'loading'
     await setupTimelineItemBunny(textItem)
     if (textItem.runtime.textBitmap) {
-      TimelineItemQueries.patchVisualRenderConfig(textItem, {
+      TimelineItemMutations.patchBaseVisualConfig(textItem, {
         width: textItem.runtime.textBitmap.width,
         height: textItem.runtime.textBitmap.height,
       })

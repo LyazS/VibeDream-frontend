@@ -256,8 +256,8 @@ export function useHistoryOperations(
       return
     }
 
-    const currentTransitionOut = TimelineItemQueries.getTransition(timelineItem)
-      ? normalizeClipTransitionOutConfig(TimelineItemQueries.getTransition(timelineItem))
+    const currentTransitionOut = TimelineItemQueries.getBaseTransition(timelineItem)
+      ? normalizeClipTransitionOutConfig(TimelineItemQueries.getBaseTransition(timelineItem))
       : undefined
     const normalizedNextTransitionConfig = nextTransitionConfig
       ? normalizeClipTransitionOutConfig(nextTransitionConfig)

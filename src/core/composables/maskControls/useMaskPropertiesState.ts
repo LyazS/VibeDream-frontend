@@ -20,7 +20,7 @@ export function useMaskPropertiesState(options: UnifiedMaskKeyframeControlsOptio
     }
 
     if (TimelineItemQueries.hasVisualProperties(item)) {
-      return TimelineItemQueries.getRenderConfig(item).visual
+      return TimelineItemQueries.getResolvedRenderConfig(item).visual
     }
 
     return { width: 0, height: 0 }
@@ -43,14 +43,14 @@ export function useMaskPropertiesState(options: UnifiedMaskKeyframeControlsOptio
     }
 
     return normalizeMaskConfig(
-      TimelineItemQueries.getRenderMask(item),
+      TimelineItemQueries.getResolvedMask(item),
       itemLocalSize.value,
     )
   })
 
   const hasMaskConfig = computed(() => {
     const item = selectedTimelineItem.value
-    return Boolean(item && TimelineItemQueries.getMask(item))
+    return Boolean(item && TimelineItemQueries.getBaseMask(item))
   })
 
   const rectangleMaskConfig = computed(() =>

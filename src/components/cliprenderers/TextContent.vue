@@ -18,7 +18,7 @@ import { TimelineItemQueries } from '@/core/timelineitem/queries'
 const props = defineProps<ContentTemplateProps<'text'>>()
 
 const previewText = computed(() => {
-  const content = TimelineItemQueries.getTextRenderConfig(props.data)?.text || '文本内容'
+  const content = TimelineItemQueries.getBaseTextConfig(props.data)?.text || '文本内容'
 
   if (!content || content.trim() === '') {
     return '文本内容'

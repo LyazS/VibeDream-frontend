@@ -41,7 +41,7 @@ export class ChainBuilder {
   constructor(private readonly params: ChainBuilderParams) {}
 
   private resolveLoadedFilterPackage(item: VisualTimelineItem) {
-    const filterConfig = TimelineItemQueries.getRenderFilter(item)
+    const filterConfig = TimelineItemQueries.getResolvedFilter(item)
     return filterConfig?.effectPackageId
       ? effectTemplateRegistry.getReadyPackage(filterConfig.effectPackageId)
       : null
@@ -59,9 +59,9 @@ export class ChainBuilder {
         0
       : 0
 
-    const renderConfig = TimelineItemQueries.getRenderConfig(item)
-    const renderFilterConfig = TimelineItemQueries.getRenderFilter(item)
-    const renderMask = TimelineItemQueries.getRenderMask(item)
+    const renderConfig = TimelineItemQueries.getResolvedRenderConfig(item)
+    const renderFilterConfig = TimelineItemQueries.getResolvedFilter(item)
+    const renderMask = TimelineItemQueries.getResolvedMask(item)
     const hasMask = Boolean(renderMask?.enabled)
     const loadedFilterPackage = this.resolveLoadedFilterPackage(item)
     const hasFilter = Boolean(renderFilterConfig && loadedFilterPackage)
@@ -83,7 +83,7 @@ export class ChainBuilder {
         this.params.targets,
         () => clockwiseRotationSourceTextureId,
         () => {
-          const config = TimelineItemQueries.getRenderConfig(item)
+          const config = TimelineItemQueries.getResolvedRenderConfig(item)
           return {
             width: config.visual.width,
             height: config.visual.height,
@@ -97,7 +97,7 @@ export class ChainBuilder {
             itemTargetTextureId,
             maskedItemTextureId,
             this.params.targets,
-            () => TimelineItemQueries.getRenderMask(item),
+            () => TimelineItemQueries.getResolvedMask(item),
           )]
         : []),
       ...(hasFilter && loadedFilterPackage
@@ -108,10 +108,10 @@ export class ChainBuilder {
             loadedFilterPackage,
             filteredItemTextureId,
             getEffectEvaluationFrame,
-            () => TimelineItemQueries.getRenderFilter(item)?.intensity ?? 1,
+            () => TimelineItemQueries.getResolvedFilter(item)?.intensity ?? 1,
             () => ({
               ...loadedFilterPackage.payload.defaultParams,
-              ...(TimelineItemQueries.getRenderFilter(item)?.params ?? {}),
+              ...(TimelineItemQueries.getResolvedFilter(item)?.params ?? {}),
             }),
             () => (hasMask ? maskedItemTextureId : itemTargetTextureId),
             (name) => `filter:${item.id}:${name}`,
@@ -123,7 +123,7 @@ export class ChainBuilder {
         hasFilter ? filteredItemTextureId : (hasMask ? maskedItemTextureId : itemTargetTextureId),
         renderConfig.visual.blendMode ?? DEFAULT_BLEND_MODE,
         () => {
-          const config = TimelineItemQueries.getRenderConfig(item)
+          const config = TimelineItemQueries.getResolvedRenderConfig(item)
           return {
             x: config.visual.x,
             y: config.visual.y,
@@ -138,16 +138,16 @@ export class ChainBuilder {
   }
 
   getSignature(item: VisualTimelineItem): string {
-    const config = TimelineItemQueries.getRenderConfig(item)
-    const mask = TimelineItemQueries.getRenderMask(item)
+    const config = TimelineItemQueries.getResolvedRenderConfig(item)
+    const mask = TimelineItemQueries.getResolvedMask(item)
     const loadedFilterPackage = this.resolveLoadedFilterPackage(item)
     return [
       `mask:${mask?.enabled ? 'on' : 'off'}:${mask?.type ?? 'rectangle'}`,
       `blend:${config.visual.blendMode ?? DEFAULT_BLEND_MODE}`,
-      `filter:${TimelineItemQueries.getRenderFilter(item)?.effectPackageId ?? ''}`,
+      `filter:${TimelineItemQueries.getResolvedFilter(item)?.effectPackageId ?? ''}`,
       `filter-installed:${loadedFilterPackage ? 'ready' : 'missing'}`,
-      `filter-version:${loadedFilterPackage?.payload.version ?? TimelineItemQueries.getRenderFilter(item)?.packagePayload?.version ?? ''}`,
-      `filter-script:${loadedFilterPackage?.payload.scriptHash ?? TimelineItemQueries.getRenderFilter(item)?.packagePayload?.scriptHash ?? ''}`,
+      `filter-version:${loadedFilterPackage?.payload.version ?? TimelineItemQueries.getResolvedFilter(item)?.packagePayload?.version ?? ''}`,
+      `filter-script:${loadedFilterPackage?.payload.scriptHash ?? TimelineItemQueries.getResolvedFilter(item)?.packagePayload?.scriptHash ?? ''}`,
     ].join(':')
   }
 }

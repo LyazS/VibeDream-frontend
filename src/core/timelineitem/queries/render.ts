@@ -75,50 +75,26 @@ function getTypedTextRenderConfig(item: UnifiedTimelineItemData<'text'>): TextPr
   return item.baseRenderConfig.text
 }
 
-export function getVisualRenderConfig(item: UnifiedTimelineItemData<MediaType>): VisualProps | undefined {
+export function getBaseVisualConfig(item: UnifiedTimelineItemData<MediaType>): VisualProps | undefined {
   if (!hasVisualProperties(item)) return undefined
   return getTypedVisualRenderConfig(item)
 }
 
-export function getAudioRenderConfig(item: UnifiedTimelineItemData<MediaType>): AudioProps | undefined {
+export function getBaseAudioConfig(item: UnifiedTimelineItemData<MediaType>): AudioProps | undefined {
   if (!hasAudioProperties(item)) return undefined
   return getTypedAudioRenderConfig(item)
 }
 
-export function getTextRenderConfig(item: UnifiedTimelineItemData<MediaType>): TextProps | undefined {
+export function getBaseTextConfig(item: UnifiedTimelineItemData<MediaType>): TextProps | undefined {
   if (!isTextTimelineItem(item)) return undefined
   return getTypedTextRenderConfig(item)
 }
 
-export function patchVisualRenderConfig(
-  item: UnifiedTimelineItemData<MediaType>,
-  patch: Partial<VisualProps>,
-): void {
-  if (!hasVisualProperties(item)) return
-  Object.assign(getTypedVisualRenderConfig(item), patch)
-}
-
-export function patchAudioRenderConfig(
-  item: UnifiedTimelineItemData<MediaType>,
-  patch: Partial<AudioProps>,
-): void {
-  if (!hasAudioProperties(item)) return
-  Object.assign(getTypedAudioRenderConfig(item), patch)
-}
-
-export function patchTextRenderConfig(
-  item: UnifiedTimelineItemData<MediaType>,
-  patch: Partial<TextProps>,
-): void {
-  if (!isTextTimelineItem(item)) return
-  Object.assign(getTypedTextRenderConfig(item), patch)
-}
-
-export function getExtraRenderConfig(item: UnifiedTimelineItemData<MediaType>) {
+export function getBaseExtraRenderConfig(item: UnifiedTimelineItemData<MediaType>) {
   return item.exRenderConfig
 }
 
-export function getRenderExtraRenderConfig(
+export function getMergedExtraRenderConfig(
   item: UnifiedTimelineItemData<MediaType> | null | undefined,
 ): TimelineExtraRenderConfig | undefined {
   if (!item) return undefined
@@ -133,26 +109,26 @@ export function getRenderExtraRenderConfig(
   }
 }
 
-export function getTransition(
+export function getBaseTransition(
   item: UnifiedTimelineItemData<MediaType> | null | undefined,
 ): ClipTransitionOutConfig | undefined {
   return item?.exRenderConfig.transition
 }
 
-export function getRenderTransition(
+export function getResolvedTransition(
   item: UnifiedTimelineItemData<MediaType> | null | undefined,
 ): ClipTransitionOutConfig | undefined {
-  return getRenderExtraRenderConfig(item)?.transition
+  return getMergedExtraRenderConfig(item)?.transition
 }
 
-export function getFilter(
+export function getBaseFilter(
   item: UnifiedTimelineItemData<MediaType> | null | undefined,
 ): ClipFilterConfig | undefined {
   if (!item || !supportsClipFilter(item)) return undefined
   return item.exRenderConfig.filter
 }
 
-export function getMask(
+export function getBaseMask(
   item: UnifiedTimelineItemData<MediaType> | null | undefined,
 ): MaskConfig | undefined {
   if (!item || !hasVisualProperties(item)) return undefined
@@ -166,21 +142,36 @@ export function getMask(
  * @param item 时间轴项目
  * @returns 用于渲染的配置对象
  */
-export function getRenderConfig<T extends MediaType>(
+export function getMergedRenderConfig<T extends MediaType>(
   item: UnifiedTimelineItemData<T>,
 ): TimelineBaseRenderConfig<T> {
-  const renderConfig = item.runtime.renderConfig || item.baseRenderConfig
+  return item.runtime.renderConfig || item.baseRenderConfig
+}
+
+/**
+ * 获取用于渲染的最终配置。
+ *
+ * 在 merged config 的基础上继续叠加当前交互态 overlay。
+ */
+export function getResolvedRenderConfig<T extends MediaType>(
+  item: UnifiedTimelineItemData<T>,
+): TimelineBaseRenderConfig<T> {
+  const mergedRenderConfig = getMergedRenderConfig(item)
   const positionOverlay = getTransformPositionOverlay(item.id)
   const sizeOverlay = getTransformSizeOverlay(item.id)
   const rotationOverlay = getTransformRotationOverlay(item.id)
   const opacityOverlay = getTransformOpacityOverlay(item.id)
   const volumeOverlay = getAudioVolumeOverlay(item.id)
   if (!positionOverlay && !sizeOverlay && !rotationOverlay && !opacityOverlay && !volumeOverlay) {
-    return renderConfig
+    return mergedRenderConfig
   }
 
-  const visualRenderConfig = hasVisualProperties(item) ? (item.runtime.renderConfig ?? item.baseRenderConfig).visual : null
-  const audioRenderConfig = hasAudioProperties(item) ? (item.runtime.renderConfig ?? item.baseRenderConfig).audio : null
+  const visualRenderConfig = hasVisualProperties(item)
+    ? (mergedRenderConfig as TimelineBaseRenderConfig<'video' | 'image' | 'text'>).visual
+    : null
+  const audioRenderConfig = hasAudioProperties(item)
+    ? (mergedRenderConfig as TimelineBaseRenderConfig<'video' | 'audio'>).audio
+    : null
   const nextVisualRenderConfig = visualRenderConfig
     ? {
         ...visualRenderConfig,
@@ -214,18 +205,18 @@ export function getRenderConfig<T extends MediaType>(
     : null
 
   return {
-    ...renderConfig,
+    ...mergedRenderConfig,
     ...(nextVisualRenderConfig ? { visual: nextVisualRenderConfig } : {}),
     ...(nextAudioRenderConfig ? { audio: nextAudioRenderConfig } : {}),
   } as TimelineBaseRenderConfig<T>
 }
 
-export function getRenderMask(
+export function getResolvedMask(
   item: UnifiedTimelineItemData<MediaType> | null | undefined,
 ): MaskConfig | undefined {
   if (!item || !hasVisualProperties(item)) return undefined
 
-  const renderConfig = getRenderConfig(item)
+  const renderConfig = getResolvedRenderConfig(item)
   const maskCenterOverlay = getMaskCenterOverlay(item.id)
   const maskFeatherOverlay = getMaskFeatherOverlay(item.id)
   const maskIntensityOverlay = getMaskIntensityOverlay(item.id)
@@ -234,7 +225,7 @@ export function getRenderMask(
   const maskMirrorLengthOverlay = getMaskMirrorLengthOverlay(item.id)
   const maskEllipseSizeOverlay = getMaskEllipseSizeOverlay(item.id)
   const maskRotationOverlay = getMaskRotationOverlay(item.id)
-  const renderMask = getRenderExtraRenderConfig(item)?.mask
+  const renderMask = getMergedExtraRenderConfig(item)?.mask
 
   if (
     !maskCenterOverlay &&
@@ -311,12 +302,12 @@ export function getRenderMask(
   }
 }
 
-export function getRenderFilter(
+export function getResolvedFilter(
   item: UnifiedTimelineItemData<MediaType> | null | undefined,
 ): ClipFilterConfig | undefined {
   if (!item || !supportsClipFilter(item)) return undefined
 
-  const renderFilterConfig = getRenderExtraRenderConfig(item)?.filter
+  const renderFilterConfig = getMergedExtraRenderConfig(item)?.filter
   if (!renderFilterConfig) return undefined
 
   const filterIntensityOverlay = getFilterIntensityOverlay(item.id)

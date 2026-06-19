@@ -34,7 +34,7 @@ export async function setupTimelineItemBunny(
     switch (timelineItem.mediaType) {
       case 'text': {
         // 文本类型：创建 textBitmap
-        const textConfig = TimelineItemQueries.getTextRenderConfig(timelineItem)
+        const textConfig = TimelineItemQueries.getBaseTextConfig(timelineItem)
         if (!textConfig) {
           throw new Error(`文本时间轴项目缺少文本配置: ${timelineItem.id}`)
         }

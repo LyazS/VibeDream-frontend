@@ -54,7 +54,7 @@ const unifiedStore = useUnifiedStore()
 const transitionConfig = computed(() =>
   normalizeClipTransitionOutConfig(
     props.selectedTimelineItem
-      ? TimelineItemQueries.getTransition(props.selectedTimelineItem)
+      ? TimelineItemQueries.getBaseTransition(props.selectedTimelineItem)
       : undefined,
   ),
 )

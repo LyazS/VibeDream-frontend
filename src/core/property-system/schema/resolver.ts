@@ -103,7 +103,7 @@ export class DynamicFilterParameterSchemaProvider implements PropertySchemaProvi
   }
 
   listSchemas(context: PropertySchemaContext): AnimatablePropertySchema[] {
-    const filterConfig = TimelineItemQueries.getExtraRenderConfig(context.item)?.filter
+    const filterConfig = TimelineItemQueries.getBaseExtraRenderConfig(context.item)?.filter
     if (!supportsClipFilter(context.item) || !filterConfig) {
       return []
     }
@@ -124,7 +124,7 @@ export class DynamicFilterParameterSchemaProvider implements PropertySchemaProvi
       return null
     }
 
-    const filterConfig = TimelineItemQueries.getExtraRenderConfig(context.item)?.filter
+    const filterConfig = TimelineItemQueries.getBaseExtraRenderConfig(context.item)?.filter
     if (!supportsClipFilter(context.item) || !filterConfig) {
       return null
     }

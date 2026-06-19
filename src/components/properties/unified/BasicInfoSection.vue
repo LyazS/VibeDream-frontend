@@ -51,7 +51,7 @@ const currentResolution = computed(() => {
     return null
   }
   
-  const config = TimelineItemQueries.getVisualRenderConfig(props.selectedTimelineItem)
+  const config = TimelineItemQueries.getBaseVisualConfig(props.selectedTimelineItem)
   if (!config) {
     return null
   }

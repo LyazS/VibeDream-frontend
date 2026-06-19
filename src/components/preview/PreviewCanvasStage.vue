@@ -144,7 +144,7 @@ const showMaskOverlay = computed(
       return false
     }
 
-    return Boolean(TimelineItemQueries.getMask(selectedItem.value))
+    return Boolean(TimelineItemQueries.getBaseMask(selectedItem.value))
   },
 )
 
@@ -390,7 +390,7 @@ function handleDragStart(event: MouseEvent) {
   const item = selectedItem.value
   if (!item || !TimelineItemQueries.hasVisualProperties(item)) return
 
-  const config = TimelineItemQueries.getRenderConfig(item).visual
+  const config = TimelineItemQueries.getResolvedRenderConfig(item).visual
 
   dragState.value = {
     isDragging: true,
@@ -452,7 +452,7 @@ function handleScaleStart(event: ScaleStartEventPayload) {
   const item = selectedItem.value
   if (!item || !TimelineItemQueries.hasVisualProperties(item)) return
 
-  const config = TimelineItemQueries.getRenderConfig(item).visual
+  const config = TimelineItemQueries.getResolvedRenderConfig(item).visual
 
   scaleState.value = {
     isScaling: true,
@@ -539,7 +539,7 @@ function handleRotateStart(event: RotateStartEventPayload) {
   const item = selectedItem.value
   if (!item || !TimelineItemQueries.hasVisualProperties(item)) return
 
-  const config = TimelineItemQueries.getRenderConfig(item).visual
+  const config = TimelineItemQueries.getResolvedRenderConfig(item).visual
 
   rotationState.value = {
     isRotating: true,
@@ -699,7 +699,7 @@ function findTimelineItemAtPosition(
       continue
     }
 
-    const renderConfig = TimelineItemQueries.getRenderConfig(item).visual
+    const renderConfig = TimelineItemQueries.getResolvedRenderConfig(item).visual
 
     const isHit = isPointInRotatedBoundingBox(canvasPoint, {
       x: renderConfig.x,
