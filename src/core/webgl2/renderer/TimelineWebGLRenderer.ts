@@ -66,7 +66,6 @@ export class TimelineWebGLRenderer {
       targets: this.runtime.targets,
       getSourceTextureId: (itemId) => this.sourceUploader.getTextureIdForItem(itemId),
       getMediaItem: options.getMediaItem,
-      getAsset: options.getAsset,
       getCurrentFrame: () => this.currentRenderFrame,
     })
     this.chainAdapter = new TimelineRenderChainAdapter(this.chainBuilder)

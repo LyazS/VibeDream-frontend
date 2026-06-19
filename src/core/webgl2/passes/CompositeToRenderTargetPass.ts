@@ -58,6 +58,7 @@ export class CompositeToRenderTargetPass implements RenderPass {
   render(ctx: RenderPassContext): void {
     const overlay = ctx.textures.get(this.overlayTextureId)
     if (!overlay) {
+      this.targets.releaseRenderTarget(this.outputTextureId)
       return
     }
 
@@ -77,6 +78,8 @@ export class CompositeToRenderTargetPass implements RenderPass {
 
     gl.bindFramebuffer(gl.FRAMEBUFFER, outputTarget.framebuffer)
     gl.viewport(0, 0, outputTarget.width, outputTarget.height)
+    gl.clearColor(0, 0, 0, 0)
+    gl.clear(gl.COLOR_BUFFER_BIT)
     gl.useProgram(this.program)
     ctx.runtime.bindUnitQuad(this.program)
 

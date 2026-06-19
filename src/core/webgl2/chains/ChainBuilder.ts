@@ -1,5 +1,3 @@
-import type { UnifiedLibraryAssetData } from '@/core/asset/types'
-import { EffectPackageFilterPass } from '@/core/effect-package/runtime/EffectPackageFilterPass'
 import { effectTemplateRegistry } from '@/core/effect-template/EffectTemplateRegistry'
 import { degreesToRadians } from '@/core/utils/rotationTransform'
 import type { UnifiedMediaItemData } from '@/core/mediaitem/types'
@@ -7,12 +5,10 @@ import { DEFAULT_BLEND_MODE } from '@/core/timelineitem/model/blendMode'
 import { TimelineItemQueries } from '@/core/timelineitem/queries'
 import type { UnifiedTimelineItemData } from '@/core/timelineitem/model/timelineItem'
 import { CompositeToMainPass } from '@/core/webgl2/passes/CompositeToMainPass'
-import { ItemLocalRasterPass } from '@/core/webgl2/passes/ItemLocalRasterPass'
-import { MaskPass } from '@/core/webgl2/passes/MaskPass'
-import { RotateSourcePass } from '@/core/webgl2/passes/RotateSourcePass'
 import { RenderChain } from '@/core/webgl2/renderchain/RenderChain'
 import type { ProgramManager } from '@/core/webgl2/runtime/ProgramManager'
 import type { RenderTargetPool } from '@/core/webgl2/runtime/RenderTargetPool'
+import { ItemPassBuilder } from '@/core/webgl2/chains/ItemPassBuilder'
 
 /**
  * 当前可映射到 RenderChain 的可视 item。
@@ -27,7 +23,6 @@ interface ChainBuilderParams {
   targets: Pick<RenderTargetPool, 'releaseRenderTarget' | 'ensureRenderTarget'>
   getSourceTextureId: (itemId: string) => string | null
   getMediaItem: (mediaItemId: string) => UnifiedMediaItemData | undefined
-  getAsset: (assetId: string | null) => UnifiedLibraryAssetData | undefined
   getCurrentFrame: () => number
 }
 
@@ -38,89 +33,34 @@ interface ChainBuilderParams {
  * 但后续可以在这里根据 item 配置插入更多 effect/composite pass。
  */
 export class ChainBuilder {
-  constructor(private readonly params: ChainBuilderParams) {}
+  private readonly itemPassBuilder: ItemPassBuilder
 
-  private resolveLoadedFilterPackage(item: VisualTimelineItem) {
-    const filterConfig = TimelineItemQueries.getResolvedFilter(item)
-    return filterConfig?.effectPackageId
-      ? effectTemplateRegistry.getReadyPackage(filterConfig.effectPackageId)
-      : null
+  constructor(private readonly params: ChainBuilderParams) {
+    this.itemPassBuilder = new ItemPassBuilder({
+      programs: params.programs,
+      targets: params.targets,
+      getMediaItem: params.getMediaItem,
+    })
   }
 
   build(item: VisualTimelineItem): RenderChain {
-    const itemTargetTextureId = `item:${item.id}`
-    const maskedItemTextureId = `mask:${item.id}`
-    const filteredItemTextureId = `filter:${item.id}`
-    const clockwiseRotationSourceTextureId = `clockwiseRotation-source:${item.id}`
-    const clockwiseRotation = TimelineItemQueries.isVideoTimelineItem(item)
-      ? this.params.getMediaItem(item.mediaItemId)?.runtime.bunny?.bunnyMedia
-          ?.clockwiseRotation ??
-        item.runtime.bunnyClip?.clockwiseRotation ??
-        0
-      : 0
-
+    const itemPassBuild = this.itemPassBuilder.build({
+      prefix: `item:${item.id}`,
+      item,
+      getSourceTextureId: () => this.params.getSourceTextureId(item.id),
+      getRenderConfig: () => TimelineItemQueries.getResolvedRenderConfig(item),
+      getRenderMask: () => TimelineItemQueries.getResolvedMask(item),
+      getRenderFilterConfig: () => TimelineItemQueries.getResolvedFilter(item),
+      getEffectEvaluationFrame: () => this.params.getCurrentFrame(),
+    })
     const renderConfig = TimelineItemQueries.getResolvedRenderConfig(item)
-    const renderFilterConfig = TimelineItemQueries.getResolvedFilter(item)
-    const renderMask = TimelineItemQueries.getResolvedMask(item)
-    const hasMask = Boolean(renderMask?.enabled)
-    const loadedFilterPackage = this.resolveLoadedFilterPackage(item)
-    const hasFilter = Boolean(renderFilterConfig && loadedFilterPackage)
-    const getEffectEvaluationFrame = () => this.params.getCurrentFrame()
 
     const passes = [
-      new RotateSourcePass(
-        `clockwiseRotation-source:${item.id}`,
-        this.params.programs,
-        clockwiseRotationSourceTextureId,
-        this.params.targets,
-        () => this.params.getSourceTextureId(item.id),
-        clockwiseRotation,
-      ),
-      new ItemLocalRasterPass(
-        `item-local:${item.id}`,
-        this.params.programs,
-        itemTargetTextureId,
-        this.params.targets,
-        () => clockwiseRotationSourceTextureId,
-        () => {
-          const config = TimelineItemQueries.getResolvedRenderConfig(item)
-          return {
-            width: config.visual.width,
-            height: config.visual.height,
-          }
-        },
-      ),
-      ...(hasMask
-        ? [new MaskPass(
-            `mask:${item.id}`,
-            this.params.programs,
-            itemTargetTextureId,
-            maskedItemTextureId,
-            this.params.targets,
-            () => TimelineItemQueries.getResolvedMask(item),
-          )]
-        : []),
-      ...(hasFilter && loadedFilterPackage
-        ? [new EffectPackageFilterPass(
-            this.params.programs,
-            this.params.targets,
-            `filter:${item.id}`,
-            loadedFilterPackage,
-            filteredItemTextureId,
-            getEffectEvaluationFrame,
-            () => TimelineItemQueries.getResolvedFilter(item)?.intensity ?? 1,
-            () => ({
-              ...loadedFilterPackage.payload.defaultParams,
-              ...(TimelineItemQueries.getResolvedFilter(item)?.params ?? {}),
-            }),
-            () => (hasMask ? maskedItemTextureId : itemTargetTextureId),
-            (name) => `filter:${item.id}:${name}`,
-          )]
-        : []),
+      ...itemPassBuild.passes,
       new CompositeToMainPass(
         this.params.programs,
         `composite:${item.id}`,
-        hasFilter ? filteredItemTextureId : (hasMask ? maskedItemTextureId : itemTargetTextureId),
+        itemPassBuild.outputTextureId,
         renderConfig.visual.blendMode ?? DEFAULT_BLEND_MODE,
         () => {
           const config = TimelineItemQueries.getResolvedRenderConfig(item)
@@ -140,7 +80,9 @@ export class ChainBuilder {
   getSignature(item: VisualTimelineItem): string {
     const config = TimelineItemQueries.getResolvedRenderConfig(item)
     const mask = TimelineItemQueries.getResolvedMask(item)
-    const loadedFilterPackage = this.resolveLoadedFilterPackage(item)
+    const loadedFilterPackage = TimelineItemQueries.getResolvedFilter(item)?.effectPackageId
+      ? effectTemplateRegistry.getReadyPackage(TimelineItemQueries.getResolvedFilter(item)?.effectPackageId ?? '')
+      : null
     return [
       `mask:${mask?.enabled ? 'on' : 'off'}:${mask?.type ?? 'rectangle'}`,
       `blend:${config.visual.blendMode ?? DEFAULT_BLEND_MODE}`,

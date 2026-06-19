@@ -1,8 +1,6 @@
 import type { UnifiedLibraryAssetData } from '@/core/asset/types'
-import { EffectPackageFilterPass } from '@/core/effect-package/runtime/EffectPackageFilterPass'
 import { EffectPackageTransitionPass } from '@/core/effect-package/runtime/EffectPackageTransitionPass'
 import { effectTemplateRegistry } from '@/core/effect-template/EffectTemplateRegistry'
-import { degreesToRadians } from '@/core/utils/rotationTransform'
 import type { UnifiedMediaItemData } from '@/core/mediaitem/types'
 import { DEFAULT_BLEND_MODE } from '@/core/timelineitem/model/blendMode'
 import { TimelineItemQueries } from '@/core/timelineitem/queries'
@@ -16,15 +14,14 @@ import {
   resolveRenderFilterConfigAtFrame,
   resolveRenderMaskAtFrame,
 } from '@/core/utils/animationInterpolation'
-import { CompositeToMainPass } from '@/core/webgl2/passes/CompositeToMainPass'
+import { degreesToRadians } from '@/core/utils/rotationTransform'
 import { CompositeToRenderTargetPass } from '@/core/webgl2/passes/CompositeToRenderTargetPass'
-import { ItemLocalRasterPass } from '@/core/webgl2/passes/ItemLocalRasterPass'
-import { MaskPass } from '@/core/webgl2/passes/MaskPass'
-import { RotateSourcePass } from '@/core/webgl2/passes/RotateSourcePass'
+import { CompositeToMainPass } from '@/core/webgl2/passes/CompositeToMainPass'
 import { RenderChain } from '@/core/webgl2/renderchain/RenderChain'
 import type { ProgramManager } from '@/core/webgl2/runtime/ProgramManager'
 import type { RenderTargetPool } from '@/core/webgl2/runtime/RenderTargetPool'
 import type { TextureManager } from '@/core/webgl2/runtime/TextureManager'
+import { ItemPassBuilder } from '@/core/webgl2/chains/ItemPassBuilder'
 
 type TransitionItem = UnifiedTimelineItemData<'video'> | UnifiedTimelineItemData<'image'>
 
@@ -40,7 +37,15 @@ interface TransitionChainBuilderParams {
 }
 
 export class TransitionChainBuilder {
-  constructor(private readonly params: TransitionChainBuilderParams) {}
+  private readonly itemPassBuilder: ItemPassBuilder
+
+  constructor(private readonly params: TransitionChainBuilderParams) {
+    this.itemPassBuilder = new ItemPassBuilder({
+      programs: params.programs,
+      targets: params.targets,
+      getMediaItem: params.getMediaItem,
+    })
+  }
 
   private resolveLoadedTransitionPackage(transitionItem: TransitionItem) {
     const effectPackageId = TimelineItemQueries.getResolvedTransition(transitionItem)?.effectPackageId
@@ -225,76 +230,28 @@ export class TransitionChainBuilder {
     getRenderFilterConfig: () => ReturnType<typeof TimelineItemQueries.getResolvedFilter>
     getEffectEvaluationFrame: () => number
   }) {
-    const rotatedTextureId = `${params.prefix}:rotated`
-    const itemLocalTextureId = `${params.prefix}:item-local`
-    const maskedTextureId = `${params.prefix}:masked`
-    const filteredTextureId = `${params.prefix}:filtered`
-    const projectedTextureId = `${params.prefix}:projected`
-    const loadedFilterPackage = this.resolveLoadedFilterPackage(params.item)
-    const hasFilter = Boolean(params.getRenderFilterConfig() && loadedFilterPackage)
-    const hasMask = Boolean(params.getRenderMask()?.enabled)
-    const getVisualRenderConfig = () => params.getRenderConfig().visual
+    const itemPassBuild = this.itemPassBuilder.build({
+      prefix: params.prefix,
+      item: params.item,
+      getSourceTextureId: params.getSourceTextureId,
+      getRenderConfig: params.getRenderConfig,
+      getRenderMask: params.getRenderMask,
+      getRenderFilterConfig: params.getRenderFilterConfig,
+      getEffectEvaluationFrame: params.getEffectEvaluationFrame,
+    })
 
     return [
-      new RotateSourcePass(
-        `${params.prefix}:rotate`,
-        this.params.programs,
-        rotatedTextureId,
-        this.params.targets,
-        params.getSourceTextureId,
-        this.getClockwiseRotation(params.item),
-      ),
-      new ItemLocalRasterPass(
-        `${params.prefix}:item-local`,
-        this.params.programs,
-        itemLocalTextureId,
-        this.params.targets,
-        () => rotatedTextureId,
-        () => {
-          const config = getVisualRenderConfig()
-          return {
-            width: config.width ?? 0,
-            height: config.height ?? 0,
-          }
-        },
-      ),
-      new MaskPass(
-        `${params.prefix}:mask`,
-        this.params.programs,
-        itemLocalTextureId,
-        maskedTextureId,
-        this.params.targets,
-        () => params.getRenderMask(),
-      ),
-      ...(hasFilter && loadedFilterPackage
-        ? [new EffectPackageFilterPass(
-            this.params.programs,
-            this.params.targets,
-            `${params.prefix}:filter`,
-            loadedFilterPackage,
-            filteredTextureId,
-            params.getEffectEvaluationFrame,
-            () => params.getRenderFilterConfig()?.intensity ?? 1,
-            () => ({
-              ...loadedFilterPackage.payload.defaultParams,
-              ...(params.getRenderFilterConfig()?.params ?? {}),
-            }),
-            () => (hasMask ? maskedTextureId : itemLocalTextureId),
-            (name) => `${params.prefix}:filter:${name}`,
-          )]
-        : []),
+      ...itemPassBuild.passes,
       new CompositeToRenderTargetPass(
         this.params.programs,
         this.params.textures,
         this.params.targets,
         `${params.prefix}:project`,
-        hasFilter
-          ? filteredTextureId
-          : (hasMask ? maskedTextureId : itemLocalTextureId),
-        projectedTextureId,
-        getVisualRenderConfig().blendMode ?? DEFAULT_BLEND_MODE,
+        itemPassBuild.outputTextureId,
+        `${params.prefix}:projected`,
+        params.getRenderConfig().visual.blendMode ?? DEFAULT_BLEND_MODE,
         () => {
-          const config = getVisualRenderConfig()
+          const config = params.getRenderConfig().visual
           return {
             x: config.x,
             y: config.y,
@@ -306,22 +263,11 @@ export class TransitionChainBuilder {
     ]
   }
 
-  private getClockwiseRotation(item: TransitionItem): number {
-    if (!TimelineItemQueries.isVideoTimelineItem(item)) {
-      return 0
-    }
-
-    return (
-      this.params.getMediaItem(item.mediaItemId)?.runtime.bunny?.bunnyMedia?.clockwiseRotation ??
-      item.runtime.bunnyClip?.clockwiseRotation ??
-      0
-    )
-  }
-
   private getBranchSignature(item: TransitionItem): string {
     const mask = TimelineItemQueries.getResolvedMask(item)
     const loadedFilterPackage = this.resolveLoadedFilterPackage(item)
     return [
+      `time:${item.timeRange.timelineStartTime}-${item.timeRange.timelineEndTime}:${item.timeRange.clipStartTime}-${item.timeRange.clipEndTime}`,
       `blend:${TimelineItemQueries.getResolvedRenderConfig(item).visual.blendMode ?? DEFAULT_BLEND_MODE}`,
       `mask:${mask?.enabled ? 'on' : 'off'}:${mask?.type ?? 'rectangle'}`,
       `filter:${TimelineItemQueries.getResolvedFilter(item)?.effectPackageId ?? ''}`,
