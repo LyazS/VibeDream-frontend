@@ -74,38 +74,30 @@ import { computed, ref, onMounted, onUnmounted, type CSSProperties } from 'vue'
 import { useUnifiedStore } from '@/core/unifiedStore'
 import { TimelineItemQueries } from '@/core/timelineitem/queries'
 import type { VisualProps } from '@/core/timelineitem/model/render'
-import type { MediaType } from '@/core/mediaitem'
-import { degreesToRadians } from '@/core/utils/rotationTransform'
+import {
+  convertCanvasToDOM,
+  type RotateStartEventPayload,
+  type ScaleStartEventPayload,
+  type Size2D,
+  type TransformScaleHandlePosition,
+  type TransformScaleHandleType,
+} from '@/core/preview/transformOverlay'
 
 interface Props {
   selectedTimelineItemId: string | null
   isMultiSelectMode: boolean
-  canvasResolution: { width: number; height: number }
-  canvasDisplaySize: { width: number; height: number }
-  containerSize: { width: number; height: number }
+  canvasResolution: Size2D
+  canvasDisplaySize: Size2D
+  containerSize: Size2D
   currentFrame: number
-}
-
-interface ScaleStartEvent {
-  handleType: 'corner' | 'edge'
-  handlePosition: 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right' | 'top' | 'bottom' | 'left' | 'right'
-  isProportional: boolean
-  clientX: number
-  clientY: number
-}
-
-interface RotateStartEvent {
-  centerPoint: { x: number; y: number }
-  clientX: number
-  clientY: number
 }
 
 interface Emits {
   (e: 'dragStart', event: MouseEvent): void
   (e: 'dragMove', event: MouseEvent): void
   (e: 'dragEnd', event: MouseEvent): void
-  (e: 'scaleStart', event: ScaleStartEvent): void
-  (e: 'rotateStart', event: RotateStartEvent): void
+  (e: 'scaleStart', event: ScaleStartEventPayload): void
+  (e: 'rotateStart', event: RotateStartEventPayload): void
 }
 
 const props = defineProps<Props>()
@@ -131,7 +123,6 @@ const shouldShowIndicator = computed(() => {
   return true
 })
 
-// 获取选中的时间轴项目
 const selectedItem = computed(() => {
   if (!props.selectedTimelineItemId) return null
   return unifiedStore.getTimelineItem(props.selectedTimelineItemId)
@@ -151,7 +142,6 @@ const isProportionalScale = computed(() => {
   return TimelineItemQueries.getResolvedRenderConfig(selectedItem.value).visual.proportionalScale ?? false
 })
 
-// 计算指示器样式
 const indicatorStyle = computed((): CSSProperties => {
   if (!visualConfig.value) return {}
 
@@ -170,51 +160,6 @@ const indicatorStyle = computed((): CSSProperties => {
     transform: `rotate(${domPosition.rotation}rad)`,
   }
 })
-
-// 坐标转换: Canvas 中心坐标系 → DOM 左上角坐标系
-function convertCanvasToDOM(
-  config: VisualProps,
-  canvasResolution: { width: number; height: number },
-  canvasDisplaySize: { width: number; height: number },
-  containerSize: { width: number; height: number },
-) {
-  // 边界检查
-  if (canvasResolution.width === 0 || canvasResolution.height === 0) {
-    return { left: 0, top: 0, width: 0, height: 0, rotation: 0 }
-  }
-  if (config.width === 0 || config.height === 0) {
-    return { left: 0, top: 0, width: 0, height: 0, rotation: 0 }
-  }
-
-  // 计算缩放比例
-  const scaleX = canvasDisplaySize.width / canvasResolution.width
-  const scaleY = canvasDisplaySize.height / canvasResolution.height
-
-  // 转换位置（项目坐标 Y 向上为正；DOM/Canvas 内部 Y 向下为正）
-  const canvasX = (config.x + canvasResolution.width / 2) * scaleX
-  const canvasY = (canvasResolution.height / 2 - config.y) * scaleY
-
-  // 计算 Canvas 在容器中的居中偏移
-  const offsetX = (containerSize.width - canvasDisplaySize.width) / 2
-  const offsetY = (containerSize.height - canvasDisplaySize.height) / 2
-
-  // 加上居中偏移
-  const domX = canvasX + offsetX
-  const domY = canvasY + offsetY
-
-  // 转换尺寸
-  const domWidth = config.width * scaleX
-  const domHeight = config.height * scaleY
-
-  // 计算左上角位置
-  const left = domX - domWidth / 2
-  const top = domY - domHeight / 2
-
-  // 转换旋转角度：角度 → 弧度（用于 CSS transform）
-  const rotationRadians = degreesToRadians(config.rotation)
-
-  return { left, top, width: domWidth, height: domHeight, rotation: rotationRadians }
-}
 
 /**
  * 处理鼠标按下事件，开始拖拽
@@ -236,8 +181,8 @@ function handleMouseDown(event: MouseEvent) {
  */
 function handleScaleMouseDown(
   event: MouseEvent,
-  handleType: 'corner' | 'edge',
-  handlePosition: ScaleStartEvent['handlePosition']
+  handleType: TransformScaleHandleType,
+  handlePosition: TransformScaleHandlePosition
 ) {
   event.preventDefault()
   event.stopPropagation()

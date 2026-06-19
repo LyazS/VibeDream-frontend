@@ -28,6 +28,7 @@ export class EffectPackageTransitionPass implements RenderPass {
       params: this.getParams(),
       progress: this.getProgress(),
       frame: this.getEvaluationFrame(),
+      canvasSize: [ctx.canvasWidth, ctx.canvasHeight],
       finalOutputTextureId: this.finalOutputTextureId,
       inputTextures: this.resolveInputTextures(),
       passOutputTextureId: this.getPassTextureId,

@@ -85,7 +85,6 @@ import {
 import {
   domToCanvasCoordinates,
   isPointInRotatedBoundingBox,
-  domDeltaToCanvasDelta,
 } from '@/core/utils/canvasClickUtils'
 import {
   getVisibleTimelineItems,
@@ -93,8 +92,23 @@ import {
 } from '@/core/utils/timelineVisibilityUtils'
 import { TimelineItemQueries } from '@/core/timelineitem/queries'
 import { useUnifiedKeyframeTransformControls } from '@/core/composables/useKeyframeTransformControls'
-import { calculateScaledSize, calculateRotationAngle } from '@/core/utils/transformMath'
 import { buildClipSelectionId } from '@/core/types/timelineSelection'
+import {
+  clamp,
+  createTransformDragSession,
+  createTransformRotationSession,
+  createTransformScaleSession,
+  getDragPreviewPosition,
+  getRotationPreviewAngle,
+  getScalePreviewGeometry,
+  screenPointToStagePoint,
+  type PreviewTransformState,
+  type RotateStartEventPayload,
+  type ScaleStartEventPayload,
+  type TransformDragSession,
+  type TransformRotationSession,
+  type TransformScaleSession,
+} from '@/core/preview/transformOverlay'
 
 const unifiedStore = useUnifiedStore()
 const { t } = useAppI18n()
@@ -127,7 +141,7 @@ const stageTransformStyle = computed(() => ({
   transform: `translate(${previewOffsetX.value}px, ${previewOffsetY.value}px) scale(${previewZoom.value})`,
   transformOrigin: 'center center',
 }))
-const previewTransform = computed(() => ({
+const previewTransform = computed<PreviewTransformState>(() => ({
   zoom: previewZoom.value,
   offsetX: previewOffsetX.value,
   offsetY: previewOffsetY.value,
@@ -165,7 +179,7 @@ const {
   currentFrame,
 })
 
-const dragState = ref({
+const dragState = ref<TransformDragSession>({
   isDragging: false,
   startX: 0,
   startY: 0,
@@ -174,10 +188,10 @@ const dragState = ref({
   hasMoved: false,
 })
 
-const scaleState = ref({
+const scaleState = ref<TransformScaleSession>({
   isScaling: false,
-  handleType: null as 'corner' | 'edge' | null,
-  handlePosition: null as string | null,
+  handleType: null,
+  handlePosition: null,
   isProportional: false,
   startX: 0,
   startY: 0,
@@ -189,7 +203,7 @@ const scaleState = ref({
   hasMoved: false,
 })
 
-const rotationState = ref({
+const rotationState = ref<TransformRotationSession>({
   isRotating: false,
   startX: 0,
   startY: 0,
@@ -219,28 +233,6 @@ const contextMenuOptions = ref({
 
 type IconComponent = (typeof IconComponents)[keyof typeof IconComponents]
 
-interface ScaleStartEventPayload {
-  handleType: 'corner' | 'edge'
-  handlePosition:
-    | 'top-left'
-    | 'top-right'
-    | 'bottom-left'
-    | 'bottom-right'
-    | 'top'
-    | 'bottom'
-    | 'left'
-    | 'right'
-  isProportional: boolean
-  clientX: number
-  clientY: number
-}
-
-interface RotateStartEventPayload {
-  centerPoint: { x: number; y: number }
-  clientX: number
-  clientY: number
-}
-
 type MenuItem =
   | {
       label: string
@@ -266,24 +258,6 @@ const updateContainerSize = () => {
   if (!rendererContainerRef.value) return
   const rect = rendererContainerRef.value.getBoundingClientRect()
   containerSizeValue.value = { width: rect.width, height: rect.height }
-}
-
-function clamp(value: number, min: number, max: number) {
-  return Math.min(max, Math.max(min, value))
-}
-
-function screenPointToStagePoint(domX: number, domY: number) {
-  return {
-    x: stageCenter.value.x + (domX - stageCenter.value.x - previewOffsetX.value) / previewZoom.value,
-    y: stageCenter.value.y + (domY - stageCenter.value.y - previewOffsetY.value) / previewZoom.value,
-  }
-}
-
-function screenDeltaToStageDelta(deltaX: number, deltaY: number) {
-  return {
-    x: deltaX / previewZoom.value,
-    y: deltaY / previewZoom.value,
-  }
 }
 
 function resetPreviewTransform() {
@@ -315,7 +289,7 @@ function handlePreviewWheel(event: WheelEvent) {
 
   const mouseX = event.clientX - rect.left
   const mouseY = event.clientY - rect.top
-  const stagePoint = screenPointToStagePoint(mouseX, mouseY)
+  const stagePoint = screenPointToStagePoint(mouseX, mouseY, stageCenter.value, previewTransform.value)
   const nextZoom = clamp(
     previewZoom.value * Math.exp(-event.deltaY * 0.0015),
     MIN_PREVIEW_ZOOM,
@@ -392,14 +366,7 @@ function handleDragStart(event: MouseEvent) {
 
   const config = TimelineItemQueries.getResolvedRenderConfig(item).visual
 
-  dragState.value = {
-    isDragging: true,
-    startX: event.clientX,
-    startY: event.clientY,
-    initialCanvasX: config.x,
-    initialCanvasY: config.y,
-    hasMoved: false,
-  }
+  dragState.value = createTransformDragSession(event, { x: config.x, y: config.y })
 
   window.addEventListener('mousemove', handleGlobalMouseMove)
   window.addEventListener('mouseup', handleGlobalMouseUp)
@@ -410,22 +377,15 @@ function handleDragMove(event: MouseEvent) {
 
   dragState.value.hasMoved = true
 
-  const screenDelta = screenDeltaToStageDelta(
-    event.clientX - dragState.value.startX,
-    event.clientY - dragState.value.startY,
-  )
-
-  const canvasDelta = domDeltaToCanvasDelta(
-    screenDelta.x,
-    screenDelta.y,
+  const nextPosition = getDragPreviewPosition(
+    dragState.value,
+    event,
+    previewTransform.value,
     canvasDisplaySize.value,
     canvasResolution.value,
   )
 
-  const newCanvasX = dragState.value.initialCanvasX + canvasDelta.x
-  const newCanvasY = dragState.value.initialCanvasY + canvasDelta.y
-
-  setTransformPositionDeferred(newCanvasX, newCanvasY)
+  setTransformPositionDeferred(nextPosition.x, nextPosition.y)
 }
 
 async function handleDragEnd(_event: MouseEvent) {
@@ -454,20 +414,13 @@ function handleScaleStart(event: ScaleStartEventPayload) {
 
   const config = TimelineItemQueries.getResolvedRenderConfig(item).visual
 
-  scaleState.value = {
-    isScaling: true,
-    handleType: event.handleType,
-    handlePosition: event.handlePosition,
-    isProportional: event.isProportional,
-    startX: event.clientX,
-    startY: event.clientY,
-    initialWidth: config.width,
-    initialHeight: config.height,
-    initialX: config.x,
-    initialY: config.y,
-    initialRotation: config.rotation,
-    hasMoved: false,
-  }
+  scaleState.value = createTransformScaleSession(event, {
+    width: config.width,
+    height: config.height,
+    x: config.x,
+    y: config.y,
+    rotation: config.rotation,
+  })
 
   window.addEventListener('mousemove', handleGlobalScaleMove)
   window.addEventListener('mouseup', handleGlobalScaleEnd)
@@ -478,39 +431,13 @@ function handleScaleMove(event: MouseEvent) {
 
   scaleState.value.hasMoved = true
 
-  const {
-    handlePosition,
-    isProportional,
-    initialWidth,
-    initialHeight,
-    initialX,
-    initialY,
-    initialRotation,
-  } = scaleState.value
-
-  const stageDelta = screenDeltaToStageDelta(
-    event.clientX - scaleState.value.startX,
-    event.clientY - scaleState.value.startY,
-  )
-
-  const canvasDelta = domDeltaToCanvasDelta(
-    stageDelta.x,
-    stageDelta.y,
+  const result = getScalePreviewGeometry(
+    scaleState.value,
+    event,
+    previewTransform.value,
     canvasDisplaySize.value,
     canvasResolution.value,
   )
-
-  const result = calculateScaledSize({
-    initialWidth,
-    initialHeight,
-    initialX,
-    initialY,
-    deltaX: canvasDelta.x,
-    deltaY: canvasDelta.y,
-    handlePosition: handlePosition!,
-    isProportional,
-    elementRotation: initialRotation,
-  })
 
   setTransformSizeDeferred(result.width, result.height, result.x, result.y)
 }
@@ -541,14 +468,7 @@ function handleRotateStart(event: RotateStartEventPayload) {
 
   const config = TimelineItemQueries.getResolvedRenderConfig(item).visual
 
-  rotationState.value = {
-    isRotating: true,
-    startX: event.clientX,
-    startY: event.clientY,
-    initialRotation: config.rotation,
-    centerPoint: event.centerPoint,
-    hasMoved: false,
-  }
+  rotationState.value = createTransformRotationSession(event, config.rotation)
 
   window.addEventListener('mousemove', handleGlobalRotateMove)
   window.addEventListener('mouseup', handleGlobalRotateEnd)
@@ -562,21 +482,15 @@ function handleRotateMove(event: MouseEvent) {
   const rect = rendererContainerRef.value?.getBoundingClientRect()
   if (!rect) return
 
-  const stagePoint = screenPointToStagePoint(event.clientX - rect.left, event.clientY - rect.top)
-
-  const canvasPoint = domToCanvasCoordinates(
-    stagePoint.x,
-    stagePoint.y,
+  const newRotation = getRotationPreviewAngle(
+    rotationState.value,
+    event,
+    rect,
+    stageCenter.value,
+    previewTransform.value,
     canvasResolution.value,
     canvasDisplaySize.value,
     containerSize.value,
-  )
-
-  const newRotation = calculateRotationAngle(
-    canvasPoint.x,
-    canvasPoint.y,
-    rotationState.value.centerPoint!.x,
-    rotationState.value.centerPoint!.y,
   )
 
   setTransformRotationDeferred(newRotation)
@@ -639,7 +553,12 @@ function handleCanvasClick(event: MouseEvent): void {
   const rect = rendererContainerRef.value?.getBoundingClientRect()
   if (!rect) return
 
-  const stagePoint = screenPointToStagePoint(event.clientX - rect.left, event.clientY - rect.top)
+  const stagePoint = screenPointToStagePoint(
+    event.clientX - rect.left,
+    event.clientY - rect.top,
+    stageCenter.value,
+    previewTransform.value,
+  )
 
   const clickedItemId = findTimelineItemAtPosition(
     stagePoint.x,

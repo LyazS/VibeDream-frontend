@@ -39,10 +39,18 @@ export class EffectPackageFilterPass implements RenderPass {
       return
     }
 
+    const sourceTexture = ctx.textures.get(sourceTextureId)
+    if (!sourceTexture) {
+      return
+    }
+
+    const outputSize: [number, number] = [sourceTexture.width, sourceTexture.height]
+
     this.controller.render(ctx, {
       params: this.getParams(),
       progress: 0,
       frame: this.getEvaluationFrame(),
+      canvasSize: outputSize,
       finalOutputTextureId: this.filteredOutputTextureId,
       inputTextures: {
         'input:source': sourceTextureId,
@@ -50,7 +58,6 @@ export class EffectPackageFilterPass implements RenderPass {
       passOutputTextureId: this.getPassTextureId,
     })
 
-    const sourceTexture = ctx.textures.get(sourceTextureId)
     const filteredTexture = ctx.textures.get(this.filteredOutputTextureId) ?? sourceTexture
     if (!sourceTexture || !filteredTexture) {
       return
@@ -59,8 +66,8 @@ export class EffectPackageFilterPass implements RenderPass {
     const gl = ctx.gl
     const outputTarget = ctx.targets.ensureRenderTarget(
       this.finalOutputTextureId,
-      ctx.canvasWidth,
-      ctx.canvasHeight,
+      sourceTexture.width,
+      sourceTexture.height,
     )
 
     gl.bindFramebuffer(gl.FRAMEBUFFER, outputTarget.framebuffer)

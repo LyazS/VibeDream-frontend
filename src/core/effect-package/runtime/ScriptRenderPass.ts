@@ -6,6 +6,7 @@ import type { RenderPassContext } from '@/core/webgl2/renderchain/RenderPassCont
 import type { TextureResource } from '@/core/webgl2/types'
 
 export interface ScriptRenderPassIOContext {
+  outputSize: [number, number]
   finalOutputTextureId: string
   passOutputTextureId: (passOutput: string) => string
   resolveInputTexture: (textureRef: string) => string | null
@@ -35,7 +36,9 @@ export class ScriptRenderPass {
       this.drawPass.output === 'final'
         ? io.finalOutputTextureId
         : io.passOutputTextureId(this.drawPass.output)
-    const outputTarget = ctx.targets.ensureRenderTarget(outputTextureId, ctx.canvasWidth, ctx.canvasHeight)
+    const outputWidth = Math.max(1, Math.round(io.outputSize[0]))
+    const outputHeight = Math.max(1, Math.round(io.outputSize[1]))
+    const outputTarget = ctx.targets.ensureRenderTarget(outputTextureId, outputWidth, outputHeight)
     const program = ctx.runtime.programs.createProgram(
       this.drawPass.vertexShader,
       this.drawPass.fragmentShader,

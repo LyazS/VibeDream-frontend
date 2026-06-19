@@ -44,6 +44,7 @@ export interface ScriptEffectRenderState {
   progress: number
   // 当前 pass 的 effect 评估帧，不保证等于全局播放帧。
   frame: number
+  canvasSize: [number, number]
   finalOutputTextureId: string
   inputTextures: Record<string, string | null>
   passOutputTextureId: (name: string) => string
@@ -76,13 +77,14 @@ export class ScriptEffectController {
         params: state.params,
         values: {
           progress: state.progress,
-          canvasSize: [ctx.canvasWidth, ctx.canvasHeight],
+          canvasSize: state.canvasSize,
           time: state.frame / 30,
         },
       })
 
       for (const entry of this.livePasses) {
         entry.renderPass.render(ctx, {
+          outputSize: state.canvasSize,
           finalOutputTextureId: state.finalOutputTextureId,
           passOutputTextureId: state.passOutputTextureId,
           resolveInputTexture: (textureRef) => {
