@@ -40,7 +40,7 @@
           :key="param.propertyId"
         >
           <KeyframedSliderField
-            v-if="param.kind === 'number'"
+            v-if="param.kind === 'float' || param.kind === 'int'"
             :label="param.label"
             :state="getFilterChannelButtonState(param.channelKey)"
             :tooltip="getFilterKeyframeTooltip(param.channelKey)"
@@ -51,16 +51,16 @@
             :min="param.min"
             :max="param.max"
             :step="param.step"
-            :precision="2"
-            @slider-input="(value) => setFilterParamDeferred(param.parameterKey, value)"
+            :precision="param.precision"
+            @slider-input="(value) => setFilterParamDeferred(param.parameterKey, getNextScalarParamValue(param.kind, value))"
             @slider-change="void commitDeferredUpdates()"
-            @number-change="(value) => void setFilterParamDirect(param.parameterKey, value)"
+            @number-change="(value) => void setFilterParamDirect(param.parameterKey, getNextScalarParamValue(param.kind, value))"
             @previous="goToPreviousFilterKeyframe(param.channelKey)"
             @toggle="void toggleFilterKeyframe(param.channelKey)"
             @next="goToNextFilterKeyframe(param.channelKey)"
           />
           <KeyframedDualNumberField
-            v-else-if="param.kind === 'vec2'"
+            v-else-if="param.kind === 'vec2' || param.kind === 'ivec2'"
             :label="param.label"
             :state="getFilterChannelButtonState(param.channelKey)"
             :tooltip="getFilterKeyframeTooltip(param.channelKey)"
@@ -76,11 +76,11 @@
             :second-min="param.min"
             :second-max="param.max"
             :step="param.step"
-            :precision="2"
-            @first-input="(value) => setFilterParamVec2Deferred(param.parameterKey, getNextFilterParamVec2Value(param.value, 'x', value))"
-            @second-input="(value) => setFilterParamVec2Deferred(param.parameterKey, getNextFilterParamVec2Value(param.value, 'y', value))"
-            @first-change="(value) => void setFilterParamVec2Direct(param.parameterKey, getNextFilterParamVec2Value(param.value, 'x', value))"
-            @second-change="(value) => void setFilterParamVec2Direct(param.parameterKey, getNextFilterParamVec2Value(param.value, 'y', value))"
+            :precision="param.precision"
+            @first-input="(value) => setFilterParamVec2Deferred(param.parameterKey, getNextFilterParamVec2Value(param.value, 'x', value, param.kind))"
+            @second-input="(value) => setFilterParamVec2Deferred(param.parameterKey, getNextFilterParamVec2Value(param.value, 'y', value, param.kind))"
+            @first-change="(value) => void setFilterParamVec2Direct(param.parameterKey, getNextFilterParamVec2Value(param.value, 'x', value, param.kind))"
+            @second-change="(value) => void setFilterParamVec2Direct(param.parameterKey, getNextFilterParamVec2Value(param.value, 'y', value, param.kind))"
             @previous="goToPreviousFilterKeyframe(param.channelKey)"
             @toggle="void toggleFilterKeyframe(param.channelKey)"
             @next="goToNextFilterKeyframe(param.channelKey)"
@@ -188,7 +188,6 @@ const {
   setFilterParamVec2Direct,
   setFilterParamBooleanDirect,
   setFilterParamColorDeferred,
-  setFilterParamColorDirect,
   commitDeferredUpdates,
   cancelDeferredUpdates,
 } = useUnifiedFilterControls({
@@ -214,11 +213,16 @@ function getNextFilterParamVec2Value(
   currentValue: FilterParamVec2Value,
   axis: 'x' | 'y',
   value: number,
+  kind: 'vec2' | 'ivec2',
 ): FilterParamVec2Value {
   return {
     ...currentValue,
-    [axis]: value,
+    [axis]: kind === 'ivec2' ? Math.round(value) : value,
   }
+}
+
+function getNextScalarParamValue(kind: 'float' | 'int', value: number): number {
+  return kind === 'int' ? Math.round(value) : value
 }
 
 function handleFilterParamBooleanChange(parameterKey: string, event: Event) {

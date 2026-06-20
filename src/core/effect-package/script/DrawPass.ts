@@ -6,6 +6,7 @@ export type UniformType =
   | 'int'
   | 'bool'
   | 'vec2'
+  | 'ivec2'
   | 'vec3'
   | 'vec4'
   | 'color4'

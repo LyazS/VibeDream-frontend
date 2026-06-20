@@ -9,6 +9,7 @@ import { TimelineItemQueries } from '@/core/timelineitem/queries'
 import type { useUnifiedStore } from '@/core/unifiedStore'
 import type {
   FilterParamColorValue,
+  TransitionParamVectorValue,
   TransitionParamVec2Value,
   TransitionTimelineItem,
   UnifiedTransitionControlsOptions,
@@ -28,18 +29,36 @@ export function cancelTransitionDeferredInteractionByTimelineItemId(timelineItem
 }
 
 function isTransitionParamVec2Value(value: unknown): value is TransitionParamVec2Value {
+  return isTransitionParamVectorValue(value, ['x', 'y'])
+}
+
+function isTransitionParamVectorValue<const TFields extends readonly string[]>(
+  value: unknown,
+  fields: TFields,
+): value is TransitionParamVectorValue {
   return (
     typeof value === 'object' &&
     value !== null &&
     !Array.isArray(value) &&
-    typeof (value as Record<string, unknown>).x === 'number' &&
-    Number.isFinite((value as Record<string, unknown>).x) &&
-    typeof (value as Record<string, unknown>).y === 'number' &&
-    Number.isFinite((value as Record<string, unknown>).y)
+    fields.every((field) =>
+      typeof (value as Record<string, unknown>)[field] === 'number' &&
+      Number.isFinite((value as Record<string, unknown>)[field]),
+    )
   )
 }
 
 function isTransitionParamColorValue(value: unknown): value is FilterParamColorValue {
+  if (!(
+    typeof value === 'object' &&
+    value !== null &&
+    !Array.isArray(value) &&
+    'r' in value &&
+    'g' in value &&
+    'b' in value
+  )) {
+    return false
+  }
+
   try {
     normalizeFilterParamColor(value)
     return true
@@ -50,11 +69,13 @@ function isTransitionParamColorValue(value: unknown): value is FilterParamColorV
 
 function isSupportedTransitionParamValue(
   value: unknown,
-): value is number | boolean | TransitionParamVec2Value | FilterParamColorValue {
+): value is number | boolean | TransitionParamVectorValue | FilterParamColorValue {
   return (
     (typeof value === 'number' && Number.isFinite(value)) ||
     typeof value === 'boolean' ||
     isTransitionParamVec2Value(value) ||
+    isTransitionParamVectorValue(value, ['x', 'y', 'z']) ||
+    isTransitionParamVectorValue(value, ['x', 'y', 'z', 'w']) ||
     isTransitionParamColorValue(value)
   )
 }
@@ -118,8 +139,20 @@ export function useTransitionDeferredInteraction(options: TransitionDeferredInte
   }
 
   function setTransitionParamVec2Deferred(parameterKey: string, value: TransitionParamVec2Value) {
+    setTransitionParamVectorDeferred(parameterKey, value, ['x', 'y'])
+  }
+
+  function setTransitionParamVectorDeferred<const TFields extends readonly string[]>(
+    parameterKey: string,
+    value: TransitionParamVectorValue,
+    fields: TFields,
+  ) {
     const item = selectedTimelineItem.value
-    if (!hasTransitionEffect(item) || !hasTransitionConfig.value || !isTransitionParamVec2Value(value)) return
+    if (
+      !hasTransitionEffect(item) ||
+      !hasTransitionConfig.value ||
+      !isTransitionParamVectorValue(value, fields)
+    ) return
 
     beginTransitionInteraction(item)
     activeTransitionParamKeys.value = new Set(activeTransitionParamKeys.value).add(parameterKey)
@@ -149,7 +182,7 @@ export function useTransitionDeferredInteraction(options: TransitionDeferredInte
     const transitionParamOverlay = getTransitionParamOverlay(timelineItemId)
     const nextParams = [...activeTransitionParamKeys.value]
       .map((parameterKey) => [parameterKey, transitionParamOverlay?.params[parameterKey]] as const)
-      .filter((entry): entry is readonly [string, number | boolean | TransitionParamVec2Value | FilterParamColorValue] =>
+      .filter((entry): entry is readonly [string, number | boolean | TransitionParamVectorValue | FilterParamColorValue] =>
         isSupportedTransitionParamValue(entry[1]),
       )
 
@@ -200,8 +233,20 @@ export function useTransitionDeferredInteraction(options: TransitionDeferredInte
   }
 
   async function setTransitionParamVec2Direct(parameterKey: string, value: TransitionParamVec2Value) {
+    await setTransitionParamVectorDirect(parameterKey, value, ['x', 'y'])
+  }
+
+  async function setTransitionParamVectorDirect<const TFields extends readonly string[]>(
+    parameterKey: string,
+    value: TransitionParamVectorValue,
+    fields: TFields,
+  ) {
     const item = selectedTimelineItem.value
-    if (!hasTransitionEffect(item) || !hasTransitionConfig.value || !isTransitionParamVec2Value(value)) return
+    if (
+      !hasTransitionEffect(item) ||
+      !hasTransitionConfig.value ||
+      !isTransitionParamVectorValue(value, fields)
+    ) return
 
     await cancelDeferredUpdates()
     const transitionConfig = TimelineItemQueries.getBaseTransition(item)
@@ -270,6 +315,8 @@ export function useTransitionDeferredInteraction(options: TransitionDeferredInte
     setTransitionParamDirect,
     setTransitionParamVec2Deferred,
     setTransitionParamVec2Direct,
+    setTransitionParamVectorDeferred,
+    setTransitionParamVectorDirect,
     setTransitionParamBooleanDirect,
     setTransitionParamColorDeferred,
     setTransitionParamColorDirect,

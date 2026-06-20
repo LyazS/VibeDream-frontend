@@ -59,16 +59,37 @@ export class EffectPackageRegistry {
     packageDirPath: string,
     packageFiles: EffectTemplatePackageFile[],
   ): Promise<void> {
-    for (const file of packageFiles) {
+    const preparedFiles = packageFiles.map((file) => {
       const targetPath = `${packageDirPath}/${normalizePackageResourcePath(file.path)}`
-      await this.ensureParentDirectory(targetPath)
       if (file.encoding === 'base64') {
         const bytes = Uint8Array.from(atob(file.content), (char) => char.charCodeAt(0))
-        await fileSystemService.writeFile(targetPath, new Blob([bytes]))
-      } else {
-        await fileSystemService.writeFile(targetPath, file.content)
+        return {
+          targetPath,
+          encoding: file.encoding,
+          sizeBytes: bytes.byteLength,
+          content: new Blob([bytes]) as string | Blob,
+        }
       }
+
+      return {
+        targetPath,
+        encoding: file.encoding,
+        sizeBytes: new Blob([file.content]).size,
+        content: file.content as string | Blob,
+      }
+    })
+    const parentDirs = Array.from(new Set(preparedFiles.map((file) => this.getParentDirectory(file.targetPath))))
+
+    for (const directoryPath of parentDirs) {
+      if (!directoryPath) {
+        continue
+      }
+      await fileSystemService.createDirectory(directoryPath)
     }
+
+    await Promise.all(preparedFiles.map(async (file) => {
+      await fileSystemService.writeFile(file.targetPath, file.content)
+    }))
   }
 
   async installDownloadedPackage(
@@ -205,14 +226,9 @@ export class EffectPackageRegistry {
 
     return files
   }
-
-  private async ensureParentDirectory(filePath: string): Promise<void> {
+  private getParentDirectory(filePath: string): string {
     const slash = filePath.lastIndexOf('/')
-    if (slash <= 0) {
-      return
-    }
-
-    await fileSystemService.createDirectory(filePath.slice(0, slash))
+    return slash <= 0 ? '' : filePath.slice(0, slash)
   }
 }
 

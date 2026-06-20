@@ -317,6 +317,9 @@ export class ScriptRenderPass {
       case 'vec2':
         gl.uniform2fv(location, this.resolveVec2UniformValue(value))
         break
+      case 'ivec2':
+        gl.uniform2iv(location, this.resolveIvec2UniformValue(value))
+        break
       case 'vec3':
         gl.uniform3fv(location, value as number[])
         break
@@ -344,5 +347,18 @@ export class ScriptRenderPass {
     }
 
     throw new Error('vec2 uniform value 必须是 [x, y]')
+  }
+
+  private resolveIvec2UniformValue(value: unknown): Int32List {
+    if (Array.isArray(value) && value.length === 2) {
+      const x = Number(value[0])
+      const y = Number(value[1])
+      if (!Number.isFinite(x) || !Number.isFinite(y)) {
+        throw new Error('ivec2 uniform value 数组必须包含有效数字')
+      }
+      return [Math.round(x), Math.round(y)]
+    }
+
+    throw new Error('ivec2 uniform value 必须是 [x, y]')
   }
 }

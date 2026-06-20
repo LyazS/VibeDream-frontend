@@ -49,6 +49,17 @@ function isFilterParamVec2Value(value: unknown): value is FilterParamVec2Value {
 }
 
 function isFilterParamColorValue(value: unknown): value is FilterParamColorValue {
+  if (!(
+    typeof value === 'object' &&
+    value !== null &&
+    !Array.isArray(value) &&
+    'r' in value &&
+    'g' in value &&
+    'b' in value
+  )) {
+    return false
+  }
+
   try {
     normalizeFilterParamColor(value)
     return true

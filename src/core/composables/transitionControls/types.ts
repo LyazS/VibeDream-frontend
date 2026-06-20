@@ -16,6 +16,19 @@ export interface TransitionParamVec2Value {
   y: number
 }
 
+export interface TransitionParamVec3Value extends TransitionParamVec2Value {
+  z: number
+}
+
+export interface TransitionParamVec4Value extends TransitionParamVec3Value {
+  w: number
+}
+
+export type TransitionParamVectorValue =
+  | TransitionParamVec2Value
+  | TransitionParamVec3Value
+  | TransitionParamVec4Value
+
 export type TransitionDeferredPatch = Partial<Pick<ClipTransitionOutConfig, 'params'>>
 
 export type { FilterParamColorValue }

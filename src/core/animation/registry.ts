@@ -8,7 +8,6 @@ import {
   ALL_ANIMATION_GROUPS,
   isDynamicFilterParamAnimationGroupId,
   type AnimationGroupId,
-  type AnimationGroupValueMap,
   type DynamicFilterParamAnimationGroupId,
   type DynamicFilterParamColorValue,
   type DynamicFilterParamNumberValue,
@@ -111,7 +110,7 @@ function getAudioConfigRecord(item: UnifiedTimelineItemData<MediaType>): AudioPr
 function getDynamicFilterParameterTypeFromConfig(
   config: Record<string, unknown>,
   parameterKey: string,
-): 'number' | 'vec2' | 'color' | undefined {
+): 'float' | 'int' | 'vec2' | 'ivec2' | 'color' | undefined {
   const packagePayload = config.packagePayload as Record<string, unknown> | undefined
   if (typeof packagePayload !== 'object' || packagePayload === null || Array.isArray(packagePayload)) {
     return undefined
@@ -136,7 +135,13 @@ function getDynamicFilterParameterTypeFromConfig(
   }
 
   const parameterType = (parameterDefinition as { type?: unknown }).type
-  return parameterType === 'number' || parameterType === 'vec2' || parameterType === 'color'
+  return (
+    parameterType === 'float' ||
+    parameterType === 'int' ||
+    parameterType === 'vec2' ||
+    parameterType === 'ivec2' ||
+    parameterType === 'color'
+  )
     ? parameterType
     : undefined
 }
@@ -192,8 +197,10 @@ function createDynamicFilterParamDefinition(
     isEnabled: (item) =>
       TimelineItemQueries.supportsClipFilter(item) &&
       (
-        getParameterType(item) === 'number' ||
+        getParameterType(item) === 'float' ||
+        getParameterType(item) === 'int' ||
         getParameterType(item) === 'vec2' ||
+        getParameterType(item) === 'ivec2' ||
         getParameterType(item) === 'color'
       ),
     getBaseValue: (item): DynamicFilterParamValue => {
@@ -206,14 +213,15 @@ function createDynamicFilterParamDefinition(
       if (parameterType === 'color') {
         return assertDynamicFilterParamColor(currentValue, parameterKey)
       }
-      if (parameterType === 'vec2') {
+      if (parameterType === 'vec2' || parameterType === 'ivec2') {
         return assertDynamicFilterParamVec2(currentValue, parameterKey)
       }
-      if (parameterType !== 'number') {
+      if (parameterType !== 'float' && parameterType !== 'int') {
         throw new Error(`滤镜参数类型不支持关键帧: ${parameterKey}`)
       }
+      const numericValue = assertDynamicFilterParamNumber(currentValue, parameterKey)
       return {
-        value: assertDynamicFilterParamNumber(currentValue, parameterKey),
+        value: parameterType === 'int' ? Math.round(numericValue) : numericValue,
       }
     },
     applyValueToConfig: (config, value) => {
@@ -226,14 +234,26 @@ function createDynamicFilterParamDefinition(
         throw new Error(`滤镜参数容器非法，无法写入动态参数: ${parameterKey}`)
       }
       const parameterType = getDynamicFilterParameterTypeFromConfig(mutableConfig, parameterKey)
-      if (parameterType !== 'number' && parameterType !== 'vec2' && parameterType !== 'color') {
+      if (
+        parameterType !== 'float' &&
+        parameterType !== 'int' &&
+        parameterType !== 'vec2' &&
+        parameterType !== 'ivec2' &&
+        parameterType !== 'color'
+      ) {
         throw new Error(`滤镜参数类型不支持关键帧: ${parameterKey}`)
       }
-      const nextValue = parameterType === 'vec2'
+      const nextValue = parameterType === 'vec2' || parameterType === 'ivec2'
         ? assertDynamicFilterParamVec2(value, parameterKey)
         : parameterType === 'color'
           ? assertDynamicFilterParamColor(value, parameterKey)
-          : assertDynamicFilterParamNumber((value as DynamicFilterParamNumberValue).value, parameterKey)
+          : (() => {
+              const numericValue = assertDynamicFilterParamNumber(
+                (value as DynamicFilterParamNumberValue).value,
+                parameterKey,
+              )
+              return parameterType === 'int' ? Math.round(numericValue) : numericValue
+            })()
       const currentParams = mutableConfig.params as Record<string, unknown>
       const nextFilterEffect = normalizeClipFilterConfig({
         ...mutableConfig,

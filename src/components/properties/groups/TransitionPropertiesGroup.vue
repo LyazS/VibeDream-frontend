@@ -28,7 +28,7 @@
           :key="param.parameterKey"
         >
           <div
-            v-if="param.kind === 'number'"
+            v-if="param.kind === 'float' || param.kind === 'int'"
             class="property-item"
           >
             <label>{{ param.label }}</label>
@@ -38,7 +38,7 @@
                 :min="param.min"
                 :max="param.max"
                 :step="param.step"
-                @input="(value) => setTransitionParamDeferred(param.parameterKey, value)"
+                @input="(value) => setTransitionParamDeferred(param.parameterKey, getNextScalarParamValue(param.kind, value))"
                 @change="void commitDeferredUpdates()"
               />
               <NumberInput
@@ -46,16 +46,16 @@
                 :min="param.min"
                 :max="param.max"
                 :step="param.step"
-                :precision="2"
+                :precision="param.precision"
                 :show-controls="false"
                 input-class="transition-properties-group__number-input"
-                @change="(value) => void setTransitionParamDirect(param.parameterKey, value)"
+                @change="(value) => void setTransitionParamDirect(param.parameterKey, getNextScalarParamValue(param.kind, value))"
               />
             </div>
           </div>
 
           <div
-            v-else-if="param.kind === 'vec2'"
+            v-else-if="param.kind === 'vec2' || param.kind === 'ivec2'"
             class="property-item"
           >
             <label>{{ param.label }}</label>
@@ -67,10 +67,10 @@
                   :min="param.min"
                   :max="param.max"
                   :step="param.step"
-                  :precision="2"
+                  :precision="param.precision"
                   :realtime="true"
-                  @input="(value) => setTransitionParamVec2Deferred(param.parameterKey, getNextTransitionParamVec2Value(param.value, 'x', value))"
-                  @change="(value) => void setTransitionParamVec2Direct(param.parameterKey, getNextTransitionParamVec2Value(param.value, 'x', value))"
+                  @input="(value) => setTransitionParamVec2Deferred(param.parameterKey, getNextTransitionParamVec2Value(param.value, 'x', value, param.kind))"
+                  @change="(value) => void setTransitionParamVec2Direct(param.parameterKey, getNextTransitionParamVec2Value(param.value, 'x', value, param.kind))"
                 />
               </div>
               <div class="transition-properties-group__vec2-input">
@@ -80,10 +80,62 @@
                   :min="param.min"
                   :max="param.max"
                   :step="param.step"
-                  :precision="2"
+                  :precision="param.precision"
                   :realtime="true"
-                  @input="(value) => setTransitionParamVec2Deferred(param.parameterKey, getNextTransitionParamVec2Value(param.value, 'y', value))"
-                  @change="(value) => void setTransitionParamVec2Direct(param.parameterKey, getNextTransitionParamVec2Value(param.value, 'y', value))"
+                  @input="(value) => setTransitionParamVec2Deferred(param.parameterKey, getNextTransitionParamVec2Value(param.value, 'y', value, param.kind))"
+                  @change="(value) => void setTransitionParamVec2Direct(param.parameterKey, getNextTransitionParamVec2Value(param.value, 'y', value, param.kind))"
+                />
+              </div>
+            </div>
+          </div>
+
+          <div
+            v-else-if="param.kind === 'vec3'"
+            class="property-item"
+          >
+            <label>{{ param.label }}</label>
+            <div class="transition-properties-group__vec2-row">
+              <div
+                v-for="axis in ['x', 'y', 'z'] as const"
+                :key="axis"
+                class="transition-properties-group__vec2-input"
+              >
+                <span class="transition-properties-group__axis-label">{{ axis.toUpperCase() }}</span>
+                <NumberInput
+                  :model-value="param.value[axis]"
+                  :min="param.min"
+                  :max="param.max"
+                  :step="param.step"
+                  :precision="param.precision"
+                  :realtime="true"
+                  @input="(value) => setTransitionParamVectorDeferred(param.parameterKey, getNextTransitionParamVec3Value(param.value, axis, value), ['x', 'y', 'z'])"
+                  @change="(value) => void setTransitionParamVectorDirect(param.parameterKey, getNextTransitionParamVec3Value(param.value, axis, value), ['x', 'y', 'z'])"
+                />
+              </div>
+            </div>
+          </div>
+
+          <div
+            v-else-if="param.kind === 'vec4'"
+            class="property-item"
+          >
+            <label>{{ param.label }}</label>
+            <div class="transition-properties-group__vec2-row">
+              <div
+                v-for="axis in ['x', 'y', 'z', 'w'] as const"
+                :key="axis"
+                class="transition-properties-group__vec2-input"
+              >
+                <span class="transition-properties-group__axis-label">{{ axis.toUpperCase() }}</span>
+                <NumberInput
+                  :model-value="param.value[axis]"
+                  :min="param.min"
+                  :max="param.max"
+                  :step="param.step"
+                  :precision="param.precision"
+                  :realtime="true"
+                  @input="(value) => setTransitionParamVectorDeferred(param.parameterKey, getNextTransitionParamVec4Value(param.value, axis, value), ['x', 'y', 'z', 'w'])"
+                  @change="(value) => void setTransitionParamVectorDirect(param.parameterKey, getNextTransitionParamVec4Value(param.value, axis, value), ['x', 'y', 'z', 'w'])"
                 />
               </div>
             </div>
@@ -152,10 +204,13 @@ import {
   type FilterParamColorValue,
 } from '@/core/filter/color'
 import { useDynamicEffectParamViewModels } from '@/core/composables/effectParams/useDynamicEffectParamViewModels'
-import type { EffectParamVec2Value } from '@/core/composables/effectParams/types'
+import type {
+  EffectParamVec2Value,
+  EffectParamVec3Value,
+  EffectParamVec4Value,
+} from '@/core/composables/effectParams/types'
 import { useAppI18n, useUnifiedTransitionControls } from '@/core/composables'
 import { effectTemplateRegistry } from '@/core/effect-template/EffectTemplateRegistry'
-import { TimelineItemQueries } from '@/core/timelineitem/queries'
 import { useUnifiedStore } from '@/core/unifiedStore'
 import type { UnifiedTimelineItemData } from '@/core/timelineitem/model/timelineItem'
 
@@ -175,6 +230,8 @@ const {
   setTransitionParamDirect,
   setTransitionParamVec2Deferred,
   setTransitionParamVec2Direct,
+  setTransitionParamVectorDeferred,
+  setTransitionParamVectorDirect,
   setTransitionParamBooleanDirect,
   setTransitionParamColorDeferred,
   commitDeferredUpdates,
@@ -258,11 +315,38 @@ function getNextTransitionParamVec2Value(
   currentValue: EffectParamVec2Value,
   axis: 'x' | 'y',
   value: number,
+  kind: 'vec2' | 'ivec2',
 ): EffectParamVec2Value {
+  return {
+    ...currentValue,
+    [axis]: kind === 'ivec2' ? Math.round(value) : value,
+  }
+}
+
+function getNextTransitionParamVec3Value(
+  currentValue: EffectParamVec3Value,
+  axis: 'x' | 'y' | 'z',
+  value: number,
+): EffectParamVec3Value {
   return {
     ...currentValue,
     [axis]: value,
   }
+}
+
+function getNextTransitionParamVec4Value(
+  currentValue: EffectParamVec4Value,
+  axis: 'x' | 'y' | 'z' | 'w',
+  value: number,
+): EffectParamVec4Value {
+  return {
+    ...currentValue,
+    [axis]: value,
+  }
+}
+
+function getNextScalarParamValue(kind: 'float' | 'int', value: number): number {
+  return kind === 'int' ? Math.round(value) : value
 }
 
 function handleTransitionParamBooleanChange(parameterKey: string, event: Event) {

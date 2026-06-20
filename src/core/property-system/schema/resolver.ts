@@ -79,11 +79,13 @@ export class StaticPropertySchemaProvider implements PropertySchemaProvider {
     textStyleTextShadowSchema,
   ]
 
-  getSchema(_context: PropertySchemaContext, propertyId: string): AnimatablePropertySchema | null {
+  getSchema(context: PropertySchemaContext, propertyId: string): AnimatablePropertySchema | null {
+    void context
     return this.schemas.find((schema) => schema.propertyId === propertyId) ?? null
   }
 
-  listSchemas(_context: PropertySchemaContext): AnimatablePropertySchema[] {
+  listSchemas(context: PropertySchemaContext): AnimatablePropertySchema[] {
+    void context
     return [...this.schemas]
   }
 }
@@ -99,8 +101,10 @@ export class DynamicFilterParameterSchemaProvider implements PropertySchemaProvi
     if (
       !definition ||
       (
-        definition.type !== 'number' &&
+        definition.type !== 'float' &&
+        definition.type !== 'int' &&
         definition.type !== 'vec2' &&
+        definition.type !== 'ivec2' &&
         definition.type !== 'boolean' &&
         definition.type !== 'color'
       )
@@ -121,8 +125,10 @@ export class DynamicFilterParameterSchemaProvider implements PropertySchemaProvi
       .filter(([key, definition]) =>
         isValidFilterParamKey(key) &&
         (
-          definition.type === 'number' ||
+          definition.type === 'float' ||
+          definition.type === 'int' ||
           definition.type === 'vec2' ||
+          definition.type === 'ivec2' ||
           definition.type === 'boolean' ||
           definition.type === 'color'
         ),
@@ -150,7 +156,7 @@ export class DynamicFilterParameterSchemaProvider implements PropertySchemaProvi
     parameterKey: string,
     definition: EffectPackageParameterDefinition,
   ): AnimatablePropertySchema {
-    if (definition.type === 'number') {
+    if (this.isScalarParamDefinition(definition)) {
       return this.createNumberParamSchema(parameterKey, definition)
     }
     if (definition.type === 'boolean') {
@@ -160,7 +166,23 @@ export class DynamicFilterParameterSchemaProvider implements PropertySchemaProvi
       return this.createColorParamSchema(parameterKey, definition)
     }
 
-    return this.createVec2ParamSchema(parameterKey, definition)
+    if (this.isVec2ParamDefinition(definition)) {
+      return this.createVec2ParamSchema(parameterKey, definition)
+    }
+
+    throw new Error(`filter parameter type 不支持属性系统: ${parameterKey}`)
+  }
+
+  private isScalarParamDefinition(
+    definition: EffectPackageParameterDefinition,
+  ): definition is EffectPackageParameterDefinition & { type: 'float' | 'int' } {
+    return definition.type === 'float' || definition.type === 'int'
+  }
+
+  private isVec2ParamDefinition(
+    definition: EffectPackageParameterDefinition,
+  ): definition is EffectPackageParameterDefinition & { type: 'vec2' | 'ivec2' } {
+    return definition.type === 'vec2' || definition.type === 'ivec2'
   }
 
   private createBooleanParamSchema(parameterKey: string): AnimatablePropertySchema {
@@ -185,11 +207,11 @@ export class DynamicFilterParameterSchemaProvider implements PropertySchemaProvi
 
   private createNumberParamSchema(
     parameterKey: string,
-    definition: EffectPackageParameterDefinition,
+    definition: EffectPackageParameterDefinition & { type: 'float' | 'int' },
   ): AnimatablePropertySchema {
-    this.assertFiniteNumberRange(parameterKey, definition, 'number')
+    this.assertFiniteNumberRange(parameterKey, definition, definition.type)
     if (typeof definition.default !== 'number' || !Number.isFinite(definition.default)) {
-      throw new Error(`filter number parameter 缺少有效默认值: ${parameterKey}`)
+      throw new Error(`filter ${definition.type} parameter 缺少有效默认值: ${parameterKey}`)
     }
 
     const propertyId = createFilterParamPropertyId(parameterKey)
@@ -200,7 +222,8 @@ export class DynamicFilterParameterSchemaProvider implements PropertySchemaProvi
         throw new Error(`${propertyId} requires a finite numeric value`)
       }
 
-      return Math.min(max, Math.max(min, value))
+      const clamped = Math.min(max, Math.max(min, value))
+      return definition.type === 'int' ? Math.round(clamped) : clamped
     }
 
     return {
@@ -263,10 +286,10 @@ export class DynamicFilterParameterSchemaProvider implements PropertySchemaProvi
 
   private createVec2ParamSchema(
     parameterKey: string,
-    definition: EffectPackageParameterDefinition,
+    definition: EffectPackageParameterDefinition & { type: 'vec2' | 'ivec2' },
   ): AnimatablePropertySchema {
-    this.assertFiniteNumberRange(parameterKey, definition, 'vec2')
-    this.normalizeVec2(definition.default, `filter vec2 parameter 缺少有效默认值: ${parameterKey}`)
+    this.assertFiniteNumberRange(parameterKey, definition, definition.type)
+    this.normalizeVec2(definition.default, `filter ${definition.type} parameter 缺少有效默认值: ${parameterKey}`)
 
     const propertyId = createFilterParamPropertyId(parameterKey)
     const min = definition.min
@@ -274,8 +297,8 @@ export class DynamicFilterParameterSchemaProvider implements PropertySchemaProvi
     const normalizeVec2 = (value: unknown) => {
       const nextValue = this.normalizeVec2(value, `${propertyId} requires finite numeric x/y values`)
       return {
-        x: Math.min(max, Math.max(min, nextValue.x)),
-        y: Math.min(max, Math.max(min, nextValue.y)),
+        x: this.normalizeVectorComponent(nextValue.x, min, max, definition.type),
+        y: this.normalizeVectorComponent(nextValue.y, min, max, definition.type),
       }
     }
 
@@ -304,7 +327,7 @@ export class DynamicFilterParameterSchemaProvider implements PropertySchemaProvi
   private assertFiniteNumberRange(
     parameterKey: string,
     definition: EffectPackageParameterDefinition,
-    type: 'number' | 'vec2',
+    type: 'float' | 'int' | 'vec2' | 'ivec2',
   ): asserts definition is EffectPackageParameterDefinition & { min: number; max: number; step: number } {
     if (typeof definition.min !== 'number' || !Number.isFinite(definition.min)) {
       throw new Error(`filter ${type} parameter 缺少有效 min: ${parameterKey}`)
@@ -334,6 +357,16 @@ export class DynamicFilterParameterSchemaProvider implements PropertySchemaProvi
       x: record.x,
       y: record.y,
     }
+  }
+
+  private normalizeVectorComponent(
+    value: number,
+    min: number,
+    max: number,
+    type: 'vec2' | 'ivec2',
+  ): number {
+    const clamped = Math.min(max, Math.max(min, value))
+    return type === 'ivec2' ? Math.round(clamped) : clamped
   }
 }
 

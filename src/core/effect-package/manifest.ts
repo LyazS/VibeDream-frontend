@@ -71,19 +71,57 @@ function normalizePath(path: string): string {
   return path.replace(/^\.?\//, '').replace(/\\/g, '/')
 }
 
-function normalizeVec2Value(value: unknown): { x: number; y: number } {
+function normalizeFloatValue(value: unknown, parameterKey: string): number {
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
+    throw new Error(`effect package float parameter 缺少有效默认值: ${parameterKey}`)
+  }
+  return value
+}
+
+function normalizeIntValue(value: unknown, parameterKey: string): number {
+  const numericValue = normalizeFloatValue(value, parameterKey)
+  return Math.round(numericValue)
+}
+
+type VectorField = 'x' | 'y' | 'z' | 'w'
+
+function normalizeVectorValue<const TFields extends readonly VectorField[]>(
+  value: unknown,
+  fields: TFields,
+  type: 'vec2' | 'ivec2' | 'vec3' | 'vec4',
+  parameterKey: string,
+): Record<TFields[number], number> {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) {
-    throw new Error('effect package vec2 parameter 默认值必须是 { x, y }')
+    throw new Error(`effect package ${type} parameter 默认值必须是对象: ${parameterKey}`)
   }
 
   const record = value as Record<string, unknown>
-  const x = Number(record.x)
-  const y = Number(record.y)
-  if (!Number.isFinite(x) || !Number.isFinite(y)) {
-    throw new Error('effect package vec2 parameter 默认值必须包含有效 x/y')
+  const normalized: Partial<Record<VectorField, number>> = {}
+  for (const field of fields) {
+    const numericValue = Number(record[field])
+    if (!Number.isFinite(numericValue)) {
+      throw new Error(`effect package ${type} parameter 默认值必须包含有效 ${fields.join('/')}: ${parameterKey}`)
+    }
+    normalized[field] = type === 'ivec2' ? Math.round(numericValue) : numericValue
   }
 
-  return { x, y }
+  return normalized as Record<TFields[number], number>
+}
+
+function normalizeVec2Value(value: unknown, parameterKey: string): { x: number; y: number } {
+  return normalizeVectorValue(value, ['x', 'y'] as const, 'vec2', parameterKey)
+}
+
+function normalizeIvec2Value(value: unknown, parameterKey: string): { x: number; y: number } {
+  return normalizeVectorValue(value, ['x', 'y'] as const, 'ivec2', parameterKey)
+}
+
+function normalizeVec3Value(value: unknown, parameterKey: string): { x: number; y: number; z: number } {
+  return normalizeVectorValue(value, ['x', 'y', 'z'] as const, 'vec3', parameterKey)
+}
+
+function normalizeVec4Value(value: unknown, parameterKey: string): { x: number; y: number; z: number; w: number } {
+  return normalizeVectorValue(value, ['x', 'y', 'z', 'w'] as const, 'vec4', parameterKey)
 }
 
 function normalizeOptionalFiniteNumber(value: unknown, fieldName: string): number | undefined {
@@ -210,7 +248,7 @@ export function normalizeManifest(raw: unknown): EffectPackageManifest {
 
     const definition = value as Record<string, unknown>
     const type = String(definition.type ?? '').trim() as EffectPackageParameterDefinition['type']
-    if (!['number', 'boolean', 'color', 'vec2'].includes(type)) {
+    if (!['float', 'int', 'boolean', 'color', 'vec2', 'ivec2', 'vec3', 'vec4'].includes(type)) {
       throw new Error(`effect package parameter type 非法: ${key}`)
     }
 
@@ -261,11 +299,11 @@ export function resolveDefaultParams(
   for (const [key, definition] of Object.entries(parameters)) {
     const value = definition.default
     switch (definition.type) {
-      case 'number':
-        if (typeof value !== 'number' || !Number.isFinite(value)) {
-          throw new Error(`effect package number parameter 缺少有效默认值: ${key}`)
-        }
-        defaults[key] = value
+      case 'float':
+        defaults[key] = normalizeFloatValue(value, key)
+        break
+      case 'int':
+        defaults[key] = normalizeIntValue(value, key)
         break
       case 'boolean':
         defaults[key] = Boolean(value)
@@ -274,7 +312,16 @@ export function resolveDefaultParams(
         defaults[key] = normalizeFilterParamColor(value)
         break
       case 'vec2':
-        defaults[key] = normalizeVec2Value(value)
+        defaults[key] = normalizeVec2Value(value, key)
+        break
+      case 'ivec2':
+        defaults[key] = normalizeIvec2Value(value, key)
+        break
+      case 'vec3':
+        defaults[key] = normalizeVec3Value(value, key)
+        break
+      case 'vec4':
+        defaults[key] = normalizeVec4Value(value, key)
         break
     }
   }

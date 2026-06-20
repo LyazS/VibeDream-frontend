@@ -4,7 +4,15 @@ import type {
   LocalizedText,
 } from '@/core/effect-template/catalogTypes'
 
-export type EffectPackageParameterType = 'number' | 'boolean' | 'color' | 'vec2'
+export type EffectPackageParameterType =
+  | 'float'
+  | 'int'
+  | 'boolean'
+  | 'color'
+  | 'vec2'
+  | 'ivec2'
+  | 'vec3'
+  | 'vec4'
 export type FilterSupportedMediaType = 'video' | 'image'
 export type EffectTextureDimension = '2d' | '3d'
 export type EffectResourceVector3 = [number, number, number]

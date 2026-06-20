@@ -11,7 +11,7 @@ import type { FilterChannelKey, FilterParamVec2Value, FilterTimelineItem } from 
 
 export type DynamicFilterParamViewModel =
   | {
-      kind: 'number'
+      kind: 'float' | 'int'
       propertyId: DynamicFilterParamPropertyId
       parameterKey: string
       channelKey: FilterChannelKey
@@ -20,9 +20,10 @@ export type DynamicFilterParamViewModel =
       min: number
       max: number
       step: number
+      precision: number
     }
   | {
-      kind: 'vec2'
+      kind: 'vec2' | 'ivec2'
       propertyId: DynamicFilterParamPropertyId
       parameterKey: string
       channelKey: FilterChannelKey
@@ -31,6 +32,7 @@ export type DynamicFilterParamViewModel =
       min: number
       max: number
       step: number
+      precision: number
     }
   | {
       kind: 'color'
@@ -78,27 +80,41 @@ export function useDynamicFilterParamViewModels(options: UseDynamicFilterParamVi
         const parameterKey = getFilterParamKey(schema.propertyId)
         const label = schema.label ?? schema.propertyId
 
-        if (schema.valueKind === 'number') {
+        const definition = filterConfig.value.packagePayload.parameterSchema[parameterKey]
+
+        if (
+          schema.valueKind === 'number' &&
+          (definition?.type === 'float' || definition?.type === 'int')
+        ) {
+          const integerLike = definition.type === 'int'
           return {
-            kind: 'number',
+            kind: definition.type,
             propertyId: schema.propertyId,
             parameterKey,
             channelKey: schema.propertyId,
             label,
-            value: getNumberValue(filterConfig.value.params[parameterKey], parameterKey),
+            value: integerLike
+              ? Math.round(getNumberValue(filterConfig.value.params[parameterKey], parameterKey))
+              : getNumberValue(filterConfig.value.params[parameterKey], parameterKey),
             ...getNumberRange(schema.propertyId, schema),
+            precision: integerLike ? 0 : 2,
           }
         }
 
-        if (schema.valueKind === 'vec2') {
+        if (
+          schema.valueKind === 'vec2' &&
+          (definition?.type === 'vec2' || definition?.type === 'ivec2')
+        ) {
+          const integerLike = definition.type === 'ivec2'
           return {
-            kind: 'vec2',
+            kind: definition.type,
             propertyId: schema.propertyId,
             parameterKey,
             channelKey: schema.propertyId,
             label,
-            value: getVec2Value(filterConfig.value.params[parameterKey], parameterKey),
+            value: getVec2Value(filterConfig.value.params[parameterKey], parameterKey, integerLike),
             ...getNumberRange(schema.propertyId, schema),
+            precision: integerLike ? 0 : 2,
           }
         }
 
@@ -135,7 +151,11 @@ function getNumberValue(value: unknown, parameterKey: string): number {
   throw new Error(`滤镜参数不是有效数字: ${parameterKey}`)
 }
 
-function getVec2Value(value: unknown, parameterKey: string): FilterParamVec2Value {
+function getVec2Value(
+  value: unknown,
+  parameterKey: string,
+  integerLike = false,
+): FilterParamVec2Value {
   if (
     typeof value === 'object' &&
     value !== null &&
@@ -146,8 +166,8 @@ function getVec2Value(value: unknown, parameterKey: string): FilterParamVec2Valu
     Number.isFinite((value as Record<string, unknown>).y)
   ) {
     return {
-      x: (value as FilterParamVec2Value).x,
-      y: (value as FilterParamVec2Value).y,
+      x: integerLike ? Math.round((value as FilterParamVec2Value).x) : (value as FilterParamVec2Value).x,
+      y: integerLike ? Math.round((value as FilterParamVec2Value).y) : (value as FilterParamVec2Value).y,
     }
   }
   throw new Error(`滤镜参数不是有效二维向量: ${parameterKey}`)

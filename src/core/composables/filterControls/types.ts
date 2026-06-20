@@ -22,4 +22,17 @@ export interface FilterParamVec2Value {
   y: number
 }
 
+export interface FilterParamVec3Value extends FilterParamVec2Value {
+  z: number
+}
+
+export interface FilterParamVec4Value extends FilterParamVec3Value {
+  w: number
+}
+
+export type FilterParamVectorValue =
+  | FilterParamVec2Value
+  | FilterParamVec3Value
+  | FilterParamVec4Value
+
 export type { FilterParamColorValue }
