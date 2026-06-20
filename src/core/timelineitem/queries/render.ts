@@ -15,6 +15,7 @@ import type { ClipFilterConfig } from '@/core/filter/types'
 import {
   getFilterIntensityOverlay,
   getFilterParamOverlay,
+  getTransitionParamOverlay,
   getAudioVolumeOverlay,
   getTransformOpacityOverlay,
   getTransformPositionOverlay,
@@ -45,6 +46,7 @@ import {
   transformSizeSchema,
 } from '@/core/property-system/schema'
 import { normalizeClipFilterConfig } from '@/core/timelineitem/features/filter'
+import { normalizeClipTransitionOutConfig } from '@/core/timelineitem/features/transition'
 import {
   isEllipseMaskConfig,
   isMirrorMaskConfig,
@@ -118,7 +120,23 @@ export function getBaseTransition(
 export function getResolvedTransition(
   item: UnifiedTimelineItemData<MediaType> | null | undefined,
 ): ClipTransitionOutConfig | undefined {
-  return getMergedExtraRenderConfig(item)?.transition
+  if (!item) return undefined
+
+  const renderTransitionConfig = getMergedExtraRenderConfig(item)?.transition
+  if (!renderTransitionConfig) return undefined
+
+  const transitionParamOverlay = getTransitionParamOverlay(item.id)
+  if (!transitionParamOverlay) {
+    return renderTransitionConfig
+  }
+
+  return normalizeClipTransitionOutConfig({
+    ...renderTransitionConfig,
+    params: {
+      ...renderTransitionConfig.params,
+      ...(transitionParamOverlay.params ?? {}),
+    },
+  })
 }
 
 export function getBaseFilter(

@@ -19,6 +19,113 @@
         />
       </div>
 
+      <div
+        v-if="dynamicTransitionParamViewModels.length > 0"
+        class="transition-properties-group__dynamic-params"
+      >
+        <template
+          v-for="param in dynamicTransitionParamViewModels"
+          :key="param.parameterKey"
+        >
+          <div
+            v-if="param.kind === 'number'"
+            class="property-item"
+          >
+            <label>{{ param.label }}</label>
+            <div class="transition-properties-group__slider-row">
+              <SliderInput
+                :model-value="param.value"
+                :min="param.min"
+                :max="param.max"
+                :step="param.step"
+                @input="(value) => setTransitionParamDeferred(param.parameterKey, value)"
+                @change="void commitDeferredUpdates()"
+              />
+              <NumberInput
+                :model-value="param.value"
+                :min="param.min"
+                :max="param.max"
+                :step="param.step"
+                :precision="2"
+                :show-controls="false"
+                input-class="transition-properties-group__number-input"
+                @change="(value) => void setTransitionParamDirect(param.parameterKey, value)"
+              />
+            </div>
+          </div>
+
+          <div
+            v-else-if="param.kind === 'vec2'"
+            class="property-item"
+          >
+            <label>{{ param.label }}</label>
+            <div class="transition-properties-group__vec2-row">
+              <div class="transition-properties-group__vec2-input">
+                <span class="transition-properties-group__axis-label">X</span>
+                <NumberInput
+                  :model-value="param.value.x"
+                  :min="param.min"
+                  :max="param.max"
+                  :step="param.step"
+                  :precision="2"
+                  :realtime="true"
+                  @input="(value) => setTransitionParamVec2Deferred(param.parameterKey, getNextTransitionParamVec2Value(param.value, 'x', value))"
+                  @change="(value) => void setTransitionParamVec2Direct(param.parameterKey, getNextTransitionParamVec2Value(param.value, 'x', value))"
+                />
+              </div>
+              <div class="transition-properties-group__vec2-input">
+                <span class="transition-properties-group__axis-label">Y</span>
+                <NumberInput
+                  :model-value="param.value.y"
+                  :min="param.min"
+                  :max="param.max"
+                  :step="param.step"
+                  :precision="2"
+                  :realtime="true"
+                  @input="(value) => setTransitionParamVec2Deferred(param.parameterKey, getNextTransitionParamVec2Value(param.value, 'y', value))"
+                  @change="(value) => void setTransitionParamVec2Direct(param.parameterKey, getNextTransitionParamVec2Value(param.value, 'y', value))"
+                />
+              </div>
+            </div>
+          </div>
+
+          <div
+            v-else-if="param.kind === 'color'"
+            class="transition-properties-group__color-field"
+          >
+            <label class="transition-properties-group__color-label">
+              {{ param.label }}
+            </label>
+            <NColorPicker
+              :value="getTransitionParamColorCssValue(param.value)"
+              :show-alpha="true"
+              :modes="['hex']"
+              @update:value="(value) => handleTransitionParamColorInput(param.parameterKey, value)"
+              @update:show="(show) => void handleTransitionParamColorPanelShowChange(param.parameterKey, show)"
+            />
+          </div>
+
+          <div
+            v-else-if="param.kind === 'boolean'"
+            class="transition-properties-group__boolean-row"
+          >
+            <label
+              :for="`transition-param-${param.parameterKey}`"
+              class="transition-properties-group__boolean-label"
+            >
+              {{ param.label }}
+            </label>
+            <input
+              :id="`transition-param-${param.parameterKey}`"
+              type="checkbox"
+              :checked="param.value"
+              class="transition-properties-group__boolean-input"
+              @change="handleTransitionParamBooleanChange(param.parameterKey, $event)"
+            />
+          </div>
+        </template>
+      </div>
+
       <div class="transition-status">
         <div class="transition-status__label">{{ t('properties.transition.status') }}</div>
         <div class="transition-status__value">{{ statusText }}</div>
@@ -35,13 +142,22 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
+import { NColorPicker } from 'naive-ui'
+import NumberInput from '@/components/base/NumberInput.vue'
+import SliderInput from '@/components/base/SliderInput.vue'
 import TimecodeInput from '@/components/base/TimecodeInput.vue'
-import { useAppI18n } from '@/core/composables/useI18n'
+import {
+  colorToCssRgbaString,
+  normalizeFilterParamColor,
+  type FilterParamColorValue,
+} from '@/core/filter/color'
+import { useDynamicEffectParamViewModels } from '@/core/composables/effectParams/useDynamicEffectParamViewModels'
+import type { EffectParamVec2Value } from '@/core/composables/effectParams/types'
+import { useAppI18n, useUnifiedTransitionControls } from '@/core/composables'
 import { effectTemplateRegistry } from '@/core/effect-template/EffectTemplateRegistry'
 import { TimelineItemQueries } from '@/core/timelineitem/queries'
 import { useUnifiedStore } from '@/core/unifiedStore'
 import type { UnifiedTimelineItemData } from '@/core/timelineitem/model/timelineItem'
-import { normalizeClipTransitionOutConfig } from '@/core/timelineitem/features/transition'
 
 interface Props {
   selectedTimelineItem: UnifiedTimelineItemData<'video'> | UnifiedTimelineItemData<'image'> | null
@@ -50,14 +166,26 @@ interface Props {
 const props = defineProps<Props>()
 const { t } = useAppI18n()
 const unifiedStore = useUnifiedStore()
+const selectedTimelineItem = computed(() => props.selectedTimelineItem)
 
-const transitionConfig = computed(() =>
-  normalizeClipTransitionOutConfig(
-    props.selectedTimelineItem
-      ? TimelineItemQueries.getBaseTransition(props.selectedTimelineItem)
-      : undefined,
-  ),
-)
+const {
+  transitionConfig,
+  transitionParameterSchema,
+  setTransitionParamDeferred,
+  setTransitionParamDirect,
+  setTransitionParamVec2Deferred,
+  setTransitionParamVec2Direct,
+  setTransitionParamBooleanDirect,
+  setTransitionParamColorDeferred,
+  commitDeferredUpdates,
+} = useUnifiedTransitionControls({
+  selectedTimelineItem,
+})
+
+const dynamicTransitionParamViewModels = useDynamicEffectParamViewModels({
+  params: computed(() => transitionConfig.value.params),
+  parameterSchema: transitionParameterSchema,
+})
 
 const transitionRuntime = computed(() => props.selectedTimelineItem?.runtime.transition)
 
@@ -126,6 +254,49 @@ function handleDurationChange(nextDurationFrames: number) {
   void updateTransition({ durationFrames: nextDurationFrames })
 }
 
+function getNextTransitionParamVec2Value(
+  currentValue: EffectParamVec2Value,
+  axis: 'x' | 'y',
+  value: number,
+): EffectParamVec2Value {
+  return {
+    ...currentValue,
+    [axis]: value,
+  }
+}
+
+function handleTransitionParamBooleanChange(parameterKey: string, event: Event) {
+  const target = event.target
+  if (!(target instanceof HTMLInputElement)) {
+    return
+  }
+
+  void setTransitionParamBooleanDirect(parameterKey, target.checked)
+}
+
+function getTransitionParamColorCssValue(value: FilterParamColorValue): string {
+  return colorToCssRgbaString(value)
+}
+
+function handleTransitionParamColorInput(parameterKey: string, value: string) {
+  setTransitionParamColorDeferred(parameterKey, normalizeFilterParamColor(value))
+}
+
+async function handleTransitionParamColorPanelShowChange(parameterKey: string, show: boolean) {
+  if (show) {
+    return
+  }
+
+  const param = dynamicTransitionParamViewModels.value.find(
+    (entry) => entry.kind === 'color' && entry.parameterKey === parameterKey,
+  )
+  if (!param) {
+    return
+  }
+
+  await commitDeferredUpdates()
+}
+
 function handleTimecodeError(message: string) {
   unifiedStore.messageError(message)
 }
@@ -134,6 +305,66 @@ function handleTimecodeError(message: string) {
 <style scoped>
 .transition-properties-group {
   width: 100%;
+}
+
+.transition-properties-group__dynamic-params {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-md);
+  margin-top: var(--spacing-md);
+}
+
+.transition-properties-group__slider-row {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+}
+
+.transition-properties-group__vec2-row {
+  display: flex;
+  gap: var(--spacing-xs);
+}
+
+.transition-properties-group__vec2-input {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  flex: 1;
+  min-width: 0;
+}
+
+.transition-properties-group__axis-label {
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+  min-width: 12px;
+}
+
+.transition-properties-group__boolean-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--spacing-md);
+}
+
+.transition-properties-group__boolean-label {
+  font-size: 14px;
+  color: var(--lc-text-primary, #e5e7eb);
+}
+
+.transition-properties-group__boolean-input {
+  width: 16px;
+  height: 16px;
+}
+
+.transition-properties-group__color-field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.transition-properties-group__color-label {
+  font-size: 14px;
+  color: var(--lc-text-primary, #e5e7eb);
 }
 
 .transition-status {
@@ -171,5 +402,9 @@ function handleTimecodeError(message: string) {
   border: 1px solid var(--color-border-secondary);
   color: var(--color-text-primary);
   font-size: var(--font-size-sm);
+}
+
+:deep(.transition-properties-group__number-input) {
+  width: 120px;
 }
 </style>

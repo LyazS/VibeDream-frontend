@@ -8,6 +8,11 @@ export {
   setFilterParamOverlay,
 } from './filterOverlay'
 export {
+  clearTransitionParamOverlay,
+  getTransitionParamOverlay,
+  setTransitionParamOverlay,
+} from './transitionOverlay'
+export {
   clearTransformPositionOverlay,
   getTransformPositionOverlay,
   setTransformPositionOverlay,

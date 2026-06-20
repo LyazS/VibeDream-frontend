@@ -17,6 +17,9 @@ export { useUnifiedMaskKeyframeControls } from './useUnifiedMaskKeyframeControls
 // 重新导出 useUnifiedFilterControls 函数
 export { useUnifiedFilterControls } from './useUnifiedFilterControls'
 
+// 重新导出 useUnifiedTransitionControls 函数
+export { useUnifiedTransitionControls } from './useUnifiedTransitionControls'
+
 // 重新导出 useTimelineTimeScale 函数
 export { useTimelineTimeScale } from './useTimelineTimeScale'
 

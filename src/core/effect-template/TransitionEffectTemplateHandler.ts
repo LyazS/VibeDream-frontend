@@ -5,6 +5,7 @@ import {
   type TransitionTemplateDropCandidate,
 } from '@/core/timelineitem/features/transition'
 import { effectTemplateRegistry } from '@/core/effect-template/EffectTemplateRegistry'
+import { isTransitionPackagePayload } from '@/core/effect-package/types'
 import type {
   EffectTemplateHandler,
   EffectTemplateResolveContext,
@@ -136,13 +137,20 @@ export class TransitionEffectTemplateHandler
     }
 
     store.pause()
+    const loadedPackage = effectTemplateRegistry.getReadyPackage(dragData.effectPackageId)
+    const transitionPackagePayload = isTransitionPackagePayload(loadedPackage?.payload)
+      ? loadedPackage.payload
+      : undefined
     await store.updateTransitionConfigWithHistory(candidate.sourceItemId, {
       effectPackageId: dragData.effectPackageId,
       templateId: dragData.templateId,
       packageVersion: dragData.packageVersion,
       catalogVersion: dragData.catalogVersion,
       durationFrames,
-      params: {},
+      params: transitionPackagePayload?.defaultParams
+        ? JSON.parse(JSON.stringify(transitionPackagePayload.defaultParams))
+        : {},
+      ...(transitionPackagePayload ? { packagePayload: transitionPackagePayload } : {}),
     })
 
     void effectTemplateRegistry.ensureReady(dragData.effectPackageId).catch((error) => {

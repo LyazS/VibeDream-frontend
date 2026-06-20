@@ -4,6 +4,7 @@
  */
 
 import type { MediaType } from '@/core/mediaitem'
+import { normalizeFilterParamColor } from '@/core/filter/color'
 import type { UnifiedTimelineItemData } from '@/core/timelineitem/model/timelineItem'
 import {
   DEFAULT_CLIP_TRANSITION_DURATION_FRAMES,
@@ -76,6 +77,31 @@ function clampDurationFrames(durationFrames: number): number {
   return Math.max(2, rounded)
 }
 
+function normalizeTransitionParams(
+  params: Record<string, unknown>,
+  config?: Partial<ClipTransitionOutConfig> | null,
+): Record<string, unknown> {
+  const nextParams = JSON.parse(JSON.stringify(params)) as Record<string, unknown>
+  const defaultParams = config?.packagePayload?.defaultParams ?? {}
+  const parameterSchema = config?.packagePayload?.parameterSchema ?? {}
+
+  for (const [parameterKey, defaultValue] of Object.entries(defaultParams)) {
+    if (!(parameterKey in nextParams)) {
+      nextParams[parameterKey] = JSON.parse(JSON.stringify(defaultValue))
+    }
+  }
+
+  for (const [parameterKey, definition] of Object.entries(parameterSchema)) {
+    if (definition.type !== 'color' || !(parameterKey in nextParams)) {
+      continue
+    }
+
+    nextParams[parameterKey] = normalizeFilterParamColor(nextParams[parameterKey])
+  }
+
+  return nextParams
+}
+
 export function createDefaultClipTransitionOutConfig(): ClipTransitionOutConfig {
   return {
     effectPackageId: '',
@@ -97,7 +123,7 @@ export function normalizeClipTransitionOutConfig(
     packageVersion: config?.packageVersion ?? defaults.packageVersion,
     catalogVersion: config?.catalogVersion ?? defaults.catalogVersion,
     durationFrames: clampDurationFrames(config?.durationFrames ?? defaults.durationFrames),
-    params: config?.params ? JSON.parse(JSON.stringify(config.params)) : {},
+    params: normalizeTransitionParams(config?.params ?? {}, config),
     ...(config?.packagePayload
       ? {
           packagePayload: JSON.parse(JSON.stringify(config.packagePayload)),
