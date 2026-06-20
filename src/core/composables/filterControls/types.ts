@@ -1,4 +1,5 @@
 import type { Ref } from 'vue'
+import type { FilterParamColorValue } from '@/core/filter/color'
 import type { ClipFilterConfig } from '@/core/filter/types'
 import type { DynamicFilterParamPropertyId } from '@/core/property-system/schema/propertyIds'
 import type { UnifiedTimelineItemData } from '@/core/timelineitem/model/timelineItem'
@@ -20,3 +21,5 @@ export interface FilterParamVec2Value {
   x: number
   y: number
 }
+
+export type { FilterParamColorValue }

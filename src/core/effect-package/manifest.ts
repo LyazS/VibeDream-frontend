@@ -6,6 +6,7 @@ import type {
   TransitionEffectPackageHost,
   TransitionPackagePayload,
 } from '@/core/effect-package/types'
+import { normalizeFilterParamColor } from '@/core/filter/color'
 
 const EFFECT_PACKAGE_PARAMETER_KEY_PATTERN = /^[A-Za-z_][A-Za-z0-9_]*$/
 const RESERVED_EFFECT_PACKAGE_PARAMETER_KEYS = new Set([
@@ -70,20 +71,6 @@ function normalizePath(path: string): string {
   return path.replace(/^\.?\//, '').replace(/\\/g, '/')
 }
 
-function normalizeNumberArray(value: unknown, size: number): number[] {
-  if (!Array.isArray(value) || value.length !== size) {
-    throw new Error(`effect package 参数默认值必须是长度为 ${size} 的数字数组`)
-  }
-
-  return value.map((item) => {
-    const numericValue = Number(item)
-    if (!Number.isFinite(numericValue)) {
-      throw new Error('effect package 参数默认值数组包含非法数字')
-    }
-    return numericValue
-  })
-}
-
 function normalizeVec2Value(value: unknown): { x: number; y: number } {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) {
     throw new Error('effect package vec2 parameter 默认值必须是 { x, y }')
@@ -109,19 +96,6 @@ function normalizeOptionalFiniteNumber(value: unknown, fieldName: string): numbe
     throw new Error(`effect package parameter ${fieldName} 必须是有限数字`)
   }
   return numericValue
-}
-
-function parseHexColor(input: string): [number, number, number, number] {
-  const hex = input.trim().replace('#', '')
-  if (hex.length !== 6 && hex.length !== 8) {
-    return [1, 1, 1, 1]
-  }
-
-  const r = Number.parseInt(hex.slice(0, 2), 16) / 255
-  const g = Number.parseInt(hex.slice(2, 4), 16) / 255
-  const b = Number.parseInt(hex.slice(4, 6), 16) / 255
-  const a = hex.length === 8 ? Number.parseInt(hex.slice(6, 8), 16) / 255 : 1
-  return [r, g, b, a]
 }
 
 export function hashString(value: string): string {
@@ -297,7 +271,7 @@ export function resolveDefaultParams(
         defaults[key] = Boolean(value)
         break
       case 'color':
-        defaults[key] = typeof value === 'string' ? parseHexColor(value) : normalizeNumberArray(value, 4)
+        defaults[key] = normalizeFilterParamColor(value)
         break
       case 'vec2':
         defaults[key] = normalizeVec2Value(value)

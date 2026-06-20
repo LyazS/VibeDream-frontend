@@ -1,4 +1,5 @@
 import { computed, type Ref } from 'vue'
+import type { FilterParamColorValue } from '@/core/filter/color'
 import type { ClipFilterConfig } from '@/core/filter/types'
 import {
   getFilterParamKey,
@@ -30,6 +31,14 @@ export type DynamicFilterParamViewModel =
       min: number
       max: number
       step: number
+    }
+  | {
+      kind: 'color'
+      propertyId: DynamicFilterParamPropertyId
+      parameterKey: string
+      channelKey: FilterChannelKey
+      label: string
+      value: FilterParamColorValue
     }
   | {
       kind: 'boolean'
@@ -103,6 +112,17 @@ export function useDynamicFilterParamViewModels(options: UseDynamicFilterParamVi
           }
         }
 
+        if (schema.valueKind === 'color') {
+          return {
+            kind: 'color',
+            propertyId: schema.propertyId,
+            parameterKey,
+            channelKey: schema.propertyId,
+            label,
+            value: getColorValue(filterConfig.value.params[parameterKey], parameterKey),
+          }
+        }
+
         throw new Error(`动态滤镜参数类型不支持: ${schema.propertyId}`)
       })
   })
@@ -131,6 +151,30 @@ function getVec2Value(value: unknown, parameterKey: string): FilterParamVec2Valu
     }
   }
   throw new Error(`滤镜参数不是有效二维向量: ${parameterKey}`)
+}
+
+function getColorValue(value: unknown, parameterKey: string): FilterParamColorValue {
+  if (
+    typeof value === 'object' &&
+    value !== null &&
+    !Array.isArray(value) &&
+    typeof (value as Record<string, unknown>).r === 'number' &&
+    Number.isFinite((value as Record<string, unknown>).r) &&
+    typeof (value as Record<string, unknown>).g === 'number' &&
+    Number.isFinite((value as Record<string, unknown>).g) &&
+    typeof (value as Record<string, unknown>).b === 'number' &&
+    Number.isFinite((value as Record<string, unknown>).b) &&
+    typeof (value as Record<string, unknown>).a === 'number' &&
+    Number.isFinite((value as Record<string, unknown>).a)
+  ) {
+    return {
+      r: (value as FilterParamColorValue).r,
+      g: (value as FilterParamColorValue).g,
+      b: (value as FilterParamColorValue).b,
+      a: (value as FilterParamColorValue).a,
+    }
+  }
+  throw new Error(`滤镜参数不是有效颜色: ${parameterKey}`)
 }
 
 function getNumberRange(

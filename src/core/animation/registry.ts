@@ -10,12 +10,14 @@ import {
   type AnimationGroupId,
   type AnimationGroupValueMap,
   type DynamicFilterParamAnimationGroupId,
+  type DynamicFilterParamColorValue,
   type DynamicFilterParamNumberValue,
   type DynamicFilterParamValue,
   type DynamicFilterParamVec2Value,
   type PropertyAnimationGroupId,
   type PropertyAnimationValueByGroup,
 } from '@/core/timelineitem/model/render'
+import { normalizeFilterParamColor } from '@/core/filter/color'
 import { getFilterParamKey } from '@/core/property-system/schema/propertyIds'
 import { TimelineItemQueries } from '@/core/timelineitem/queries'
 import {
@@ -109,7 +111,7 @@ function getAudioConfigRecord(item: UnifiedTimelineItemData<MediaType>): AudioPr
 function getDynamicFilterParameterTypeFromConfig(
   config: Record<string, unknown>,
   parameterKey: string,
-): 'number' | 'vec2' | undefined {
+): 'number' | 'vec2' | 'color' | undefined {
   const packagePayload = config.packagePayload as Record<string, unknown> | undefined
   if (typeof packagePayload !== 'object' || packagePayload === null || Array.isArray(packagePayload)) {
     return undefined
@@ -134,7 +136,7 @@ function getDynamicFilterParameterTypeFromConfig(
   }
 
   const parameterType = (parameterDefinition as { type?: unknown }).type
-  return parameterType === 'number' || parameterType === 'vec2'
+  return parameterType === 'number' || parameterType === 'vec2' || parameterType === 'color'
     ? parameterType
     : undefined
 }
@@ -165,6 +167,17 @@ function assertDynamicFilterParamVec2(value: unknown, parameterKey: string): Dyn
   }
 }
 
+function assertDynamicFilterParamColor(
+  value: unknown,
+  parameterKey: string,
+): DynamicFilterParamColorValue {
+  try {
+    return normalizeFilterParamColor(value)
+  } catch {
+    throw new Error(`滤镜参数不是有效颜色: ${parameterKey}`)
+  }
+}
+
 function createDynamicFilterParamDefinition(
   groupId: DynamicFilterParamAnimationGroupId,
 ): AnimationGroupDefinition<DynamicFilterParamAnimationGroupId> {
@@ -178,7 +191,11 @@ function createDynamicFilterParamDefinition(
     supports: (item) => TimelineItemQueries.supportsClipFilter(item),
     isEnabled: (item) =>
       TimelineItemQueries.supportsClipFilter(item) &&
-      (getParameterType(item) === 'number' || getParameterType(item) === 'vec2'),
+      (
+        getParameterType(item) === 'number' ||
+        getParameterType(item) === 'vec2' ||
+        getParameterType(item) === 'color'
+      ),
     getBaseValue: (item): DynamicFilterParamValue => {
       const filterConfig = TimelineItemQueries.getResolvedFilter(item)
       if (!filterConfig) {
@@ -186,6 +203,9 @@ function createDynamicFilterParamDefinition(
       }
       const currentValue = filterConfig.params[parameterKey]
       const parameterType = getParameterType(item)
+      if (parameterType === 'color') {
+        return assertDynamicFilterParamColor(currentValue, parameterKey)
+      }
       if (parameterType === 'vec2') {
         return assertDynamicFilterParamVec2(currentValue, parameterKey)
       }
@@ -206,12 +226,14 @@ function createDynamicFilterParamDefinition(
         throw new Error(`滤镜参数容器非法，无法写入动态参数: ${parameterKey}`)
       }
       const parameterType = getDynamicFilterParameterTypeFromConfig(mutableConfig, parameterKey)
-      if (parameterType !== 'number' && parameterType !== 'vec2') {
+      if (parameterType !== 'number' && parameterType !== 'vec2' && parameterType !== 'color') {
         throw new Error(`滤镜参数类型不支持关键帧: ${parameterKey}`)
       }
       const nextValue = parameterType === 'vec2'
         ? assertDynamicFilterParamVec2(value, parameterKey)
-        : assertDynamicFilterParamNumber((value as DynamicFilterParamNumberValue).value, parameterKey)
+        : parameterType === 'color'
+          ? assertDynamicFilterParamColor(value, parameterKey)
+          : assertDynamicFilterParamNumber((value as DynamicFilterParamNumberValue).value, parameterKey)
       const currentParams = mutableConfig.params as Record<string, unknown>
       const nextFilterEffect = normalizeClipFilterConfig({
         ...mutableConfig,

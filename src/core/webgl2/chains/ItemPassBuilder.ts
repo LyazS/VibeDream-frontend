@@ -1,4 +1,5 @@
 import { EffectPackageFilterPass } from '@/core/effect-package/runtime/EffectPackageFilterPass'
+import { normalizeEffectRuntimeParams } from '@/core/effect-package/runtimeParams'
 import { effectTemplateRegistry } from '@/core/effect-template/EffectTemplateRegistry'
 import type { UnifiedMediaItemData } from '@/core/mediaitem/types'
 import { TimelineItemQueries } from '@/core/timelineitem/queries'
@@ -92,10 +93,11 @@ export class ItemPassBuilder {
               filteredTextureId,
               options.getEffectEvaluationFrame,
               () => options.getRenderFilterConfig()?.intensity ?? 1,
-              () => ({
-                ...loadedFilterPackage.payload.defaultParams,
-                ...(options.getRenderFilterConfig()?.params ?? {}),
-              }),
+              () =>
+                normalizeEffectRuntimeParams(loadedFilterPackage.payload, {
+                  ...loadedFilterPackage.payload.defaultParams,
+                  ...(options.getRenderFilterConfig()?.params ?? {}),
+                }),
               () => itemLocalTextureId,
               (name) => `${options.prefix}:filter:${name}`,
             )]

@@ -86,6 +86,34 @@
             @next="goToNextFilterKeyframe(param.channelKey)"
           />
           <div
+            v-else-if="param.kind === 'color'"
+            class="filter-properties-group__color-field"
+          >
+            <label class="filter-properties-group__color-label">
+              {{ param.label }}
+            </label>
+            <div class="filter-properties-group__color-control">
+              <NColorPicker
+                :value="getFilterParamColorCssValue(param.value)"
+                :show-alpha="true"
+                :modes="['hex']"
+                :disabled="!canOperateFilterNumbers || !isFilterReady"
+                @update:value="(value) => handleFilterParamColorInput(param.parameterKey, value)"
+                @update:show="(show) => void handleFilterParamColorPanelShowChange(param.parameterKey, show)"
+              />
+              <KeyframeNavButtons
+                :state="getFilterChannelButtonState(param.channelKey)"
+                :tooltip="getFilterKeyframeTooltip(param.channelKey)"
+                :disabled="!canOperateFilterNumbers || !isFilterReady"
+                :has-previous="hasPreviousFilterKeyframe(param.channelKey)"
+                :has-next="hasNextFilterKeyframe(param.channelKey)"
+                @previous="goToPreviousFilterKeyframe(param.channelKey)"
+                @toggle="void toggleFilterKeyframe(param.channelKey)"
+                @next="goToNextFilterKeyframe(param.channelKey)"
+              />
+            </div>
+          </div>
+          <div
             v-else-if="param.kind === 'boolean'"
             class="filter-properties-group__boolean-row"
           >
@@ -112,9 +140,16 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
+import { NColorPicker } from 'naive-ui'
 import FilterEffectDropZone from '@/components/properties/groups/FilterEffectDropZone.vue'
 import KeyframedDualNumberField from '@/components/properties/common/KeyframedDualNumberField.vue'
 import KeyframedSliderField from '@/components/properties/common/KeyframedSliderField.vue'
+import KeyframeNavButtons from '@/components/properties/common/KeyframeNavButtons.vue'
+import {
+  colorToCssRgbaString,
+  normalizeFilterParamColor,
+  type FilterParamColorValue,
+} from '@/core/filter/color'
 import { useAppI18n, useUnifiedFilterControls } from '@/core/composables'
 import { useDynamicFilterParamViewModels } from '@/core/composables/filterControls/useDynamicFilterParamViewModels'
 import { effectTemplateRegistry } from '@/core/effect-template/EffectTemplateRegistry'
@@ -152,6 +187,8 @@ const {
   setFilterParamVec2Deferred,
   setFilterParamVec2Direct,
   setFilterParamBooleanDirect,
+  setFilterParamColorDeferred,
+  setFilterParamColorDirect,
   commitDeferredUpdates,
   cancelDeferredUpdates,
 } = useUnifiedFilterControls({
@@ -191,6 +228,29 @@ function handleFilterParamBooleanChange(parameterKey: string, event: Event) {
   }
 
   void setFilterParamBooleanDirect(parameterKey, target.checked)
+}
+
+function getFilterParamColorCssValue(value: FilterParamColorValue): string {
+  return colorToCssRgbaString(value)
+}
+
+function handleFilterParamColorInput(parameterKey: string, value: string) {
+  setFilterParamColorDeferred(parameterKey, normalizeFilterParamColor(value))
+}
+
+async function handleFilterParamColorPanelShowChange(parameterKey: string, show: boolean) {
+  if (show) {
+    return
+  }
+
+  const param = dynamicFilterParamViewModels.value.find(
+    (entry) => entry.kind === 'color' && entry.parameterKey === parameterKey,
+  )
+  if (!param) {
+    return
+  }
+
+  await commitDeferredUpdates()
 }
 
 async function handleRemove() {
@@ -237,6 +297,24 @@ async function handleRemove() {
 .filter-properties-group__boolean-input {
   width: 16px;
   height: 16px;
+}
+
+.filter-properties-group__color-field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.filter-properties-group__color-label {
+  font-size: 14px;
+  color: var(--lc-text-primary, #e5e7eb);
+}
+
+.filter-properties-group__color-control {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--spacing-md);
 }
 
 .filter-properties-group__slider-value {

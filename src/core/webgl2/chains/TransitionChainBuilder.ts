@@ -1,5 +1,6 @@
 import type { UnifiedLibraryAssetData } from '@/core/asset/types'
 import { EffectPackageTransitionPass } from '@/core/effect-package/runtime/EffectPackageTransitionPass'
+import { normalizeEffectRuntimeParams } from '@/core/effect-package/runtimeParams'
 import { effectTemplateRegistry } from '@/core/effect-template/EffectTemplateRegistry'
 import type { UnifiedMediaItemData } from '@/core/mediaitem/types'
 import { DEFAULT_BLEND_MODE } from '@/core/timelineitem/model/blendMode'
@@ -143,10 +144,11 @@ export class TransitionChainBuilder {
         mixedOutput,
         () => this.params.getCurrentFrame(),
         () => this.getTransitionProgress(transitionItem),
-        () => ({
-          ...loadedPackage.payload.defaultParams,
-          ...(TimelineItemQueries.getResolvedTransition(transitionItem)?.params ?? {}),
-        }),
+        () =>
+          normalizeEffectRuntimeParams(loadedPackage.payload, {
+            ...loadedPackage.payload.defaultParams,
+            ...(TimelineItemQueries.getResolvedTransition(transitionItem)?.params ?? {}),
+          }),
         () => {
           const transitionRuntime = transitionItem.runtime.transition
           if (!transitionRuntime) {

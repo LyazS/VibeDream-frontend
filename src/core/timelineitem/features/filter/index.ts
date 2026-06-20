@@ -4,6 +4,7 @@
  */
 
 import type { MediaType } from '@/core/mediaitem'
+import { normalizeFilterParamColor } from '@/core/filter/color'
 import type { UnifiedTimelineItemData } from '@/core/timelineitem/model/timelineItem'
 import { DEFAULT_CLIP_FILTER_INTENSITY, type ClipFilterConfig } from '@/core/filter/types'
 
@@ -16,6 +17,24 @@ function clampIntensity(intensity: number): number {
     return DEFAULT_CLIP_FILTER_INTENSITY
   }
   return Math.max(0, Math.min(1, intensity))
+}
+
+function normalizeFilterParams(
+  params: Record<string, unknown>,
+  config?: Partial<ClipFilterConfig> | null,
+): Record<string, unknown> {
+  const nextParams = JSON.parse(JSON.stringify(params)) as Record<string, unknown>
+  const parameterSchema = config?.packagePayload?.parameterSchema ?? {}
+
+  for (const [parameterKey, definition] of Object.entries(parameterSchema)) {
+    if (definition.type !== 'color' || !(parameterKey in nextParams)) {
+      continue
+    }
+
+    nextParams[parameterKey] = normalizeFilterParamColor(nextParams[parameterKey])
+  }
+
+  return nextParams
 }
 
 export function createDefaultClipFilterConfig(): ClipFilterConfig {
@@ -61,7 +80,7 @@ export function normalizeClipFilterConfig(
     packageVersion: config?.packageVersion ?? defaults.packageVersion,
     catalogVersion: config?.catalogVersion ?? defaults.catalogVersion,
     intensity: clampIntensity(config?.intensity ?? defaults.intensity),
-    params: config?.params ? JSON.parse(JSON.stringify(config.params)) : {},
+    params: config?.params ? normalizeFilterParams(config.params, config) : {},
     packagePayload: config?.packagePayload
       ? JSON.parse(JSON.stringify(config.packagePayload))
       : defaults.packagePayload,

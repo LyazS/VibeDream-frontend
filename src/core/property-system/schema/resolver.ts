@@ -1,5 +1,6 @@
 import type { MediaType } from '@/core/mediaitem'
 import type { EffectPackageParameterDefinition } from '@/core/effect-package/types'
+import { normalizeFilterParamColor } from '@/core/filter/color'
 import type { UnifiedTimelineItemData } from '@/core/timelineitem/model/timelineItem'
 import { supportsClipFilter } from '@/core/timelineitem/features/filter'
 import { TimelineItemQueries } from '@/core/timelineitem/queries'
@@ -95,7 +96,15 @@ export class DynamicFilterParameterSchemaProvider implements PropertySchemaProvi
 
     const parameterKey = getFilterParamKey(propertyId)
     const definition = this.getParameterDefinition(context, parameterKey)
-    if (!definition || (definition.type !== 'number' && definition.type !== 'vec2' && definition.type !== 'boolean')) {
+    if (
+      !definition ||
+      (
+        definition.type !== 'number' &&
+        definition.type !== 'vec2' &&
+        definition.type !== 'boolean' &&
+        definition.type !== 'color'
+      )
+    ) {
       return null
     }
 
@@ -111,7 +120,12 @@ export class DynamicFilterParameterSchemaProvider implements PropertySchemaProvi
     return Object.entries(filterConfig.packagePayload.parameterSchema)
       .filter(([key, definition]) =>
         isValidFilterParamKey(key) &&
-        (definition.type === 'number' || definition.type === 'vec2' || definition.type === 'boolean'),
+        (
+          definition.type === 'number' ||
+          definition.type === 'vec2' ||
+          definition.type === 'boolean' ||
+          definition.type === 'color'
+        ),
       )
       .map(([key, definition]) => this.createParamSchema(key, definition))
   }
@@ -141,6 +155,9 @@ export class DynamicFilterParameterSchemaProvider implements PropertySchemaProvi
     }
     if (definition.type === 'boolean') {
       return this.createBooleanParamSchema(parameterKey)
+    }
+    if (definition.type === 'color') {
+      return this.createColorParamSchema(parameterKey, definition)
     }
 
     return this.createVec2ParamSchema(parameterKey, definition)
@@ -207,6 +224,40 @@ export class DynamicFilterParameterSchemaProvider implements PropertySchemaProvi
       normalizeKeyframeValue: (value) => ({
         value: normalizeNumber(value),
       }),
+    }
+  }
+
+  private createColorParamSchema(
+    parameterKey: string,
+    definition: EffectPackageParameterDefinition,
+  ): AnimatablePropertySchema {
+    normalizeFilterParamColor(definition.default)
+
+    const propertyId = createFilterParamPropertyId(parameterKey)
+    return {
+      propertyId,
+      animationGroupId: propertyId,
+      target: 'filter',
+      valueFields: ['r', 'g', 'b', 'a'],
+      valueKind: 'color',
+      supportsDirectCommit: true,
+      supportsKeyframeToggle: true,
+      supportsTransientOverlay: true,
+      label: parameterKey,
+      normalizeDirectValue: (value) => ({
+        params: {
+          [parameterKey]: normalizeFilterParamColor(value),
+        },
+      }),
+      normalizeKeyframeValue: (value) => {
+        const color = normalizeFilterParamColor(value)
+        return {
+          r: color.r,
+          g: color.g,
+          b: color.b,
+          a: color.a,
+        }
+      },
     }
   }
 

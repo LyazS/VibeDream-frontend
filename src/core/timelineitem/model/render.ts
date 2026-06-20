@@ -7,6 +7,7 @@ import type { MediaType } from '@/core/mediaitem'
 import { isFilterParamPropertyId } from '@/core/property-system/schema/propertyIds'
 import type { TextStyleConfig } from './textStyle'
 import type { BlendMode } from './blendMode'
+import type { FilterParamColorValue } from '@/core/filter/color'
 import type {
   MaskCenterValue,
   MaskConfig,
@@ -91,9 +92,12 @@ export interface DynamicFilterParamVec2Value {
   y: number
 }
 
+export interface DynamicFilterParamColorValue extends FilterParamColorValue {}
+
 export type DynamicFilterParamValue =
   | DynamicFilterParamNumberValue
   | DynamicFilterParamVec2Value
+  | DynamicFilterParamColorValue
 
 export type AnimationGroupValueMap = {
   'transform.position': PositionAnimatableProps
