@@ -131,11 +131,15 @@ const { t, locale } = useAppI18n()
 const search = ref('')
 
 const searchPlaceholder = computed(() =>
-  props.effectType === 'transition' ? '搜索转场模板' : '搜索滤镜模板',
+  props.effectType === 'transition'
+    ? t('media.effectTemplateSearchTransition')
+    : t('media.effectTemplateSearchFilter'),
 )
 
 const emptyTitle = computed(() =>
-  search.value.trim() ? '没有找到匹配的模板' : '当前分类下还没有模板',
+  search.value.trim()
+    ? t('media.effectTemplateEmptySearch')
+    : t('media.effectTemplateEmptyCategory'),
 )
 
 async function refresh(): Promise<void> {
@@ -154,7 +158,16 @@ const items = computed<DisplayItem[]>(() =>
   effectTemplateRegistry
     .listStatesByType(props.effectType)
     .map((state) => {
-      const localizedTags = state.meta?.tags.zh?.length ? state.meta.tags.zh : (state.meta?.tags.en || [])
+      const isZhLocale = locale.value === 'zh-CN'
+      const localizedName = isZhLocale
+        ? (state.meta?.name.zh || state.meta?.name.en || state.templateId)
+        : (state.meta?.name.en || state.meta?.name.zh || state.templateId)
+      const localizedSummary = isZhLocale
+        ? (state.meta?.summary.zh || state.meta?.summary.en || '')
+        : (state.meta?.summary.en || state.meta?.summary.zh || '')
+      const localizedTags = isZhLocale
+        ? (state.meta?.tags.zh?.length ? state.meta.tags.zh : (state.meta?.tags.en || []))
+        : (state.meta?.tags.en?.length ? state.meta.tags.en : (state.meta?.tags.zh || []))
       const categoryLabel = locale.value === 'zh-CN'
         ? (state.meta?.category.label.zh || state.meta?.category.label.en || state.meta?.category.key || '')
         : (state.meta?.category.label.en || state.meta?.category.label.zh || state.meta?.category.key || '')
@@ -165,13 +178,11 @@ const items = computed<DisplayItem[]>(() =>
         packageVersion: state.packageVersion,
         catalogVersion: state.catalogVersion,
         status: state.status,
-        displayName:
-          state.meta?.name.zh ||
-          state.meta?.name.en ||
-          state.templateId,
+        displayName: localizedName,
         searchTokens: [
           state.meta?.name.zh || '',
           state.meta?.name.en || '',
+          localizedSummary,
           state.meta?.summary.zh || '',
           state.meta?.summary.en || '',
           categoryLabel,

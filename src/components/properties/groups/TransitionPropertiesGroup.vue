@@ -54,10 +54,26 @@
             </div>
           </div>
 
-          <div
-            v-else-if="param.kind === 'vec2' || param.kind === 'ivec2'"
-            class="property-item"
-          >
+	          <div
+	            v-else-if="param.kind === 'int-select'"
+	            class="property-item"
+	          >
+	            <label>{{ param.label }}</label>
+	            <SearchableSelect
+	              :model-value="param.value"
+	              :options="param.options"
+	              :searchable="false"
+	              value-key="value"
+	              label-key="label"
+	              :placeholder="param.label"
+	              @update:model-value="(value) => void setTransitionParamDirect(param.parameterKey, Math.round(Number(value)))"
+	            />
+	          </div>
+
+	          <div
+	            v-else-if="param.kind === 'vec2' || param.kind === 'ivec2'"
+	            class="property-item"
+	          >
             <label>{{ param.label }}</label>
             <div class="transition-properties-group__vec2-row">
               <div class="transition-properties-group__vec2-input">
@@ -196,6 +212,7 @@
 import { computed } from 'vue'
 import { NColorPicker } from 'naive-ui'
 import NumberInput from '@/components/base/NumberInput.vue'
+import SearchableSelect from '@/components/base/SearchableSelect.vue'
 import SliderInput from '@/components/base/SliderInput.vue'
 import TimecodeInput from '@/components/base/TimecodeInput.vue'
 import {
@@ -219,7 +236,7 @@ interface Props {
 }
 
 const props = defineProps<Props>()
-const { t } = useAppI18n()
+const { t, locale } = useAppI18n()
 const unifiedStore = useUnifiedStore()
 const selectedTimelineItem = computed(() => props.selectedTimelineItem)
 
@@ -242,6 +259,7 @@ const {
 const dynamicTransitionParamViewModels = useDynamicEffectParamViewModels({
   params: computed(() => transitionConfig.value.params),
   parameterSchema: transitionParameterSchema,
+  locale,
 })
 
 const transitionRuntime = computed(() => props.selectedTimelineItem?.runtime.transition)

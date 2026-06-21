@@ -136,6 +136,33 @@ function normalizeOptionalFiniteNumber(value: unknown, fieldName: string): numbe
   return numericValue
 }
 
+function normalizeParameterOptions(value: unknown, parameterKey: string) {
+  if (value === undefined) {
+    return undefined
+  }
+
+  if (!Array.isArray(value)) {
+    throw new Error(`effect package parameter options 必须是数组: ${parameterKey}`)
+  }
+
+  return value.map((item, index) => {
+    if (typeof item !== 'object' || item === null || Array.isArray(item)) {
+      throw new Error(`effect package parameter option 非法: ${parameterKey}[${index}]`)
+    }
+
+    const option = item as Record<string, unknown>
+    const numericValue = Number(option.value)
+    if (!Number.isFinite(numericValue)) {
+      throw new Error(`effect package parameter option.value 必须是有限数字: ${parameterKey}[${index}]`)
+    }
+
+    return {
+      value: Math.round(numericValue),
+      label: option.label === undefined ? undefined : normalizeLocalizedText(option.label, String(Math.round(numericValue))),
+    }
+  })
+}
+
 export function hashString(value: string): string {
   let hash = 2166136261
   for (let index = 0; index < value.length; index += 1) {
@@ -254,10 +281,12 @@ export function normalizeManifest(raw: unknown): EffectPackageManifest {
 
     parameters[key] = {
       type,
+      label: definition.label === undefined ? undefined : normalizeLocalizedText(definition.label, key),
       default: definition.default,
       min: normalizeOptionalFiniteNumber(definition.min, `${key}.min`),
       max: normalizeOptionalFiniteNumber(definition.max, `${key}.max`),
       step: normalizeOptionalFiniteNumber(definition.step, `${key}.step`),
+      options: normalizeParameterOptions(definition.options, key),
     }
   }
 

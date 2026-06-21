@@ -1,4 +1,5 @@
 import { computed, type Ref } from 'vue'
+import type { WritableComputedRef } from 'vue'
 import {
   normalizeFilterParamColor,
   type FilterParamColorValue,
@@ -14,18 +15,32 @@ import type {
 interface UseDynamicEffectParamViewModelsOptions {
   params: Ref<Record<string, unknown>>
   parameterSchema: Ref<EffectParameterSchema>
+  locale?: Ref<string> | WritableComputedRef<string>
 }
 
 export function useDynamicEffectParamViewModels(options: UseDynamicEffectParamViewModelsOptions) {
-  const { params, parameterSchema } = options
+  const { params, parameterSchema, locale } = options
 
   return computed<DynamicEffectParamViewModel[]>(() =>
     Object.entries(parameterSchema.value).map(([parameterKey, definition]) => {
-      const label = parameterKey
+      const label = getParameterLabel(definition.label, parameterKey, locale?.value)
       const value = params.value[parameterKey]
 
       if (definition.type === 'float' || definition.type === 'int') {
         const integerLike = definition.type === 'int'
+        if (definition.type === 'int' && Array.isArray(definition.options) && definition.options.length > 0) {
+          return {
+            kind: 'int-select' as const,
+            parameterKey,
+            label,
+            value: Math.round(getNumberValue(value, parameterKey)),
+            options: definition.options.map((option) => ({
+              value: Math.round(option.value),
+              label: getParameterLabel(option.label, String(Math.round(option.value)), locale?.value),
+              rawOption: option,
+            })),
+          }
+        }
         return {
           kind: definition.type,
           parameterKey,
@@ -101,6 +116,20 @@ export function useDynamicEffectParamViewModels(options: UseDynamicEffectParamVi
       throw new Error(`动态效果参数类型不支持: ${parameterKey}`)
     }),
   )
+}
+
+function getParameterLabel(
+  label: { zh: string; en: string } | undefined,
+  parameterKey: string,
+  locale?: string,
+): string {
+  if (!label) {
+    return parameterKey
+  }
+
+  return locale === 'zh-CN'
+    ? label.zh || label.en || parameterKey
+    : label.en || label.zh || parameterKey
 }
 
 function getNumberValue(value: unknown, parameterKey: string): number {

@@ -17,6 +17,11 @@ export type FilterSupportedMediaType = 'video' | 'image'
 export type EffectTextureDimension = '2d' | '3d'
 export type EffectResourceVector3 = [number, number, number]
 
+export interface EffectPackageParameterOption {
+  value: number
+  label?: LocalizedText
+}
+
 export interface TransitionEffectPackageHost {
   transition: {
     defaultDurationFrames: number
@@ -33,10 +38,12 @@ export type EffectPackageHost = TransitionEffectPackageHost | FilterEffectPackag
 
 export interface EffectPackageParameterDefinition {
   type: EffectPackageParameterType
+  label?: LocalizedText
   default?: unknown
   min?: number
   max?: number
   step?: number
+  options?: EffectPackageParameterOption[]
 }
 
 export interface EffectPackageManifestSnapshot {

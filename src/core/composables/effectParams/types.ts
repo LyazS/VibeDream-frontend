@@ -1,5 +1,8 @@
 import type { FilterParamColorValue } from '@/core/filter/color'
-import type { EffectPackageParameterDefinition } from '@/core/effect-package/types'
+import type {
+  EffectPackageParameterDefinition,
+  EffectPackageParameterOption,
+} from '@/core/effect-package/types'
 
 export interface EffectParamVec2Value {
   x: number
@@ -24,6 +27,17 @@ export type DynamicEffectParamViewModel =
       max: number
       step: number
       precision: number
+    }
+  | {
+      kind: 'int-select'
+      parameterKey: string
+      label: string
+      value: number
+      options: Array<{
+        value: number
+        label: string
+        rawOption: EffectPackageParameterOption
+      }>
     }
   | {
       kind: 'vec2' | 'ivec2'
