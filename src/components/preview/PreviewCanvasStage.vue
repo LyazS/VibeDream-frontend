@@ -271,8 +271,35 @@ function handleResetButtonClick(event: MouseEvent) {
   resetPreviewTransform()
 }
 
+function normalizeWheelDelta(delta: number, deltaMode: number): number {
+  if (deltaMode === WheelEvent.DOM_DELTA_LINE) {
+    return delta * 16
+  }
+
+  if (deltaMode === WheelEvent.DOM_DELTA_PAGE) {
+    return delta * 100
+  }
+
+  return delta
+}
+
+function getPinchScaleFactor(deltaY: number): number {
+  const rawScaleFactor = Math.exp(-deltaY * 0.0036)
+  return Math.max(0.9, Math.min(rawScaleFactor, 1.1))
+}
+
+function zoomPreviewAroundPointer(mouseX: number, mouseY: number, scaleFactor: number) {
+  const stagePoint = screenPointToStagePoint(mouseX, mouseY, stageCenter.value, previewTransform.value)
+  const nextZoom = clamp(previewZoom.value * scaleFactor, MIN_PREVIEW_ZOOM, MAX_PREVIEW_ZOOM)
+
+  previewZoom.value = nextZoom
+  previewOffsetX.value =
+    mouseX - stageCenter.value.x - nextZoom * (stagePoint.x - stageCenter.value.x)
+  previewOffsetY.value =
+    mouseY - stageCenter.value.y - nextZoom * (stagePoint.y - stageCenter.value.y)
+}
+
 function handlePreviewWheel(event: WheelEvent) {
-  if (!event.altKey) return
   if (
     dragState.value.isDragging ||
     scaleState.value.isScaling ||
@@ -287,20 +314,25 @@ function handlePreviewWheel(event: WheelEvent) {
   const rect = rendererContainerRef.value?.getBoundingClientRect()
   if (!rect) return
 
+  const deltaX = normalizeWheelDelta(event.deltaX, event.deltaMode)
+  const deltaY = normalizeWheelDelta(event.deltaY, event.deltaMode)
   const mouseX = event.clientX - rect.left
   const mouseY = event.clientY - rect.top
-  const stagePoint = screenPointToStagePoint(mouseX, mouseY, stageCenter.value, previewTransform.value)
-  const nextZoom = clamp(
-    previewZoom.value * Math.exp(-event.deltaY * 0.0015),
-    MIN_PREVIEW_ZOOM,
-    MAX_PREVIEW_ZOOM,
-  )
+  const isPinchZoom = event.ctrlKey || event.metaKey
+  const isKeyboardZoom = event.altKey
 
-  previewZoom.value = nextZoom
-  previewOffsetX.value =
-    mouseX - stageCenter.value.x - nextZoom * (stagePoint.x - stageCenter.value.x)
-  previewOffsetY.value =
-    mouseY - stageCenter.value.y - nextZoom * (stagePoint.y - stageCenter.value.y)
+  if (isPinchZoom || isKeyboardZoom) {
+    event.preventDefault()
+    const scaleFactor = isPinchZoom ? getPinchScaleFactor(deltaY) : Math.exp(-deltaY * 0.0015)
+    zoomPreviewAroundPointer(mouseX, mouseY, scaleFactor)
+    return
+  }
+
+  if (deltaX !== 0 || deltaY !== 0) {
+    event.preventDefault()
+    previewOffsetX.value -= deltaX
+    previewOffsetY.value -= deltaY
+  }
 }
 
 function handleStageMouseDown(event: MouseEvent) {
