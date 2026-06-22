@@ -8,6 +8,7 @@ import { computed, reactive } from 'vue'
 import type { RetrievalResultItem, SearchMediaStage } from '../../services/mediaIndexService'
 import { searchMedia } from '../../services/mediaIndexService'
 import type { ToolDefinition, ToolExecutionContext } from '../core/toolTypes'
+import { buildXmlAttributes, escapeXmlText } from './utils/xml'
 import {
   buildIndexingStatusMessage,
   createRuntimeI18nMessage,
@@ -98,22 +99,6 @@ function finishExecutionState(toolCallId: string): void {
   delete activeExecutions[toolCallId]
 }
 
-function escapeXml(value: string): string {
-  return value
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&apos;')
-}
-
-function buildAttributes(attributes: Array<[string, string | number | boolean | undefined]>): string {
-  return attributes
-    .filter(([, value]) => value !== undefined)
-    .map(([key, value]) => `${key}="${escapeXml(String(value))}"`)
-    .join(' ')
-}
-
 function normalizeTopK(value: unknown): number {
   if (typeof value !== 'number' || !Number.isFinite(value)) {
     return DEFAULT_TOP_K
@@ -130,7 +115,7 @@ function formatEvidenceNode(evidence: string | null): string | null {
     return null
   }
 
-  return `<evidence>${escapeXml(evidence)}</evidence>`
+  return `<evidence>${escapeXmlText(evidence)}</evidence>`
 }
 
 function getValidationResult(item: RetrievalResultItem) {
@@ -145,7 +130,7 @@ function getEvidence(item: RetrievalResultItem): string | null {
 
 function formatVideoHit(item: RetrievalResultItem): string {
   const validationResult = getValidationResult(item)
-  const attrs = buildAttributes([
+  const attrs = buildXmlAttributes([
     ['media_item_id', item.media_item_id],
     ['media_name', item.media_name],
     ['score', item.score.toFixed(3)],
@@ -169,7 +154,7 @@ function formatVideoHit(item: RetrievalResultItem): string {
 
 function formatImageHit(item: RetrievalResultItem): string {
   const validationResult = getValidationResult(item)
-  const attrs = buildAttributes([
+  const attrs = buildXmlAttributes([
     ['media_item_id', item.media_item_id],
     ['media_name', item.media_name],
     ['score', item.score.toFixed(3)],
@@ -205,7 +190,7 @@ function buildSearchMediaXml(params: {
 }): string {
   const { status, query, requestedTopK, results, error } = params
   const lines = [
-    `<search_media ${buildAttributes([
+    `<search_media ${buildXmlAttributes([
       ['status', status],
       ['query', query],
       ['requested_top_k', requestedTopK],
@@ -218,7 +203,7 @@ function buildSearchMediaXml(params: {
   }
 
   if (error) {
-    lines.push(`  <error>${escapeXml(error)}</error>`)
+    lines.push(`  <error>${escapeXmlText(error)}</error>`)
   }
 
   lines.push(`</search_media>`)

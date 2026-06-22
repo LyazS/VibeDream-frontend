@@ -6,6 +6,7 @@
 import { useUnifiedStore } from '@/core/unifiedStore'
 import type { UnifiedMediaItemData, UnifiedMediaIndexMetadata } from '@/core/mediaitem/types'
 import type { ToolDefinition } from '../core/toolTypes'
+import { buildXmlAttributes, escapeXmlText } from './utils/xml'
 
 /**
  * 虚拟路径条目接口
@@ -29,26 +30,6 @@ interface ShotOutlineItem {
 const SHOT_OUTLINE_HEAD_COUNT = 2
 const SHOT_OUTLINE_TAIL_COUNT = 1
 const FALLBACK_MEDIA_TAG = 'media'
-
-function escapeXmlText(value: string): string {
-  return value
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-}
-
-function escapeXmlAttribute(value: string): string {
-  return escapeXmlText(value)
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&apos;')
-}
-
-function buildXmlAttributes(attributes: Array<[string, string | number | undefined]>): string {
-  return attributes
-    .filter(([, value]) => value !== undefined)
-    .map(([key, value]) => `${key}="${escapeXmlAttribute(String(value))}"`)
-    .join(' ')
-}
 
 function getCompletedIndexingMetadata(mediaItem?: UnifiedMediaItemData): UnifiedMediaIndexMetadata | undefined {
   const indexing = mediaItem?.metadata?.indexing
@@ -355,11 +336,20 @@ export async function executeListMedia(args: Record<string, any>): Promise<strin
     const { filePath, offset = 1, limit = 2000 } = args
 
     try {
+      if (typeof filePath !== 'string' || !filePath.trim()) {
+        return logListMediaResult(filePath ?? '', offset, limit, '<error>filePath 是必填项，且必须是字符串。</error>')
+      }
+
       // 1. 解析 ID 路径，获取对应的目录ID
       const dirId = resolveIdPathToDirId(filePath)
 
       if (!dirId) {
-        return logListMediaResult(filePath, offset, limit, `File not found: ${filePath}`)
+        return logListMediaResult(
+          filePath,
+          offset,
+          limit,
+          `<error>未找到路径 ${escapeXmlText(filePath)} 对应的目录。</error>`,
+        )
       }
 
       // 2. 从素材库获取目录的直接子项（非递归）
@@ -375,7 +365,7 @@ export async function executeListMedia(args: Record<string, any>): Promise<strin
           filePath,
           offset,
           limit,
-          `Offset ${offset} is out of range for this directory (${totalEntries} entries)`,
+          `<error>offset=${offset} 超出范围。当前目录共有 ${totalEntries} 个条目。</error>`,
         )
       }
 
@@ -421,7 +411,7 @@ export async function executeListMedia(args: Record<string, any>): Promise<strin
         filePath,
         offset,
         limit,
-        `Error reading directory: ${error.message}`,
+        `<error>${escapeXmlText(error.message)}</error>`,
       )
     }
   }

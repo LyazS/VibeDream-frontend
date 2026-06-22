@@ -15,6 +15,7 @@ import type {
   UnifiedVideoMediaIndexMetadata,
 } from '@/core/mediaitem/types'
 import type { ToolDefinition, ToolExecutionContext } from '../core/toolTypes'
+import { buildXmlAttributes, escapeXmlText } from './utils/xml'
 import {
   buildIndexingStatusMessage,
   createRuntimeI18nMessage,
@@ -125,22 +126,6 @@ function registerCancellationHook(
   cancellationHooks.set(toolCallId, hook)
 }
 
-function escapeXml(value: string): string {
-  return value
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&apos;')
-}
-
-function buildAttributes(attributes: Array<[string, string | number | boolean | undefined]>): string {
-  return attributes
-    .filter(([, value]) => value !== undefined)
-    .map(([key, value]) => `${key}="${escapeXml(String(value))}"`)
-    .join(' ')
-}
-
 function isReadMediaField(value: unknown): value is ReadMediaField {
   return typeof value === 'string' && SUPPORTED_FIELDS.has(value as ReadMediaField)
 }
@@ -249,7 +234,7 @@ function getImageMetadata(
 }
 
 function buildBasicNode(mediaItem: UnifiedMediaItemData): string {
-  return `<basic ${buildAttributes([
+  return `<basic ${buildXmlAttributes([
     ['id', mediaItem.id],
     ['name', mediaItem.name],
     ['media_type', mediaItem.mediaType],
@@ -263,8 +248,8 @@ function buildSummaryNode(indexing?: UnifiedMediaIndexMetadata): string | null {
     return null
   }
 
-  const attrs = buildAttributes([['title', summary?.title]])
-  const content = summary?.summary ? escapeXml(summary.summary) : ''
+  const attrs = buildXmlAttributes([['title', summary?.title]])
+  const content = summary?.summary ? escapeXmlText(summary.summary) : ''
   return `<summary${attrs ? ` ${attrs}` : ''}>${content}</summary>`
 }
 
@@ -275,17 +260,17 @@ function buildSegmentsNode(indexing?: UnifiedVideoMediaIndexMetadata): string | 
   }
 
   const lines = [
-    `<segments ${buildAttributes([['count', segments.length]])}>`,
+    `<segments ${buildXmlAttributes([['count', segments.length]])}>`,
   ]
   for (const segment of segments) {
-    const attrs = buildAttributes([
+    const attrs = buildXmlAttributes([
       ['index', segment.segmentIndex],
       ['start', segment.startTimecode],
       ['end', segment.endTimecode],
       ['title', segment.title],
     ])
     lines.push(
-      `  <segment${attrs ? ` ${attrs}` : ''}>${escapeXml(segment.summary || '')}</segment>`,
+      `  <segment${attrs ? ` ${attrs}` : ''}>${escapeXmlText(segment.summary || '')}</segment>`,
     )
   }
   lines.push('</segments>')
@@ -299,7 +284,7 @@ function buildMediaNode(
 ): string {
   const { mediaItem, suggestedItem } = context.resolveMediaRequest(controller.requestedId)
   if (!mediaItem) {
-    return `<media ${buildAttributes([
+    return `<media ${buildXmlAttributes([
       ['id', controller.requestedId],
       ['status', 'failed'],
       ['reason', controller.failureReason || 'not_found'],
@@ -310,7 +295,7 @@ function buildMediaNode(
 
   const indexing = getIndexMetadata(mediaItem)
   const lines = [
-    `<media ${buildAttributes([
+    `<media ${buildXmlAttributes([
       ['id', mediaItem.id],
       ['status', controller.itemStatus === 'pending' ? 'failed' : controller.itemStatus],
       ['media_type', mediaItem.mediaType],
@@ -359,7 +344,7 @@ function buildResultXml(
       : 'failed'
 
   const lines = [
-    `<read_media ${buildAttributes([
+    `<read_media ${buildXmlAttributes([
       ['status', status],
       ['cancelled', cancelled],
       ['fields', fields.join(',')],
@@ -631,42 +616,42 @@ export async function executeReadMedia(
   args: Record<string, any>,
   context?: ToolExecutionContext,
 ): Promise<string> {
-  const mediaIds = normalizeMediaIds(args.mediaIds)
-  const fields = normalizeFields(args.fields)
-  const unifiedStore = useUnifiedStore()
-  const readMediaContext: ReadMediaToolContext = {
-    resolveMediaRequest: (mediaId) =>
-      getMediaItemOrSuggestion(mediaId, unifiedStore.mediaItems || []),
-    ensureMediaIndexing: (mediaId) => unifiedStore.ensureMediaIndexing(mediaId),
-    onJobResourceEvent: (listener) => unifiedStore.jobRuntime.onResourceEvent(listener),
-  }
-  const toolCallId = context?.toolCallId
-  const controllers: ReadMediaItemController[] = mediaIds.map((mediaId) => ({
-    requestedId: mediaId,
-    itemStatus: 'pending',
-    waitStarted: false,
-  }))
-
-  let cancelled = false
-  let wakeWaiting: (() => void) | null = null
-
-  if (toolCallId) {
-    startExecutionState(toolCallId, mediaIds, fields)
-    registerCancellationHook(toolCallId, () => {
-      cancelled = true
-      updateExecutionState(toolCallId, {
-        cancelled: true,
-        canCancel: false,
-        message: '正在停止等待索引…',
-        indexingStatus: createRuntimeI18nMessage('aiPanel.toolsState.indexingStopping'),
-      })
-      wakeWaiting?.()
-    })
-  }
-
-  const deadline = Date.now() + MAX_WAIT_MS
-
   try {
+    const mediaIds = normalizeMediaIds(args.mediaIds)
+    const fields = normalizeFields(args.fields)
+    const unifiedStore = useUnifiedStore()
+    const readMediaContext: ReadMediaToolContext = {
+      resolveMediaRequest: (mediaId) =>
+        getMediaItemOrSuggestion(mediaId, unifiedStore.mediaItems || []),
+      ensureMediaIndexing: (mediaId) => unifiedStore.ensureMediaIndexing(mediaId),
+      onJobResourceEvent: (listener) => unifiedStore.jobRuntime.onResourceEvent(listener),
+    }
+    const toolCallId = context?.toolCallId
+    const controllers: ReadMediaItemController[] = mediaIds.map((mediaId) => ({
+      requestedId: mediaId,
+      itemStatus: 'pending',
+      waitStarted: false,
+    }))
+
+    let cancelled = false
+    let wakeWaiting: (() => void) | null = null
+
+    if (toolCallId) {
+      startExecutionState(toolCallId, mediaIds, fields)
+      registerCancellationHook(toolCallId, () => {
+        cancelled = true
+        updateExecutionState(toolCallId, {
+          cancelled: true,
+          canCancel: false,
+          message: '正在停止等待索引…',
+          indexingStatus: createRuntimeI18nMessage('aiPanel.toolsState.indexingStopping'),
+        })
+        wakeWaiting?.()
+      })
+    }
+
+    const deadline = Date.now() + MAX_WAIT_MS
+
     while (true) {
       const waitReason = await waitForControllersToSettle({
         controllers,
@@ -722,7 +707,11 @@ export async function executeReadMedia(
       })
     }
     return result
+  } catch (error: any) {
+    const message = error instanceof Error ? error.message : String(error)
+    return `<error>${escapeXmlText(message)}</error>`
   } finally {
+    const toolCallId = context?.toolCallId
     if (toolCallId) {
       finishExecutionState(toolCallId)
     }

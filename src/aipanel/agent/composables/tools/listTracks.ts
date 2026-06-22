@@ -1,10 +1,12 @@
 /**
  * list_tracks 工具实现
- * 列出时间轴上所有轨道的基本信息
+ * 列出时间轴上所有轨道的基本信息，返回 XML
  */
 
 import { useUnifiedStore } from '@/core/unifiedStore'
+import { getTimelineItemsByTrack } from '@/core/utils/timelineSearchUtils'
 import type { ToolDefinition } from '../core/toolTypes'
+import { buildXmlAttributes, escapeXmlText } from './utils/xml'
 
 /**
  * 轨道基本信息接口
@@ -16,6 +18,14 @@ interface TrackBasicInfo {
   name: string
   /** 轨道类型 */
   type: 'video' | 'audio' | 'text'
+  /** 轨道顺序 */
+  index: number
+  /** 是否可见 */
+  visible: boolean
+  /** 是否静音 */
+  muted: boolean
+  /** 轨道上的时间轴项目数 */
+  itemCount: number
 }
 
 /**
@@ -23,40 +33,48 @@ interface TrackBasicInfo {
  *
  * 获取时间轴上所有轨道的基本信息（id、名字、类型），用于快速浏览和筛选轨道。
  *
- * @returns 格式化的轨道基本信息文本
+ * @returns XML 格式的轨道基本信息
  */
 export async function executeListTracks(args: Record<string, any>): Promise<string> {
   try {
+    void args
     const store = useUnifiedStore()
     const tracks = store.tracks || []
+    const timelineItems = store.timelineItems || []
 
     if (tracks.length === 0) {
-      return '当前时间轴没有轨道'
+      return '<list_tracks total="0" />'
     }
 
-    // 构建轨道信息列表
-    const trackInfos: TrackBasicInfo[] = tracks.map((track) => ({
+    const trackInfos: TrackBasicInfo[] = tracks.map((track, index) => ({
       id: track.id,
       name: track.name,
       type: track.type as 'video' | 'audio' | 'text',
+      index,
+      visible: track.isVisible,
+      muted: track.isMuted,
+      itemCount: getTimelineItemsByTrack(track.id, timelineItems).length,
     }))
 
-    // 格式化输出
-    const lines: string[] = []
-    lines.push(`=== 轨道列表 (${trackInfos.length}个) ===`)
-    lines.push('')
-
-    trackInfos.forEach((track, index) => {
-      lines.push(`[ID: ${track.id}]`)
-      lines.push(`  名称: ${track.name}`)
-      lines.push(`  类型: ${track.type}`)
-      lines.push(`  索引: ${index}`)
-      lines.push('')
-    })
+    const lines: string[] = [`<list_tracks total="${trackInfos.length}">`]
+    for (const track of trackInfos) {
+      lines.push(
+        `  <track ${buildXmlAttributes([
+          ['id', track.id],
+          ['name', track.name],
+          ['type', track.type],
+          ['index', track.index],
+          ['visible', track.visible],
+          ['muted', track.muted],
+          ['item_count', track.itemCount],
+        ])} />`,
+      )
+    }
+    lines.push('</list_tracks>')
 
     return lines.join('\n')
   } catch (error: any) {
-    return `Error reading tracks: ${error.message}`
+    return `<error>${escapeXmlText(error.message)}</error>`
   }
 }
 
