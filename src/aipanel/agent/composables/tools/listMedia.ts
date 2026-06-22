@@ -1,5 +1,5 @@
 /**
- * list_contents 工具实现
+ * list_media 工具实现
  * 列出前端虚拟目录内容（非递归）
  */
 
@@ -328,18 +328,18 @@ function buildPathName(dirId: string): string {
   }
 }
 
-function logListContentsResult(
+function logListMediaResult(
   filePath: string,
   offset: number,
   limit: number,
   result: string,
 ): string {
-  console.log('[list_contents] result', result)
+  console.log('[list_media] result', result)
   return result
 }
 
 /**
- * list_contents 工具执行函数
+ * list_media 工具执行函数
  *
  * 列出前端虚拟目录的直接子项（非递归）。
  * 使用虚拟路径读取素材库目录内容（如 '/视频/'），返回该目录下的子文件夹和素材列表。
@@ -351,7 +351,7 @@ function logListContentsResult(
  * @param args.limit - 最多显示的条目数（默认为2000）
  * @returns XML 格式的目录内容
  */
-export async function executeListContents(args: Record<string, any>): Promise<string> {
+export async function executeListMedia(args: Record<string, any>): Promise<string> {
     const { filePath, offset = 1, limit = 2000 } = args
 
     try {
@@ -359,7 +359,7 @@ export async function executeListContents(args: Record<string, any>): Promise<st
       const dirId = resolveIdPathToDirId(filePath)
 
       if (!dirId) {
-        return logListContentsResult(filePath, offset, limit, `File not found: ${filePath}`)
+        return logListMediaResult(filePath, offset, limit, `File not found: ${filePath}`)
       }
 
       // 2. 从素材库获取目录的直接子项（非递归）
@@ -371,7 +371,7 @@ export async function executeListContents(args: Record<string, any>): Promise<st
       // 4. 分页验证
       const totalEntries = entries.length
       if (offset > totalEntries) {
-        return logListContentsResult(
+        return logListMediaResult(
           filePath,
           offset,
           limit,
@@ -415,9 +415,9 @@ export async function executeListContents(args: Record<string, any>): Promise<st
         outputLines.push(`(${totalEntries} entries)`)
       }
 
-      return logListContentsResult(filePath, offset, limit, outputLines.join('\n'))
+      return logListMediaResult(filePath, offset, limit, outputLines.join('\n'))
     } catch (error: any) {
-      return logListContentsResult(
+      return logListMediaResult(
         filePath,
         offset,
         limit,
@@ -427,10 +427,10 @@ export async function executeListContents(args: Record<string, any>): Promise<st
   }
 
 /**
- * list_contents 工具定义
+ * list_media 工具定义
  * 供 index.ts 注册使用（只需要 name 和 execute，其他字段由后端定义）
  */
-export const listContentsTool: ToolDefinition = {
-  name: 'list_contents',
-  execute: executeListContents
+export const listMediaTool: ToolDefinition = {
+  name: 'list_media',
+  execute: executeListMedia
 } as ToolDefinition

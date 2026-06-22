@@ -4,7 +4,7 @@
     "agent": "Agent",
     "tools": {
       "unknown": "Unknown Tool",
-      "list_contents": "List Contents",
+      "list_media": "List Media",
       "read_media": "Read Media",
       "search_media": "Search Media"
     },

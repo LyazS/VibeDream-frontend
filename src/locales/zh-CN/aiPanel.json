@@ -4,7 +4,7 @@
     "agent": "智能助手",
     "tools": {
       "unknown": "未知工具",
-      "list_contents": "读取目录",
+      "list_media": "读取素材列表",
       "read_media": "查看素材",
       "search_media": "检索素材"
     },

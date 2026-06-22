@@ -1,5 +1,3 @@
-import type { TimelineJsonBundle } from '@/aipanel/timeline-json/types'
-
 export enum AgentMessageRole {
   USER = 'user',
   ASSISTANT = 'assistant',
@@ -120,7 +118,6 @@ export interface RunInput {
 
 export interface StartRunRequest {
   input: RunInput
-  timeline: TimelineJsonBundle
 }
 
 export interface ToolResultRequest {

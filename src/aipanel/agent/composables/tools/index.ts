@@ -3,7 +3,7 @@
  * 负责工具的注册、查询和执行
  */
 
-import { listContentsTool } from './listContents'
+import { listMediaTool } from './listMedia'
 import { readMediaTool } from './readMedia'
 import { searchMediaTool } from './searchMedia'
 import type { ToolDefinition, ToolExecutionContext, ToolResult } from '../core/toolTypes'
@@ -19,7 +19,7 @@ function registerTool(tool: ToolDefinition): void {
 }
 
 // 注册内置工具
-registerTool(listContentsTool)
+registerTool(listMediaTool)
 registerTool(readMediaTool)
 registerTool(searchMediaTool)
 
@@ -73,7 +73,7 @@ export function listTools(): ToolDefinition[] {
 
 // 导出工具定义供外部参考
 export {
-  listContentsTool,
+  listMediaTool,
   readMediaTool,
   searchMediaTool,
 }
