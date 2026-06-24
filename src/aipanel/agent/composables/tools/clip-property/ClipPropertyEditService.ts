@@ -205,16 +205,16 @@ export class ClipPropertyEditService {
     return {
       text: String(text?.text ?? ''),
       style: {
-        fontFamily: text?.style?.fontFamily,
-        fontSize: roundMaybeNumber(text?.style?.fontSize),
-        fontWeight: text?.style?.fontWeight,
-        fontStyle: text?.style?.fontStyle,
-        color: text?.style?.color,
-        backgroundColor: text?.style?.backgroundColor,
-        textAlign: text?.style?.textAlign,
-        textShadow: text?.style?.textShadow,
-        textStroke: text?.style?.textStroke,
-        textGlow: text?.style?.textGlow,
+        fontFamily: nullIfUndefined(text?.style?.fontFamily),
+        fontSize: nullIfUndefined(roundMaybeNumber(text?.style?.fontSize)),
+        fontWeight: nullIfUndefined(text?.style?.fontWeight),
+        fontStyle: nullIfUndefined(text?.style?.fontStyle),
+        color: nullIfUndefined(text?.style?.color),
+        backgroundColor: nullIfUndefined(text?.style?.backgroundColor),
+        textAlign: nullIfUndefined(text?.style?.textAlign),
+        textShadow: nullIfUndefined(text?.style?.textShadow),
+        textStroke: nullIfUndefined(text?.style?.textStroke),
+        textGlow: nullIfUndefined(text?.style?.textGlow),
       },
     }
   }
@@ -694,6 +694,9 @@ function pickValues(source: Record<string, unknown>, keys: string[]) {
 }
 
 function isEqualValue(a: unknown, b: unknown): boolean {
+  if (isNullish(a) && isNullish(b)) {
+    return true
+  }
   if (typeof a === 'number' && typeof b === 'number') {
     return Math.abs(a - b) <= NUMERIC_MATCH_EPSILON
   }
@@ -709,6 +712,14 @@ function roundMaybeNumber(value: number | undefined): number | undefined {
     return value
   }
   return roundNumeric(value)
+}
+
+function nullIfUndefined<T>(value: T | undefined): T | null {
+  return value === undefined ? null : value
+}
+
+function isNullish(value: unknown): value is null | undefined {
+  return value === null || value === undefined
 }
 
 function toolError(code: string, message: string, details?: Record<string, any>) {

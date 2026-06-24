@@ -4,6 +4,7 @@
  */
 
 import { addTrackTool } from './addTrack'
+import { createSubtitleClipTool } from './createSubtitleClip'
 import { listMediaTool } from './listMedia'
 import { listTracksTool } from './listTracks'
 import { insertClipTool } from './insertClip'
@@ -72,6 +73,7 @@ function registerTool(tool: ToolDefinition): void {
 
 // 注册内置工具
 registerTool(addTrackTool)
+registerTool(createSubtitleClipTool)
 registerTool(listMediaTool)
 registerTool(listTracksTool)
 registerTool(insertClipTool)
@@ -175,6 +177,7 @@ export function listTools(): ToolDefinition[] {
 // 导出工具定义供外部参考
 export {
   addTrackTool,
+  createSubtitleClipTool,
   listMediaTool,
   listTracksTool,
   insertClipTool,
