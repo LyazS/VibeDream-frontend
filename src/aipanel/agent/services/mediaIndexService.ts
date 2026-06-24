@@ -379,11 +379,13 @@ export async function prepareRerankCandidates(
   candidates: RerankCandidateInput[],
   getMediaItem: (id: string) => UnifiedMediaItemData | undefined,
   onProgress?: (current: number, total: number) => void,
+  checkCancelled?: () => void,
 ): Promise<PreparedRerankCandidate[]> {
   const prepared: PreparedRerankCandidate[] = []
   const total = candidates.length
 
   for (let i = 0; i < candidates.length; i++) {
+    checkCancelled?.()
     onProgress?.(i, total)
     const candidate = candidates[i]
 
@@ -429,6 +431,7 @@ export async function callRerankApi(
   projectId: string,
   candidates: PreparedRerankCandidate[],
   topK: number = 10,
+  signal?: AbortSignal,
 ): Promise<RerankResultItem[]> {
   const response = await fetchClient.post<{
     query: string
@@ -439,7 +442,7 @@ export async function callRerankApi(
     project_id: projectId,
     top_k: topK,
     candidates,
-  })
+  }, { signal })
 
   return response.data?.results || []
 }
@@ -448,11 +451,13 @@ export async function prepareValidateCandidates(
   candidates: ValidationCandidateInput[],
   getMediaItem: (id: string) => UnifiedMediaItemData | undefined,
   onProgress?: (current: number, total: number) => void,
+  checkCancelled?: () => void,
 ): Promise<PreparedValidationCandidate[]> {
   const prepared: PreparedValidationCandidate[] = []
   const total = candidates.length
 
   for (let i = 0; i < candidates.length; i++) {
+    checkCancelled?.()
     onProgress?.(i, total)
     const candidate = candidates[i]
 
@@ -493,6 +498,7 @@ export async function callValidateApi(
   projectId: string,
   candidates: PreparedValidationCandidate[],
   topK: number = 10,
+  signal?: AbortSignal,
 ): Promise<ValidationResultItem[]> {
   const response = await fetchClient.post<{
     query: string
@@ -503,7 +509,7 @@ export async function callValidateApi(
     project_id: projectId,
     top_k: topK,
     candidates,
-  })
+  }, { signal })
 
   return response.data?.results || []
 }
@@ -568,6 +574,8 @@ interface SearchMediaParams {
   topK?: number
   onProgress?: (stage: SearchMediaStage, completedSteps: number, totalSteps: number) => void
   onIndexingProgress?: (resolvedCount: number, totalCount: number, failedCount: number) => void
+  signal?: AbortSignal
+  checkCancelled?: () => void
 }
 
 interface SearchMediaResult {
@@ -595,8 +603,9 @@ async function ensureSearchMediaIndexed(params: {
   mediaItems: UnifiedMediaItemData[]
   ensureMediaIndexing: (id: string) => Promise<unknown>
   onIndexingProgress?: (resolvedCount: number, totalCount: number, failedCount: number) => void
+  checkCancelled?: () => void
 }): Promise<void> {
-  const { projectId, mediaItems, ensureMediaIndexing, onIndexingProgress } = params
+  const { projectId, mediaItems, ensureMediaIndexing, onIndexingProgress, checkCancelled } = params
   const indexableItems = mediaItems.filter(
     (item) => item.mediaType === 'video' || item.mediaType === 'image',
   )
@@ -625,6 +634,7 @@ async function ensureSearchMediaIndexed(params: {
   onIndexingProgress?.(0, targetIds.length, 0)
 
   const results = await Promise.allSettled(targetIds.map(async (mediaId) => {
+    checkCancelled?.()
     try {
       return await ensureMediaIndexing(mediaId)
     } catch (error) {
@@ -653,6 +663,8 @@ export async function searchMedia({
   topK = RERANK_TOP_K,
   onProgress,
   onIndexingProgress,
+  signal,
+  checkCancelled,
 }: SearchMediaParams): Promise<SearchMediaResult> {
   const normalizedTopK = normalizeSearchTopK(topK)
   const totalSteps = 4
@@ -666,13 +678,16 @@ export async function searchMedia({
   }
 
   try {
+    checkCancelled?.()
     onProgress?.('indexing', 0, totalSteps)
     await ensureSearchMediaIndexed({
       projectId,
       mediaItems,
       ensureMediaIndexing,
       onIndexingProgress,
+      checkCancelled,
     })
+    checkCancelled?.()
     onProgress?.('indexing', 1, totalSteps)
 
     onProgress?.('retrieval', 1, totalSteps)
@@ -684,8 +699,9 @@ export async function searchMedia({
       query: normalizedQuery,
       project_id: projectId,
       top_k: RETRIEVAL_TOP_K,
-    })
+    }, { signal })
 
+    checkCancelled?.()
     const retrievalResults = response.data?.results || []
     if (retrievalResults.length === 0) {
       return { results: [], error: '' }
@@ -699,7 +715,7 @@ export async function searchMedia({
       segment: result.segment,
     }))
 
-    const prepared = await prepareRerankCandidates(candidates, getMediaItem)
+    const prepared = await prepareRerankCandidates(candidates, getMediaItem, undefined, checkCancelled)
     if (prepared.length === 0) {
       return { results: [], error: t('aiPanel.search.rerankFailed') }
     }
@@ -710,8 +726,10 @@ export async function searchMedia({
       projectId,
       prepared,
       normalizedTopK,
+      signal,
     )
 
+    checkCancelled?.()
     if (rerankResults.length === 0) {
       return { results: [], error: t('aiPanel.search.rerankFailed') }
     }
@@ -740,7 +758,12 @@ export async function searchMedia({
       summary: result.summary,
       keywordMatches: result.keyword_matches,
     }))
-    const preparedValidationCandidates = await prepareValidateCandidates(validateCandidates, getMediaItem)
+    const preparedValidationCandidates = await prepareValidateCandidates(
+      validateCandidates,
+      getMediaItem,
+      undefined,
+      checkCancelled,
+    )
     if (preparedValidationCandidates.length === 0) {
       return { results: [], error: t('aiPanel.search.validationPrepareFailed') }
     }
@@ -751,8 +774,10 @@ export async function searchMedia({
       projectId,
       preparedValidationCandidates,
       normalizedTopK,
+      signal,
     )
     const validationMap = new Map(validationResults.map((result) => [result.point_id, result]))
+    checkCancelled?.()
     if (
       validationResults.length !== reranked.length
       || reranked.some((result) => !validationMap.has(result.point_id))

@@ -14,6 +14,10 @@ import {
   createRuntimeI18nMessage,
   type IndexingRuntimeState,
 } from './indexingRuntime'
+import {
+  registerToolCancellationHook,
+  unregisterToolCancellationHook,
+} from './cancellation'
 
 const DEFAULT_TOP_K = 5
 const MIN_TOP_K = 1
@@ -27,6 +31,8 @@ export interface SearchMediaExecutionState extends IndexingRuntimeState {
   totalSteps: number
   completedSteps: number
   active: boolean
+  canCancel: boolean
+  cancelled: boolean
   message: string
 }
 
@@ -48,30 +54,19 @@ function startExecutionState(toolCallId: string, query: string): void {
     indexingFailedCount: 0,
     indexingStatus: createRuntimeI18nMessage('aiPanel.toolsState.indexingPreparing'),
     active: true,
+    canCancel: true,
+    cancelled: false,
     message: '正在补齐素材索引…',
   }
 }
 
 function updateExecutionState(
   toolCallId: string,
-  stage: SearchMediaStage,
-  completedSteps: number,
-  totalSteps: number,
+  patch: Partial<SearchMediaExecutionState>,
 ): void {
   const current = activeExecutions[toolCallId]
   if (!current) return
-
-  const messageByStage: Record<SearchMediaStage, string> = {
-    indexing: '正在补齐素材索引…',
-    retrieval: '正在召回候选素材…',
-    rerank: '正在重排候选结果…',
-    validate: '正在校验命中结果…',
-  }
-
-  current.currentStage = stage
-  current.completedSteps = completedSteps
-  current.totalSteps = totalSteps
-  current.message = messageByStage[stage]
+  Object.assign(current, patch)
 }
 
 function updateIndexingProgress(
@@ -97,6 +92,7 @@ function updateIndexingProgress(
 
 function finishExecutionState(toolCallId: string): void {
   delete activeExecutions[toolCallId]
+  unregisterToolCancellationHook('search_media', toolCallId)
 }
 
 function normalizeTopK(value: unknown): number {
@@ -169,6 +165,28 @@ export async function executeSearchMedia(
   }
 
   try {
+    const abortController = toolCallId ? new AbortController() : null
+    let cancelled = false
+    const checkCancelled = () => {
+      if (cancelled) {
+        throw new DOMException('Search media execution aborted', 'AbortError')
+      }
+    }
+
+    if (toolCallId && abortController) {
+      registerToolCancellationHook('search_media', toolCallId, () => {
+        cancelled = true
+        abortController.abort()
+        updateExecutionState(toolCallId, {
+          cancelled: true,
+          canCancel: false,
+          active: false,
+          message: '正在停止素材检索…',
+          indexingStatus: createRuntimeI18nMessage('aiPanel.toolsState.indexingStopping'),
+        })
+      })
+    }
+
     const { results, error } = await searchMedia({
       query,
       projectId: unifiedStore.projectId,
@@ -179,13 +197,32 @@ export async function executeSearchMedia(
       topK,
       onProgress: (stage, completedSteps, totalSteps) => {
         if (!toolCallId) return
-        updateExecutionState(toolCallId, stage, completedSteps, totalSteps)
+        const messageByStage: Record<SearchMediaStage, string> = {
+          indexing: '正在补齐素材索引…',
+          retrieval: '正在召回候选素材…',
+          rerank: '正在重排候选结果…',
+          validate: '正在校验命中结果…',
+        }
+        updateExecutionState(toolCallId, {
+          currentStage: stage,
+          completedSteps,
+          totalSteps,
+          message: messageByStage[stage],
+        })
       },
       onIndexingProgress: (resolvedCount, totalCount, failedCount) => {
         if (!toolCallId) return
         updateIndexingProgress(toolCallId, resolvedCount, totalCount, failedCount)
       },
+      signal: abortController?.signal,
+      checkCancelled,
     })
+
+    if (cancelled) {
+      return logSearchMediaResult(
+        buildToolError('search_media', 'user_cancelled', '用户取消了本次素材检索'),
+      )
+    }
     const hasMissingValidation = results.some((item) => !item.validation_result)
 
     if (error || hasMissingValidation) {
@@ -211,6 +248,13 @@ export async function executeSearchMedia(
         `找到 ${normalizedResults.length} 个匹配素材。`,
       ),
     )
+  } catch (error) {
+    if (error instanceof DOMException && error.name === 'AbortError') {
+      return logSearchMediaResult(
+        buildToolError('search_media', 'user_cancelled', '用户取消了本次素材检索'),
+      )
+    }
+    throw error
   } finally {
     if (toolCallId) {
       finishExecutionState(toolCallId)

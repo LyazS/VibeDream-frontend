@@ -89,6 +89,7 @@ export enum RunStatus {
   PAUSED = 'paused',
   COMPLETED = 'completed',
   FAILED = 'failed',
+  CANCELLED = 'cancelled',
 }
 
 export interface PendingRun {
@@ -130,6 +131,11 @@ export interface InteractionResultRequest {
   interaction_id: string
   answer: string
   submitted_via: InteractionSubmittedVia
+}
+
+export interface CancelRunRequest {
+  reason: string
+  pending_tool_call_id?: string | null
 }
 
 export interface SessionSnapshot {

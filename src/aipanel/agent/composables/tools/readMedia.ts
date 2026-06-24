@@ -22,6 +22,10 @@ import {
   createRuntimeI18nMessage,
   type IndexingRuntimeState,
 } from './indexingRuntime'
+import {
+  registerToolCancellationHook,
+  unregisterToolCancellationHook,
+} from './cancellation'
 
 const MAX_MEDIA_IDS = 10
 const MAX_WAIT_MS = 30 * 60 * 1000
@@ -70,8 +74,6 @@ interface ReadMediaItemController {
 }
 
 const activeExecutions = reactive<Record<string, ReadMediaExecutionState>>({})
-const cancellationHooks = new Map<string, () => Promise<void> | void>()
-
 export function useReadMediaExecutionState(toolCallId: string) {
   return computed(() => activeExecutions[toolCallId] ?? null)
 }
@@ -110,20 +112,7 @@ function updateExecutionState(
 
 function finishExecutionState(toolCallId: string): void {
   delete activeExecutions[toolCallId]
-  cancellationHooks.delete(toolCallId)
-}
-
-export async function cancelReadMediaExecution(toolCallId: string): Promise<void> {
-  const hook = cancellationHooks.get(toolCallId)
-  if (!hook) return
-  await hook()
-}
-
-function registerCancellationHook(
-  toolCallId: string,
-  hook: () => Promise<void> | void,
-): void {
-  cancellationHooks.set(toolCallId, hook)
+  unregisterToolCancellationHook('read_media', toolCallId)
 }
 
 function isReadMediaField(value: unknown): value is ReadMediaField {
@@ -657,7 +646,7 @@ export async function executeReadMedia(
 
     if (toolCallId) {
       startExecutionState(toolCallId, mediaIds, fields)
-      registerCancellationHook(toolCallId, () => {
+      registerToolCancellationHook('read_media', toolCallId, () => {
         cancelled = true
         updateExecutionState(toolCallId, {
           cancelled: true,

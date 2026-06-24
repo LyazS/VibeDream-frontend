@@ -28,6 +28,7 @@ import {
   isUserMessage,
 } from '@/aipanel/agent/types'
 import { useAgentToolRuntime } from '@/aipanel/agent/composables/useAgentToolRuntime'
+import { cancelToolExecution } from '@/aipanel/agent/composables/tools/cancellation'
 import { indexedDBService } from '@/core/storage/IndexedDBService'
 
 export interface SessionInfo {
@@ -45,6 +46,12 @@ interface SessionData {
   updatedAt: string
 }
 
+interface ActiveToolExecution {
+  runId: string
+  toolCallId: string
+  toolName: string
+}
+
 class AgentRunFailedError extends Error {
   constructor(
     message: string,
@@ -57,8 +64,27 @@ class AgentRunFailedError extends Error {
   }
 }
 
+class AgentRunAbortedError extends Error {
+  constructor(message = 'Agent 运行已停止') {
+    super(message)
+    this.name = 'AgentRunAbortedError'
+  }
+}
+
 function isAgentRunFailedError(error: unknown): error is AgentRunFailedError {
   return error instanceof AgentRunFailedError
+}
+
+function isAgentRunAbortedError(error: unknown): error is AgentRunAbortedError {
+  return error instanceof AgentRunAbortedError
+}
+
+function isAbortError(error: unknown): boolean {
+  return (
+    error instanceof DOMException
+      ? error.name === 'AbortError'
+      : error instanceof Error && error.name === 'AbortError'
+  )
 }
 
 export class SessionManager {
@@ -77,6 +103,9 @@ export class SessionManager {
   private currentAbortController: AbortController | null = null
   private pendingUserMessage: AgentMessage | null = null
   private agentToolRuntime: ReturnType<typeof useAgentToolRuntime>
+  private activeToolExecution: ActiveToolExecution | null = null
+  private abandonedToolCallIds = new Set<string>()
+  private activeRunId: string | null = null
 
   constructor() {
     this.agentToolRuntime = useAgentToolRuntime()
@@ -94,6 +123,9 @@ export class SessionManager {
     this.isSending.value = false
     this.currentAbortController = null
     this.pendingUserMessage = null
+    this.activeToolExecution = null
+    this.activeRunId = null
+    this.abandonedToolCallIds.clear()
     this.sessionError.value = null
     this.clearPendingInterrupt()
   }
@@ -109,13 +141,39 @@ export class SessionManager {
     return this.completedMessageIds.value.includes(messageId)
   }
 
-  abortCurrentMessage(): void {
+  async abortCurrentMessage(): Promise<void> {
+    const activeToolExecution = this.activeToolExecution
+    if (activeToolExecution) {
+      this.abandonedToolCallIds.add(activeToolExecution.toolCallId)
+      try {
+        await cancelToolExecution(activeToolExecution.toolName, activeToolExecution.toolCallId)
+      } catch (error) {
+        console.warn('取消前端工具执行失败:', error)
+      }
+    }
+
+    const sessionId = this.currentSessionId.value
+    const runId = activeToolExecution?.runId || this.activeRunId || this.pendingRunId.value
+    if (sessionId && runId) {
+      try {
+        await fetchClient.post(API_ENDPOINTS.cancelRun(sessionId, runId), {
+          reason: 'user_cancelled',
+          pending_tool_call_id: activeToolExecution?.toolCallId || null,
+        })
+      } catch (error) {
+        console.warn('取消后端 Agent run 失败:', error)
+      }
+    }
+
     if (this.currentAbortController) {
       this.currentAbortController.abort()
     }
     this.isSending.value = false
     this.currentAbortController = null
     this.pendingUserMessage = null
+    this.activeToolExecution = null
+    this.activeRunId = null
+    this.clearPendingInterrupt()
   }
 
   async handleSendMessage(message: string): Promise<void> {
@@ -150,6 +208,9 @@ export class SessionManager {
       await this.saveSessionToDB()
     } catch (error) {
       this.pendingUserMessage = null
+      if (isAgentRunAbortedError(error)) {
+        return
+      }
       if (isAgentRunFailedError(error) && !error.retryable) {
         this.clearPendingInterrupt()
       }
@@ -233,15 +294,22 @@ export class SessionManager {
   ): Promise<void> {
     this.currentAbortController = new AbortController()
 
-    await fetchClient.stream<AgentStreamEvent>(
-      'POST',
-      url,
-      async (event) => {
-        await this.handleStreamEvent(event, sessionId)
-      },
-      payload,
-      { signal: this.currentAbortController.signal },
-    )
+    try {
+      await fetchClient.stream<AgentStreamEvent>(
+        'POST',
+        url,
+        async (event) => {
+          await this.handleStreamEvent(event, sessionId)
+        },
+        payload,
+        { signal: this.currentAbortController.signal },
+      )
+    } catch (error) {
+      if (isAbortError(error)) {
+        throw new AgentRunAbortedError()
+      }
+      throw error
+    }
   }
 
   private async handleStreamEvent(event: AgentStreamEvent, sessionId: string): Promise<void> {
@@ -249,6 +317,7 @@ export class SessionManager {
 
     switch (event.type) {
       case 'run.started':
+        this.activeRunId = event.run_id
         break
       case 'message.delta':
         this.applyMessageDelta(event)
@@ -263,9 +332,11 @@ export class SessionManager {
         if (event.message_id) {
           this.markMessageCompleted(event.message_id)
         }
+        this.activeRunId = null
         this.clearPendingInterrupt()
         break
       case 'run.failed':
+        this.activeRunId = null
         this.clearPendingInterrupt()
         throw new AgentRunFailedError(
           event.detail || event.error_code || 'Agent 运行失败',
@@ -350,11 +421,21 @@ export class SessionManager {
     const previousInterrupt = interrupt
     const previousRunId = runId
     this.setPendingInterrupt(runId, interrupt)
+    this.activeToolExecution = {
+      runId,
+      toolCallId: interrupt.tool_call_id,
+      toolName: interrupt.tool_name,
+    }
 
     try {
       const result = await this.agentToolRuntime.executeTool(interrupt.tool_name, interrupt.args, {
         toolCallId: interrupt.tool_call_id,
       })
+      if (this.abandonedToolCallIds.has(interrupt.tool_call_id)) {
+        this.abandonedToolCallIds.delete(interrupt.tool_call_id)
+        this.clearPendingInterrupt()
+        return
+      }
       const payload: ToolResultRequest = {
         tool_call_id: interrupt.tool_call_id,
         output: result.success ? result.output : `工具执行失败: ${result.error}`,
@@ -368,12 +449,21 @@ export class SessionManager {
         sessionId,
       )
     } catch (error) {
+      if (isAgentRunAbortedError(error)) {
+        this.abandonedToolCallIds.delete(interrupt.tool_call_id)
+        this.clearPendingInterrupt()
+        return
+      }
       if (isAgentRunFailedError(error) && !error.retryable) {
         this.clearPendingInterrupt()
       } else {
         this.setPendingInterrupt(previousRunId, previousInterrupt)
       }
       throw error
+    } finally {
+      if (this.activeToolExecution?.toolCallId === interrupt.tool_call_id) {
+        this.activeToolExecution = null
+      }
     }
   }
 
@@ -407,6 +497,10 @@ export class SessionManager {
         sessionId,
       )
     } catch (error) {
+      if (isAgentRunAbortedError(error)) {
+        this.clearPendingInterrupt()
+        return
+      }
       if (isAgentRunFailedError(error) && !error.retryable) {
         this.clearPendingInterrupt()
       } else {
@@ -422,6 +516,7 @@ export class SessionManager {
   }
 
   private setPendingInterrupt(runId: string, interrupt: PendingInterrupt): void {
+    this.activeRunId = runId
     this.pendingRunId.value = runId
     this.pendingInterrupt.value = interrupt
     this.pendingInteraction.value = isInteractiveInterrupt(interrupt) ? interrupt : null
@@ -446,6 +541,9 @@ export class SessionManager {
       await this.resumePendingInteraction(sessionId, answer, 'option')
       await this.saveSessionToDB()
     } catch (error) {
+      if (isAgentRunAbortedError(error)) {
+        return
+      }
       this.sessionError.value = error instanceof Error ? error.message : '发送消息失败'
       throw error instanceof Error ? error : new Error('发送消息失败')
     } finally {
@@ -465,6 +563,9 @@ export class SessionManager {
       await this.resumePendingInteraction(sessionId, answer, 'custom_input')
       await this.saveSessionToDB()
     } catch (error) {
+      if (isAgentRunAbortedError(error)) {
+        return
+      }
       this.sessionError.value = error instanceof Error ? error.message : '发送消息失败'
       throw error instanceof Error ? error : new Error('发送消息失败')
     } finally {

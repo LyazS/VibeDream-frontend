@@ -1,4 +1,5 @@
 import type {
+  CancelRunRequest,
   InteractionResultRequest,
   SessionSnapshot,
   StartRunRequest,
@@ -9,6 +10,8 @@ export const API_ENDPOINTS = {
   createSession: '/api/agent/sessions',
   sessionSnapshot: (sessionId: string) => `/api/agent/sessions/${sessionId}`,
   startRun: (sessionId: string) => `/api/agent/sessions/${sessionId}/runs`,
+  cancelRun: (sessionId: string, runId: string) =>
+    `/api/agent/sessions/${sessionId}/runs/${runId}/cancel`,
   submitToolResult: (sessionId: string, runId: string) =>
     `/api/agent/sessions/${sessionId}/runs/${runId}/tool-results`,
   submitInteractionResult: (sessionId: string, runId: string) =>
@@ -27,6 +30,8 @@ export type StartRunPayload = StartRunRequest
 export type SubmitToolResultPayload = ToolResultRequest
 
 export type SubmitInteractionResultPayload = InteractionResultRequest
+
+export type CancelRunPayload = CancelRunRequest
 
 export interface ApiError {
   detail: string

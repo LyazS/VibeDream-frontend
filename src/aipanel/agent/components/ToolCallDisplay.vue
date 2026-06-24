@@ -9,12 +9,12 @@
         </div>
       </div>
       <button
-        v-if="canCancelReadMedia"
+        v-if="canCancelToolExecution"
         type="button"
         class="tool-stop-button"
         :title="t('aiPanel.toolsState.stop')"
         :aria-label="t('aiPanel.toolsState.stop')"
-        @click.stop="handleCancelReadMedia"
+        @click.stop="handleCancelToolExecution"
       >
         <component :is="IconComponents.STOP" size="12px" />
       </button>
@@ -50,12 +50,14 @@ import { IconComponents } from '@/constants/iconComponents'
 import type { ToolCallPart } from '../types'
 import IndexingRuntimeCard from './IndexingRuntimeCard.vue'
 import {
-  cancelReadMediaExecution,
   useReadMediaExecutionState,
 } from '../composables/tools/readMedia'
 import {
   useSearchMediaExecutionState,
 } from '../composables/tools/searchMedia'
+import {
+  cancelToolExecution,
+} from '../composables/tools/cancellation'
 
 const props = defineProps<{
   item: ToolCallPart
@@ -69,12 +71,25 @@ const readMediaExecutionState = useReadMediaExecutionState(props.item.tool_call_
 const searchMediaExecutionState = useSearchMediaExecutionState(props.item.tool_call_id)
 const progressState = computed(() => readMediaExecutionState.value ?? searchMediaExecutionState.value)
 
-const canCancelReadMedia = computed(
-  () =>
+const canCancelToolExecution = computed(() => {
+  if (
     props.item.tool_name === 'read_media'
     && !!readMediaExecutionState.value?.active
-    && !!readMediaExecutionState.value?.canCancel,
-)
+    && !!readMediaExecutionState.value?.canCancel
+  ) {
+    return true
+  }
+
+  if (
+    props.item.tool_name === 'search_media'
+    && !!searchMediaExecutionState.value?.active
+    && !!searchMediaExecutionState.value?.canCancel
+  ) {
+    return true
+  }
+
+  return false
+})
 const progressPercent = computed(() => {
   const readState = readMediaExecutionState.value
   if (readState) {
@@ -120,8 +135,8 @@ const toggleExpand = () => {
   isExpanded.value = !isExpanded.value
 }
 
-const handleCancelReadMedia = async () => {
-  await cancelReadMediaExecution(props.item.tool_call_id)
+const handleCancelToolExecution = async () => {
+  await cancelToolExecution(props.item.tool_name, props.item.tool_call_id)
 }
 </script>
 
