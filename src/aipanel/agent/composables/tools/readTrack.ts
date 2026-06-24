@@ -1,6 +1,6 @@
 /**
  * read_track 工具实现
- * 读取轨道上的时间轴项目列表，返回 XML
+ * 读取轨道上的时间轴项目列表，返回 JSON envelope
  */
 
 import { useUnifiedStore } from '@/core/unifiedStore'
@@ -8,20 +8,19 @@ import { getTimelineItemsByTrack } from '@/core/utils/timelineSearchUtils'
 import { framesToTimecode } from '@/core/utils/timeUtils'
 import type { ToolDefinition } from '../core/toolTypes'
 import { isValidAgentToolTimecode, parseAgentToolTimecode } from './utils/timecode'
-import { buildXmlAttributes, escapeXmlText } from './utils/xml'
+import { buildToolError, buildToolSuccess } from './utils/result'
 
 /**
  * 轨道上的时间轴项目信息
  */
 interface TrackItemInfo {
-  /** 时间轴项目ID */
-  id: string
-  /** 时间轴开始时间 */
+  clipId: string
+  mediaId?: string
+  name: string
   start: string
-  /** 时间轴结束时间 */
   end: string
-  /** 媒体类型 */
-  type: string
+  duration: string
+  mediaType: string
 }
 
 /**
@@ -33,13 +32,17 @@ interface TrackItemInfo {
  * @param args.trackId - 轨道ID
  * @param args.startTime - 筛选开始时间（时间码格式），只返回此时间之后的片段
  * @param args.endTime - 筛选结束时间（时间码格式），只返回此时间之前的片段
- * @returns XML 格式的轨道项目列表
+ * @returns JSON 格式的轨道项目列表
  */
-export async function executeReadTrack(args: Record<string, any>): Promise<string> {
+export async function executeReadTrack(args: Record<string, any>) {
   const { trackId, startTime, endTime } = args
 
   if (!trackId || typeof trackId !== 'string') {
-    return '<error>trackId 是必填项，且必须是字符串。</error>'
+    return buildToolError(
+      'read_track',
+      'invalid_arguments',
+      'trackId 是必填项，且必须是字符串。',
+    )
   }
 
   try {
@@ -47,7 +50,12 @@ export async function executeReadTrack(args: Record<string, any>): Promise<strin
     const track = store.getTrack(trackId)
 
     if (!track) {
-      return `<error>未找到 ID "${escapeXmlText(trackId)}" 的轨道。请使用 list_tracks 查看正确的轨道 ID。</error>`
+      return buildToolError(
+        'read_track',
+        'track_not_found',
+        `未找到 ID "${trackId}" 的轨道。请使用 list_tracks 查看正确的轨道 ID。`,
+        { trackId },
+      )
     }
 
     const allTrackItems = getTimelineItemsByTrack(trackId, store.timelineItems || [])
@@ -55,7 +63,12 @@ export async function executeReadTrack(args: Record<string, any>): Promise<strin
     let filteredItems = allTrackItems
     if (startTime || endTime) {
       if ((startTime && !isValidAgentToolTimecode(startTime)) || (endTime && !isValidAgentToolTimecode(endTime))) {
-        return '<error>startTime 或 endTime 不是合法的时间码，格式应为 HH:MM:SS+FF。</error>'
+        return buildToolError(
+          'read_track',
+          'invalid_timecode',
+          'startTime 或 endTime 不是合法的时间码，格式应为 HH:MM:SS+FF。',
+          { startTime, endTime },
+        )
       }
 
       const startFrames = startTime ? parseAgentToolTimecode(startTime) : 0
@@ -69,39 +82,39 @@ export async function executeReadTrack(args: Record<string, any>): Promise<strin
     }
 
     const itemInfos: TrackItemInfo[] = filteredItems.map((item) => ({
-      id: item.id,
+      clipId: item.id,
+      mediaId: item.mediaItemId || undefined,
+      name: item.id,
       start: framesToTimecode(item.timeRange.timelineStartTime),
       end: framesToTimecode(item.timeRange.timelineEndTime),
-      type: item.mediaType,
+      duration: framesToTimecode(item.timeRange.timelineEndTime - item.timeRange.timelineStartTime),
+      mediaType: item.mediaType,
     }))
 
-    const rootAttributes = buildXmlAttributes([
-      ['track_id', trackId],
-      ['total', itemInfos.length],
-      ['filter_start', startTime],
-      ['filter_end', endTime],
-    ])
+    const filter =
+      startTime || endTime
+        ? {
+            startTime: startTime || null,
+            endTime: endTime || null,
+          }
+        : undefined
 
-    if (itemInfos.length === 0) {
-      return `<read_track ${rootAttributes} />`
-    }
-
-    const lines: string[] = [`<read_track ${rootAttributes}>`]
-    for (const item of itemInfos) {
-      lines.push(
-        `  <item ${buildXmlAttributes([
-          ['id', item.id],
-          ['start', item.start],
-          ['end', item.end],
-          ['type', item.type],
-        ])} />`,
-      )
-    }
-    lines.push('</read_track>')
-
-    return lines.join('\n')
+    return buildToolSuccess(
+      'read_track',
+      {
+        trackId: track.id,
+        clips: itemInfos,
+        total: itemInfos.length,
+        filter,
+      },
+      `${track.id} 上共有 ${itemInfos.length} 个片段。`,
+    )
   } catch (error: any) {
-    return `<error>${escapeXmlText(error.message)}</error>`
+    return buildToolError(
+      'read_track',
+      'internal_error',
+      error instanceof Error ? error.message : String(error),
+    )
   }
 }
 

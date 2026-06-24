@@ -6,7 +6,7 @@
 import { useUnifiedStore } from '@/core/unifiedStore'
 import type { UnifiedMediaItemData, UnifiedMediaIndexMetadata } from '@/core/mediaitem/types'
 import type { ToolDefinition } from '../core/toolTypes'
-import { buildXmlAttributes, escapeXmlText } from './utils/xml'
+import { buildToolError, buildToolSuccess } from './utils/result'
 
 /**
  * 虚拟路径条目接口
@@ -22,13 +22,6 @@ interface VirtualEntry {
   mediaItem?: UnifiedMediaItemData
 }
 
-interface ShotOutlineItem {
-  index: number
-  title: string
-}
-
-const SHOT_OUTLINE_HEAD_COUNT = 2
-const SHOT_OUTLINE_TAIL_COUNT = 1
 const FALLBACK_MEDIA_TAG = 'media'
 
 function getCompletedIndexingMetadata(mediaItem?: UnifiedMediaItemData): UnifiedMediaIndexMetadata | undefined {
@@ -48,93 +41,34 @@ function isUnifiedMediaItemData(value: unknown): value is UnifiedMediaItemData {
   return 'id' in value && 'name' in value && 'mediaType' in value
 }
 
-function buildShotOutline(
-  indexing: Extract<UnifiedMediaIndexMetadata, { mediaKind: 'video' }>,
-): ShotOutlineItem[] {
-  const titledShots = (indexing.segmentSummaries || [])
-    .filter((segment) => typeof segment.title === 'string' && segment.title.trim())
-    .map((segment) => ({
-      index: segment.segmentIndex,
-      title: segment.title!.trim(),
-    }))
-
-  if (titledShots.length <= SHOT_OUTLINE_HEAD_COUNT + SHOT_OUTLINE_TAIL_COUNT) {
-    return titledShots
-  }
-
-  const head = titledShots.slice(0, SHOT_OUTLINE_HEAD_COUNT)
-  const tail = titledShots.slice(-SHOT_OUTLINE_TAIL_COUNT)
-  const dedupedTail = tail.filter(
-    (tailItem) => !head.some((headItem) => headItem.index === tailItem.index),
-  )
-
-  return [...head, ...dedupedTail]
-}
-
-function formatDirectoryEntry(entry: VirtualEntry): string {
-  const attrs = buildXmlAttributes([['id', entry.id]])
-  return `<dir ${attrs}>${escapeXmlText(entry.name)}</dir>`
-}
-
-function getMediaTagName(mediaItem?: UnifiedMediaItemData): string {
-  const mediaType = mediaItem?.mediaType
-  if (mediaType === 'video' || mediaType === 'image' || mediaType === 'audio' || mediaType === 'text') {
-    return mediaType
-  }
-
-  return FALLBACK_MEDIA_TAG
-}
-
-function formatMediaEntry(entry: VirtualEntry): string {
+function formatMediaEntry(entry: VirtualEntry): Record<string, any> {
   const mediaItem = entry.mediaItem
   const indexing = getCompletedIndexingMetadata(mediaItem)
-  const tagName = getMediaTagName(mediaItem)
-  const baseAttributes: Array<[string, string | number | undefined]> = [
-    ['id', entry.id],
-    ['name', entry.name],
-  ]
+  const baseEntry = {
+    type: 'media',
+    mediaId: entry.id,
+    name: entry.name,
+    mediaType: mediaItem?.mediaType || FALLBACK_MEDIA_TAG,
+  }
 
   if (!indexing) {
-    return `<${tagName} ${buildXmlAttributes(baseAttributes)} />`
+    return baseEntry
   }
 
   const title = indexing.summary?.title?.trim() || undefined
 
   if (indexing.mediaKind === 'image') {
-    return `<${tagName} ${buildXmlAttributes([
-      ...baseAttributes,
-      ['title', title],
-    ])} />`
-  }
-
-  const shotOutline = buildShotOutline(indexing)
-  const mediaAttributes = buildXmlAttributes([
-    ...baseAttributes,
-    ['title', title],
-    ['shots', indexing.segmentCount],
-  ])
-
-  if (shotOutline.length === 0) {
-    return `<${tagName} ${mediaAttributes} />`
-  }
-
-  const totalShots = indexing.segmentCount ?? shotOutline.length
-  const shouldShowEllipsis = totalShots > shotOutline.length
-  const lines: string[] = [`<${tagName} ${mediaAttributes}>`]
-
-  for (let i = 0; i < shotOutline.length; i++) {
-    const shot = shotOutline[i]
-    const isBeforeTail = shouldShowEllipsis && i === SHOT_OUTLINE_HEAD_COUNT
-    if (isBeforeTail) {
-      lines.push(`  <ellipsis>...</ellipsis>`)
+    return {
+      ...baseEntry,
+      title,
     }
-    lines.push(
-      `  <shot ${buildXmlAttributes([['index', shot.index]])}>${escapeXmlText(shot.title)}</shot>`,
-    )
   }
 
-  lines.push(`</${tagName}>`)
-  return lines.join('\n')
+  return {
+    ...baseEntry,
+    title,
+    shots: indexing.segmentCount,
+  }
 }
 
 /**
@@ -309,12 +243,7 @@ function buildPathName(dirId: string): string {
   }
 }
 
-function logListMediaResult(
-  filePath: string,
-  offset: number,
-  limit: number,
-  result: string,
-): string {
+function logListMediaResult(result: Record<string, any>) {
   console.log('[list_media] result', result)
   return result
 }
@@ -330,14 +259,16 @@ function logListMediaResult(
  * @param args.filePath - 前端虚拟目录路径，如 '/视频/'
  * @param args.offset - 从第几个条目开始显示（1-indexed，默认为1）
  * @param args.limit - 最多显示的条目数（默认为2000）
- * @returns XML 格式的目录内容
+ * @returns JSON 格式的目录内容
  */
-export async function executeListMedia(args: Record<string, any>): Promise<string> {
+export async function executeListMedia(args: Record<string, any>) {
     const { filePath, offset = 1, limit = 2000 } = args
 
     try {
       if (typeof filePath !== 'string' || !filePath.trim()) {
-        return logListMediaResult(filePath ?? '', offset, limit, '<error>filePath 是必填项，且必须是字符串。</error>')
+        return logListMediaResult(
+          buildToolError('list_media', 'invalid_arguments', 'filePath 是必填项，且必须是字符串。'),
+        )
       }
 
       // 1. 解析 ID 路径，获取对应的目录ID
@@ -345,10 +276,12 @@ export async function executeListMedia(args: Record<string, any>): Promise<strin
 
       if (!dirId) {
         return logListMediaResult(
-          filePath,
-          offset,
-          limit,
-          `<error>未找到路径 ${escapeXmlText(filePath)} 对应的目录。</error>`,
+          buildToolError(
+            'list_media',
+            'not_found',
+            `未找到路径 ${filePath} 对应的目录。`,
+            { filePath },
+          ),
         )
       }
 
@@ -362,10 +295,12 @@ export async function executeListMedia(args: Record<string, any>): Promise<strin
       const totalEntries = entries.length
       if (offset > totalEntries) {
         return logListMediaResult(
-          filePath,
-          offset,
-          limit,
-          `<error>offset=${offset} 超出范围。当前目录共有 ${totalEntries} 个条目。</error>`,
+          buildToolError(
+            'list_media',
+            'invalid_arguments',
+            `offset=${offset} 超出范围。当前目录共有 ${totalEntries} 个条目。`,
+            { offset, total: totalEntries },
+          ),
         )
       }
 
@@ -374,44 +309,44 @@ export async function executeListMedia(args: Record<string, any>): Promise<strin
       const endIdx = Math.min(startIdx + limit, totalEntries)
       const pagedEntries = entries.slice(startIdx, endIdx)
 
-      // 6. 构建条目列表（XML 格式，避免 AI 误解 ID 格式）
-      const entryLines: string[] = []
-      for (const entry of pagedEntries) {
-        if (entry.type === 'directory') {
-          entryLines.push(formatDirectoryEntry(entry))
-        } else {
-          entryLines.push(formatMediaEntry(entry))
-        }
-      }
+      // 6. 构建条目列表（JSON 结构，保留稳定 ID 和分页信息）
+      const normalizedEntries = pagedEntries.map((entry) =>
+        entry.type === 'directory'
+          ? {
+              type: 'directory',
+              id: entry.id,
+              name: entry.name,
+            }
+          : formatMediaEntry(entry),
+      )
 
-      // 7. 构建 XML 格式输出
       const pathName = buildPathName(dirId) // 从 ID 路径构建名称路径
-      const outputLines: string[] = [
-        `<path>${filePath}</path>`,
-        `<path_name>${pathName}</path_name>`,
-        `<entries>`,
-        ...entryLines,
-        `</entries>`
-      ]
-
-      // 8. 添加分页提示
       const hasMore = endIdx < totalEntries
-      if (hasMore) {
-        outputLines.push(
-          `(Showing ${pagedEntries.length} of ${totalEntries} entries. ` +
-          `Use 'offset' parameter to read beyond entry ${endIdx})`
-        )
-      } else {
-        outputLines.push(`(${totalEntries} entries)`)
-      }
-
-      return logListMediaResult(filePath, offset, limit, outputLines.join('\n'))
+      return logListMediaResult(
+        buildToolSuccess(
+          'list_media',
+          {
+            path: filePath,
+            pathName,
+            entries: normalizedEntries,
+            page: {
+              offset,
+              limit,
+              total: totalEntries,
+              hasMore,
+              nextOffset: hasMore ? endIdx + 1 : null,
+            },
+          },
+          `当前目录共有 ${totalEntries} 个条目，本次返回 ${pagedEntries.length} 个。`,
+        ),
+      )
     } catch (error: any) {
       return logListMediaResult(
-        filePath,
-        offset,
-        limit,
-        `<error>${escapeXmlText(error.message)}</error>`,
+        buildToolError(
+          'list_media',
+          'internal_error',
+          error instanceof Error ? error.message : String(error),
+        ),
       )
     }
   }

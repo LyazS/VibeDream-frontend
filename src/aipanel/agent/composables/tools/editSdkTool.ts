@@ -5,6 +5,7 @@
 
 import { useEditSDK } from '../useEditSDK'
 import type { ToolDefinition } from '../core/toolTypes'
+import { buildToolError, buildToolSuccess } from './utils/result'
 
 /**
  * edit_sdk 工具执行函数
@@ -18,22 +19,32 @@ import type { ToolDefinition } from '../core/toolTypes'
  * @param args.script - 要执行的 JavaScript 代码
  * @returns 执行结果报告
  */
-export async function executeEditSDK(args: Record<string, any>): Promise<string> {
+export async function executeEditSDK(args: Record<string, any>) {
   const { script } = args
 
   try {
-    // 参数验证
     if (!script || typeof script !== 'string') {
-      return '错误: script 参数必须是有效的 JavaScript 代码字符串'
+      return buildToolError(
+        'edit_sdk',
+        'invalid_arguments',
+        'script 参数必须是有效的 JavaScript 代码字符串',
+      )
     }
 
-    // 执行脚本
     const editSDK = useEditSDK()
     const result = await editSDK.executeUserScript(script)
 
-    return result
+    return buildToolSuccess(
+      'edit_sdk',
+      { result },
+      '脚本执行完成。',
+    )
   } catch (error: any) {
-    return `执行错误: ${error.message}`
+    return buildToolError(
+      'edit_sdk',
+      'internal_error',
+      error instanceof Error ? error.message : String(error),
+    )
   }
 }
 

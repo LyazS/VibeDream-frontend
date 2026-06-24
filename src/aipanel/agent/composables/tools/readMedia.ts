@@ -1,10 +1,11 @@
 /**
  * read_media 工具实现
- * 按字段读取素材详情，必要时触发索引并等待完成，最终返回 XML。
+ * 按字段读取素材详情，必要时触发索引并等待完成，最终返回 JSON envelope。
  */
 
 import { computed, reactive } from 'vue'
 import type { ResourceEvent } from '@/core/jobs/ResourceTypes'
+import { MediaItemQueries } from '@/core/mediaitem/queries'
 import { useUnifiedStore } from '@/core/unifiedStore'
 import { framesToTimecode } from '@/core/utils/timeUtils'
 import type {
@@ -15,7 +16,7 @@ import type {
   UnifiedVideoMediaIndexMetadata,
 } from '@/core/mediaitem/types'
 import type { ToolDefinition, ToolExecutionContext } from '../core/toolTypes'
-import { buildXmlAttributes, escapeXmlText } from './utils/xml'
+import { buildToolError, buildToolSuccess } from './utils/result'
 import {
   buildIndexingStatusMessage,
   createRuntimeI18nMessage,
@@ -26,7 +27,6 @@ const MAX_MEDIA_IDS = 10
 const MAX_WAIT_MS = 30 * 60 * 1000
 
 type ReadMediaField = 'basic' | 'summary' | 'segments'
-type ReadMediaOverallStatus = 'success' | 'partial_success' | 'failed'
 type ReadMediaItemStatus = 'success' | 'failed' | 'pending'
 type ReadMediaFailureReason =
   | 'not_found'
@@ -221,6 +221,22 @@ function formatDuration(duration?: number): string | undefined {
   return framesToTimecode(duration)
 }
 
+function getOriginalSize(mediaItem: UnifiedMediaItemData): { width?: number; height?: number } {
+  if (mediaItem.mediaType !== 'video' && mediaItem.mediaType !== 'image') {
+    return {}
+  }
+
+  const size = MediaItemQueries.getOriginalSize(mediaItem)
+  if (!size) {
+    return {}
+  }
+
+  return {
+    width: size.width,
+    height: size.height,
+  }
+}
+
 function getVideoMetadata(
   indexing?: UnifiedMediaIndexMetadata,
 ): UnifiedVideoMediaIndexMetadata | undefined {
@@ -233,134 +249,137 @@ function getImageMetadata(
   return indexing?.mediaKind === 'image' ? indexing : undefined
 }
 
-function buildBasicNode(mediaItem: UnifiedMediaItemData): string {
-  return `<basic ${buildXmlAttributes([
-    ['id', mediaItem.id],
-    ['name', mediaItem.name],
-    ['media_type', mediaItem.mediaType],
-    ['duration', formatDuration(mediaItem.duration)],
-  ])} />`
+function buildBasicData(mediaItem: UnifiedMediaItemData): Record<string, any> {
+  const base: Record<string, any> = {
+    name: mediaItem.name,
+  }
+
+  if (mediaItem.mediaType === 'video') {
+    const { width, height } = getOriginalSize(mediaItem)
+    return {
+      ...base,
+      width,
+      height,
+      duration: formatDuration(mediaItem.duration),
+    }
+  }
+
+  if (mediaItem.mediaType === 'image') {
+    const { width, height } = getOriginalSize(mediaItem)
+    return {
+      ...base,
+      width,
+      height,
+    }
+  }
+
+  if (mediaItem.mediaType === 'audio') {
+    return {
+      ...base,
+      duration: formatDuration(mediaItem.duration),
+    }
+  }
+
+  return base
 }
 
-function buildSummaryNode(indexing?: UnifiedMediaIndexMetadata): string | null {
+function buildSummaryData(indexing?: UnifiedMediaIndexMetadata): Record<string, any> | null {
   const summary = indexing?.summary
   if (!summary?.title && !summary?.summary) {
     return null
   }
 
-  const attrs = buildXmlAttributes([['title', summary?.title]])
-  const content = summary?.summary ? escapeXmlText(summary.summary) : ''
-  return `<summary${attrs ? ` ${attrs}` : ''}>${content}</summary>`
+  return {
+    title: summary?.title || undefined,
+    summary: summary?.summary || undefined,
+  }
 }
 
-function buildSegmentsNode(indexing?: UnifiedVideoMediaIndexMetadata): string | null {
+function buildSegmentsData(indexing?: UnifiedVideoMediaIndexMetadata): Array<Record<string, any>> | null {
   const segments = indexing?.segmentSummaries || []
   if (segments.length === 0) {
     return null
   }
 
-  const lines = [
-    `<segments ${buildXmlAttributes([['count', segments.length]])}>`,
-  ]
-  for (const segment of segments) {
-    const attrs = buildXmlAttributes([
-      ['index', segment.segmentIndex],
-      ['start', segment.startTimecode],
-      ['end', segment.endTimecode],
-      ['title', segment.title],
-    ])
-    lines.push(
-      `  <segment${attrs ? ` ${attrs}` : ''}>${escapeXmlText(segment.summary || '')}</segment>`,
-    )
-  }
-  lines.push('</segments>')
-  return lines.join('\n')
+  return segments.map((segment) => ({
+    index: segment.segmentIndex,
+    start: segment.startTimecode,
+    end: segment.endTimecode,
+    title: segment.title || undefined,
+    summary: segment.summary || undefined,
+  }))
 }
 
-function buildMediaNode(
+function buildMediaData(
   controller: ReadMediaItemController,
   fields: ReadMediaField[],
   context: ReadMediaToolContext,
-): string {
+): Record<string, any> {
   const { mediaItem, suggestedItem } = context.resolveMediaRequest(controller.requestedId)
   if (!mediaItem) {
-    return `<media ${buildXmlAttributes([
-      ['id', controller.requestedId],
-      ['status', 'failed'],
-      ['reason', controller.failureReason || 'not_found'],
-      ['suggested_id', controller.suggestedId || suggestedItem?.id],
-      ['message', controller.failureMessage],
-    ])} />`
+    return {
+      mediaId: controller.requestedId,
+      status: 'not_found',
+      error: {
+        code: controller.failureReason || 'media_not_found',
+        message: controller.failureMessage || '未找到素材',
+        details: {
+          suggestedId: controller.suggestedId || suggestedItem?.id,
+        },
+      },
+    }
   }
 
   const indexing = getIndexMetadata(mediaItem)
-  const lines = [
-    `<media ${buildXmlAttributes([
-      ['id', mediaItem.id],
-      ['status', controller.itemStatus === 'pending' ? 'failed' : controller.itemStatus],
-      ['media_type', mediaItem.mediaType],
-      ['index_status', getIndexStatus(mediaItem)],
-      ['reason', controller.itemStatus === 'failed' ? controller.failureReason : undefined],
-      ['message', controller.itemStatus === 'failed' ? controller.failureMessage : undefined],
-    ])}>`,
-  ]
+  const mediaData: Record<string, any> = {
+    mediaId: mediaItem.id,
+    status: controller.itemStatus === 'pending' ? 'failed' : 'found',
+    mediaType: mediaItem.mediaType,
+    indexStatus: getIndexStatus(mediaItem),
+  }
 
   if (fields.includes('basic')) {
-    lines.push(`  ${buildBasicNode(mediaItem)}`)
+    mediaData.basic = buildBasicData(mediaItem)
   }
 
   if (fields.includes('summary') && fieldSupported(mediaItem, 'summary')) {
-    const summaryNode = buildSummaryNode(
+    const summaryData = buildSummaryData(
       getVideoMetadata(indexing) || getImageMetadata(indexing),
     )
-    if (summaryNode) {
-      lines.push(`  ${summaryNode}`)
+    if (summaryData) {
+      mediaData.summary = summaryData.summary
+      if (summaryData.title) {
+        mediaData.title = summaryData.title
+      }
     }
   }
 
   if (fields.includes('segments') && fieldSupported(mediaItem, 'segments')) {
-    const segmentsNode = buildSegmentsNode(getVideoMetadata(indexing))
-    if (segmentsNode) {
-      lines.push(...segmentsNode.split('\n').map((line) => `  ${line}`))
+    const segmentsData = buildSegmentsData(getVideoMetadata(indexing))
+    if (segmentsData) {
+      mediaData.segments = segmentsData
     }
   }
 
-  lines.push('</media>')
-  return lines.join('\n')
+  if (controller.itemStatus === 'failed') {
+    mediaData.error = {
+      code: controller.failureReason || 'internal_error',
+      message: controller.failureMessage || '读取素材失败',
+    }
+  }
+
+  return mediaData
 }
 
-function buildResultXml(
+function buildResultData(
   controllers: ReadMediaItemController[],
   fields: ReadMediaField[],
   context: ReadMediaToolContext,
-  cancelled: boolean,
-): string {
-  const successCount = controllers.filter((item) => item.itemStatus === 'success').length
-  const failedCount = controllers.filter((item) => item.itemStatus === 'failed').length
-  const status: ReadMediaOverallStatus = successCount > 0 && failedCount > 0
-    ? 'partial_success'
-    : successCount > 0
-      ? 'success'
-      : 'failed'
-
-  const lines = [
-    `<read_media ${buildXmlAttributes([
-      ['status', status],
-      ['cancelled', cancelled],
-      ['fields', fields.join(',')],
-    ])}>`,
-  ]
-
-  for (const controller of controllers) {
-    lines.push(
-      ...buildMediaNode(controller, fields, context)
-        .split('\n')
-        .map((line) => `  ${line}`),
-    )
+): Record<string, any> {
+  const mediaItems = controllers.map((controller) => buildMediaData(controller, fields, context))
+  return {
+      mediaItems,
   }
-
-  lines.push('</read_media>')
-  return lines.join('\n')
 }
 
 function markFailures(
@@ -615,7 +634,7 @@ function waitForRelevantReadMediaSignal(params: {
 export async function executeReadMedia(
   args: Record<string, any>,
   context?: ToolExecutionContext,
-): Promise<string> {
+){
   try {
     const mediaIds = normalizeMediaIds(args.mediaIds)
     const fields = normalizeFields(args.fields)
@@ -689,11 +708,10 @@ export async function executeReadMedia(
       }
     }
 
-    const result = buildResultXml(
+    const result = buildResultData(
       controllers,
       fields,
       readMediaContext,
-      cancelled,
     )
 
     if (toolCallId) {
@@ -706,10 +724,14 @@ export async function executeReadMedia(
         ),
       })
     }
-    return result
+    return buildToolSuccess(
+      'read_media',
+      result,
+      `已返回 ${result.mediaItems.length} 个素材读取结果。`,
+    )
   } catch (error: any) {
     const message = error instanceof Error ? error.message : String(error)
-    return `<error>${escapeXmlText(message)}</error>`
+    return buildToolError('read_media', 'invalid_arguments', message)
   } finally {
     const toolCallId = context?.toolCallId
     if (toolCallId) {

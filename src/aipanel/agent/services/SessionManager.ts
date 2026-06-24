@@ -357,7 +357,7 @@ export class SessionManager {
       })
       const payload: ToolResultRequest = {
         tool_call_id: interrupt.tool_call_id,
-        output: result.success ? result.result : `工具执行失败: ${result.error}`,
+        output: result.success ? result.output : `工具执行失败: ${result.error}`,
         is_error: !result.success,
       }
 

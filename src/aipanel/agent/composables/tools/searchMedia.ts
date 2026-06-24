@@ -8,7 +8,7 @@ import { computed, reactive } from 'vue'
 import type { RetrievalResultItem, SearchMediaStage } from '../../services/mediaIndexService'
 import { searchMedia } from '../../services/mediaIndexService'
 import type { ToolDefinition, ToolExecutionContext } from '../core/toolTypes'
-import { buildXmlAttributes, escapeXmlText } from './utils/xml'
+import { buildToolError, buildToolSuccess } from './utils/result'
 import {
   buildIndexingStatusMessage,
   createRuntimeI18nMessage,
@@ -110,14 +110,6 @@ function normalizeTopK(value: unknown): number {
   return integer
 }
 
-function formatEvidenceNode(evidence: string | null): string | null {
-  if (!evidence) {
-    return null
-  }
-
-  return `<evidence>${escapeXmlText(evidence)}</evidence>`
-}
-
 function getValidationResult(item: RetrievalResultItem) {
   return item.validation_result
 }
@@ -128,89 +120,25 @@ function getEvidence(item: RetrievalResultItem): string | null {
   return reason || null
 }
 
-function formatVideoHit(item: RetrievalResultItem): string {
+function formatResult(item: RetrievalResultItem): Record<string, any> {
   const validationResult = getValidationResult(item)
-  const attrs = buildXmlAttributes([
-    ['media_item_id', item.media_item_id],
-    ['media_name', item.media_name],
-    ['score', item.score.toFixed(3)],
-    ['verdict', validationResult?.verdict],
-    ['segment_index', item.segment?.segment_index],
-    ['start_timecode', item.segment?.start_timecode],
-    ['end_timecode', item.segment?.end_timecode],
-  ])
-  const evidenceNode = formatEvidenceNode(getEvidence(item))
-
-  if (!evidenceNode) {
-    return `<video_hit${attrs ? ` ${attrs}` : ''}></video_hit>`
+  return {
+    type: item.media_kind,
+    mediaId: item.media_item_id,
+    mediaName: item.media_name,
+    verdict: validationResult?.verdict,
+    segment: item.segment
+      ? {
+          index: item.segment.segment_index,
+          start: item.segment.start_timecode,
+          end: item.segment.end_timecode,
+        }
+      : undefined,
+    evidence: getEvidence(item) || undefined,
   }
-
-  return [
-    `<video_hit${attrs ? ` ${attrs}` : ''}>`,
-    `  ${evidenceNode}`,
-    `</video_hit>`,
-  ].join('\n')
 }
 
-function formatImageHit(item: RetrievalResultItem): string {
-  const validationResult = getValidationResult(item)
-  const attrs = buildXmlAttributes([
-    ['media_item_id', item.media_item_id],
-    ['media_name', item.media_name],
-    ['score', item.score.toFixed(3)],
-    ['verdict', validationResult?.verdict],
-  ])
-  const evidenceNode = formatEvidenceNode(getEvidence(item))
-
-  if (!evidenceNode) {
-    return `<image_hit${attrs ? ` ${attrs}` : ''}></image_hit>`
-  }
-
-  return [
-    `<image_hit${attrs ? ` ${attrs}` : ''}>`,
-    `  ${evidenceNode}`,
-    `</image_hit>`,
-  ].join('\n')
-}
-
-function formatResult(item: RetrievalResultItem): string {
-  if (item.media_kind === 'video' && item.segment) {
-    return formatVideoHit(item)
-  }
-
-  return formatImageHit(item)
-}
-
-function buildSearchMediaXml(params: {
-  status: 'success' | 'failed'
-  query: string
-  requestedTopK: number
-  results: RetrievalResultItem[]
-  error?: string
-}): string {
-  const { status, query, requestedTopK, results, error } = params
-  const lines = [
-    `<search_media ${buildXmlAttributes([
-      ['status', status],
-      ['query', query],
-      ['requested_top_k', requestedTopK],
-      ['returned_results', results.length],
-    ])}>`,
-  ]
-
-  for (const item of results) {
-    lines.push(...formatResult(item).split('\n').map((line) => `  ${line}`))
-  }
-
-  if (error) {
-    lines.push(`  <error>${escapeXmlText(error)}</error>`)
-  }
-
-  lines.push(`</search_media>`)
-  return lines.join('\n')
-}
-
-function logSearchMediaResult(result: string): string {
+function logSearchMediaResult(result: Record<string, any>) {
   console.log('[search_media] result', result)
   return result
 }
@@ -218,30 +146,22 @@ function logSearchMediaResult(result: string): string {
 export async function executeSearchMedia(
   args: Record<string, any>,
   context?: ToolExecutionContext,
-): Promise<string> {
+){
   const query = typeof args.query === 'string' ? args.query.trim() : ''
   const topK = normalizeTopK(args.top_k)
   const toolCallId = context?.toolCallId
   if (!query) {
-    return logSearchMediaResult(buildSearchMediaXml({
-      status: 'failed',
-      query,
-      requestedTopK: topK,
-      results: [],
-      error: 'query must be a non-empty string',
-    }))
+    return logSearchMediaResult(
+      buildToolError('search_media', 'invalid_arguments', 'query must be a non-empty string'),
+    )
   }
 
   const unifiedStore = useUnifiedStore()
 
   if (!unifiedStore.projectId) {
-    return logSearchMediaResult(buildSearchMediaXml({
-      status: 'failed',
-      query,
-      requestedTopK: topK,
-      results: [],
-      error: '当前项目未初始化，无法检索素材',
-    }))
+    return logSearchMediaResult(
+      buildToolError('search_media', 'internal_error', '当前项目未初始化，无法检索素材'),
+    )
   }
 
   if (toolCallId) {
@@ -268,13 +188,29 @@ export async function executeSearchMedia(
     })
     const hasMissingValidation = results.some((item) => !item.validation_result)
 
-    return logSearchMediaResult(buildSearchMediaXml({
-      status: error || hasMissingValidation ? 'failed' : 'success',
-      query,
-      requestedTopK: topK,
-      results: error || hasMissingValidation ? [] : results,
-      error: error || (hasMissingValidation ? '搜索结果缺少校验信息' : undefined),
-    }))
+    if (error || hasMissingValidation) {
+      return logSearchMediaResult(
+        buildToolError(
+          'search_media',
+          'internal_error',
+          error || '搜索结果缺少校验信息',
+          { query, requestedTopK: topK },
+        ),
+      )
+    }
+
+    const normalizedResults = results.map(formatResult)
+    return logSearchMediaResult(
+      buildToolSuccess(
+        'search_media',
+        {
+          query,
+          requestedTopK: topK,
+          results: normalizedResults,
+        },
+        `找到 ${normalizedResults.length} 个匹配素材。`,
+      ),
+    )
   } finally {
     if (toolCallId) {
       finishExecutionState(toolCallId)

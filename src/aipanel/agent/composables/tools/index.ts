@@ -3,13 +3,25 @@
  * 负责工具的注册、查询和执行
  */
 
+import { addTrackTool } from './addTrack'
 import { listMediaTool } from './listMedia'
 import { listTracksTool } from './listTracks'
+import { insertClipTool } from './insertClip'
+import { moveClipTool } from './moveClip'
+import { moveTrackTool } from './moveTrack'
 import { readClipTool } from './readClip'
 import { readMediaTool } from './readMedia'
 import { readTrackTool } from './readTrack'
+import { removeClipTool } from './removeClip'
+import { removeTrackTool } from './removeTrack'
+import { renameTrackTool } from './renameTrack'
 import { searchMediaTool } from './searchMedia'
+import { setTrackMuteTool } from './setTrackMute'
+import { setTrackVisibilityTool } from './setTrackVisibility'
+import { splitClipTool } from './splitClip'
+import { trimClipTool } from './trimClip'
 import type { ToolDefinition, ToolExecutionContext, ToolResult } from '../core/toolTypes'
+import { isToolErrorEnvelope, serializeToolOutput } from './utils/result'
 
 // 工具存储
 const tools = new Map<string, ToolDefinition>()
@@ -57,12 +69,23 @@ function registerTool(tool: ToolDefinition): void {
 }
 
 // 注册内置工具
+registerTool(addTrackTool)
 registerTool(listMediaTool)
 registerTool(listTracksTool)
+registerTool(insertClipTool)
+registerTool(moveClipTool)
+registerTool(moveTrackTool)
 registerTool(readClipTool)
 registerTool(readMediaTool)
 registerTool(readTrackTool)
+registerTool(removeClipTool)
+registerTool(removeTrackTool)
+registerTool(renameTrackTool)
 registerTool(searchMediaTool)
+registerTool(setTrackMuteTool)
+registerTool(setTrackVisibilityTool)
+registerTool(splitClipTool)
+registerTool(trimClipTool)
 
 /**
  * 执行工具
@@ -83,21 +106,29 @@ export function executeTool(
     })
     return Promise.resolve({
       success: false,
-      result: '',
+      output: '',
       error: `未找到工具: ${name}`,
     })
   }
 
   return tool.execute(args, context).then(
-    (result) => {
+    (envelope) => {
+      const result = serializeToolOutput(envelope)
+      const success = !isToolErrorEnvelope(envelope)
       logToolExecution({
         name,
         args,
         context,
-        success: true,
+        success,
         result,
+        error: success ? undefined : envelope.error.message,
       })
-      return { success: true, result }
+      return {
+        success,
+        output: result,
+        envelope,
+        error: success ? undefined : envelope.error.message,
+      }
     },
     (error) => {
       logToolExecution({
@@ -109,7 +140,7 @@ export function executeTool(
       })
       return {
         success: false,
-        result: '',
+        output: '',
         error: error.message,
       }
     },
@@ -139,11 +170,22 @@ export function listTools(): ToolDefinition[] {
 
 // 导出工具定义供外部参考
 export {
+  addTrackTool,
   listMediaTool,
   listTracksTool,
+  insertClipTool,
+  moveClipTool,
+  moveTrackTool,
   readClipTool,
   readMediaTool,
   readTrackTool,
+  removeClipTool,
+  removeTrackTool,
+  renameTrackTool,
   searchMediaTool,
+  setTrackMuteTool,
+  setTrackVisibilityTool,
+  splitClipTool,
+  trimClipTool,
 }
 export type { ToolDefinition, ToolResult }

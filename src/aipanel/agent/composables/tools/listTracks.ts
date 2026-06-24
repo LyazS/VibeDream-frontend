@@ -1,12 +1,12 @@
 /**
  * list_tracks 工具实现
- * 列出时间轴上所有轨道的基本信息，返回 XML
+ * 列出时间轴上所有轨道的基本信息，返回 JSON envelope
  */
 
 import { useUnifiedStore } from '@/core/unifiedStore'
 import { getTimelineItemsByTrack } from '@/core/utils/timelineSearchUtils'
 import type { ToolDefinition } from '../core/toolTypes'
-import { buildXmlAttributes, escapeXmlText } from './utils/xml'
+import { buildToolError, buildToolSuccess } from './utils/result'
 
 /**
  * 轨道基本信息接口
@@ -33,9 +33,9 @@ interface TrackBasicInfo {
  *
  * 获取时间轴上所有轨道的基本信息（id、名字、类型），用于快速浏览和筛选轨道。
  *
- * @returns XML 格式的轨道基本信息
+ * @returns JSON 格式的轨道基本信息
  */
-export async function executeListTracks(args: Record<string, any>): Promise<string> {
+export async function executeListTracks(args: Record<string, any>) {
   try {
     void args
     const store = useUnifiedStore()
@@ -43,38 +43,40 @@ export async function executeListTracks(args: Record<string, any>): Promise<stri
     const timelineItems = store.timelineItems || []
 
     if (tracks.length === 0) {
-      return '<list_tracks total="0" />'
+      return buildToolSuccess(
+        'list_tracks',
+        {
+          tracks: [],
+          total: 0,
+        },
+        '时间轴上暂无轨道。',
+      )
     }
 
-    const trackInfos: TrackBasicInfo[] = tracks.map((track, index) => ({
-      id: track.id,
+    const trackInfos = tracks.map((track, index) => ({
+      trackId: track.id,
       name: track.name,
       type: track.type as 'video' | 'audio' | 'text',
       index,
       visible: track.isVisible,
       muted: track.isMuted,
-      itemCount: getTimelineItemsByTrack(track.id, timelineItems).length,
+      clipCount: getTimelineItemsByTrack(track.id, timelineItems).length,
     }))
 
-    const lines: string[] = [`<list_tracks total="${trackInfos.length}">`]
-    for (const track of trackInfos) {
-      lines.push(
-        `  <track ${buildXmlAttributes([
-          ['id', track.id],
-          ['name', track.name],
-          ['type', track.type],
-          ['index', track.index],
-          ['visible', track.visible],
-          ['muted', track.muted],
-          ['item_count', track.itemCount],
-        ])} />`,
-      )
-    }
-    lines.push('</list_tracks>')
-
-    return lines.join('\n')
+    return buildToolSuccess(
+      'list_tracks',
+      {
+        tracks: trackInfos,
+        total: trackInfos.length,
+      },
+      `时间轴上共有 ${trackInfos.length} 条轨道。`,
+    )
   } catch (error: any) {
-    return `<error>${escapeXmlText(error.message)}</error>`
+    return buildToolError(
+      'list_tracks',
+      'internal_error',
+      error instanceof Error ? error.message : String(error),
+    )
   }
 }
 

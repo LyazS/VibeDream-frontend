@@ -19,6 +19,7 @@ export { StartASRRequestCommand } from './StartASRRequestCommand'
 export { MoveTimelineItemCommand } from './MoveTimelineItemCommand' // ok
 export { SplitTimelineItemCommand } from './SplitTimelineItemCommand' // ok
 export { AddTrackCommand } from './AddTrackCommand' // ok
+export { MoveTrackCommand } from './MoveTrackCommand' // ok
 export { RenameTrackCommand } from './RenameTrackCommand' // ok
 export { RemoveTrackCommand } from './RemoveTrackCommand' // ok
 export { ToggleTrackVisibilityCommand } from './ToggleTrackVisibilityCommand' // ok
