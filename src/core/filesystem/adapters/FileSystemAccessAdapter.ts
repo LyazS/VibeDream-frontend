@@ -12,6 +12,7 @@ export class FileSystemAccessAdapter implements IFileSystemAdapter {
   private workspaceHandle: FileSystemDirectoryHandle | null = null
   private readonly STORAGE_KEY = 'workspace_directory_handle'
   private readonly STORE_NAME = 'handles'
+  private readonly debugPrefix = '[LC_TEMP_FOCUS_DEBUG][FSAccess]'
 
   // ==================== 实现接口方法 ====================
 
@@ -28,10 +29,23 @@ export class FileSystemAccessAdapter implements IFileSystemAdapter {
    */
   async checkPermission(forcePrompt: boolean = false): Promise<PermissionCheckResult> {
     const hadAccessBefore = this.workspaceHandle !== null
+    console.log(`${this.debugPrefix} checkPermission start`, {
+      forcePrompt,
+      hadAccessBefore,
+      hasWorkspaceHandleInMemory: this.workspaceHandle !== null,
+      documentVisibility: typeof document !== 'undefined' ? document.visibilityState : 'unknown',
+      hasFocus: typeof document !== 'undefined' ? document.hasFocus() : false,
+      timestamp: new Date().toISOString(),
+    })
 
     // 1. 如果强制弹窗，直接跳到选择步骤
     if (forcePrompt) {
+      console.log(`${this.debugPrefix} checkPermission using forcePrompt path`)
       const success = await this.promptUserToSelectWorkspace()
+      console.log(`${this.debugPrefix} checkPermission forcePrompt result`, {
+        success,
+        accessChanged: success !== hadAccessBefore,
+      })
       return {
         hasAccess: success,
         accessChanged: success !== hadAccessBefore,
@@ -40,33 +54,48 @@ export class FileSystemAccessAdapter implements IFileSystemAdapter {
 
     // 2. 检查内存中的句柄
     if (this.workspaceHandle) {
+      console.log(`${this.debugPrefix} checkPermission verifying in-memory handle`, {
+        handleName: this.workspaceHandle.name,
+      })
       const hasPermission = await this.verifyPermission(this.workspaceHandle)
       if (hasPermission) {
+        console.log(`${this.debugPrefix} checkPermission in-memory handle granted`)
         return {
           hasAccess: true,
           accessChanged: false,
         }
       }
       // 权限失效，清除句柄
+      console.warn(`${this.debugPrefix} checkPermission in-memory handle lost permission`)
       this.workspaceHandle = null
     }
 
     // 3. 尝试从 IndexedDB 恢复句柄
     const restoredHandle = await this.restoreHandleFromDB()
     if (restoredHandle) {
+      console.log(`${this.debugPrefix} checkPermission restored handle from IndexedDB`, {
+        handleName: restoredHandle.name,
+      })
       const hasPermission = await this.verifyPermission(restoredHandle)
       if (hasPermission) {
         this.workspaceHandle = restoredHandle
+        console.log(`${this.debugPrefix} checkPermission restored handle granted`, {
+          accessChanged: !hadAccessBefore,
+        })
         return {
           hasAccess: true,
           accessChanged: !hadAccessBefore,
         }
       }
       // 恢复的句柄无效，清除存储
+      console.warn(`${this.debugPrefix} checkPermission restored handle invalid, clearing DB`)
       await this.clearHandleFromDB()
     }
 
     // 4. 返回无权限状态，不自动弹窗
+    console.warn(`${this.debugPrefix} checkPermission no access`, {
+      accessChanged: hadAccessBefore,
+    })
     return {
       hasAccess: false,
       accessChanged: hadAccessBefore, // 从有权限变为无权限
@@ -313,25 +342,59 @@ export class FileSystemAccessAdapter implements IFileSystemAdapter {
    */
   private async verifyPermission(handle: FileSystemDirectoryHandle): Promise<boolean> {
     try {
+      console.log(`${this.debugPrefix} verifyPermission start`, {
+        handleName: handle.name,
+        documentVisibility: typeof document !== 'undefined' ? document.visibilityState : 'unknown',
+        hasFocus: typeof document !== 'undefined' ? document.hasFocus() : false,
+        canQueryPermission: typeof handle.queryPermission === 'function',
+        canRequestPermission: typeof handle.requestPermission === 'function',
+        timestamp: new Date().toISOString(),
+      })
       // 尝试查询权限
       if (typeof handle.queryPermission === 'function') {
         const permission = await handle.queryPermission({ mode: 'readwrite' })
+        console.log(`${this.debugPrefix} verifyPermission queryPermission result`, {
+          handleName: handle.name,
+          permission,
+        })
         if (permission === 'granted') {
           return true
         }
 
         // 尝试请求权限
         if (typeof handle.requestPermission === 'function') {
+          console.warn(`${this.debugPrefix} verifyPermission requestPermission about to run`, {
+            handleName: handle.name,
+            currentPermission: permission,
+            documentVisibility: typeof document !== 'undefined' ? document.visibilityState : 'unknown',
+            hasFocus: typeof document !== 'undefined' ? document.hasFocus() : false,
+          })
           const requested = await handle.requestPermission({ mode: 'readwrite' })
+          console.warn(`${this.debugPrefix} verifyPermission requestPermission resolved`, {
+            handleName: handle.name,
+            requested,
+            documentVisibility: typeof document !== 'undefined' ? document.visibilityState : 'unknown',
+            hasFocus: typeof document !== 'undefined' ? document.hasFocus() : false,
+          })
           return requested === 'granted'
         }
       }
 
       // 降级方案：尝试访问来测试权限
+      console.log(`${this.debugPrefix} verifyPermission using fallback entries probe`, {
+        handleName: handle.name,
+      })
       const entries = handle.entries()
       await entries.next()
+      console.log(`${this.debugPrefix} verifyPermission fallback probe succeeded`, {
+        handleName: handle.name,
+      })
       return true
-    } catch {
+    } catch (error) {
+      console.error(`${this.debugPrefix} verifyPermission failed`, {
+        handleName: handle.name,
+        error,
+      })
       return false
     }
   }
@@ -341,27 +404,45 @@ export class FileSystemAccessAdapter implements IFileSystemAdapter {
    */
   private async promptUserToSelectWorkspace(): Promise<boolean> {
     try {
+      console.warn(`${this.debugPrefix} promptUserToSelectWorkspace opening directory picker`, {
+        documentVisibility: typeof document !== 'undefined' ? document.visibilityState : 'unknown',
+        hasFocus: typeof document !== 'undefined' ? document.hasFocus() : false,
+        timestamp: new Date().toISOString(),
+      })
       const directoryHandle = await window.showDirectoryPicker({
         mode: 'readwrite',
         startIn: 'documents',
+      })
+      console.warn(`${this.debugPrefix} promptUserToSelectWorkspace picker resolved`, {
+        handleName: directoryHandle.name,
+        documentVisibility: typeof document !== 'undefined' ? document.visibilityState : 'unknown',
+        hasFocus: typeof document !== 'undefined' ? document.hasFocus() : false,
       })
 
       // 验证权限
       const hasPermission = await this.verifyPermission(directoryHandle)
       if (!hasPermission) {
+        console.warn(`${this.debugPrefix} promptUserToSelectWorkspace permission denied after picker`, {
+          handleName: directoryHandle.name,
+        })
         return false
       }
 
       // 保存句柄
       this.workspaceHandle = directoryHandle
       await this.persistHandleToDB(directoryHandle)
+      console.log(`${this.debugPrefix} promptUserToSelectWorkspace handle persisted`, {
+        handleName: directoryHandle.name,
+      })
 
       return true
     } catch (error) {
       // 用户取消选择
       if (error instanceof Error && error.name === 'AbortError') {
+        console.warn(`${this.debugPrefix} promptUserToSelectWorkspace aborted by user`)
         return false
       }
+      console.error(`${this.debugPrefix} promptUserToSelectWorkspace failed`, error)
       throw error
     }
   }
@@ -371,6 +452,7 @@ export class FileSystemAccessAdapter implements IFileSystemAdapter {
    */
   private async restoreHandleFromDB(): Promise<FileSystemDirectoryHandle | null> {
     if (!('indexedDB' in window)) {
+      console.warn(`${this.debugPrefix} restoreHandleFromDB skipped: indexedDB unavailable`)
       return null
     }
 
@@ -378,8 +460,13 @@ export class FileSystemAccessAdapter implements IFileSystemAdapter {
       const result = await indexedDBService.transaction(this.STORE_NAME, 'readonly', (store) =>
         store.get(this.STORAGE_KEY),
       )
+      console.log(`${this.debugPrefix} restoreHandleFromDB result`, {
+        restored: !!result,
+        handleName: result?.name,
+      })
       return result || null
-    } catch {
+    } catch (error) {
+      console.error(`${this.debugPrefix} restoreHandleFromDB failed`, error)
       return null
     }
   }
@@ -392,9 +479,15 @@ export class FileSystemAccessAdapter implements IFileSystemAdapter {
       return
     }
 
+    console.log(`${this.debugPrefix} persistHandleToDB start`, {
+      handleName: handle.name,
+    })
     await indexedDBService.transaction(this.STORE_NAME, 'readwrite', (store) =>
       store.put(handle, this.STORAGE_KEY),
     )
+    console.log(`${this.debugPrefix} persistHandleToDB done`, {
+      handleName: handle.name,
+    })
   }
 
   /**
@@ -405,9 +498,11 @@ export class FileSystemAccessAdapter implements IFileSystemAdapter {
       return
     }
 
+    console.warn(`${this.debugPrefix} clearHandleFromDB start`)
     await indexedDBService.transaction(this.STORE_NAME, 'readwrite', (store) =>
       store.delete(this.STORAGE_KEY),
     )
+    console.warn(`${this.debugPrefix} clearHandleFromDB done`)
   }
 
   // ==================== 文件系统辅助方法 ====================

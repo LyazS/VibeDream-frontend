@@ -3,6 +3,8 @@ import { createVNode, render, ref, watchEffect, nextTick, h, type VNode, type Co
 import UniversalModal from '@/components/modals/UniversalModal.vue'
 import LoadingModal from '@/components/base/LoadingModal.vue'
 
+const TEMP_FOCUS_DEBUG_PREFIX = '[LC_TEMP_FOCUS_DEBUG][Notify]'
+
 /**
  * 自定义 Modal 配置选项
  */
@@ -515,13 +517,33 @@ export function createUnifiedUseNaiveUIModule() {
       return false
     }
 
+    console.log(`${TEMP_FOCUS_DEBUG_PREFIX} notifySystem called`, {
+      title,
+      body,
+      permission: Notification.permission,
+      documentVisibility: typeof document !== 'undefined' ? document.visibilityState : 'unknown',
+      hasFocus: typeof document !== 'undefined' ? document.hasFocus() : false,
+      timestamp: new Date().toISOString(),
+    })
+
     // 检查权限
     let permission = Notification.permission
 
     // 如果权限未决定，尝试请求
     if (permission === 'default') {
       try {
+        console.warn(`${TEMP_FOCUS_DEBUG_PREFIX} requestPermission about to run`, {
+          title,
+          documentVisibility: typeof document !== 'undefined' ? document.visibilityState : 'unknown',
+          hasFocus: typeof document !== 'undefined' ? document.hasFocus() : false,
+        })
         permission = await Notification.requestPermission()
+        console.warn(`${TEMP_FOCUS_DEBUG_PREFIX} requestPermission resolved`, {
+          title,
+          permission,
+          documentVisibility: typeof document !== 'undefined' ? document.visibilityState : 'unknown',
+          hasFocus: typeof document !== 'undefined' ? document.hasFocus() : false,
+        })
       } catch (error) {
         console.error('请求系统通知权限失败:', error)
         return false
@@ -541,8 +563,20 @@ export function createUnifiedUseNaiveUIModule() {
         icon: '/logo-ok/favicon-96x96.png',  // 使用应用图标
       })
 
+      console.log(`${TEMP_FOCUS_DEBUG_PREFIX} notification created`, {
+        title,
+        documentVisibility: typeof document !== 'undefined' ? document.visibilityState : 'unknown',
+        hasFocus: typeof document !== 'undefined' ? document.hasFocus() : false,
+      })
+
       // 点击通知时聚焦回网页
       notification.onclick = () => {
+        console.warn(`${TEMP_FOCUS_DEBUG_PREFIX} notification onclick -> window.focus()`, {
+          title,
+          documentVisibility: typeof document !== 'undefined' ? document.visibilityState : 'unknown',
+          hasFocusBeforeFocusCall: typeof document !== 'undefined' ? document.hasFocus() : false,
+          timestamp: new Date().toISOString(),
+        })
         window.focus()
         notification.close()
       }
