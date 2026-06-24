@@ -9,7 +9,9 @@ import { listTracksTool } from './listTracks'
 import { insertClipTool } from './insertClip'
 import { moveClipTool } from './moveClip'
 import { moveTrackTool } from './moveTrack'
+import { patchClipPropertiesTool } from './patchClipProperties'
 import { readClipTool } from './readClip'
+import { readClipPropertiesTool } from './readClipProperties'
 import { readMediaTool } from './readMedia'
 import { readTrackTool } from './readTrack'
 import { removeClipTool } from './removeClip'
@@ -75,7 +77,9 @@ registerTool(listTracksTool)
 registerTool(insertClipTool)
 registerTool(moveClipTool)
 registerTool(moveTrackTool)
+registerTool(patchClipPropertiesTool)
 registerTool(readClipTool)
+registerTool(readClipPropertiesTool)
 registerTool(readMediaTool)
 registerTool(readTrackTool)
 registerTool(removeClipTool)
@@ -176,7 +180,9 @@ export {
   insertClipTool,
   moveClipTool,
   moveTrackTool,
+  patchClipPropertiesTool,
   readClipTool,
+  readClipPropertiesTool,
   readMediaTool,
   readTrackTool,
   removeClipTool,
