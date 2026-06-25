@@ -102,10 +102,26 @@ const submitCustomAnswer = async () => {
   margin: 2px 0;
   padding: var(--spacing-lg);
   border-radius: var(--border-radius-large);
-  background: rgba(255, 255, 255, 0.035);
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.04);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.045) 0%, rgba(255, 255, 255, 0.028) 100%),
+    rgba(255, 255, 255, 0.02);
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.05),
+    0 6px 16px rgba(0, 0, 0, 0.12),
+    0 2px 6px rgba(0, 0, 0, 0.1);
   width: 100%;
   box-sizing: border-box;
+  transition:
+    box-shadow var(--transition-fast),
+    transform var(--transition-fast);
+}
+
+.interaction-card:hover {
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.07),
+    0 10px 24px rgba(0, 0, 0, 0.16),
+    0 3px 8px rgba(0, 0, 0, 0.12);
+  transform: translateY(-1px);
 }
 
 .interaction-header {
@@ -137,9 +153,11 @@ const submitCustomAnswer = async () => {
 
 .interaction-response {
   padding: 10px 12px;
-  background: rgba(255, 255, 255, 0.03);
+  background: rgba(255, 255, 255, 0.045);
   border-radius: var(--border-radius-medium);
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.04);
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.045),
+    0 4px 10px rgba(0, 0, 0, 0.08);
 }
 
 .interaction-response-value {
@@ -166,16 +184,22 @@ const submitCustomAnswer = async () => {
   flex: 1;
   min-width: 0;
   border: none;
-  background: rgba(255, 255, 255, 0.03);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.05) 0%, rgba(255, 255, 255, 0.03) 100%);
   color: var(--color-text-primary);
   border-radius: var(--border-radius-large);
+  min-height: 40px;
   padding: 10px 12px;
   font-size: var(--font-size-base);
   line-height: 1.4;
   cursor: pointer;
   text-align: left;
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.04),
+    0 3px 8px rgba(0, 0, 0, 0.08);
   transition:
     background-color var(--transition-fast),
+    box-shadow var(--transition-fast),
     transform var(--transition-fast);
 }
 
@@ -199,14 +223,26 @@ const submitCustomAnswer = async () => {
 }
 
 .interaction-option-chip:hover:not(:disabled) {
-  background: rgba(255, 255, 255, 0.09);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.085) 0%, rgba(255, 255, 255, 0.05) 100%);
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.07),
+    0 8px 18px rgba(0, 0, 0, 0.12);
   transform: translateY(-1px);
 }
 
 .interaction-option-chip:focus-visible {
   outline: none;
-  background: rgba(255, 255, 255, 0.09);
-  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.14);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.085) 0%, rgba(255, 255, 255, 0.05) 100%);
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.14),
+    0 0 0 3px rgba(255, 159, 67, 0.12),
+    0 8px 18px rgba(0, 0, 0, 0.12);
+}
+
+.interaction-option-chip:active:not(:disabled) {
+  transform: scale(0.96);
 }
 
 .interaction-option-chip:disabled {
@@ -238,22 +274,28 @@ const submitCustomAnswer = async () => {
   flex: 1;
   min-width: 0;
   border: 1px solid var(--color-border-primary);
-  background: var(--color-bg-primary);
+  background: rgba(255, 255, 255, 0.025);
   color: var(--color-text-primary);
   border-radius: var(--border-radius-large);
+  min-height: 40px;
   padding: 9px 12px;
   font-size: var(--font-size-md);
   line-height: 1.4;
   outline: none;
   box-sizing: border-box;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
   transition:
     border-color var(--transition-fast),
-    background-color var(--transition-fast);
+    background-color var(--transition-fast),
+    box-shadow var(--transition-fast);
 }
 
 .interaction-custom-input:focus {
   border-color: var(--color-accent-secondary);
-  background: rgba(255, 255, 255, 0.02);
+  background: rgba(255, 255, 255, 0.04);
+  box-shadow:
+    0 0 0 1px rgba(255, 159, 67, 0.16),
+    0 6px 14px rgba(0, 0, 0, 0.1);
 }
 
 .interaction-custom-input:disabled {
@@ -269,24 +311,32 @@ const submitCustomAnswer = async () => {
   background: var(--color-bg-quaternary);
   color: var(--color-text-primary);
   border-radius: var(--border-radius-medium);
+  min-height: 40px;
   padding: 8px 10px;
   font-size: var(--font-size-sm);
   line-height: 1.2;
   cursor: pointer;
   white-space: nowrap;
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.04),
+    0 3px 8px rgba(0, 0, 0, 0.08);
   transition:
     background-color var(--transition-fast),
     color var(--transition-fast),
+    box-shadow var(--transition-fast),
     transform var(--transition-fast);
 }
 
 .interaction-custom-submit:hover:not(:disabled) {
   background: var(--color-accent-secondary);
   color: #fff;
+  box-shadow:
+    0 0 0 1px rgba(255, 159, 67, 0.14),
+    0 8px 18px rgba(0, 0, 0, 0.14);
 }
 
 .interaction-custom-submit:active:not(:disabled) {
-  transform: translateY(1px);
+  transform: scale(0.96);
 }
 
 .interaction-custom-submit:disabled {

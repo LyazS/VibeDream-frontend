@@ -1,14 +1,14 @@
 <template>
   <div class="chat-messages-container" ref="messagesContainer">
-    <AgentMessage :message="welcomeMessage" />
-    <template v-for="item in timelineItems" :key="item.id">
-      <UserMessage v-if="item.type === 'message' && isUserMessage(item.message)" :message="item.message" />
+    <AgentMessage :messages="[welcomeMessage]" :completed-message-ids="completedMessageIds" />
+    <template v-for="block in renderBlocks" :key="block.id">
+      <UserMessage v-if="block.type === 'user_message'" :message="block.message" />
       <AgentMessage
-        v-else-if="item.type === 'message' && isAssistantMessage(item.message)"
-        :message="item.message"
-        :is-task-complete="SESSION_MANAGER.isTaskCompleteMessage(item.message.id)"
+        v-else-if="block.type === 'assistant_group'"
+        :messages="block.messages"
+        :completed-message-ids="completedMessageIds"
       />
-      <InteractionCard v-else-if="item.type === 'interaction'" :record="item.record" />
+      <InteractionCard v-else-if="block.type === 'interaction'" :record="block.record" />
     </template>
     <ThinkingIndicator v-if="isSending" />
   </div>
@@ -53,9 +53,15 @@ provide('renderMarkdown', renderMarkdown)
 
 const messages = computed(() => SESSION_MANAGER.messages.value.filter(isPublicMessage))
 const interactions = computed(() => SESSION_MANAGER.interactions.value)
+const completedMessageIds = computed(() => SESSION_MANAGER.completedMessageIds.value)
 
 type TimelineItem =
   | { type: 'message'; id: string; createdAt: string; message: AgentMessageModel }
+  | { type: 'interaction'; id: string; createdAt: string; record: SessionInteractionRecord }
+
+type RenderBlock =
+  | { type: 'user_message'; id: string; createdAt: string; message: AgentMessageModel }
+  | { type: 'assistant_group'; id: string; createdAt: string; messages: AgentMessageModel[] }
   | { type: 'interaction'; id: string; createdAt: string; record: SessionInteractionRecord }
 
 const timelineItems = computed<TimelineItem[]>(() => {
@@ -75,6 +81,56 @@ const timelineItems = computed<TimelineItem[]>(() => {
   return [...messageItems, ...interactionItems].sort(
     (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
   )
+})
+
+const renderBlocks = computed<RenderBlock[]>(() => {
+  const blocks: RenderBlock[] = []
+  let pendingAssistantGroup: RenderBlock | null = null
+
+  const flushAssistantGroup = () => {
+    if (pendingAssistantGroup?.type === 'assistant_group') {
+      blocks.push(pendingAssistantGroup)
+      pendingAssistantGroup = null
+    }
+  }
+
+  for (const item of timelineItems.value) {
+    if (item.type === 'interaction') {
+      flushAssistantGroup()
+      blocks.push(item)
+      continue
+    }
+
+    if (isUserMessage(item.message)) {
+      flushAssistantGroup()
+      blocks.push({
+        type: 'user_message',
+        id: item.id,
+        createdAt: item.createdAt,
+        message: item.message,
+      })
+      continue
+    }
+
+    if (
+      pendingAssistantGroup?.type === 'assistant_group'
+      && isAssistantMessage(item.message)
+    ) {
+      pendingAssistantGroup.messages.push(item.message)
+      continue
+    }
+
+    flushAssistantGroup()
+    pendingAssistantGroup = {
+      type: 'assistant_group',
+      id: item.id,
+      createdAt: item.createdAt,
+      messages: [item.message],
+    }
+  }
+
+  flushAssistantGroup()
+  return blocks
 })
 
 const { t } = useAppI18n()
@@ -101,7 +157,7 @@ const scrollToBottom = async () => {
 }
 
 watch(
-  timelineItems,
+  renderBlocks,
   () => {
     scrollToBottom()
   },

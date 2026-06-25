@@ -1,37 +1,40 @@
 <template>
   <div class="chat-message ai">
     <div class="message-bubble">
-      <div class="message-header">
-        <component :is="IconComponents.ROBOT" size="20px" class="agent-icon" />
-        <span class="agent-label">Agent</span>
-      </div>
-      <div v-if="isTaskComplete" class="task-complete-component">
-        <div class="task-complete-header">
-          <component :is="IconComponents.SUCCESS" size="18px" class="check-icon" />
-          <span class="task-complete-title">{{ t('aiPanel.taskComplete') }}</span>
+      <div
+        v-for="message in messages"
+        :key="message.id"
+        class="message-section"
+        :class="{ 'message-section--task-complete': isTaskCompleteMessage(message.id) }"
+      >
+        <div v-if="isTaskCompleteMessage(message.id)" class="task-complete-component">
+          <div class="task-complete-header">
+            <component :is="IconComponents.SUCCESS" size="18px" class="check-icon" />
+            <span class="task-complete-title">{{ t('aiPanel.taskComplete') }}</span>
+          </div>
+          <div class="task-complete-content">
+            <template v-for="(item, index) in message.parts" :key="index">
+              <div
+                v-if="item.type === MessagePartType.TEXT"
+                class="markdown-body"
+                v-html="renderMarkdown(item.text)"
+              ></div>
+            </template>
+          </div>
         </div>
-        <div class="task-complete-content">
+        <div v-else class="message-content">
           <template v-for="(item, index) in message.parts" :key="index">
             <div
               v-if="item.type === MessagePartType.TEXT"
               class="markdown-body"
               v-html="renderMarkdown(item.text)"
             ></div>
+            <ToolCallDisplay
+              v-else-if="item.type === MessagePartType.TOOL_CALL && item.tool_name !== 'task_complete'"
+              :item="item"
+            />
           </template>
         </div>
-      </div>
-      <div v-else class="message-content">
-        <template v-for="(item, index) in message.parts" :key="index">
-          <div
-            v-if="item.type === MessagePartType.TEXT"
-            class="markdown-body"
-            v-html="renderMarkdown(item.text)"
-          ></div>
-          <ToolCallDisplay
-            v-else-if="item.type === MessagePartType.TOOL_CALL && item.tool_name !== 'task_complete'"
-            :item="item"
-          />
-        </template>
       </div>
     </div>
   </div>
@@ -42,8 +45,8 @@ import { inject } from 'vue'
 import 'github-markdown-css/github-markdown.css'
 import type { AgentMessage } from '../types'
 import { MessagePartType } from '../types'
-import { IconComponents } from '@/constants/iconComponents'
 import ToolCallDisplay from './ToolCallDisplay.vue'
+import { IconComponents } from '@/constants/iconComponents'
 import { useAppI18n } from '@/core/composables/useI18n'
 
 const { t } = useAppI18n()
@@ -54,9 +57,13 @@ const renderMarkdown = inject<(content: string) => string>('renderMarkdown', (co
 })
 
 const props = defineProps<{
-  message: AgentMessage
-  isTaskComplete?: boolean
+  messages: AgentMessage[]
+  completedMessageIds?: string[]
 }>()
+
+const isTaskCompleteMessage = (messageId: string) => {
+  return props.completedMessageIds?.includes(messageId) ?? false
+}
 </script>
 
 <style scoped>
@@ -78,29 +85,15 @@ const props = defineProps<{
   word-wrap: break-word;
 }
 
-.message-header {
-  display: flex;
-  align-items: center;
-  margin-bottom: var(--spacing-xs);
-  font-size: var(--font-size-base);
-  color: var(--color-text-secondary);
-  font-weight: 500;
-}
-
-.agent-icon {
-  margin-right: var(--spacing-sm);
-}
-
-.agent-label {
-  font-weight: 600;
-  font-size: var(--font-size-lg);
-}
-
 .message-content {
   font-size: var(--font-size-base);
   line-height: 1.4;
   margin-bottom: var(--spacing-xs);
   width: 100%;
+}
+
+.message-section + .message-section {
+  margin-top: var(--spacing-md);
 }
 
 .markdown-body {

@@ -3,6 +3,7 @@ import { AnimationRegistry } from '@/core/animation/registry'
 import {
   getRelativeFrame,
   getPosition,
+  getSupportedAnimationGroups,
   getTrack,
 } from '@/core/animation/engine'
 import { TimelineItemQueries } from '@/core/timelineitem/queries'
