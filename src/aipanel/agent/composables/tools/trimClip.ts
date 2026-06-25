@@ -1,3 +1,5 @@
+import type { MediaType, UnifiedMediaItemData } from '@/core/mediaitem/types'
+import type { UnifiedTimelineItemData } from '@/core/timelineitem/model/timelineItem'
 import { framesToTimecode } from '@/core/utils/timeUtils'
 import type { ToolDefinition } from '../core/toolTypes'
 import { buildToolError, buildToolSuccess } from './utils/result'
@@ -18,6 +20,119 @@ function buildTrimState(params: {
   }
 }
 
+function buildTimelineState(item: UnifiedTimelineItemData<MediaType>) {
+  return buildTrimState({
+    timelineStartTime: item.timeRange.timelineStartTime,
+    timelineEndTime: item.timeRange.timelineEndTime,
+  })
+}
+
+function buildSourceState(item: UnifiedTimelineItemData<MediaType>) {
+  return {
+    startTime: framesToTimecode(item.timeRange.clipStartTime),
+    endTime: framesToTimecode(item.timeRange.clipEndTime),
+  }
+}
+
+function isSourceBackedClip(mediaType: MediaType): boolean {
+  return mediaType === 'video' || mediaType === 'audio'
+}
+
+function buildInvalidRangeError(
+  clipId: string,
+  side: 'start' | 'end',
+  newTime: string,
+  message: string,
+) {
+  return buildToolError('trim_clip', 'invalid_range', message, { clipId, side, newTime })
+}
+
+function validateTimelineBoundary(params: {
+  clip: UnifiedTimelineItemData<MediaType>
+  side: 'start' | 'end'
+  targetBoundaryFrame: number
+  newTime: string
+}) {
+  const { clip, side, targetBoundaryFrame, newTime } = params
+  const current = clip.timeRange
+
+  if (side === 'start') {
+    if (targetBoundaryFrame < 0) {
+      return buildInvalidRangeError(clip.id, side, newTime, 'newTime 不能早于时间轴起点 00:00:00+00。')
+    }
+
+    if (targetBoundaryFrame >= current.timelineEndTime) {
+      return buildInvalidRangeError(clip.id, side, newTime, 'newTime 必须早于当前片段结束时间。')
+    }
+
+    return null
+  }
+
+  if (targetBoundaryFrame <= current.timelineStartTime) {
+    return buildInvalidRangeError(clip.id, side, newTime, 'newTime 必须晚于当前片段开始时间。')
+  }
+
+  return null
+}
+
+function validateSourceBoundary(params: {
+  clip: UnifiedTimelineItemData<MediaType>
+  mediaItem?: UnifiedMediaItemData
+  side: 'start' | 'end'
+  targetBoundaryFrame: number
+  newTime: string
+}) {
+  const { clip, mediaItem, side, targetBoundaryFrame, newTime } = params
+  if (!isSourceBackedClip(clip.mediaType)) {
+    return null
+  }
+
+  const current = clip.timeRange
+  const timelineDuration = current.timelineEndTime - current.timelineStartTime
+  const sourceDuration = current.clipEndTime - current.clipStartTime
+  if (timelineDuration <= 0 || sourceDuration <= 0) {
+    return buildInvalidRangeError(clip.id, side, newTime, '当前片段时间范围无效，无法执行 trim。')
+  }
+
+  const playbackRate = sourceDuration / timelineDuration
+  if (!Number.isFinite(playbackRate) || playbackRate <= 0) {
+    return buildInvalidRangeError(clip.id, side, newTime, '当前片段播放倍速无效，无法执行 trim。')
+  }
+
+  if (side === 'start') {
+    const sourceDelta = Math.round((targetBoundaryFrame - current.timelineStartTime) * playbackRate)
+    const nextClipStart = current.clipStartTime + sourceDelta
+    if (nextClipStart < 0) {
+      return buildInvalidRangeError(
+        clip.id,
+        side,
+        newTime,
+        'newTime 超出素材可用范围，开始边界不能再向前扩展。',
+      )
+    }
+    if (nextClipStart >= current.clipEndTime) {
+      return buildInvalidRangeError(clip.id, side, newTime, '裁切后素材区间无效。')
+    }
+    return null
+  }
+
+  const sourceDelta = Math.round((targetBoundaryFrame - current.timelineEndTime) * playbackRate)
+  const nextClipEnd = current.clipEndTime + sourceDelta
+  if (typeof mediaItem?.duration === 'number' && Number.isFinite(mediaItem.duration) && nextClipEnd > mediaItem.duration) {
+    return buildInvalidRangeError(
+      clip.id,
+      side,
+      newTime,
+      'newTime 超出素材可用范围，结束边界不能再向后扩展。',
+    )
+  }
+  if (nextClipEnd <= current.clipStartTime) {
+    return buildInvalidRangeError(clip.id, side, newTime, '裁切后素材区间无效。')
+  }
+
+  return null
+}
+
 export async function executeTrimClip(args: Record<string, any>) {
   const { clipId, side, newTime } = args
 
@@ -35,7 +150,7 @@ export async function executeTrimClip(args: Record<string, any>) {
   }
 
   try {
-    const { store, createResizeTimelineItemCommand } = createTimelineCommandHelpers()
+    const { store, createTrimTimelineItemCommand } = createTimelineCommandHelpers()
     const clip = store.getTimelineItem(clipId)
 
     if (!clip) {
@@ -47,58 +162,58 @@ export async function executeTrimClip(args: Record<string, any>) {
       )
     }
 
-    const beforeTimelineStartTime = clip.timeRange.timelineStartTime
-    const beforeTimelineEndTime = clip.timeRange.timelineEndTime
-    const nextTimeRange = { ...clip.timeRange }
-
-    if (side === 'start') {
-      if (parsed.frames <= clip.timeRange.timelineStartTime || parsed.frames >= clip.timeRange.timelineEndTime) {
-        return buildToolError(
-          'trim_clip',
-          'invalid_range',
-          'newTime 必须位于当前片段内部，且不能等于或超过结束时间。',
-          { clipId, side, newTime },
-        )
-      }
-
-      const delta = parsed.frames - clip.timeRange.timelineStartTime
-      nextTimeRange.timelineStartTime = parsed.frames
-      nextTimeRange.clipStartTime = clip.timeRange.clipStartTime + delta
-    } else {
-      if (parsed.frames >= clip.timeRange.timelineEndTime || parsed.frames <= clip.timeRange.timelineStartTime) {
-        return buildToolError(
-          'trim_clip',
-          'invalid_range',
-          'newTime 必须位于当前片段内部，且不能等于或早于开始时间。',
-          { clipId, side, newTime },
-        )
-      }
-
-      const delta = clip.timeRange.timelineEndTime - parsed.frames
-      nextTimeRange.timelineEndTime = parsed.frames
-      nextTimeRange.clipEndTime = clip.timeRange.clipEndTime - delta
+    const timelineError = validateTimelineBoundary({
+      clip,
+      side,
+      targetBoundaryFrame: parsed.frames,
+      newTime,
+    })
+    if (timelineError) {
+      return timelineError
     }
 
-    if (nextTimeRange.clipStartTime >= nextTimeRange.clipEndTime) {
-      return buildToolError('trim_clip', 'invalid_range', '裁切后素材区间无效。', { clipId, side, newTime })
+    const mediaItem = clip.mediaItemId ? store.getMediaItem(clip.mediaItemId) : undefined
+    const sourceError = validateSourceBoundary({
+      clip,
+      mediaItem,
+      side,
+      targetBoundaryFrame: parsed.frames,
+      newTime,
+    })
+    if (sourceError) {
+      return sourceError
     }
 
-    const conflict = findTrackConflict({
+    const nextTimelineStartTime = side === 'start' ? parsed.frames : clip.timeRange.timelineStartTime
+    const nextTimelineEndTime = side === 'end' ? parsed.frames : clip.timeRange.timelineEndTime
+    const conflictClipIds: string[] = []
+    const firstConflict = findTrackConflict({
       trackId: clip.trackId,
-      start: nextTimeRange.timelineStartTime,
-      end: nextTimeRange.timelineEndTime,
+      start: nextTimelineStartTime,
+      end: nextTimelineEndTime,
       excludeClipIds: [clipId],
     })
-    if (conflict) {
-      return buildToolError(
-        'trim_clip',
-        'timeline_conflict',
-        `裁切后的区间与现有片段 ${conflict.id} 冲突，已拒绝执行。`,
-        { clipId, conflictClipId: conflict.id },
-      )
+    if (firstConflict) {
+      conflictClipIds.push(firstConflict.id)
+      for (const item of store.timelineItems) {
+        if (item.trackId !== clip.trackId || item.id === clipId || item.id === firstConflict.id) {
+          continue
+        }
+        if (
+          Math.max(nextTimelineStartTime, item.timeRange.timelineStartTime) <
+          Math.min(nextTimelineEndTime, item.timeRange.timelineEndTime)
+        ) {
+          conflictClipIds.push(item.id)
+        }
+      }
     }
 
-    await executeSingleCommand(createResizeTimelineItemCommand(clip, nextTimeRange))
+    const beforeState = {
+      timeline: buildTimelineState(clip),
+      ...(isSourceBackedClip(clip.mediaType) ? { source: buildSourceState(clip) } : {}),
+    }
+
+    await executeSingleCommand(createTrimTimelineItemCommand(clip, side, parsed.frames))
 
     const afterClip = store.getTimelineItem(clipId)
     if (!afterClip) {
@@ -110,16 +225,23 @@ export async function executeTrimClip(args: Record<string, any>) {
       {
         clipId,
         side,
-        before: buildTrimState({
-          timelineStartTime: beforeTimelineStartTime,
-          timelineEndTime: beforeTimelineEndTime,
-        }),
-        after: buildTrimState({
-          timelineStartTime: afterClip.timeRange.timelineStartTime,
-          timelineEndTime: afterClip.timeRange.timelineEndTime,
-        }),
+        before: beforeState,
+        after: {
+          timeline: buildTimelineState(afterClip),
+          ...(isSourceBackedClip(afterClip.mediaType) ? { source: buildSourceState(afterClip) } : {}),
+        },
+        ...(conflictClipIds.length > 0
+          ? {
+              warning: `已执行，但与同轨片段发生重叠：${conflictClipIds.join(', ')}`,
+              conflict: {
+                clipIds: conflictClipIds,
+              },
+            }
+          : {}),
       },
-      `已调整 ${clipId} 的${side === 'start' ? '开始' : '结束'}边界到 ${parsed.timecode}。`,
+      conflictClipIds.length > 0
+        ? `已调整 ${clipId} 的${side === 'start' ? '开始' : '结束'}边界到 ${parsed.timecode}，但与同轨片段发生重叠。`
+        : `已调整 ${clipId} 的${side === 'start' ? '开始' : '结束'}边界到 ${parsed.timecode}。`,
     )
   } catch (error: any) {
     return buildToolError(

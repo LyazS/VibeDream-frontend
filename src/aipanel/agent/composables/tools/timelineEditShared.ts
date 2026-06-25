@@ -18,7 +18,9 @@ import {
   RemoveTimelineItemCommand,
   ResizeTimelineItemCommand,
   SplitTimelineItemCommand,
+  TrimTimelineItemCommand,
 } from '@/core/modules/commands/timelineCommands'
+import type { TrimTimelineItemSide } from '@/core/modules/commands/timelineCommands'
 import { generateTimelineItemId } from '@/core/utils/idGenerator'
 import type { SimpleCommand } from '@/core/modules/commands/types'
 import { buildToolError } from './utils/result'
@@ -30,6 +32,7 @@ type TimelineCommand =
   | RemoveTimelineItemCommand
   | ResizeTimelineItemCommand
   | SplitTimelineItemCommand
+  | TrimTimelineItemCommand
 
 export function parseRequiredTimecode(
   tool: string,
@@ -211,6 +214,25 @@ export function createTimelineCommandHelpers() {
         item.id,
         { ...item.timeRange },
         newTimeRange,
+        {
+          getTimelineItem: (id: string) => store.getTimelineItem(id),
+          setTimelineItemTimeRangeForCmd: store.setTimelineItemTimeRangeForCmd.bind(store),
+        },
+        {
+          getMediaItem: (id: string | null) => (id ? store.getMediaItem(id) : undefined),
+        },
+      )
+    },
+    createTrimTimelineItemCommand(
+      item: UnifiedTimelineItemData,
+      side: TrimTimelineItemSide,
+      targetBoundaryFrame: number,
+    ): TimelineCommand {
+      return new TrimTimelineItemCommand(
+        item.id,
+        item,
+        side,
+        targetBoundaryFrame,
         {
           getTimelineItem: (id: string) => store.getTimelineItem(id),
           setTimelineItemTimeRangeForCmd: store.setTimelineItemTimeRangeForCmd.bind(store),
