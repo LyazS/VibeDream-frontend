@@ -61,9 +61,8 @@ function handleConfirm() {
   if (!newName.value.trim()) {
     return
   }
-  
+
   emit('confirm', newName.value.trim())
-  newName.value = ''
 }
 
 // 监听显示状态，自动聚焦输入框并选中文本
@@ -73,7 +72,7 @@ watch(
     if (newShow) {
       // 设置当前名称
       newName.value = props.currentName
-      
+
       nextTick(() => {
         inputRef.value?.focus()
         inputRef.value?.select()

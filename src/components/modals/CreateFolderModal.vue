@@ -57,9 +57,8 @@ function handleConfirm() {
   if (!folderName.value.trim()) {
     return
   }
-  
+
   emit('confirm', folderName.value.trim())
-  folderName.value = ''
 }
 
 // 监听显示状态，自动聚焦输入框

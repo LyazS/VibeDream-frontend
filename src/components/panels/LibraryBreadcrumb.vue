@@ -9,8 +9,8 @@
           @click="navigateToDir(dir.id)"
         >
           <component :is="IconComponents.HOME" v-if="index === 0" size="16px" />
-          <span v-if="index > 0">{{ dir.name }}</span>
-          <span v-if="index < breadcrumb.length - 1" class="breadcrumb-separator"> / </span>
+          <span v-else>{{ dir.name }}</span>
+          <span class="breadcrumb-separator"> / </span>
         </span>
       </div>
     </n-scrollbar>

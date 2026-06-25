@@ -71,6 +71,75 @@ export function createUnifiedDirectoryModule(registry: ModuleRegistry) {
     return directories.value.get(activeTab.value.dirId) || null
   })
 
+  type DirectoryMutationErrorCode = 'invalid_name' | 'duplicate_name' | 'not_found'
+  type DirectoryMutationResult =
+    | { success: true; directory: VirtualDirectory }
+    | { success: false; error: string; code: DirectoryMutationErrorCode }
+
+  function normalizeDirectoryName(name: string): string {
+    return name.trim()
+  }
+
+  function getSiblingDirectories(parentId: string | null): VirtualDirectory[] {
+    return Array.from(directories.value.values()).filter((dir) => dir.parentId === parentId)
+  }
+
+  function validateDirectoryName(
+    name: string,
+    parentId: string | null,
+    excludeDirId?: string,
+  ): { ok: true; normalizedName: string } | { ok: false; error: string; code: DirectoryMutationErrorCode } {
+    const normalizedName = normalizeDirectoryName(name)
+
+    if (!normalizedName) {
+      return { ok: false, error: '目录名称不能为空', code: 'invalid_name' }
+    }
+
+    if (normalizedName === '.' || normalizedName === '..') {
+      return { ok: false, error: '目录名称不能为 . 或 ..', code: 'invalid_name' }
+    }
+
+    if (/[\/\\]/.test(normalizedName)) {
+      return { ok: false, error: '目录名称不能包含 / 或 \\', code: 'invalid_name' }
+    }
+
+    if (/[\u0000-\u001f\u007f]/.test(normalizedName)) {
+      return { ok: false, error: '目录名称不能包含控制字符', code: 'invalid_name' }
+    }
+
+    const duplicate = getSiblingDirectories(parentId).find(
+      (dir) => dir.id !== excludeDirId && dir.name === normalizedName,
+    )
+    if (duplicate) {
+      return { ok: false, error: `当前目录下已存在同名文件夹“${normalizedName}”`, code: 'duplicate_name' }
+    }
+
+    return { ok: true, normalizedName }
+  }
+
+  function createDirectoryRecord(name: string, parentId: string | null = null): VirtualDirectory {
+    const newDir: VirtualDirectory = {
+      type: DirectoryType.BASE,
+      id: generateDirectoryId(),
+      name,
+      parentId,
+      createdAt: new Date().toISOString(),
+      childDirIds: [],
+      assetIds: [],
+    }
+
+    directories.value.set(newDir.id, newDir)
+
+    if (parentId) {
+      const parentDir = directories.value.get(parentId)
+      if (parentDir) {
+        parentDir.childDirIds.push(newDir.id)
+      }
+    }
+
+    return newDir
+  }
+
   // ==================== 核心方法 ====================
 
   /**
@@ -86,28 +155,20 @@ export function createUnifiedDirectoryModule(registry: ModuleRegistry) {
   /**
    * 创建新目录
    */
-  function createDirectory(name: string, parentId: string | null = null): VirtualDirectory {
-    const newDir: VirtualDirectory = {
-      type: DirectoryType.BASE,
-      id: generateDirectoryId(),
-      name,
-      parentId,
-      createdAt: new Date().toISOString(),
-      childDirIds: [],
-      assetIds: [],
+  function createDirectory(name: string, parentId: string | null = null): DirectoryMutationResult {
+    if (parentId && !directories.value.has(parentId)) {
+      return { success: false, error: '父目录不存在', code: 'not_found' }
     }
 
-    directories.value.set(newDir.id, newDir)
-
-    // 如果有父目录，更新父目录的子目录列表
-    if (parentId) {
-      const parentDir = directories.value.get(parentId)
-      if (parentDir) {
-        parentDir.childDirIds.push(newDir.id)
-      }
+    const validation = validateDirectoryName(name, parentId)
+    if (!validation.ok) {
+      return { success: false, error: validation.error, code: validation.code }
     }
 
-    return newDir
+    return {
+      success: true,
+      directory: createDirectoryRecord(validation.normalizedName, parentId),
+    }
   }
 
   /**
@@ -120,10 +181,15 @@ export function createUnifiedDirectoryModule(registry: ModuleRegistry) {
     parentId: string | null = null,
     timestamps: { st: number; ed: number },
   ): CharacterDirectory {
+    const validation = validateDirectoryName(name, parentId)
+    if (!validation.ok) {
+      throw new Error(validation.error)
+    }
+
     const characterDir: CharacterDirectory = {
       type: DirectoryType.CHARACTER,
       id: generateDirectoryId(),
-      name,
+      name: validation.normalizedName,
       parentId,
       createdAt: new Date().toISOString(),
       childDirIds: [],
@@ -170,14 +236,23 @@ export function createUnifiedDirectoryModule(registry: ModuleRegistry) {
   /**
    * 重命名目录
    */
-  function renameDirectory(id: string, newName: string): boolean {
+  function renameDirectory(id: string, newName: string): DirectoryMutationResult {
     const dir = directories.value.get(id)
-    if (!dir) return false
+    if (!dir) {
+      return { success: false, error: '目录不存在', code: 'not_found' }
+    }
 
-    if (!newName.trim()) return false
+    if (dir.parentId === null) {
+      return { success: false, error: '不能重命名根目录', code: 'invalid_name' }
+    }
 
-    dir.name = newName.trim()
-    return true
+    const validation = validateDirectoryName(newName, dir.parentId, id)
+    if (!validation.ok) {
+      return { success: false, error: validation.error, code: validation.code }
+    }
+
+    dir.name = validation.normalizedName
+    return { success: true, directory: dir }
   }
 
   /**
@@ -460,7 +535,7 @@ export function createUnifiedDirectoryModule(registry: ModuleRegistry) {
     }
 
     // 创建根目录
-    const rootDir = createDirectory('root', null)
+    const rootDir = createDirectoryRecord('root', null)
 
     // 打开根目录标签页
     openTab(rootDir.id)
@@ -728,7 +803,11 @@ export function createUnifiedDirectoryModule(registry: ModuleRegistry) {
     if (!sourceDir) throw new Error('源目录不存在')
 
     // 创建新目录
-    const newDir = createDirectory(newName, targetParentId)
+    const createResult = createDirectory(newName, targetParentId)
+    if (!createResult.success) {
+      throw new Error(createResult.error)
+    }
+    const newDir = createResult.directory
 
     // 复制子目录
     for (const childDirId of sourceDir.childDirIds) {

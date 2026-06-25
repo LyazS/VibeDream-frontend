@@ -1094,11 +1094,12 @@ async function handleRenameConfirm(newName: string): Promise<void> {
   try {
     if (target.type === 'directory') {
       // 重命名文件夹
-      const success = unifiedStore.renameDirectory(target.id, newName)
-      if (success) {
+      const result = unifiedStore.renameDirectory(target.id, newName)
+      if (result.success) {
         unifiedStore.messageSuccess(t('media.folderRenameSuccess'))
       } else {
-        unifiedStore.messageError(t('media.folderRenameFailed'))
+        unifiedStore.messageError(result.error || t('media.folderRenameFailed'))
+        return
       }
     } else {
       unifiedStore.updateAssetName(target.id, newName)
@@ -1120,7 +1121,11 @@ async function handleCreateFolder(folderName: string): Promise<void> {
   }
 
   try {
-    unifiedStore.createDirectory(folderName, currentDir.value.id)
+    const result = unifiedStore.createDirectory(folderName, currentDir.value.id)
+    if (!result.success) {
+      unifiedStore.messageError(result.error || t('media.folderCreateFailed'))
+      return
+    }
     showCreateDirModal.value = false
     unifiedStore.messageSuccess(t('media.folderCreateSuccess'))
   } catch (error) {
