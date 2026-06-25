@@ -5,6 +5,7 @@
 
 import { addTrackTool } from './addTrack'
 import { createSubtitleClipTool } from './createSubtitleClip'
+import { diffApplyKeyframeChannelTool } from './diffApplyKeyframeChannel'
 import { listMediaTool } from './listMedia'
 import { listTracksTool } from './listTracks'
 import { insertClipTool } from './insertClip'
@@ -13,6 +14,7 @@ import { moveTrackTool } from './moveTrack'
 import { patchClipPropertiesTool } from './patchClipProperties'
 import { readClipTool } from './readClip'
 import { readClipPropertiesTool } from './readClipProperties'
+import { readKeyframeTimelineTool } from './readKeyframeTimeline'
 import { readMediaTool } from './readMedia'
 import { readTrackTool } from './readTrack'
 import { removeClipTool } from './removeClip'
@@ -23,6 +25,7 @@ import { setTrackMuteTool } from './setTrackMute'
 import { setTrackVisibilityTool } from './setTrackVisibility'
 import { splitClipTool } from './splitClip'
 import { trimClipTool } from './trimClip'
+import { writeKeyframeChannelTool } from './writeKeyframeChannel'
 import type { ToolDefinition, ToolExecutionContext, ToolResult } from '../core/toolTypes'
 import { isToolErrorEnvelope, serializeToolOutput } from './utils/result'
 
@@ -74,6 +77,7 @@ function registerTool(tool: ToolDefinition): void {
 // 注册内置工具
 registerTool(addTrackTool)
 registerTool(createSubtitleClipTool)
+registerTool(diffApplyKeyframeChannelTool)
 registerTool(listMediaTool)
 registerTool(listTracksTool)
 registerTool(insertClipTool)
@@ -82,6 +86,7 @@ registerTool(moveTrackTool)
 registerTool(patchClipPropertiesTool)
 registerTool(readClipTool)
 registerTool(readClipPropertiesTool)
+registerTool(readKeyframeTimelineTool)
 registerTool(readMediaTool)
 registerTool(readTrackTool)
 registerTool(removeClipTool)
@@ -92,6 +97,7 @@ registerTool(setTrackMuteTool)
 registerTool(setTrackVisibilityTool)
 registerTool(splitClipTool)
 registerTool(trimClipTool)
+registerTool(writeKeyframeChannelTool)
 
 /**
  * 执行工具
@@ -178,6 +184,7 @@ export function listTools(): ToolDefinition[] {
 export {
   addTrackTool,
   createSubtitleClipTool,
+  diffApplyKeyframeChannelTool,
   listMediaTool,
   listTracksTool,
   insertClipTool,
@@ -186,6 +193,7 @@ export {
   patchClipPropertiesTool,
   readClipTool,
   readClipPropertiesTool,
+  readKeyframeTimelineTool,
   readMediaTool,
   readTrackTool,
   removeClipTool,
@@ -196,5 +204,6 @@ export {
   setTrackVisibilityTool,
   splitClipTool,
   trimClipTool,
+  writeKeyframeChannelTool,
 }
 export type { ToolDefinition, ToolResult }

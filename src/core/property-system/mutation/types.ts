@@ -168,4 +168,5 @@ export interface ChangePlan {
   propertyId: ChangePlanPropertyId
   description: string
   operations: ChangeOperation[]
+  toolMode?: boolean
 }

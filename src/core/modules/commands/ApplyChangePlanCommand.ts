@@ -64,7 +64,11 @@ export class ApplyChangePlanCommand implements SimpleCommand {
         throw new Error(`时间轴项目不存在: ${operation.timelineItemId}`)
       }
 
-      if ('frame' in operation && !isPlayheadInTimelineItem(item, operation.frame)) {
+      if (
+        !this.plan.toolMode &&
+        'frame' in operation &&
+        !isPlayheadInTimelineItem(item, operation.frame)
+      ) {
         await showUserWarning('无法更新属性', '播放头不在当前片段内。')
         throw new Error('播放头不在当前clip时间范围内，无法更新属性')
       }
