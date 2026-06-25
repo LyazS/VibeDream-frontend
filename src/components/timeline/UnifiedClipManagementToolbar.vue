@@ -66,6 +66,17 @@
         />
       </div>
 
+      <!-- 边界编辑模式切换 -->
+      <HoverButton
+        @click="toggleEdgeEditMode"
+        :title="edgeEditModeTooltip"
+      >
+        <template #icon>
+          <component :is="edgeEditModeIcon" size="14px" />
+        </template>
+        {{ edgeEditModeLabel }}
+      </HoverButton>
+
       <!-- 吸附开关按钮 -->
       <HoverButton
         @click="toggleSnap"
@@ -143,11 +154,35 @@ function handleZoomChange(sliderValue: number) {
 // 吸附功能状态
 const snapEnabled = computed(() => unifiedStore.snapConfig.enabled)
 
+const edgeEditModeLabel = computed(() =>
+  unifiedStore.timelineEdgeEditMode === 'trim'
+    ? t('toolbar.edgeEdit.trim')
+    : t('toolbar.edgeEdit.resize'),
+)
+
+const edgeEditModeTooltip = computed(() =>
+  unifiedStore.timelineEdgeEditMode === 'trim'
+    ? t('toolbar.edgeEdit.trimTooltip')
+    : t('toolbar.edgeEdit.resizeTooltip'),
+)
+
+const edgeEditModeIcon = computed(() =>
+  unifiedStore.timelineEdgeEditMode === 'trim'
+    ? IconComponents.TRIM
+    : IconComponents.RESIZE_WIDTH,
+)
+
 // 切换吸附功能
 function toggleSnap() {
   unifiedStore.updateSnapConfig({ enabled: !snapEnabled.value })
   console.log(
     `🧲 ${t('toolbar.feedback.snapToggled', { status: snapEnabled.value ? '已关闭' : '已开启' })}`,
+  )
+}
+
+function toggleEdgeEditMode() {
+  unifiedStore.setTimelineEdgeEditMode(
+    unifiedStore.timelineEdgeEditMode === 'trim' ? 'resize' : 'trim',
   )
 }
 

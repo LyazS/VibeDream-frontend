@@ -52,10 +52,11 @@ const unifiedStore = useUnifiedStore()
 
 // 缩略图布局数组
 const thumbnailLayout = computed<ThumbnailLayoutItem[]>(() => {
-  const clipTLStartFrame = props.data.timeRange.timelineStartTime
-  const clipTLDurationFrames = props.data.timeRange.timelineEndTime - clipTLStartFrame
-  const clipStartFrame = props.data.timeRange.clipStartTime
-  const clipDurationFrames = props.data.timeRange.clipEndTime - clipStartFrame
+  const timeRange = props.data.timeRange
+  const clipTLStartFrame = timeRange.timelineStartTime
+  const clipTLDurationFrames = timeRange.timelineEndTime - clipTLStartFrame
+  const clipStartFrame = timeRange.clipStartTime
+  const clipDurationFrames = timeRange.clipEndTime - clipStartFrame
 
   // 计算clip的像素宽度
   const clipWidthPixels = calculateClipWidthPixels(
@@ -82,8 +83,8 @@ const thumbnailLayout = computed<ThumbnailLayoutItem[]>(() => {
   // 过滤可见的缩略图
   return filterThumbnailVisible(
     layout,
-    clipTLStartFrame,
-    clipTLDurationFrames,
+    props.renderFrame?.timeRange.timelineStartTime ?? clipTLStartFrame,
+    props.renderFrame?.durationFrames ?? clipTLDurationFrames,
     viewportStartFrame,
     viewportEndFrame,
   )
@@ -92,7 +93,7 @@ const thumbnailLayout = computed<ThumbnailLayoutItem[]>(() => {
 // 获取缩略图槽位样式
 function getThumbnailSlotStyle(item: ThumbnailLayoutItem) {
   return {
-    left: `${item.pixelPosition}px`,
+    left: `${props.renderFrame?.frameToLocalPixel(item.timelineFramePosition) ?? item.pixelPosition}px`,
     width: `${THUMBNAIL_CONSTANTS.WIDTH}px`,
     height: `${THUMBNAIL_CONSTANTS.HEIGHT}px`,
   }

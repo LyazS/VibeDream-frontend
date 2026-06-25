@@ -26,6 +26,7 @@ import {
   ToggleTrackVisibilityCommand,
   ToggleTrackMuteCommand,
   SelectTimelineSelectionsCommand,
+  TrimTimelineItemCommand,
 } from '@/core/modules/commands/timelineCommands'
 import { ApplyChangePlanCommand } from '@/core/modules/commands/ApplyChangePlanCommand'
 import { BatchAutoArrangeTrackCommand } from '@/core/modules/commands/batchCommands'
@@ -51,6 +52,7 @@ import {
 import { RENDERER_FPS } from '@/core/mediabunny/constant'
 import type { ChangePlan } from '@/core/property-system'
 import type { AnimationChannelKey } from '@/core/timelineitem/model/render'
+import type { TrimTimelineItemSide } from '@/core/modules/commands/timelineCommands'
 
 interface PlaybackRateUpdate {
   playbackRate: number
@@ -510,6 +512,42 @@ export function useHistoryOperations(
     }
   }
 
+  async function trimTimelineItemWithHistory(
+    timelineItemId: string,
+    side: TrimTimelineItemSide,
+    targetBoundaryFrame: number,
+  ): Promise<boolean> {
+    try {
+      const currentItem = getEditableTimelineItemOrWarn(timelineItemId, 'Trim 时间范围')
+      if (!currentItem) {
+        return false
+      }
+
+      const currentBoundary =
+        side === 'start'
+          ? currentItem.timeRange.timelineStartTime
+          : currentItem.timeRange.timelineEndTime
+      if (currentBoundary === targetBoundaryFrame) {
+        return true
+      }
+
+      const command = new TrimTimelineItemCommand(
+        timelineItemId,
+        currentItem,
+        side,
+        targetBoundaryFrame,
+        unifiedTimelineModule,
+        unifiedMediaModule,
+      )
+
+      await unifiedHistoryModule.executeCommand(command)
+      return true
+    } catch (error) {
+      console.error('❌ [UnifiedStore] Trim 时间轴项目时发生错误:', error)
+      return false
+    }
+  }
+
   /**
    * 带历史记录的添加轨道方法
    * @param type 轨道类型
@@ -804,6 +842,7 @@ export function useHistoryOperations(
     splitTimelineItemAtTimeWithHistory,
     duplicateTimelineItemWithHistory,
     resizeTimelineItemWithHistory,
+    trimTimelineItemWithHistory,
     addTrackWithHistory,
     removeTrackWithHistory,
     renameTrackWithHistory,

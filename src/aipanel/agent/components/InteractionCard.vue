@@ -102,8 +102,8 @@ const submitCustomAnswer = async () => {
   margin: 2px 0;
   padding: var(--spacing-lg);
   border-radius: var(--border-radius-large);
-  background: rgba(255, 255, 255, 0.015);
-  border: 1px solid var(--color-border-secondary);
+  background: rgba(255, 255, 255, 0.035);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.04);
   width: 100%;
   box-sizing: border-box;
 }
@@ -118,7 +118,7 @@ const submitCustomAnswer = async () => {
 .interaction-icon {
   flex-shrink: 0;
   margin-top: 2px;
-  color: var(--color-text-tertiary);
+  color: #ff9f43;
 }
 
 .interaction-body {
@@ -137,9 +137,9 @@ const submitCustomAnswer = async () => {
 
 .interaction-response {
   padding: 10px 12px;
-  background: var(--color-bg-secondary);
-  border: 1px solid var(--color-border-primary);
+  background: rgba(255, 255, 255, 0.03);
   border-radius: var(--border-radius-medium);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.04);
 }
 
 .interaction-response-value {
@@ -165,8 +165,8 @@ const submitCustomAnswer = async () => {
 .interaction-option-chip {
   flex: 1;
   min-width: 0;
-  border: 1px solid var(--color-border-primary);
-  background: var(--color-bg-secondary);
+  border: none;
+  background: rgba(255, 255, 255, 0.03);
   color: var(--color-text-primary);
   border-radius: var(--border-radius-large);
   padding: 10px 12px;
@@ -176,7 +176,6 @@ const submitCustomAnswer = async () => {
   text-align: left;
   transition:
     background-color var(--transition-fast),
-    border-color var(--transition-fast),
     transform var(--transition-fast);
 }
 
@@ -200,14 +199,14 @@ const submitCustomAnswer = async () => {
 }
 
 .interaction-option-chip:hover:not(:disabled) {
-  background: var(--color-bg-hover);
-  border-color: var(--color-border-hover);
+  background: rgba(255, 255, 255, 0.09);
   transform: translateY(-1px);
 }
 
 .interaction-option-chip:focus-visible {
   outline: none;
-  border-color: var(--color-accent-secondary);
+  background: rgba(255, 255, 255, 0.09);
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.14);
 }
 
 .interaction-option-chip:disabled {

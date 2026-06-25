@@ -61,6 +61,7 @@ import {
   isPlayheadInTimelineItem,
   findOverlappingTimelineItems,
 } from '@/core/utils/timelineSearchUtils'
+export type { TimelineEdgeEditMode } from '@/core/modules/UnifiedConfigModule'
 
 /**
  * 统一视频编辑器存储
@@ -402,6 +403,7 @@ export const useUnifiedStore = defineStore('unified', () => {
     splitTimelineItemAtTimeWithHistory: historyOperations.splitTimelineItemAtTimeWithHistory,
     duplicateTimelineItemWithHistory: historyOperations.duplicateTimelineItemWithHistory,
     resizeTimelineItemWithHistory: historyOperations.resizeTimelineItemWithHistory,
+    trimTimelineItemWithHistory: historyOperations.trimTimelineItemWithHistory,
     // 轨道历史记录方法
     addTrackWithHistory: historyOperations.addTrackWithHistory,
     removeTrackWithHistory: historyOperations.removeTrackWithHistory,
@@ -577,9 +579,11 @@ export const useUnifiedStore = defineStore('unified', () => {
     // 配置状态
     videoResolution: unifiedConfigModule.videoResolution,
     timelineDurationFrames: unifiedConfigModule.timelineDurationFrames,
+    timelineEdgeEditMode: unifiedConfigModule.timelineEdgeEditMode,
 
     // 配置管理方法
     setVideoResolution: unifiedConfigModule.setVideoResolution,
+    setTimelineEdgeEditMode: unifiedConfigModule.setTimelineEdgeEditMode,
     resetConfigToDefaults: unifiedConfigModule.resetToDefaults,
     restoreFromProjectSettings: unifiedConfigModule.restoreFromProjectSettings,
 

@@ -58,8 +58,13 @@
 
 <script setup lang="ts">
 import { computed, ref, onUnmounted } from 'vue'
-import type { UnifiedTimelineClipProps, ContentTemplateProps } from '@/core/types/clipRenderer'
+import {
+  createClipRenderFrame,
+  type ContentTemplateProps,
+  type UnifiedTimelineClipProps,
+} from '@/core/types/clipRenderer'
 import type { UnifiedTimeRange } from '@/core/types/timeRange'
+import type { TrimTimelineItemSide } from '@/core/modules/commands/timelineCommands'
 import { ContentRendererFactory } from '@/components/cliprenderers/ContentRendererFactory'
 import { effectTemplateRegistry } from '@/core/effect-template/EffectTemplateRegistry'
 import type { SnapResultState } from '@/core/composables/useTimelineSnap'
@@ -104,6 +109,8 @@ const tempResizePositionFrames = ref(0)
 // 拖拽状态
 const isDragging = ref(false)
 
+const timelineEdgeEditMode = computed(() => unifiedStore.timelineEdgeEditMode)
+
 const hasEffectWarning = computed(() => {
   const transitionPackageId = TimelineItemQueries.getBaseTransition(props.data)?.effectPackageId
   if (transitionPackageId && effectTemplateRegistry.getPackageState(transitionPackageId)?.status !== 'ready') {
@@ -137,6 +144,7 @@ const templateProps = computed<ContentTemplateProps>(() => ({
   trackHeight: props.trackHeight,
   timelineWidth: props.timelineWidth,
   viewportFrameRange: props.viewportFrameRange,
+  renderFrame: isResizing.value ? clipRenderFrame.value : undefined,
 }))
 
 /**
@@ -198,6 +206,51 @@ const combinedStyles = computed(() => {
   }
 })
 
+const previewTimeRange = computed<UnifiedTimeRange>(() => {
+  const timeRange = props.data.timeRange
+  if (!isResizing.value) {
+    return timeRange
+  }
+
+  const preview: UnifiedTimeRange = {
+    ...timeRange,
+    timelineStartTime: tempResizePositionFrames.value,
+    timelineEndTime: tempResizePositionFrames.value + tempDurationFrames.value,
+  }
+
+  const timelineDuration = timeRange.timelineEndTime - timeRange.timelineStartTime
+  const sourceDuration = timeRange.clipEndTime - timeRange.clipStartTime
+  if (
+    timelineEdgeEditMode.value === 'trim' &&
+    (props.data.mediaType === 'video' || props.data.mediaType === 'audio') &&
+    timelineDuration > 0
+  ) {
+    const playbackRate = sourceDuration / timelineDuration
+    if (resizeDirection.value === 'left') {
+      preview.clipStartTime =
+        timeRange.clipStartTime +
+        Math.round((preview.timelineStartTime - timeRange.timelineStartTime) * playbackRate)
+    } else if (resizeDirection.value === 'right') {
+      preview.clipEndTime =
+        timeRange.clipEndTime +
+        Math.round((preview.timelineEndTime - timeRange.timelineEndTime) * playbackRate)
+    }
+  }
+
+  return preview
+})
+
+const clipRenderWidthPixels = computed(() => {
+  const timeRange = previewTimeRange.value
+  const left = unifiedStore.frameToPixel(timeRange.timelineStartTime, props.timelineWidth)
+  const right = unifiedStore.frameToPixel(timeRange.timelineEndTime, props.timelineWidth)
+  return Math.max(right - left, 20)
+})
+
+const clipRenderFrame = computed(() =>
+  createClipRenderFrame(previewTimeRange.value, clipRenderWidthPixels.value),
+)
+
 // ==================== 关键帧标记相关计算属性 ====================
 
 /**
@@ -214,25 +267,17 @@ const visibleKeyframes = computed(() => {
   if (!hasKeyframes.value) return []
 
   const keyframes = getVisibleKeyframesForTimeline(props.data)
-  const timeRange = props.data.timeRange
-  const clipStartFrame = timeRange.timelineStartTime
-  const clipEndFrame = timeRange.timelineEndTime
-
-  // 计算clip在时间轴上的像素位置和宽度（使用统一store的坐标转换）
-  const clipLeft = unifiedStore.frameToPixel(clipStartFrame, props.timelineWidth)
-  const clipRight = unifiedStore.frameToPixel(clipEndFrame, props.timelineWidth)
-  const clipWidth = clipRight - clipLeft
+  const renderFrame = clipRenderFrame.value
+  const timeRange = renderFrame.timeRange
+  const clipWidth = renderFrame.widthPixels
 
   return keyframes
     .map((keyframe) => {
       // ✅ 直接使用 cachedFrame
-      const absoluteFrame = relativeFrameToAbsoluteFrame(keyframe.cachedFrame, timeRange)
+      const absoluteFrame = relativeFrameToAbsoluteFrame(keyframe.cachedFrame, props.data.timeRange)
 
-      // 计算关键帧在整个时间轴上的像素位置（考虑缩放级别）
-      const absolutePixelPosition = unifiedStore.frameToPixel(absoluteFrame, props.timelineWidth)
-
-      // 关键帧标记应该使用相对于clip容器的位置
-      const relativePixelPosition = absolutePixelPosition - clipLeft
+      // 关键帧标记应该使用原绝对帧到当前 renderFrame 的局部坐标。
+      const relativePixelPosition = renderFrame.frameToLocalPixel(absoluteFrame)
 
       return {
         cachedFrame: keyframe.cachedFrame,
@@ -489,6 +534,36 @@ function handleResize(event: MouseEvent) {
     newDurationFrames = newRightFrames - resizeStartPositionFrames.value
   }
 
+  if (timelineEdgeEditMode.value === 'trim') {
+    const timeRange = props.data.timeRange
+    const timelineDuration = timeRange.timelineEndTime - timeRange.timelineStartTime
+    const sourceDuration = timeRange.clipEndTime - timeRange.clipStartTime
+
+    if ((props.data.mediaType === 'video' || props.data.mediaType === 'audio') && timelineDuration > 0) {
+      const playbackRate = sourceDuration / timelineDuration
+      if (resizeDirection.value === 'left') {
+        const minStartBySource = timeRange.timelineStartTime - timeRange.clipStartTime / playbackRate
+        newTimelinePositionFrames = Math.max(newTimelinePositionFrames, Math.ceil(minStartBySource), 0)
+        newTimelinePositionFrames = Math.min(
+          newTimelinePositionFrames,
+          timeRange.timelineEndTime - 1,
+        )
+        newDurationFrames = timeRange.timelineEndTime - newTimelinePositionFrames
+      } else {
+        const mediaItem = unifiedStore.getMediaItem(props.data.mediaItemId)
+        if (typeof mediaItem?.duration === 'number' && Number.isFinite(mediaItem.duration)) {
+          const maxEndBySource =
+            timeRange.timelineEndTime + (mediaItem.duration - timeRange.clipEndTime) / playbackRate
+          const nextEndFrames = Math.min(
+            resizeStartPositionFrames.value + newDurationFrames,
+            Math.floor(maxEndBySource),
+          )
+          newDurationFrames = nextEndFrames - resizeStartPositionFrames.value
+        }
+      }
+    }
+  }
+
   // 设置时长限制：最小1帧，用户可以自由调整时长
   const minDurationFrames = 1
   newDurationFrames = Math.max(minDurationFrames, newDurationFrames)
@@ -531,20 +606,27 @@ async function stopResize() {
 
     // 使用统一架构的resize命令来更新时间范围
     try {
-      // 构建完整的newTimeRange对象
-      const currentTimeRange = props.data.timeRange
-      let newTimeRange: UnifiedTimeRange
+      let success = false
+      if (timelineEdgeEditMode.value === 'trim') {
+        const side: TrimTimelineItemSide = resizeDirection.value === 'left' ? 'start' : 'end'
+        const targetBoundaryFrame =
+          side === 'start' ? newTimelineStartTimeFrames : newTimelineEndTimeFrames
+        success = await unifiedStore.trimTimelineItemWithHistory(
+          props.data.id,
+          side,
+          targetBoundaryFrame,
+        )
+      } else {
+        const currentTimeRange = props.data.timeRange
+        const newTimeRange: UnifiedTimeRange = {
+          timelineStartTime: newTimelineStartTimeFrames,
+          timelineEndTime: newTimelineEndTimeFrames,
+          clipStartTime: currentTimeRange.clipStartTime,
+          clipEndTime: currentTimeRange.clipEndTime,
+        }
 
-      // 统一使用UnifiedTimeRange结构
-      newTimeRange = {
-        timelineStartTime: newTimelineStartTimeFrames,
-        timelineEndTime: newTimelineEndTimeFrames,
-        clipStartTime: currentTimeRange.clipStartTime,
-        clipEndTime: currentTimeRange.clipEndTime,
+        success = await unifiedStore.resizeTimelineItemWithHistory(props.data.id, newTimeRange)
       }
-
-      // 调用统一store的resize方法，传入完整的newTimeRange对象
-      const success = await unifiedStore.resizeTimelineItemWithHistory(props.data.id, newTimeRange)
 
       if (success) {
         console.log('✅ [CleanTimelineClip]', t('timeline.clip.resizeSuccess'))

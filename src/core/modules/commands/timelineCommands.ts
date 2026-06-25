@@ -25,6 +25,8 @@ export { RemoveTrackCommand } from './RemoveTrackCommand' // ok
 export { ToggleTrackVisibilityCommand } from './ToggleTrackVisibilityCommand' // ok
 export { ToggleTrackMuteCommand } from './ToggleTrackMuteCommand' // ok
 export { ResizeTimelineItemCommand } from './ResizeTimelineItemCommand' // ok
+export { TrimTimelineItemCommand } from './TrimTimelineItemCommand'
+export type { TrimTimelineItemSide } from './TrimTimelineItemCommand'
 export { SelectTimelineSelectionsCommand } from './SelectTimelineItemsCommand' // ok
 export { UpdateTransitionConfigCommand } from './UpdateTransitionOutCommand'
 export { UpdateFilterConfigCommand } from './UpdateFilterEffectCommand'
