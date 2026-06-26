@@ -2,6 +2,7 @@ import { useUnifiedStore } from '@/core/unifiedStore'
 import { TimelineItemQueries } from '@/core/timelineitem/queries'
 import type { UnifiedTimelineItemData } from '@/core/timelineitem/model/timelineItem'
 import { isBlendMode, type BlendMode } from '@/core/timelineitem/model/blendMode'
+import { framesToTimecode } from '@/core/utils/timeUtils'
 import type { DirectPropertyBatchPlanEntry } from '@/core/property-system/mutation'
 import { propertyMutationCommitter } from '@/core/property-system/commit/PropertyMutationCommitter'
 import type { ChangePlan, ChangeOperation } from '@/core/property-system'
@@ -10,15 +11,16 @@ const NUMERIC_MATCH_EPSILON = 0.01
 const NUMERIC_DISPLAY_DECIMALS = 2
 
 type GroupId = 'visual' | 'audio' | 'text'
+type ReadGroupId = GroupId | 'timeline'
 type SupportedMediaType = UnifiedTimelineItemData['mediaType']
 type KnownMediaType = Exclude<SupportedMediaType, 'unknown'>
 
 type ReadClipPropertiesArgs = {
   clipId: string
-  groupId: GroupId
+  groupIds: ReadGroupId[]
 }
 
-type PatchClipPropertiesArgs = {
+type UpdateClipPropertiesArgs = {
   clipId: string
   match: Record<string, unknown>
   patch: Record<string, unknown>
@@ -86,17 +88,22 @@ const PATH_DEFINITIONS: Record<PropertyPath, PathDefinition> = {
 export class ClipPropertyEditService {
   async readClipProperties(args: ReadClipPropertiesArgs) {
     const item = this.requireClip(args.clipId)
-    this.ensureGroupSupported(item, args.groupId)
+    const groupIds = normalizeReadGroupIds(args.groupIds)
+    const groups: Partial<Record<ReadGroupId, Record<string, unknown>>> = {}
+
+    for (const groupId of groupIds) {
+      this.ensureReadGroupSupported(item, groupId)
+      groups[groupId] = this.buildReadGroupProperties(item, groupId)
+    }
 
     return {
       clipId: item.id,
       mediaType: item.mediaType,
-      groupId: args.groupId,
-      properties: this.buildGroupProperties(item, args.groupId),
+      groups,
     }
   }
 
-  async patchClipProperties(args: PatchClipPropertiesArgs) {
+  async updateClipProperties(args: UpdateClipPropertiesArgs) {
     const item = this.requireClip(args.clipId)
     validatePatchPayload(args.match, args.patch)
 
@@ -162,6 +169,35 @@ export class ClipPropertyEditService {
         supportedGroups,
       })
     }
+  }
+
+  private ensureReadGroupSupported(item: UnifiedTimelineItemData, groupId: ReadGroupId) {
+    if (groupId === 'timeline') {
+      return
+    }
+    this.ensureGroupSupported(item, groupId)
+  }
+
+  private buildReadGroupProperties(item: UnifiedTimelineItemData, groupId: ReadGroupId) {
+    if (groupId === 'timeline') {
+      const timelineStart = item.timeRange.timelineStartTime
+      const timelineEnd = item.timeRange.timelineEndTime
+      return {
+        trackId: item.trackId,
+        start: framesToTimecode(timelineStart),
+        end: framesToTimecode(timelineEnd),
+        duration: framesToTimecode(timelineEnd - timelineStart),
+        ...(item.mediaType === 'video' || item.mediaType === 'audio'
+          ? {
+              mediaId: item.mediaItemId ?? null,
+              sourceStart: framesToTimecode(item.timeRange.clipStartTime),
+              sourceEnd: framesToTimecode(item.timeRange.clipEndTime),
+            }
+          : {}),
+      }
+    }
+
+    return this.buildGroupProperties(item, groupId)
   }
 
   private buildGroupProperties(item: UnifiedTimelineItemData, groupId: GroupId) {
@@ -393,6 +429,20 @@ export class ClipPropertyEditService {
       operations,
     }
   }
+}
+
+function normalizeReadGroupIds(groupIds: ReadGroupId[]) {
+  if (!Array.isArray(groupIds) || groupIds.length === 0) {
+    throw toolError('invalid_arguments', 'groupIds 必须是非空数组')
+  }
+
+  for (const groupId of groupIds) {
+    if (!['visual', 'audio', 'text', 'timeline'].includes(groupId)) {
+      throw toolError('invalid_group', `无效的属性组: ${groupId}`, { groupId })
+    }
+  }
+
+  return Array.from(new Set(groupIds))
 }
 
 function mergeDirectEntries(entries: DirectPropertyBatchPlanEntry[]): DirectPropertyBatchPlanEntry[] {

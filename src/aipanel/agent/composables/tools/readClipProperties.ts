@@ -8,13 +8,13 @@ export async function executeReadClipProperties(args: Record<string, any>) {
   try {
     const data = await service.readClipProperties({
       clipId: args.clipId,
-      groupId: args.groupId,
+      groupIds: args.groupIds,
     })
 
     return buildToolSuccess(
       'read_clip_properties',
       data,
-      `已读取 ${data.clipId} 的 ${data.groupId} 属性。`,
+      `已读取 ${data.clipId} 的 ${Object.keys(data.groups).join('、')} 属性组。`,
     )
   } catch (error: any) {
     return buildToolError(

@@ -59,7 +59,6 @@ export interface InteractiveInterrupt {
   kind: InteractionKind
   prompt: string
   options: string[]
-  placeholder: string
   created_at: string
 }
 
@@ -79,7 +78,6 @@ export interface SessionInteractionRecord {
 export interface AskUserToolArgs {
   question: string
   suggested_options?: string[]
-  placeholder?: string
 }
 
 export type PendingInterrupt = FrontendToolInterrupt | InteractiveInterrupt

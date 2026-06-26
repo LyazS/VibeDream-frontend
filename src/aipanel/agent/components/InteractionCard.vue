@@ -39,7 +39,7 @@
           v-model="customAnswer"
           type="text"
           class="interaction-custom-input"
-          :placeholder="customInputPlaceholder"
+          :placeholder="t('aiPanel.interaction.customPlaceholder')"
           :disabled="isSending"
         />
         <button
@@ -71,10 +71,6 @@ const isPending = computed(
   () => SESSION_MANAGER.pendingInteraction.value?.interaction_id === props.record.interrupt.interaction_id,
 )
 const customAnswer = ref('')
-
-const customInputPlaceholder = computed(
-  () => props.record.interrupt.placeholder || t('aiPanel.interaction.customPlaceholder'),
-)
 
 const submitOption = async (option: string) => {
   if (!isPending.value || isSending.value) return

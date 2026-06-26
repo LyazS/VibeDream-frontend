@@ -74,10 +74,6 @@ const textareaStyle = computed(() => ({
 }))
 
 const inputPlaceholder = computed(() => {
-  const placeholder = pendingAskUserArgs.value?.placeholder
-  if (typeof placeholder === 'string' && placeholder.trim()) {
-    return placeholder
-  }
   return pendingAskUserArgs.value?.prompt || t('common.chat.inputPlaceholder')
 })
 

@@ -319,7 +319,6 @@ export async function executeListMedia(args: Record<string, any>) {
       entry.type === 'directory'
         ? {
             type: 'directory',
-            id: entry.id,
             name: entry.name,
           }
         : formatMediaEntry(entry),

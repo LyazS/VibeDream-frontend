@@ -5,27 +5,24 @@
 
 import { addTrackTool } from './addTrack'
 import { createSubtitleClipTool } from './createSubtitleClip'
-import { diffApplyKeyframeChannelTool } from './diffApplyKeyframeChannel'
+import { patchClipKeyframeTool } from './patchClipKeyframe'
 import { listMediaTool } from './listMedia'
 import { listTracksTool } from './listTracks'
 import { insertClipTool } from './insertClip'
 import { moveClipTool } from './moveClip'
 import { moveTrackTool } from './moveTrack'
-import { patchClipPropertiesTool } from './patchClipProperties'
-import { readClipTool } from './readClip'
+import { updateClipPropertiesTool } from './updateClipProperties'
+import { updateTrackPropertiesTool } from './updateTrackProperties'
 import { readClipPropertiesTool } from './readClipProperties'
-import { readKeyframeTimelineTool } from './readKeyframeTimeline'
+import { readClipKeyframeTool } from './readClipKeyframe'
 import { readMediaTool } from './readMedia'
 import { readTrackTool } from './readTrack'
 import { removeClipTool } from './removeClip'
 import { removeTrackTool } from './removeTrack'
-import { renameTrackTool } from './renameTrack'
 import { searchMediaTool } from './searchMedia'
-import { setTrackMuteTool } from './setTrackMute'
-import { setTrackVisibilityTool } from './setTrackVisibility'
 import { splitClipTool } from './splitClip'
 import { trimClipTool } from './trimClip'
-import { writeKeyframeChannelTool } from './writeKeyframeChannel'
+import { writeClipKeyframeTool } from './writeClipKeyframe'
 import type { ToolDefinition, ToolExecutionContext, ToolResult } from '../core/toolTypes'
 import { isToolErrorEnvelope, serializeToolOutput } from './utils/result'
 
@@ -77,27 +74,24 @@ function registerTool(tool: ToolDefinition): void {
 // 注册内置工具
 registerTool(addTrackTool)
 registerTool(createSubtitleClipTool)
-registerTool(diffApplyKeyframeChannelTool)
+registerTool(patchClipKeyframeTool)
 registerTool(listMediaTool)
 registerTool(listTracksTool)
 registerTool(insertClipTool)
 registerTool(moveClipTool)
 registerTool(moveTrackTool)
-registerTool(patchClipPropertiesTool)
-registerTool(readClipTool)
+registerTool(updateClipPropertiesTool)
+registerTool(updateTrackPropertiesTool)
 registerTool(readClipPropertiesTool)
-registerTool(readKeyframeTimelineTool)
+registerTool(readClipKeyframeTool)
 registerTool(readMediaTool)
 registerTool(readTrackTool)
 registerTool(removeClipTool)
 registerTool(removeTrackTool)
-registerTool(renameTrackTool)
 registerTool(searchMediaTool)
-registerTool(setTrackMuteTool)
-registerTool(setTrackVisibilityTool)
 registerTool(splitClipTool)
 registerTool(trimClipTool)
-registerTool(writeKeyframeChannelTool)
+registerTool(writeClipKeyframeTool)
 
 /**
  * 执行工具
@@ -184,26 +178,23 @@ export function listTools(): ToolDefinition[] {
 export {
   addTrackTool,
   createSubtitleClipTool,
-  diffApplyKeyframeChannelTool,
+  patchClipKeyframeTool,
   listMediaTool,
   listTracksTool,
   insertClipTool,
   moveClipTool,
   moveTrackTool,
-  patchClipPropertiesTool,
-  readClipTool,
+  updateClipPropertiesTool,
+  updateTrackPropertiesTool,
   readClipPropertiesTool,
-  readKeyframeTimelineTool,
+  readClipKeyframeTool,
   readMediaTool,
   readTrackTool,
   removeClipTool,
   removeTrackTool,
-  renameTrackTool,
   searchMediaTool,
-  setTrackMuteTool,
-  setTrackVisibilityTool,
   splitClipTool,
   trimClipTool,
-  writeKeyframeChannelTool,
+  writeClipKeyframeTool,
 }
 export type { ToolDefinition, ToolResult }

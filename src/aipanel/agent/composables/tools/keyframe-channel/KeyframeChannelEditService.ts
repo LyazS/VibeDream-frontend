@@ -44,16 +44,12 @@ type WriteArgs = {
 type DiffApplyArgs = {
   itemId: string
   groupId: PropertyAnimationGroupId
-  match: {
-    range: {
-      startFrame: number
-      endFrame: number
-    }
-    keyframes: KeyframePayload[]
+  range: {
+    startFrame: number
+    endFrame: number
   }
-  apply: {
-    replaceWith: KeyframePayload[]
-  }
+  match: KeyframePayload[]
+  apply: KeyframePayload[]
   options?: {
     onMismatch?: 'reject'
     frameMode?: 'absolute'
@@ -119,7 +115,7 @@ function valuesEqual(left: unknown, right: unknown): boolean {
 }
 
 export class KeyframeChannelEditService {
-  async readKeyframeTimeline(args: ReadArgs) {
+  async readClipKeyframe(args: ReadArgs) {
     const item = this.requireClip(args.itemId)
     const groupId = this.requireSupportedGroup(item, args.groupId)
     const keyframes = this.readTimelineKeyframes(item, groupId)
@@ -137,7 +133,7 @@ export class KeyframeChannelEditService {
     }
   }
 
-  async writeKeyframeChannel(args: WriteArgs) {
+  async writeClipKeyframe(args: WriteArgs) {
     const item = this.requireClip(args.itemId)
     const groupId = this.requireSupportedGroup(item, args.groupId)
     this.assertFrameMode(args.options?.frameMode)
@@ -167,23 +163,38 @@ export class KeyframeChannelEditService {
     }
   }
 
-  async diffApplyKeyframeChannel(args: DiffApplyArgs) {
+  async patchClipKeyframe(args: DiffApplyArgs) {
     const item = this.requireClip(args.itemId)
     const groupId = this.requireSupportedGroup(item, args.groupId)
     this.assertFrameMode(args.options?.frameMode)
 
     const current = this.readTimelineKeyframes(item, groupId)
-    const startFrame = normalizeFrame(args.match?.range?.startFrame, 'match.range.startFrame')
-    const endFrame = normalizeFrame(args.match?.range?.endFrame, 'match.range.endFrame')
+    const expected = this.normalizeInputKeyframes(item, groupId, args.match ?? [])
+    if (expected.length === 0) {
+      throw toolError('invalid_arguments', 'match 至少需要 1 个关键帧', {
+        field: 'match',
+      })
+    }
+
+    const startFrame = normalizeFrame(args.range?.startFrame, 'range.startFrame')
+    const endFrame = normalizeFrame(args.range?.endFrame, 'range.endFrame')
     if (endFrame < startFrame) {
-      throw toolError('invalid_arguments', 'match.range.endFrame 不能小于 startFrame', {
+      throw toolError('invalid_arguments', 'range.endFrame 不能小于 startFrame', {
         startFrame,
         endFrame,
       })
     }
 
-    const expected = this.normalizeInputKeyframes(item, groupId, args.match?.keyframes ?? [])
-    const replacement = this.normalizeInputKeyframes(item, groupId, args.apply?.replaceWith ?? [])
+    const matchStartFrame = expected[0].frame
+    const matchEndFrame = expected[expected.length - 1].frame
+    if (matchStartFrame < startFrame || matchEndFrame > endFrame) {
+      throw toolError('invalid_arguments', 'match 中的关键帧必须落在 range 内', {
+        range: { startFrame, endFrame },
+        matchRange: { startFrame: matchStartFrame, endFrame: matchEndFrame },
+      })
+    }
+
+    const replacement = this.normalizeInputKeyframes(item, groupId, args.apply ?? [])
     const matched = current.filter((entry) => entry.frame >= startFrame && entry.frame <= endFrame)
 
     if (!this.keyframeListsEqual(matched, expected)) {
