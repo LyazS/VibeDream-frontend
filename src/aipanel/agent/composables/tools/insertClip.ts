@@ -71,21 +71,6 @@ export async function executeInsertClip(args: Record<string, any>) {
       start: nextItem.timeRange.timelineStartTime,
       end: nextItem.timeRange.timelineEndTime,
     })
-    if (conflict) {
-      return buildToolError(
-        'insert_clip',
-        'timeline_conflict',
-        `目标区间与现有片段 ${conflict.id} 冲突，已拒绝插入。`,
-        {
-          conflictClipId: conflict.id,
-          trackId,
-          requestedRange: {
-            start: startParsed.timecode,
-            end: buildClipSnapshot(nextItem).timeline.end,
-          },
-        },
-      )
-    }
 
     await executeSingleCommand(createAddTimelineItemCommand(nextItem))
 
@@ -99,8 +84,23 @@ export async function executeInsertClip(args: Record<string, any>) {
           start: startParsed.timecode,
           end: framesToTimecode(nextItem.timeRange.timelineEndTime),
         },
+        ...(conflict
+          ? {
+              warning: `已执行，但与同轨片段发生重叠：${conflict.id}`,
+              conflict: {
+                clipIds: [conflict.id],
+                trackId,
+                requestedRange: {
+                  start: startParsed.timecode,
+                  end: buildClipSnapshot(nextItem).timeline.end,
+                },
+              },
+            }
+          : {}),
       },
-      `已将素材 ${mediaId} 插入到轨道 ${trackId} 的 ${startParsed.timecode}。`,
+      conflict
+        ? `已将素材 ${mediaId} 插入到轨道 ${trackId} 的 ${startParsed.timecode}，但与同轨片段发生重叠。`
+        : `已将素材 ${mediaId} 插入到轨道 ${trackId} 的 ${startParsed.timecode}。`,
     )
   } catch (error: any) {
     return buildToolError(
