@@ -24,7 +24,6 @@ import { splitClipTool } from './splitClip'
 import { trimClipTool } from './trimClip'
 import { writeClipKeyframeTool } from './writeClipKeyframe'
 import type { ToolDefinition, ToolExecutionContext, ToolResult } from '../core/toolTypes'
-import { isToolErrorEnvelope, serializeToolOutput } from './utils/result'
 
 // 工具存储
 const tools = new Map<string, ToolDefinition>()
@@ -118,23 +117,16 @@ export function executeTool(
   }
 
   return tool.execute(args, context).then(
-    (envelope) => {
-      const result = serializeToolOutput(envelope)
-      const success = !isToolErrorEnvelope(envelope)
+    (result) => {
       logToolExecution({
         name,
         args,
         context,
-        success,
-        result,
-        error: success ? undefined : envelope.error.message,
+        success: result.success,
+        result: result.output,
+        error: result.success ? undefined : result.error,
       })
-      return {
-        success,
-        output: result,
-        envelope,
-        error: success ? undefined : envelope.error.message,
-      }
+      return result
     },
     (error) => {
       logToolExecution({

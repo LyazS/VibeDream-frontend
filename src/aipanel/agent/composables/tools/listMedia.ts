@@ -325,23 +325,18 @@ export async function executeListMedia(args: Record<string, any>) {
     )
 
     const canonicalPath = buildCanonicalPath(resolved.dirId)
-    const hasMore = endIdx < totalEntries
+    const nextOffset = endIdx < totalEntries ? endIdx + 1 : null
     return logListMediaResult(
-      buildToolSuccess(
-        'list_media',
-        {
-          path: canonicalPath,
-          entries: normalizedEntries,
-          page: {
-            offset,
-            limit,
-            total: totalEntries,
-            hasMore,
-            nextOffset: hasMore ? endIdx + 1 : null,
-          },
+      buildToolSuccess('list_media', {
+        path: canonicalPath,
+        entries: normalizedEntries,
+        page: {
+          offset,
+          limit,
+          total: totalEntries,
+          nextOffset,
         },
-        `当前目录共有 ${totalEntries} 个条目，本次返回 ${pagedEntries.length} 个。`,
-      ),
+      }),
     )
   } catch (error: any) {
     return logListMediaResult(

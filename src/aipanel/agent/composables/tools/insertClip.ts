@@ -2,7 +2,6 @@ import { framesToTimecode } from '@/core/utils/timeUtils'
 import type { ToolDefinition } from '../core/toolTypes'
 import { buildToolError, buildToolSuccess } from './utils/result'
 import {
-  buildClipSnapshot,
   buildTimelineItemFromMedia,
   createTimelineCommandHelpers,
   ensureMediaReadyForInsert,
@@ -87,20 +86,10 @@ export async function executeInsertClip(args: Record<string, any>) {
         ...(conflict
           ? {
               warning: `已执行，但与同轨片段发生重叠：${conflict.id}`,
-              conflict: {
-                clipIds: [conflict.id],
-                trackId,
-                requestedRange: {
-                  start: startParsed.timecode,
-                  end: buildClipSnapshot(nextItem).timeline.end,
-                },
-              },
+              overlapClipIds: [conflict.id],
             }
           : {}),
       },
-      conflict
-        ? `已将素材 ${mediaId} 插入到轨道 ${trackId} 的 ${startParsed.timecode}，但与同轨片段发生重叠。`
-        : `已将素材 ${mediaId} 插入到轨道 ${trackId} 的 ${startParsed.timecode}。`,
     )
   } catch (error: any) {
     return buildToolError(

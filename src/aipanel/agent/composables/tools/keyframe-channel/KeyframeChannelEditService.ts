@@ -26,12 +26,12 @@ type KeyframePayload = {
 
 type ReadArgs = {
   itemId: string
-  groupId: PropertyAnimationGroupId
+  channelId: string
 }
 
 type WriteArgs = {
   itemId: string
-  groupId: PropertyAnimationGroupId
+  channelId: string
   keyframes: KeyframePayload[]
   options?: {
     frameMode?: 'absolute'
@@ -43,11 +43,7 @@ type WriteArgs = {
 
 type DiffApplyArgs = {
   itemId: string
-  groupId: PropertyAnimationGroupId
-  range: {
-    startFrame: number
-    endFrame: number
-  }
+  channelId: string
   match: KeyframePayload[]
   apply: KeyframePayload[]
   options?: {
@@ -117,13 +113,13 @@ function valuesEqual(left: unknown, right: unknown): boolean {
 export class KeyframeChannelEditService {
   async readClipKeyframe(args: ReadArgs) {
     const item = this.requireClip(args.itemId)
-    const groupId = this.requireSupportedGroup(item, args.groupId)
+    const groupId = this.requireSupportedGroup(item, args.channelId)
     const keyframes = this.readTimelineKeyframes(item, groupId)
 
     return {
       itemId: item.id,
       mediaType: item.mediaType,
-      groupId,
+      channelId: groupId,
       timelineRange: {
         startFrame: item.timeRange.timelineStartTime,
         endFrame: item.timeRange.timelineEndTime,
@@ -135,12 +131,12 @@ export class KeyframeChannelEditService {
 
   async writeClipKeyframe(args: WriteArgs) {
     const item = this.requireClip(args.itemId)
-    const groupId = this.requireSupportedGroup(item, args.groupId)
+    const groupId = this.requireSupportedGroup(item, args.channelId)
     this.assertFrameMode(args.options?.frameMode)
 
     const current = this.readTimelineKeyframes(item, groupId)
     const next = this.normalizeInputKeyframes(item, groupId, args.keyframes)
-    const plan = this.buildPlan(item, groupId, current, next, `重写 ${groupId} 关键帧`)
+    const plan = this.buildPlan(item, groupId, current, next, `重写 ${args.channelId} 关键帧`)
     const diff = this.summarizeDiff(current, next)
 
     if (plan.operations.length > 0) {
@@ -149,7 +145,7 @@ export class KeyframeChannelEditService {
 
     return {
       itemId: item.id,
-      groupId,
+      channelId: groupId,
       status: 'applied' as const,
       diff: {
         replaceMode: 'entire-channel' as const,
@@ -165,7 +161,7 @@ export class KeyframeChannelEditService {
 
   async patchClipKeyframe(args: DiffApplyArgs) {
     const item = this.requireClip(args.itemId)
-    const groupId = this.requireSupportedGroup(item, args.groupId)
+    const groupId = this.requireSupportedGroup(item, args.channelId)
     this.assertFrameMode(args.options?.frameMode)
 
     const current = this.readTimelineKeyframes(item, groupId)
@@ -176,23 +172,8 @@ export class KeyframeChannelEditService {
       })
     }
 
-    const startFrame = normalizeFrame(args.range?.startFrame, 'range.startFrame')
-    const endFrame = normalizeFrame(args.range?.endFrame, 'range.endFrame')
-    if (endFrame < startFrame) {
-      throw toolError('invalid_arguments', 'range.endFrame 不能小于 startFrame', {
-        startFrame,
-        endFrame,
-      })
-    }
-
-    const matchStartFrame = expected[0].frame
-    const matchEndFrame = expected[expected.length - 1].frame
-    if (matchStartFrame < startFrame || matchEndFrame > endFrame) {
-      throw toolError('invalid_arguments', 'match 中的关键帧必须落在 range 内', {
-        range: { startFrame, endFrame },
-        matchRange: { startFrame: matchStartFrame, endFrame: matchEndFrame },
-      })
-    }
+    const startFrame = expected[0].frame
+    const endFrame = expected[expected.length - 1].frame
 
     const replacement = this.normalizeInputKeyframes(item, groupId, args.apply ?? [])
     const matched = current.filter((entry) => entry.frame >= startFrame && entry.frame <= endFrame)
@@ -211,26 +192,31 @@ export class KeyframeChannelEditService {
       ...replacement,
     ])
 
-    const plan = this.buildPlan(item, groupId, current, next, `局部更新 ${groupId} 关键帧`)
-    const diff = this.summarizeDiff(current, next)
+    const plan = this.buildPlan(item, groupId, current, next, `局部更新 ${args.channelId} 关键帧`)
 
     if (plan.operations.length > 0) {
       await useUnifiedStore().applyChangePlanWithHistory(plan)
     }
 
+    const afterRangeStartFrame = replacement.length > 0 ? replacement[0].frame : startFrame
+    const afterRangeEndFrame =
+      replacement.length > 0 ? replacement[replacement.length - 1].frame : endFrame
+
     return {
       itemId: item.id,
-      groupId,
-      status: 'applied' as const,
-      matched: true,
-      diff: {
-        previousKeyframeCount: current.length,
-        finalKeyframeCount: next.length,
-        createdFrames: diff.createdFrames,
-        updatedFrames: diff.updatedFrames,
-        deletedFrames: diff.deletedFrames,
-        normalized: true,
-      },
+      channelId: groupId,
+      beforeHasLeadingOmitted: current.some((entry) => entry.frame < startFrame),
+      beforeHasTrailingOmitted: current.some((entry) => entry.frame > endFrame),
+      before: matched.map((entry) => ({
+        frame: entry.frame,
+        value: cloneRecord(entry.value),
+      })),
+      afterHasLeadingOmitted: next.some((entry) => entry.frame < afterRangeStartFrame),
+      afterHasTrailingOmitted: next.some((entry) => entry.frame > afterRangeEndFrame),
+      after: replacement.map((entry) => ({
+        frame: entry.frame,
+        value: cloneRecord(entry.value),
+      })),
     }
   }
 
@@ -247,12 +233,12 @@ export class KeyframeChannelEditService {
 
   private requireSupportedGroup(
     item: UnifiedTimelineItemData<MediaType>,
-    groupId: PropertyAnimationGroupId,
+    groupId: string,
   ) {
     if (!groupId || typeof groupId !== 'string') {
       throw toolError('invalid_group', 'groupId 必须是非空字符串')
     }
-    const definition = AnimationRegistry.get(groupId)
+    const definition = AnimationRegistry.get(groupId as PropertyAnimationGroupId)
     if (!definition.supports(item)) {
       throw toolError('group_not_supported', `该 clip 不支持关键帧组 ${groupId}`, {
         itemId: item.id,
@@ -261,7 +247,7 @@ export class KeyframeChannelEditService {
         supportedGroups: getSupportedAnimationGroups(item),
       })
     }
-    return groupId
+    return groupId as PropertyAnimationGroupId
   }
 
   private assertFrameMode(frameMode: 'absolute' | undefined) {

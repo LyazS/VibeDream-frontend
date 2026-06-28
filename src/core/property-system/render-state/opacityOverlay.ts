@@ -1,5 +1,5 @@
 import { reactive } from 'vue'
-import { transformOpacitySchema } from '@/core/property-system/schema'
+import { visualOpacitySchema } from '@/core/property-system/schema'
 
 interface OpacityOverlayEntry {
   opacity: number
@@ -11,9 +11,9 @@ function clampOpacity(opacity: number): number {
   return Math.min(1, Math.max(0, opacity))
 }
 
-export function setTransformOpacityOverlay(timelineItemId: string, opacity: number): void {
-  if (!transformOpacitySchema.supportsTransientOverlay) {
-    throw new Error(`Transient overlay is not supported: ${transformOpacitySchema.propertyId}`)
+export function setVisualOpacityOverlay(timelineItemId: string, opacity: number): void {
+  if (!visualOpacitySchema.supportsTransientOverlay) {
+    throw new Error(`Transient overlay is not supported: ${visualOpacitySchema.propertyId}`)
   }
 
   opacityOverlays.set(timelineItemId, {
@@ -21,10 +21,10 @@ export function setTransformOpacityOverlay(timelineItemId: string, opacity: numb
   })
 }
 
-export function getTransformOpacityOverlay(timelineItemId: string): OpacityOverlayEntry | undefined {
+export function getVisualOpacityOverlay(timelineItemId: string): OpacityOverlayEntry | undefined {
   return opacityOverlays.get(timelineItemId)
 }
 
-export function clearTransformOpacityOverlay(timelineItemId: string): void {
+export function clearVisualOpacityOverlay(timelineItemId: string): void {
   opacityOverlays.delete(timelineItemId)
 }

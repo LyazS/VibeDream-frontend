@@ -65,27 +65,26 @@ export async function executeCreateSubtitleClip(args: Record<string, any>) {
     }
 
     const timelineEndFrames = startParsed.frames + durationParsed.frames
-    const conflict = findTrackConflict({
+    const firstConflict = findTrackConflict({
       trackId,
       start: startParsed.frames,
       end: timelineEndFrames,
     })
-    if (conflict) {
-      return buildToolError(
-        'create_subtitle_clip',
-        'timeline_conflict',
-        `目标区间与现有片段 ${conflict.id} 冲突，已拒绝创建字幕。`,
-        {
-          conflictClipId: conflict.id,
-          trackId,
-          requestedRange: {
-            start: startParsed.timecode,
-            end: framesToTimecode(timelineEndFrames),
-          },
-        },
-      )
+    const overlapClipIds: string[] = []
+    if (firstConflict) {
+      overlapClipIds.push(firstConflict.id)
+      for (const item of store.timelineItems) {
+        if (item.trackId !== trackId || item.id === firstConflict.id) {
+          continue
+        }
+        if (
+          Math.max(startParsed.frames, item.timeRange.timelineStartTime) <
+          Math.min(timelineEndFrames, item.timeRange.timelineEndTime)
+        ) {
+          overlapClipIds.push(item.id)
+        }
+      }
     }
-
     const nextItem = await createTextTimelineItem(
       text.trim(),
       {},
@@ -114,8 +113,13 @@ export async function executeCreateSubtitleClip(args: Record<string, any>) {
         mediaType: nextItem.mediaType,
         text: text.trim(),
         timeline: snapshot.timeline,
+        ...(overlapClipIds.length > 0
+          ? {
+              warning: '发生同轨重叠',
+              overlapClipIds,
+            }
+          : {}),
       },
-      `已在轨道 ${trackId} 的 ${startParsed.timecode} 创建字幕 clip。`,
     )
   } catch (error: any) {
     return buildToolError(

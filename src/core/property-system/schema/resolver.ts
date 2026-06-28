@@ -32,10 +32,10 @@ import {
   textStyleTextAlignSchema,
   textStyleTextStrokeSchema,
   textStyleTextShadowSchema,
-  transformOpacitySchema,
-  transformPositionSchema,
-  transformRotationSchema,
-  transformSizeSchema,
+  visualOpacitySchema,
+  visualPositionSchema,
+  visualRotationSchema,
+  visualSizeSchema,
   type AnimatablePropertySchema,
 } from './animatablePropertySchemas'
 
@@ -52,10 +52,10 @@ export interface PropertySchemaProvider {
 
 export class StaticPropertySchemaProvider implements PropertySchemaProvider {
   private readonly schemas = [
-    transformRotationSchema,
-    transformPositionSchema,
-    transformSizeSchema,
-    transformOpacitySchema,
+    visualRotationSchema,
+    visualPositionSchema,
+    visualSizeSchema,
+    visualOpacitySchema,
     filterIntensitySchema,
     audioVolumeSchema,
     maskCenterSchema,

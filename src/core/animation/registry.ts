@@ -41,7 +41,7 @@ import {
 } from '@/core/timelineitem/features/mask'
 import { normalizeClipFilterConfig } from '@/core/timelineitem/features/filter'
 
-export type AnimationScope = 'transform' | 'audio' | 'mask' | 'filter'
+export type AnimationScope = 'visual' | 'audio' | 'mask' | 'filter'
 
 export interface AnimationGroupDefinition<G extends PropertyAnimationGroupId = AnimationGroupId> {
   id: G
@@ -284,9 +284,9 @@ function getMaskTextureSizeFromItem(item: UnifiedTimelineItemData<MediaType>) {
 const animationGroupDefinitions: {
   [G in AnimationGroupId]: AnimationGroupDefinition<G>
 } = {
-  'transform.position': {
-    id: 'transform.position',
-    scope: 'transform',
+  'visual.position': {
+    id: 'visual.position',
+    scope: 'visual',
     supports: (item) => TimelineItemQueries.hasVisualProperties(item),
     isEnabled: (item) => TimelineItemQueries.hasVisualProperties(item),
     getBaseValue: (item) => {
@@ -303,9 +303,9 @@ const animationGroupDefinitions: {
     uiMeta: { order: 10, allowDeferred: true, allowNavigation: true },
     historyMeta: { description: '修改位置关键帧' },
   },
-  'transform.size': {
-    id: 'transform.size',
-    scope: 'transform',
+  'visual.size': {
+    id: 'visual.size',
+    scope: 'visual',
     supports: (item) => TimelineItemQueries.hasVisualProperties(item),
     isEnabled: (item) => TimelineItemQueries.hasVisualProperties(item),
     getBaseValue: (item) => {
@@ -322,9 +322,9 @@ const animationGroupDefinitions: {
     uiMeta: { order: 20, allowDeferred: true, allowNavigation: true },
     historyMeta: { description: '修改尺寸关键帧' },
   },
-  'transform.rotation': {
-    id: 'transform.rotation',
-    scope: 'transform',
+  'visual.rotation': {
+    id: 'visual.rotation',
+    scope: 'visual',
     supports: (item) => TimelineItemQueries.hasVisualProperties(item),
     isEnabled: (item) => TimelineItemQueries.hasVisualProperties(item),
     getBaseValue: (item) => ({ rotation: getVisualConfigRecord(item).rotation }),
@@ -335,9 +335,9 @@ const animationGroupDefinitions: {
     uiMeta: { order: 30, allowDeferred: true, allowNavigation: true },
     historyMeta: { description: '修改旋转关键帧' },
   },
-  'transform.opacity': {
-    id: 'transform.opacity',
-    scope: 'transform',
+  'visual.opacity': {
+    id: 'visual.opacity',
+    scope: 'visual',
     supports: (item) => TimelineItemQueries.hasVisualProperties(item),
     isEnabled: (item) => TimelineItemQueries.hasVisualProperties(item),
     getBaseValue: (item) => ({ opacity: getVisualConfigRecord(item).opacity }),

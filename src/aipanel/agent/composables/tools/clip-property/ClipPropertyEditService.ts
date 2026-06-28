@@ -3,6 +3,7 @@ import { TimelineItemQueries } from '@/core/timelineitem/queries'
 import type { UnifiedTimelineItemData } from '@/core/timelineitem/model/timelineItem'
 import { isBlendMode, type BlendMode } from '@/core/timelineitem/model/blendMode'
 import { framesToTimecode } from '@/core/utils/timeUtils'
+import { getCurrentGroupValue } from '@/core/animation/engine'
 import type { DirectPropertyBatchPlanEntry } from '@/core/property-system/mutation'
 import { propertyMutationCommitter } from '@/core/property-system/commit/PropertyMutationCommitter'
 import type { ChangePlan, ChangeOperation } from '@/core/property-system'
@@ -17,7 +18,8 @@ type KnownMediaType = Exclude<SupportedMediaType, 'unknown'>
 
 type ReadClipPropertiesArgs = {
   clipId: string
-  groupIds: ReadGroupId[]
+  propertyGroups: ReadGroupId[]
+  frame?: number
 }
 
 type UpdateClipPropertiesArgs = {
@@ -88,17 +90,19 @@ const PATH_DEFINITIONS: Record<PropertyPath, PathDefinition> = {
 export class ClipPropertyEditService {
   async readClipProperties(args: ReadClipPropertiesArgs) {
     const item = this.requireClip(args.clipId)
-    const groupIds = normalizeReadGroupIds(args.groupIds)
+    const groupIds = normalizeReadGroupIds(args.propertyGroups)
+    const readFrame = normalizeReadFrame(args.frame)
     const groups: Partial<Record<ReadGroupId, Record<string, unknown>>> = {}
 
     for (const groupId of groupIds) {
       this.ensureReadGroupSupported(item, groupId)
-      groups[groupId] = this.buildReadGroupProperties(item, groupId)
+      groups[groupId] = this.buildReadGroupProperties(item, groupId, readFrame)
     }
 
     return {
       clipId: item.id,
       mediaType: item.mediaType,
+      ...(readFrame !== undefined ? { frame: readFrame } : {}),
       groups,
     }
   }
@@ -178,7 +182,11 @@ export class ClipPropertyEditService {
     this.ensureGroupSupported(item, groupId)
   }
 
-  private buildReadGroupProperties(item: UnifiedTimelineItemData, groupId: ReadGroupId) {
+  private buildReadGroupProperties(
+    item: UnifiedTimelineItemData,
+    groupId: ReadGroupId,
+    frame?: number,
+  ) {
     if (groupId === 'timeline') {
       const timelineStart = item.timeRange.timelineStartTime
       const timelineEnd = item.timeRange.timelineEndTime
@@ -197,10 +205,10 @@ export class ClipPropertyEditService {
       }
     }
 
-    return this.buildGroupProperties(item, groupId)
+    return this.buildGroupProperties(item, groupId, frame)
   }
 
-  private buildGroupProperties(item: UnifiedTimelineItemData, groupId: GroupId) {
+  private buildGroupProperties(item: UnifiedTimelineItemData, groupId: GroupId, frame?: number) {
     if (groupId === 'visual') {
       const resolved = TimelineItemQueries.getResolvedRenderConfig(item)
       if (!('visual' in resolved)) {
@@ -210,13 +218,20 @@ export class ClipPropertyEditService {
           groupId,
         })
       }
+      const animatedPosition =
+        frame !== undefined ? getCurrentGroupValue(item, frame, 'visual.position') : null
+      const animatedSize = frame !== undefined ? getCurrentGroupValue(item, frame, 'visual.size') : null
+      const animatedRotation =
+        frame !== undefined ? getCurrentGroupValue(item, frame, 'visual.rotation') : null
+      const animatedOpacity =
+        frame !== undefined ? getCurrentGroupValue(item, frame, 'visual.opacity') : null
       return {
-        x: roundNumeric(resolved.visual.x),
-        y: roundNumeric(resolved.visual.y),
-        width: roundNumeric(resolved.visual.width),
-        height: roundNumeric(resolved.visual.height),
-        rotation: roundNumeric(resolved.visual.rotation),
-        opacity: roundNumeric(resolved.visual.opacity),
+        x: roundNumeric(animatedPosition?.x ?? resolved.visual.x),
+        y: roundNumeric(animatedPosition?.y ?? resolved.visual.y),
+        width: roundNumeric(animatedSize?.width ?? resolved.visual.width),
+        height: roundNumeric(animatedSize?.height ?? resolved.visual.height),
+        rotation: roundNumeric(animatedRotation?.rotation ?? resolved.visual.rotation),
+        opacity: roundNumeric(animatedOpacity?.opacity ?? resolved.visual.opacity),
         blendMode: resolved.visual.blendMode,
         proportionalScale: resolved.visual.proportionalScale,
       }
@@ -231,8 +246,9 @@ export class ClipPropertyEditService {
           groupId,
         })
       }
+      const animatedVolume = frame !== undefined ? getCurrentGroupValue(item, frame, 'audio.volume') : null
       return {
-        volume: roundNumeric(resolved.audio.volume),
+        volume: roundNumeric(animatedVolume?.volume ?? resolved.audio.volume),
         isMuted: resolved.audio.isMuted,
       }
     }
@@ -256,10 +272,10 @@ export class ClipPropertyEditService {
   }
 
   private buildCurrentPathValues(item: UnifiedTimelineItemData): Record<PropertyPath, unknown> {
-    const visual = this.buildGroupProperties(item, 'visual')
     const result: Partial<Record<PropertyPath, unknown>> = {}
 
     if (getSupportedGroups(item.mediaType).includes('visual')) {
+      const visual = this.buildGroupProperties(item, 'visual')
       result['visual.x'] = visual.x
       result['visual.y'] = visual.y
       result['visual.width'] = visual.width
@@ -329,10 +345,10 @@ export class ClipPropertyEditService {
         case 'visual.height':
           break
         case 'visual.rotation':
-          directEntries.push({ propertyId: 'transform.rotation', value })
+          directEntries.push({ propertyId: 'visual.rotation', value })
           break
         case 'visual.opacity':
-          directEntries.push({ propertyId: 'transform.opacity', value })
+          directEntries.push({ propertyId: 'visual.opacity', value })
           break
         case 'audio.volume':
           directEntries.push({ propertyId: 'audio.volume', value })
@@ -383,11 +399,11 @@ export class ClipPropertyEditService {
     }
 
     if (keys.includes('visual.x') || keys.includes('visual.y')) {
-      directEntries.push({ propertyId: 'transform.position', value: nextPosition })
+      directEntries.push({ propertyId: 'visual.position', value: nextPosition })
     }
 
     if (keys.includes('visual.width') || keys.includes('visual.height')) {
-      directEntries.push({ propertyId: 'transform.size', value: nextSize })
+      directEntries.push({ propertyId: 'visual.size', value: nextSize })
     }
 
     const operations: ChangeOperation[] = []
@@ -445,6 +461,16 @@ function normalizeReadGroupIds(groupIds: ReadGroupId[]) {
   return Array.from(new Set(groupIds))
 }
 
+function normalizeReadFrame(frame: unknown): number | undefined {
+  if (frame === undefined || frame === null) {
+    return undefined
+  }
+  if (!Number.isInteger(frame) || Number(frame) < 0) {
+    throw toolError('invalid_arguments', 'frame 必须是大于等于 0 的整数')
+  }
+  return Number(frame)
+}
+
 function mergeDirectEntries(entries: DirectPropertyBatchPlanEntry[]): DirectPropertyBatchPlanEntry[] {
   const grouped = new Map<string, DirectPropertyBatchPlanEntry>()
 
@@ -458,7 +484,7 @@ function mergeDirectEntries(entries: DirectPropertyBatchPlanEntry[]): DirectProp
 function getPlanPropertyId(keys: PropertyPath[]): ChangePlan['propertyId'] {
   if (keys.some((key) => key.startsWith('text.'))) return 'text.content'
   if (keys.some((key) => key.startsWith('audio.'))) return 'audio.volume'
-  return 'transform.position'
+  return 'visual.position'
 }
 
 function getSupportedGroups(mediaType: SupportedMediaType): GroupId[] {

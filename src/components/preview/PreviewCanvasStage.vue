@@ -91,7 +91,7 @@ import {
   sortTimelineItemsByTrackIndex,
 } from '@/core/utils/timelineVisibilityUtils'
 import { TimelineItemQueries } from '@/core/timelineitem/queries'
-import { useUnifiedKeyframeTransformControls } from '@/core/composables/useKeyframeTransformControls'
+import { useUnifiedKeyframeVisualControls } from '@/core/composables/useKeyframeTransformControls'
 import { buildClipSelectionId } from '@/core/types/timelineSelection'
 import {
   clamp,
@@ -168,13 +168,13 @@ const selectedItem = computed(() => {
 })
 
 const {
-  setTransformPositionDeferred,
-  setTransformSizeDeferred,
-  setTransformRotationDeferred,
-  commitTransformPositionDeferredUpdate,
-  commitTransformGeometryDeferredUpdate,
+  setVisualPositionDeferred,
+  setVisualSizeDeferred,
+  setVisualRotationDeferred,
+  commitVisualPositionDeferredUpdate,
+  commitVisualGeometryDeferredUpdate,
   commitRotationDeferredUpdate,
-} = useUnifiedKeyframeTransformControls({
+} = useUnifiedKeyframeVisualControls({
   selectedTimelineItem: selectedItem,
   currentFrame,
 })
@@ -417,13 +417,13 @@ function handleDragMove(event: MouseEvent) {
     canvasResolution.value,
   )
 
-  setTransformPositionDeferred(nextPosition.x, nextPosition.y)
+  setVisualPositionDeferred(nextPosition.x, nextPosition.y)
 }
 
 async function handleDragEnd(_event: MouseEvent) {
   if (!dragState.value.isDragging) return
 
-  await commitTransformPositionDeferredUpdate()
+  await commitVisualPositionDeferredUpdate()
   dragState.value.isDragging = false
 
   window.removeEventListener('mousemove', handleGlobalMouseMove)
@@ -471,13 +471,13 @@ function handleScaleMove(event: MouseEvent) {
     canvasResolution.value,
   )
 
-  setTransformSizeDeferred(result.width, result.height, result.x, result.y)
+  setVisualSizeDeferred(result.width, result.height, result.x, result.y)
 }
 
 async function handleScaleEnd(_event: MouseEvent) {
   if (!scaleState.value.isScaling) return
 
-  await commitTransformGeometryDeferredUpdate()
+  await commitVisualGeometryDeferredUpdate()
   scaleState.value.isScaling = false
 
   window.removeEventListener('mousemove', handleGlobalScaleMove)
@@ -525,7 +525,7 @@ function handleRotateMove(event: MouseEvent) {
     containerSize.value,
   )
 
-  setTransformRotationDeferred(newRotation)
+  setVisualRotationDeferred(newRotation)
 }
 
 async function handleRotateEnd(_event: MouseEvent) {

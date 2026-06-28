@@ -5,60 +5,60 @@
 
       <!-- 位置控制 -->
       <KeyframedDualNumberField
-        :label="t('properties.transform.position')"
+        :label="t('properties.visual.position')"
         :state="positionButtonState"
-        :tooltip="getChannelKeyframeTooltip('transform.position')"
-        :disabled="!canOperateTransforms"
-        :has-previous="hasPreviousChannelKeyframe('transform.position')"
-        :has-next="hasNextChannelKeyframe('transform.position')"
-        :first-label="t('properties.transform.positionX')"
-        :second-label="t('properties.transform.positionY')"
-        :first-value="transformX"
-        :second-value="transformY"
+        :tooltip="getChannelKeyframeTooltip('visual.position')"
+        :disabled="!canOperateVisualChannels"
+        :has-previous="hasPreviousChannelKeyframe('visual.position')"
+        :has-next="hasNextChannelKeyframe('visual.position')"
+        :first-label="t('properties.visual.positionX')"
+        :second-label="t('properties.visual.positionY')"
+        :first-value="visualX"
+        :second-value="visualY"
         :first-min="positionLimits.minX"
         :first-max="positionLimits.maxX"
         :second-min="positionLimits.minY"
         :second-max="positionLimits.maxY"
         :step="1"
         :precision="0"
-        :first-placeholder="t('properties.transform.centerFor0')"
-        :second-placeholder="t('properties.transform.centerFor0')"
-        @first-input="setTransformXDeferred"
-        @second-input="setTransformYDeferred"
-        @first-change="commitTransformXDeferredUpdate"
-        @second-change="commitTransformYDeferredUpdate"
-        @previous="goToPreviousChannelKeyframe('transform.position')"
-        @toggle="toggleChannelKeyframe('transform.position')"
-        @next="goToNextChannelKeyframe('transform.position')"
+        :first-placeholder="t('properties.visual.centerFor0')"
+        :second-placeholder="t('properties.visual.centerFor0')"
+        @first-input="setVisualXDeferred"
+        @second-input="setVisualYDeferred"
+        @first-change="commitVisualXDeferredUpdate"
+        @second-change="commitVisualYDeferredUpdate"
+        @previous="goToPreviousChannelKeyframe('visual.position')"
+        @toggle="toggleChannelKeyframe('visual.position')"
+        @next="goToNextChannelKeyframe('visual.position')"
       />
 
       <!-- 水平对齐 -->
       <div class="property-item">
           <label :class="getAnimatedLabelClass(positionButtonState)">
-          {{ t('properties.transform.alignHorizontal') }}
+          {{ t('properties.visual.alignHorizontal') }}
         </label>
         <div class="alignment-controls">
           <button
             @click="alignHorizontal('left')"
-            :disabled="!canOperateTransforms"
+            :disabled="!canOperateVisualChannels"
             class="align-btn"
-            :title="t('properties.transform.left')"
+            :title="t('properties.visual.left')"
           >
             <component :is="IconComponents.ALIGN_ITEM_LEFT" size="16px" />
           </button>
           <button
             @click="alignHorizontal('center')"
-            :disabled="!canOperateTransforms"
+            :disabled="!canOperateVisualChannels"
             class="align-btn"
-            :title="t('properties.transform.center')"
+            :title="t('properties.visual.center')"
           >
             <component :is="IconComponents.ALIGN_ITEM_H_CENTER" size="16px" />
           </button>
           <button
             @click="alignHorizontal('right')"
-            :disabled="!canOperateTransforms"
+            :disabled="!canOperateVisualChannels"
             class="align-btn"
-            :title="t('properties.transform.right')"
+            :title="t('properties.visual.right')"
           >
             <component :is="IconComponents.ALIGN_ITEM_RIGHT" size="16px" />
           </button>
@@ -68,30 +68,30 @@
       <!-- 垂直对齐 -->
       <div class="property-item">
           <label :class="getAnimatedLabelClass(positionButtonState)">
-          {{ t('properties.transform.alignVertical') }}
+          {{ t('properties.visual.alignVertical') }}
         </label>
         <div class="alignment-controls">
           <button
             @click="alignVertical('top')"
-            :disabled="!canOperateTransforms"
+            :disabled="!canOperateVisualChannels"
             class="align-btn"
-            :title="t('properties.transform.top')"
+            :title="t('properties.visual.top')"
           >
             <component :is="IconComponents.ALIGN_ITEM_TOP" size="16px" />
           </button>
           <button
             @click="alignVertical('middle')"
-            :disabled="!canOperateTransforms"
+            :disabled="!canOperateVisualChannels"
             class="align-btn"
-            :title="t('properties.transform.middle')"
+            :title="t('properties.visual.middle')"
           >
             <component :is="IconComponents.ALIGN_ITEM_V_CENTER" size="16px" />
           </button>
           <button
             @click="alignVertical('bottom')"
-            :disabled="!canOperateTransforms"
+            :disabled="!canOperateVisualChannels"
             class="align-btn"
-            :title="t('properties.transform.bottom')"
+            :title="t('properties.visual.bottom')"
           >
             <component :is="IconComponents.ALIGN_ITEM_BOTTOM" size="16px" />
           </button>
@@ -101,26 +101,26 @@
       <!-- 等比缩放选项 -->
       <div class="property-item">
           <label :class="getAnimatedLabelClass(sizeButtonState)">
-          {{ t('properties.transform.proportionalScale') }}
+          {{ t('properties.visual.proportionalScale') }}
         </label>
         <input
           :checked="proportionalScale"
           @change="toggleProportionalScale"
-          :disabled="!canOperateTransforms"
+          :disabled="!canOperateVisualChannels"
           type="checkbox"
           class="checkbox-input"
         />
       </div>
 
       <KeyframedDualNumberField
-        :label="t('properties.transform.size')"
+        :label="t('properties.visual.size')"
         :state="sizeButtonState"
-        :tooltip="getChannelKeyframeTooltip('transform.size')"
-        :disabled="!canOperateTransforms"
-        :has-previous="hasPreviousChannelKeyframe('transform.size')"
-        :has-next="hasNextChannelKeyframe('transform.size')"
-        :first-label="t('properties.transform.width')"
-        :second-label="t('properties.transform.height')"
+        :tooltip="getChannelKeyframeTooltip('visual.size')"
+        :disabled="!canOperateVisualChannels"
+        :has-previous="hasPreviousChannelKeyframe('visual.size')"
+        :has-next="hasNextChannelKeyframe('visual.size')"
+        :first-label="t('properties.visual.width')"
+        :second-label="t('properties.visual.height')"
         :first-value="displayWidth"
         :second-value="displayHeight"
         :first-min="sizeLimits.min"
@@ -133,33 +133,33 @@
         @second-input="setHeightDeferred"
         @first-change="commitWidthDeferredUpdate"
         @second-change="commitHeightDeferredUpdate"
-        @previous="goToPreviousChannelKeyframe('transform.size')"
-        @toggle="toggleChannelKeyframe('transform.size')"
-        @next="goToNextChannelKeyframe('transform.size')"
+        @previous="goToPreviousChannelKeyframe('visual.size')"
+        @toggle="toggleChannelKeyframe('visual.size')"
+        @next="goToNextChannelKeyframe('visual.size')"
       />
 
       <!-- 缩放预设 -->
       <div class="property-item">
         <label :class="getAnimatedLabelClass(sizeButtonState)">
-          {{ t('properties.transform.scalePresets') }}
+          {{ t('properties.visual.scalePresets') }}
         </label>
         <div class="scale-preset-controls">
-          <button @click="fitToCanvas" :disabled="!canOperateTransforms" class="preset-btn">
-            {{ t('properties.transform.fitToCanvas') }}
+          <button @click="fitToCanvas" :disabled="!canOperateVisualChannels" class="preset-btn">
+            {{ t('properties.visual.fitToCanvas') }}
           </button>
-          <button @click="fillCanvas" :disabled="!canOperateTransforms" class="preset-btn">
-            {{ t('properties.transform.fillCanvas') }}
+          <button @click="fillCanvas" :disabled="!canOperateVisualChannels" class="preset-btn">
+            {{ t('properties.visual.fillCanvas') }}
           </button>
         </div>
       </div>
       <!-- 旋转 -->
       <KeyframedSliderField
-        :label="t('properties.transform.rotation')"
+        :label="t('properties.visual.rotation')"
         :state="rotationButtonState"
-        :tooltip="getChannelKeyframeTooltip('transform.rotation')"
-        :disabled="!canOperateTransforms"
-        :has-previous="hasPreviousChannelKeyframe('transform.rotation')"
-        :has-next="hasNextChannelKeyframe('transform.rotation')"
+        :tooltip="getChannelKeyframeTooltip('visual.rotation')"
+        :disabled="!canOperateVisualChannels"
+        :has-previous="hasPreviousChannelKeyframe('visual.rotation')"
+        :has-next="hasNextChannelKeyframe('visual.rotation')"
         :value="rotation"
         :min="-180"
         :max="180"
@@ -169,32 +169,32 @@
         @slider-input="setRotationDeferred"
         @slider-change="commitRotationDeferredUpdate"
         @number-change="setRotationDirectly"
-        @previous="goToPreviousChannelKeyframe('transform.rotation')"
-        @toggle="toggleChannelKeyframe('transform.rotation')"
-        @next="goToNextChannelKeyframe('transform.rotation')"
+        @previous="goToPreviousChannelKeyframe('visual.rotation')"
+        @toggle="toggleChannelKeyframe('visual.rotation')"
+        @next="goToNextChannelKeyframe('visual.rotation')"
       />
 
       <div class="property-item">
-        <label>{{ t('properties.transform.blendMode') }}</label>
+        <label>{{ t('properties.visual.blendMode') }}</label>
         <SearchableSelect
           class="blend-mode-select"
           :model-value="blendMode"
           :options="blendModeOptions"
           :searchable="false"
-          :disabled="!canOperateTransforms"
-          :placeholder="t('properties.transform.blendMode')"
+          :disabled="!canOperateVisualChannels"
+          :placeholder="t('properties.visual.blendMode')"
           @update:model-value="handleBlendModeChange"
         />
       </div>
 
       <!-- 混合强度 -->
       <KeyframedSliderField
-        :label="t('properties.transform.blendIntensity')"
+        :label="t('properties.visual.blendIntensity')"
         :state="opacityButtonState"
-        :tooltip="getChannelKeyframeTooltip('transform.opacity')"
-        :disabled="!canOperateTransforms"
-        :has-previous="hasPreviousChannelKeyframe('transform.opacity')"
-        :has-next="hasNextChannelKeyframe('transform.opacity')"
+        :tooltip="getChannelKeyframeTooltip('visual.opacity')"
+        :disabled="!canOperateVisualChannels"
+        :has-previous="hasPreviousChannelKeyframe('visual.opacity')"
+        :has-next="hasNextChannelKeyframe('visual.opacity')"
         :value="opacity"
         :min="0"
         :max="1"
@@ -204,9 +204,9 @@
         @slider-input="setOpacityDeferred"
         @slider-change="commitOpacityDeferredUpdate"
         @number-change="setOpacityDirectly"
-        @previous="goToPreviousChannelKeyframe('transform.opacity')"
-        @toggle="toggleChannelKeyframe('transform.opacity')"
-        @next="goToNextChannelKeyframe('transform.opacity')"
+        @previous="goToPreviousChannelKeyframe('visual.opacity')"
+        @toggle="toggleChannelKeyframe('visual.opacity')"
+        @next="goToNextChannelKeyframe('visual.opacity')"
       />
     </div>
   </div>
@@ -216,7 +216,7 @@
 import { computed } from 'vue'
 import { useAppI18n } from '@/core/composables/useI18n'
 import { useUnifiedStore } from '@/core/unifiedStore'
-import { useUnifiedKeyframeTransformControls } from '@/core/composables'
+import { useUnifiedKeyframeVisualControls } from '@/core/composables'
 import { IconComponents } from '@/constants/iconComponents'
 import type { BlendMode, UnifiedTimelineItemData } from '@/core/timelineitem/model/timelineItem'
 import { BLEND_MODE_VALUES } from '@/core/timelineitem/model/blendMode'
@@ -233,11 +233,11 @@ const props = defineProps<Props>()
 const { t } = useAppI18n()
 const unifiedStore = useUnifiedStore()
 
-// 从关键帧控制器获取所有变换属性和方法
+// 从关键帧控制器获取所有视觉/音频通道相关能力
 const {
-  canOperateTransforms,
-  transformX,
-  transformY,
+  canOperateVisualChannels,
+  visualX,
+  visualY,
   displayWidth,
   displayHeight,
   rotation,
@@ -251,16 +251,16 @@ const {
   setHeightDeferred,
   commitRotationDeferredUpdate,
   commitOpacityDeferredUpdate,
-  setTransformXDeferred,
-  setTransformYDeferred,
-  commitTransformXDeferredUpdate,
-  commitTransformYDeferredUpdate,
+  setVisualXDeferred,
+  setVisualYDeferred,
+  commitVisualXDeferredUpdate,
+  commitVisualYDeferredUpdate,
   commitWidthDeferredUpdate,
   commitHeightDeferredUpdate,
 
   // 直接更新方法（用于 NumberInput）
-  setTransformXDirectly,
-  setTransformYDirectly,
+  setVisualXDirectly,
+  setVisualYDirectly,
   setWidthDirectly,
   setHeightDirectly,
   fitToCanvas,
@@ -278,20 +278,20 @@ const {
   goToNextChannelKeyframe,
   toggleChannelKeyframe,
   getChannelKeyframeTooltip,
-} = useUnifiedKeyframeTransformControls({
+} = useUnifiedKeyframeVisualControls({
   selectedTimelineItem: computed(() => props.selectedTimelineItem),
   currentFrame: computed(() => props.currentFrame),
 })
 
-const positionButtonState = computed(() => getChannelButtonState('transform.position'))
-const sizeButtonState = computed(() => getChannelButtonState('transform.size'))
-const rotationButtonState = computed(() => getChannelButtonState('transform.rotation'))
-const opacityButtonState = computed(() => getChannelButtonState('transform.opacity'))
+const positionButtonState = computed(() => getChannelButtonState('visual.position'))
+const sizeButtonState = computed(() => getChannelButtonState('visual.size'))
+const rotationButtonState = computed(() => getChannelButtonState('visual.rotation'))
+const opacityButtonState = computed(() => getChannelButtonState('visual.opacity'))
 
 const blendModeOptions = computed(() =>
   BLEND_MODE_VALUES.map((value) => ({
     value,
-    label: t(`properties.transform.blendModes.${value}`),
+    label: t(`properties.visual.blendModes.${value}`),
   })),
 )
 

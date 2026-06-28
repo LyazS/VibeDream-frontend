@@ -43,14 +43,10 @@ export async function executeListTracks(args: Record<string, any>) {
     const timelineItems = store.timelineItems || []
 
     if (tracks.length === 0) {
-      return buildToolSuccess(
-        'list_tracks',
-        {
-          tracks: [],
-          total: 0,
-        },
-        '时间轴上暂无轨道。',
-      )
+      return buildToolSuccess('list_tracks', {
+        tracks: [],
+        total: 0,
+      })
     }
 
     const trackInfos = tracks.map((track, index) => ({
@@ -63,14 +59,10 @@ export async function executeListTracks(args: Record<string, any>) {
       clipCount: getTimelineItemsByTrack(track.id, timelineItems).length,
     }))
 
-    return buildToolSuccess(
-      'list_tracks',
-      {
-        tracks: trackInfos,
-        total: trackInfos.length,
-      },
-      `时间轴上共有 ${trackInfos.length} 条轨道。`,
-    )
+    return buildToolSuccess('list_tracks', {
+      tracks: trackInfos,
+      total: trackInfos.length,
+    })
   } catch (error: any) {
     return buildToolError(
       'list_tracks',

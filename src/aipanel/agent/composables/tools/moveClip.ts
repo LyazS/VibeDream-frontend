@@ -23,15 +23,59 @@ function buildMoveState(params: {
 }
 
 export async function executeMoveClip(args: Record<string, any>) {
-  const { clipId, toStartTime, toTrackId } = args
+  const { clipId, startTime, trackId } = args
 
   if (typeof clipId !== 'string' || !clipId) {
     return buildToolError('move_clip', 'invalid_arguments', 'clipId 是必填字符串。')
   }
 
-  const startParsed = parseRequiredTimecode('move_clip', toStartTime, 'toStartTime')
-  if (!startParsed.ok) {
-    return startParsed.error
+  if (!startTime || typeof startTime !== 'object' || Array.isArray(startTime)) {
+    return buildToolError(
+      'move_clip',
+      'invalid_arguments',
+      'startTime 是必填对象，且必须包含 from 和 to。',
+    )
+  }
+
+  const startFromParsed = parseRequiredTimecode('move_clip', startTime.from, 'startTime.from')
+  if (!startFromParsed.ok) {
+    return startFromParsed.error
+  }
+
+  const startToParsed = parseRequiredTimecode('move_clip', startTime.to, 'startTime.to')
+  if (!startToParsed.ok) {
+    return startToParsed.error
+  }
+
+  let trackFromId: string | null = null
+  let trackToId: string | null = null
+  if (trackId !== undefined) {
+    if (!trackId || typeof trackId !== 'object' || Array.isArray(trackId)) {
+      return buildToolError(
+        'move_clip',
+        'invalid_arguments',
+        'trackId 如果提供，必须是包含 from 和 to 的对象。',
+      )
+    }
+
+    if (typeof trackId.from !== 'string' || !trackId.from) {
+      return buildToolError(
+        'move_clip',
+        'invalid_arguments',
+        'trackId.from 如果提供 trackId，则为必填非空字符串。',
+      )
+    }
+
+    if (typeof trackId.to !== 'string' || !trackId.to) {
+      return buildToolError(
+        'move_clip',
+        'invalid_arguments',
+        'trackId.to 如果提供 trackId，则为必填非空字符串。',
+      )
+    }
+
+    trackFromId = trackId.from
+    trackToId = trackId.to
   }
 
   try {
@@ -49,7 +93,33 @@ export async function executeMoveClip(args: Record<string, any>) {
 
     const beforeTrackId = clip.trackId
     const beforeStartFrames = clip.timeRange.timelineStartTime
-    const targetTrackId = typeof toTrackId === 'string' && toTrackId ? toTrackId : clip.trackId
+    if (beforeStartFrames !== startFromParsed.frames) {
+      return buildToolError(
+        'move_clip',
+        'clip_state_mismatch',
+        `片段 ${clipId} 当前开始时间与 startTime.from 不一致。`,
+        {
+          clipId,
+          expectedStartTime: startFromParsed.timecode,
+          actualStartTime: framesToTimecode(beforeStartFrames),
+        },
+      )
+    }
+
+    if (trackFromId !== null && beforeTrackId !== trackFromId) {
+      return buildToolError(
+        'move_clip',
+        'clip_state_mismatch',
+        `片段 ${clipId} 当前轨道与 trackId.from 不一致。`,
+        {
+          clipId,
+          expectedTrackId: trackFromId,
+          actualTrackId: beforeTrackId,
+        },
+      )
+    }
+
+    const targetTrackId = trackToId ?? clip.trackId
     const targetTrack = store.getTrack(targetTrackId)
 
     if (!targetTrack) {
@@ -76,27 +146,30 @@ export async function executeMoveClip(args: Record<string, any>) {
     }
 
     const duration = clip.timeRange.timelineEndTime - clip.timeRange.timelineStartTime
-    const nextEnd = startParsed.frames + duration
-    const conflict = findTrackConflict({
+    const nextEnd = startToParsed.frames + duration
+    const overlapClipIds: string[] = []
+    const firstConflict = findTrackConflict({
       trackId: targetTrackId,
-      start: startParsed.frames,
+      start: startToParsed.frames,
       end: nextEnd,
       excludeClipIds: [clipId],
     })
-    if (conflict) {
-      return buildToolError(
-        'move_clip',
-        'timeline_conflict',
-        `目标区间与现有片段 ${conflict.id} 冲突，已拒绝移动。`,
-        {
-          clipId,
-          conflictClipId: conflict.id,
-          targetTrackId,
-        },
-      )
+    if (firstConflict) {
+      overlapClipIds.push(firstConflict.id)
+      for (const item of store.timelineItems) {
+        if (item.trackId !== targetTrackId || item.id === clipId || item.id === firstConflict.id) {
+          continue
+        }
+        if (
+          Math.max(startToParsed.frames, item.timeRange.timelineStartTime) <
+          Math.min(nextEnd, item.timeRange.timelineEndTime)
+        ) {
+          overlapClipIds.push(item.id)
+        }
+      }
     }
 
-    await executeSingleCommand(createMoveTimelineItemCommand(clip, startParsed.frames, targetTrackId))
+    await executeSingleCommand(createMoveTimelineItemCommand(clip, startToParsed.frames, targetTrackId))
 
     const afterClip = store.getTimelineItem(clipId)
     if (!afterClip) {
@@ -120,15 +193,17 @@ export async function executeMoveClip(args: Record<string, any>) {
       includeStartTime,
     })
 
-    return buildToolSuccess(
-      'move_clip',
-      {
-        clipId,
-        before,
-        after,
-      },
-      `已将 ${clipId} 移动到轨道 ${afterClip.trackId} 的 ${startParsed.timecode}。`,
-    )
+    return buildToolSuccess('move_clip', {
+      clipId,
+      before,
+      after,
+      ...(overlapClipIds.length > 0
+        ? {
+            warning: '发生同轨重叠',
+            overlapClipIds,
+          }
+        : {}),
+    })
   } catch (error: any) {
     return buildToolError(
       'move_clip',

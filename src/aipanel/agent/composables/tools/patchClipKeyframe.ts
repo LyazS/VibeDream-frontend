@@ -1,6 +1,41 @@
 import type { ToolDefinition } from '../core/toolTypes'
-import { buildToolError, buildToolSuccess } from './utils/result'
 import { KeyframeChannelEditService } from './keyframe-channel/KeyframeChannelEditService'
+
+function formatKeyframeValue(value: Record<string, unknown>): string {
+  return JSON.stringify(value)
+}
+
+function formatKeyframe(entry: { frame: number; value: Record<string, unknown> }): string {
+  return `{ "frame": ${entry.frame}, "value": ${formatKeyframeValue(entry.value)} }`
+}
+
+function formatKeyframeSection(
+  label: 'before' | 'after',
+  entries: Array<{ frame: number; value: Record<string, unknown> }>,
+  hasLeadingOmitted: boolean,
+  hasTrailingOmitted: boolean,
+): string {
+  const lines = [`  "${label}": [`]
+
+  if (hasLeadingOmitted) {
+    lines.push('    ...')
+  }
+
+  for (const entry of entries) {
+    lines.push(`    ${formatKeyframe(entry)},`)
+  }
+
+  if (hasTrailingOmitted) {
+    lines.push('    ...')
+  } else if (entries.length > 0) {
+    const lastLine = lines[lines.length - 1]
+    lines[lines.length - 1] = lastLine.endsWith(',') ? lastLine.slice(0, -1) : lastLine
+  }
+
+  lines.push('  ]')
+
+  return lines.join('\n')
+}
 
 export async function executePatchClipKeyframe(args: Record<string, any>) {
   const service = new KeyframeChannelEditService()
@@ -8,25 +43,41 @@ export async function executePatchClipKeyframe(args: Record<string, any>) {
   try {
     const data = await service.patchClipKeyframe({
       itemId: args.itemId,
-      groupId: args.groupId,
-      range: args.range,
+      channelId: args.channelId,
       match: args.match,
       apply: args.apply,
-      options: args.options,
     })
 
-    return buildToolSuccess(
-      'patch_clip_keyframe',
-      data,
-      `已局部更新 ${data.itemId} 的 ${data.groupId} 通道。`,
+    const beforeSection = formatKeyframeSection(
+      'before',
+      data.before,
+      data.beforeHasLeadingOmitted,
+      data.beforeHasTrailingOmitted,
     )
+    const afterSection = formatKeyframeSection(
+      'after',
+      data.after,
+      data.afterHasLeadingOmitted,
+      data.afterHasTrailingOmitted,
+    )
+
+    return {
+      success: true,
+      output: `{
+  "tool": "patch_clip_keyframe",
+  "itemId": "${data.itemId}",
+  "channelId": "${data.channelId}",
+${beforeSection},
+${afterSection}
+}`,
+    }
   } catch (error: any) {
-    return buildToolError(
-      'patch_clip_keyframe',
-      error?.toolCode ?? 'internal_error',
-      error instanceof Error ? error.message : String(error),
-      error?.toolDetails,
-    )
+    const message = error instanceof Error ? error.message : String(error)
+    return {
+      success: false,
+      output: JSON.stringify({ tool: 'patch_clip_keyframe', error: message }, null, 2),
+      error: message,
+    }
   }
 }
 

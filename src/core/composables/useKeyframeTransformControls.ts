@@ -16,39 +16,39 @@ import { isBlendMode } from '@/core/timelineitem/model/blendMode'
 import { propertyMutationCommitter, type ChangeOperation } from '@/core/property-system'
 import {
   clearAudioVolumeOverlay,
-  clearTransformOpacityOverlay,
-  clearTransformPositionOverlay,
-  clearTransformRotationOverlay,
-  clearTransformSizeOverlay,
+  clearVisualOpacityOverlay,
+  clearVisualPositionOverlay,
+  clearVisualRotationOverlay,
+  clearVisualSizeOverlay,
   getAudioVolumeOverlay,
-  getTransformOpacityOverlay,
-  getTransformPositionOverlay,
-  getTransformSizeOverlay,
+  getVisualOpacityOverlay,
+  getVisualPositionOverlay,
+  getVisualSizeOverlay,
   setAudioVolumeOverlay,
-  setTransformOpacityOverlay,
-  setTransformPositionOverlay,
-  setTransformRotationOverlay,
-  setTransformSizeOverlay,
+  setVisualOpacityOverlay,
+  setVisualPositionOverlay,
+  setVisualRotationOverlay,
+  setVisualSizeOverlay,
 } from '@/core/property-system/render-state'
 
-interface UnifiedKeyframeTransformControlsOptions {
+interface UnifiedKeyframeVisualControlsOptions {
   selectedTimelineItem: Ref<UnifiedTimelineItemData | null>
   currentFrame: Ref<number>
 }
 
-type TransformKeyframeChannel =
+type VisualKeyframeChannel =
   | 'audio.volume'
-  | 'transform.opacity'
-  | 'transform.size'
-  | 'transform.position'
-  | 'transform.rotation'
+  | 'visual.opacity'
+  | 'visual.size'
+  | 'visual.position'
+  | 'visual.rotation'
 
 function isFiniteNumber(value: unknown): value is number {
   return typeof value === 'number' && Number.isFinite(value)
 }
 
-export function useUnifiedKeyframeTransformControls(
-  options: UnifiedKeyframeTransformControlsOptions,
+export function useUnifiedKeyframeVisualControls(
+  options: UnifiedKeyframeVisualControlsOptions,
 ) {
   const { selectedTimelineItem, currentFrame } = options
   const unifiedStore = useUnifiedStore()
@@ -61,7 +61,7 @@ export function useUnifiedKeyframeTransformControls(
     }
   }
 
-  const canOperateTransforms = computed(() => {
+  const canOperateVisualChannels = computed(() => {
     if (!selectedTimelineItem.value) return false
     return isPlayheadInTimelineItem(selectedTimelineItem.value, currentFrame.value)
   })
@@ -103,8 +103,8 @@ export function useUnifiedKeyframeTransformControls(
     }
   }
 
-  const transformX = computed(() => visualRenderConfig.value?.x ?? 0)
-  const transformY = computed(() => visualRenderConfig.value?.y ?? 0)
+  const visualX = computed(() => visualRenderConfig.value?.x ?? 0)
+  const visualY = computed(() => visualRenderConfig.value?.y ?? 0)
   const displayWidth = computed(() => visualRenderConfig.value?.width ?? 0)
   const displayHeight = computed(() => visualRenderConfig.value?.height ?? 0)
   const rotation = computed(() => visualRenderConfig.value?.rotation ?? 0)
@@ -182,37 +182,37 @@ export function useUnifiedKeyframeTransformControls(
     if (frame !== null) unifiedStore.seekToFrame(frame)
   }
 
-  const toggleChannelKeyframe = async (groupId: TransformKeyframeChannel) => {
+  const toggleChannelKeyframe = async (groupId: VisualKeyframeChannel) => {
     switch (groupId) {
       case 'audio.volume': {
         const item = selectedTimelineItem.value
-        if (!item || !canOperateTransforms.value) return
+        if (!item || !canOperateVisualChannels.value) return
         await propertyMutationCommitter.toggleKeyframe(getCommitContext(item), 'audio.volume')
         return
       }
-      case 'transform.opacity': {
+      case 'visual.opacity': {
         const item = selectedTimelineItem.value
-        if (!item || !canOperateTransforms.value) return
-        await propertyMutationCommitter.toggleKeyframe(getCommitContext(item), 'transform.opacity')
+        if (!item || !canOperateVisualChannels.value) return
+        await propertyMutationCommitter.toggleKeyframe(getCommitContext(item), 'visual.opacity')
         return
       }
-      case 'transform.size': {
+      case 'visual.size': {
         const item = selectedTimelineItem.value
-        if (!item || !canOperateTransforms.value) return
-        await propertyMutationCommitter.toggleKeyframe(getCommitContext(item), 'transform.size')
+        if (!item || !canOperateVisualChannels.value) return
+        await propertyMutationCommitter.toggleKeyframe(getCommitContext(item), 'visual.size')
         return
       }
-      case 'transform.position': {
+      case 'visual.position': {
         const item = selectedTimelineItem.value
-        if (!item || !canOperateTransforms.value) return
-        await propertyMutationCommitter.toggleKeyframe(getCommitContext(item), 'transform.position')
+        if (!item || !canOperateVisualChannels.value) return
+        await propertyMutationCommitter.toggleKeyframe(getCommitContext(item), 'visual.position')
         return
       }
-      case 'transform.rotation': {
+      case 'visual.rotation': {
         const item = selectedTimelineItem.value
-        if (!item || !canOperateTransforms.value) return
-        clearTransformRotationOverlay(item.id)
-        await propertyMutationCommitter.toggleKeyframe(getCommitContext(item), 'transform.rotation')
+        if (!item || !canOperateVisualChannels.value) return
+        clearVisualRotationOverlay(item.id)
+        await propertyMutationCommitter.toggleKeyframe(getCommitContext(item), 'visual.rotation')
         return
       }
       default: {
@@ -223,7 +223,7 @@ export function useUnifiedKeyframeTransformControls(
   }
 
   const getChannelKeyframeTooltip = (groupId: AnimationChannelKey) => {
-    if (!canOperateTransforms.value) {
+    if (!canOperateVisualChannels.value) {
       return '播放头不在当前clip时间范围内，无法操作关键帧'
     }
     switch (getChannelButtonState(groupId)) {
@@ -240,17 +240,17 @@ export function useUnifiedKeyframeTransformControls(
 
   async function commitRotationDeferredUpdate(nextValue?: number) {
     const item = selectedTimelineItem.value
-    if (!item || !canOperateTransforms.value) return
+    if (!item || !canOperateVisualChannels.value) return
     const nextRotation = typeof nextValue === 'number' ? normalizeAngle(nextValue) : rotation.value
-    await propertyMutationCommitter.commitDirect(getCommitContext(item), 'transform.rotation', nextRotation)
-    clearTransformRotationOverlay(item.id)
+    await propertyMutationCommitter.commitDirect(getCommitContext(item), 'visual.rotation', nextRotation)
+    clearVisualRotationOverlay(item.id)
   }
 
   async function commitPositionDeferredUpdate(axis: 'x' | 'y', nextValue?: number) {
     const item = selectedTimelineItem.value
-    if (!item || !canOperateTransforms.value) return
+    if (!item || !canOperateVisualChannels.value) return
 
-    const positionOverlay = getTransformPositionOverlay(item.id)
+    const positionOverlay = getVisualPositionOverlay(item.id)
     const currentRenderConfig = visualRenderConfig.value
     const resolvedValue =
       typeof nextValue === 'number'
@@ -261,15 +261,15 @@ export function useUnifiedKeyframeTransformControls(
       return
     }
 
-    await propertyMutationCommitter.commitDirect(getCommitContext(item), 'transform.position', { [axis]: resolvedValue })
-    clearTransformPositionOverlay(item.id)
+    await propertyMutationCommitter.commitDirect(getCommitContext(item), 'visual.position', { [axis]: resolvedValue })
+    clearVisualPositionOverlay(item.id)
   }
 
-  async function commitTransformPositionDeferredUpdate() {
+  async function commitVisualPositionDeferredUpdate() {
     const item = selectedTimelineItem.value
-    if (!item || !canOperateTransforms.value) return
+    if (!item || !canOperateVisualChannels.value) return
 
-    const positionOverlay = getTransformPositionOverlay(item.id)
+    const positionOverlay = getVisualPositionOverlay(item.id)
     if (!positionOverlay) return
 
     const currentRenderConfig = visualRenderConfig.value
@@ -277,8 +277,8 @@ export function useUnifiedKeyframeTransformControls(
     const y = positionOverlay.y ?? currentRenderConfig?.y
     if (!isFiniteNumber(x) || !isFiniteNumber(y)) return
 
-    await propertyMutationCommitter.commitDirect(getCommitContext(item), 'transform.position', { x, y })
-    clearTransformPositionOverlay(item.id)
+    await propertyMutationCommitter.commitDirect(getCommitContext(item), 'visual.position', { x, y })
+    clearVisualPositionOverlay(item.id)
   }
 
   async function commitSizeDeferredUpdate(
@@ -286,9 +286,9 @@ export function useUnifiedKeyframeTransformControls(
     nextValue?: number,
   ) {
     const item = selectedTimelineItem.value
-    if (!item || !canOperateTransforms.value) return
+    if (!item || !canOperateVisualChannels.value) return
 
-    const sizeOverlay = getTransformSizeOverlay(item.id)
+    const sizeOverlay = getVisualSizeOverlay(item.id)
     const currentRenderConfig = visualRenderConfig.value
     const resolvedValue =
       typeof nextValue === 'number'
@@ -308,15 +308,15 @@ export function useUnifiedKeyframeTransformControls(
           ? getScaledSizeFromHeight(resolvedValue)
           : { height: resolvedValue }
 
-    await propertyMutationCommitter.commitDirect(getCommitContext(item), 'transform.size', patch)
-    clearTransformSizeOverlay(item.id)
+    await propertyMutationCommitter.commitDirect(getCommitContext(item), 'visual.size', patch)
+    clearVisualSizeOverlay(item.id)
   }
 
   async function commitOpacityDeferredUpdate(nextValue?: number) {
     const item = selectedTimelineItem.value
-    if (!item || !canOperateTransforms.value) return
+    if (!item || !canOperateVisualChannels.value) return
 
-    const opacityOverlay = getTransformOpacityOverlay(item.id)
+    const opacityOverlay = getVisualOpacityOverlay(item.id)
     const currentRenderConfig = visualRenderConfig.value
     const nextOpacity =
       typeof nextValue === 'number'
@@ -325,13 +325,13 @@ export function useUnifiedKeyframeTransformControls(
 
     if (!isFiniteNumber(nextOpacity)) return
 
-    await propertyMutationCommitter.commitDirect(getCommitContext(item), 'transform.opacity', nextOpacity)
-    clearTransformOpacityOverlay(item.id)
+    await propertyMutationCommitter.commitDirect(getCommitContext(item), 'visual.opacity', nextOpacity)
+    clearVisualOpacityOverlay(item.id)
   }
 
   async function commitVolumeDeferredUpdate(nextValue?: number) {
     const item = selectedTimelineItem.value
-    if (!item || !canOperateTransforms.value) return
+    if (!item || !canOperateVisualChannels.value) return
 
     const volumeOverlay = getAudioVolumeOverlay(item.id)
     const currentRenderConfig = audioRenderConfig.value
@@ -346,12 +346,12 @@ export function useUnifiedKeyframeTransformControls(
     clearAudioVolumeOverlay(item.id)
   }
 
-  async function commitTransformGeometryDeferredUpdate() {
+  async function commitVisualGeometryDeferredUpdate() {
     const item = selectedTimelineItem.value
-    if (!item || !canOperateTransforms.value) return
+    if (!item || !canOperateVisualChannels.value) return
 
-    const sizeOverlay = getTransformSizeOverlay(item.id)
-    const positionOverlay = getTransformPositionOverlay(item.id)
+    const sizeOverlay = getVisualSizeOverlay(item.id)
+    const positionOverlay = getVisualPositionOverlay(item.id)
     if (!sizeOverlay && !positionOverlay) return
 
     const currentRenderConfig = visualRenderConfig.value
@@ -363,7 +363,7 @@ export function useUnifiedKeyframeTransformControls(
       if (isFiniteNumber(width) && isFiniteNumber(height)) {
         const sizePlan = propertyMutationCommitter.createDirectPlan(
           getCommitContext(item),
-          'transform.size',
+          'visual.size',
           { width, height },
         )
         operations.push(...sizePlan.operations)
@@ -376,7 +376,7 @@ export function useUnifiedKeyframeTransformControls(
       if (isFiniteNumber(x) && isFiniteNumber(y)) {
         const positionPlan = propertyMutationCommitter.createDirectPlan(
           getCommitContext(item),
-          'transform.position',
+          'visual.position',
           { x, y },
         )
         operations.push(...positionPlan.operations)
@@ -386,86 +386,86 @@ export function useUnifiedKeyframeTransformControls(
     if (operations.length === 0) return
 
     await propertyMutationCommitter.commitChangePlan(getCommitContext(item), {
-      propertyId: 'transform.size',
+      propertyId: 'visual.size',
       description: '修改尺寸和位置',
       operations,
     })
-    clearTransformSizeOverlay(item.id)
-    clearTransformPositionOverlay(item.id)
+    clearVisualSizeOverlay(item.id)
+    clearVisualPositionOverlay(item.id)
   }
 
   async function setPositionPatchDirectly(value: Record<string, number>) {
     const item = selectedTimelineItem.value
-    if (!item || !canOperateTransforms.value) return
-    await propertyMutationCommitter.commitDirect(getCommitContext(item), 'transform.position', value)
+    if (!item || !canOperateVisualChannels.value) return
+    await propertyMutationCommitter.commitDirect(getCommitContext(item), 'visual.position', value)
   }
 
-  const setTransformPositionDeferred = (x: number, y: number) => {
+  const setVisualPositionDeferred = (x: number, y: number) => {
     const item = selectedTimelineItem.value
-    if (!item || !canOperateTransforms.value) return
-    setTransformPositionOverlay(item.id, { x, y })
+    if (!item || !canOperateVisualChannels.value) return
+    setVisualPositionOverlay(item.id, { x, y })
   }
 
-  const setTransformXDeferred = (x: number) => {
+  const setVisualXDeferred = (x: number) => {
     const item = selectedTimelineItem.value
-    if (!item || !canOperateTransforms.value) return
-    setTransformPositionOverlay(item.id, { x })
+    if (!item || !canOperateVisualChannels.value) return
+    setVisualPositionOverlay(item.id, { x })
   }
 
-  const setTransformYDeferred = (y: number) => {
+  const setVisualYDeferred = (y: number) => {
     const item = selectedTimelineItem.value
-    if (!item || !canOperateTransforms.value) return
-    setTransformPositionOverlay(item.id, { y })
+    if (!item || !canOperateVisualChannels.value) return
+    setVisualPositionOverlay(item.id, { y })
   }
 
-  const setTransformSizeDeferred = (width: number, height: number, x?: number, y?: number) => {
+  const setVisualSizeDeferred = (width: number, height: number, x?: number, y?: number) => {
     const item = selectedTimelineItem.value
-    if (!item || !canOperateTransforms.value) return
-    setTransformSizeOverlay(item.id, { width, height })
+    if (!item || !canOperateVisualChannels.value) return
+    setVisualSizeOverlay(item.id, { width, height })
     if (typeof x === 'number' || typeof y === 'number') {
       const positionPatch: Record<string, number> = {}
       if (typeof x === 'number') positionPatch.x = x
       if (typeof y === 'number') positionPatch.y = y
-      setTransformPositionOverlay(item.id, positionPatch)
+      setVisualPositionOverlay(item.id, positionPatch)
     }
   }
 
-  const setTransformRotationDeferred = (nextRotation: number) => {
+  const setVisualRotationDeferred = (nextRotation: number) => {
     const item = selectedTimelineItem.value
-    if (!item || !canOperateTransforms.value) return
-    setTransformRotationOverlay(item.id, normalizeAngle(nextRotation))
+    if (!item || !canOperateVisualChannels.value) return
+    setVisualRotationOverlay(item.id, normalizeAngle(nextRotation))
   }
 
   const setRotationDeferred = (nextRotation: number) => {
-    setTransformRotationDeferred(nextRotation)
+    setVisualRotationDeferred(nextRotation)
   }
 
-  const commitTransformXDeferredUpdate = async (x: number) => {
+  const commitVisualXDeferredUpdate = async (x: number) => {
     await commitPositionDeferredUpdate('x', x)
   }
 
-  const commitTransformYDeferredUpdate = async (y: number) => {
+  const commitVisualYDeferredUpdate = async (y: number) => {
     await commitPositionDeferredUpdate('y', y)
   }
 
   const setWidthDeferred = (width: number) => {
     const item = selectedTimelineItem.value
-    if (!item || !canOperateTransforms.value) return
+    if (!item || !canOperateVisualChannels.value) return
     if (proportionalScale.value) {
-      setTransformSizeOverlay(item.id, getScaledSizeFromWidth(width))
+      setVisualSizeOverlay(item.id, getScaledSizeFromWidth(width))
       return
     }
-    setTransformSizeOverlay(item.id, { width })
+    setVisualSizeOverlay(item.id, { width })
   }
 
   const setHeightDeferred = (height: number) => {
     const item = selectedTimelineItem.value
-    if (!item || !canOperateTransforms.value) return
+    if (!item || !canOperateVisualChannels.value) return
     if (proportionalScale.value) {
-      setTransformSizeOverlay(item.id, getScaledSizeFromHeight(height))
+      setVisualSizeOverlay(item.id, getScaledSizeFromHeight(height))
       return
     }
-    setTransformSizeOverlay(item.id, { height })
+    setVisualSizeOverlay(item.id, { height })
   }
 
   const commitWidthDeferredUpdate = async (width: number) => {
@@ -478,34 +478,34 @@ export function useUnifiedKeyframeTransformControls(
 
   const setOpacityDeferred = (nextOpacity: number) => {
     const item = selectedTimelineItem.value
-    if (!item || !canOperateTransforms.value) return
-    setTransformOpacityOverlay(item.id, nextOpacity)
+    if (!item || !canOperateVisualChannels.value) return
+    setVisualOpacityOverlay(item.id, nextOpacity)
   }
 
   const updateVolumeDeferred = (nextVolume: number) => {
     const item = selectedTimelineItem.value
-    if (!item || !canOperateTransforms.value) return
+    if (!item || !canOperateVisualChannels.value) return
     setAudioVolumeOverlay(item.id, nextVolume)
   }
 
-  const setTransformXDirectly = async (x: number) => {
+  const setVisualXDirectly = async (x: number) => {
     await setPositionPatchDirectly({ x })
   }
 
-  const setTransformYDirectly = async (y: number) => {
+  const setVisualYDirectly = async (y: number) => {
     await setPositionPatchDirectly({ y })
   }
 
   const setSizeDirectly = async (width: number, height: number) => {
     const item = selectedTimelineItem.value
-    if (!item || !canOperateTransforms.value) return
-    await propertyMutationCommitter.commitDirect(getCommitContext(item), 'transform.size', { width, height })
+    if (!item || !canOperateVisualChannels.value) return
+    await propertyMutationCommitter.commitDirect(getCommitContext(item), 'visual.size', { width, height })
   }
 
   const setSizePatchDirectly = async (value: Record<string, number>) => {
     const item = selectedTimelineItem.value
-    if (!item || !canOperateTransforms.value) return
-    await propertyMutationCommitter.commitDirect(getCommitContext(item), 'transform.size', value)
+    if (!item || !canOperateVisualChannels.value) return
+    await propertyMutationCommitter.commitDirect(getCommitContext(item), 'visual.size', value)
   }
 
   const setWidthDirectly = async (width: number) => {
@@ -550,28 +550,28 @@ export function useUnifiedKeyframeTransformControls(
 
   const setRotationDirectly = async (nextRotation: number) => {
     const item = selectedTimelineItem.value
-    if (!item || !canOperateTransforms.value) return
-    clearTransformRotationOverlay(item.id)
+    if (!item || !canOperateVisualChannels.value) return
+    clearVisualRotationOverlay(item.id)
     await propertyMutationCommitter.commitDirect(
       getCommitContext(item),
-      'transform.rotation',
+      'visual.rotation',
       normalizeAngle(nextRotation),
     )
   }
 
   const setOpacityDirectly = async (nextOpacity: number) => {
     const item = selectedTimelineItem.value
-    if (!item || !canOperateTransforms.value) return
-    await propertyMutationCommitter.commitDirect(getCommitContext(item), 'transform.opacity', nextOpacity)
+    if (!item || !canOperateVisualChannels.value) return
+    await propertyMutationCommitter.commitDirect(getCommitContext(item), 'visual.opacity', nextOpacity)
   }
 
   const setBlendModeDirectly = async (nextBlendMode: BlendMode) => {
     const item = selectedTimelineItem.value
-    if (!item || !canOperateTransforms.value || !TimelineItemQueries.hasVisualProperties(item)) return
+    if (!item || !canOperateVisualChannels.value || !TimelineItemQueries.hasVisualProperties(item)) return
     if (!isBlendMode(nextBlendMode)) return
 
     await propertyMutationCommitter.commitConfigPatch(getCommitContext(item), {
-      propertyId: 'transform.blendMode',
+      propertyId: 'visual.blendMode',
       description: '修改混合模式',
       operations: [
         {
@@ -586,13 +586,13 @@ export function useUnifiedKeyframeTransformControls(
 
   const setVolume = async (nextVolume: number) => {
     const item = selectedTimelineItem.value
-    if (!item || !canOperateTransforms.value) return
+    if (!item || !canOperateVisualChannels.value) return
     await propertyMutationCommitter.commitDirect(getCommitContext(item), 'audio.volume', nextVolume)
   }
 
   const setMutedDirectly = async (nextMuted: boolean) => {
     const item = selectedTimelineItem.value
-    if (!item || !canOperateTransforms.value || !TimelineItemQueries.hasAudioProperties(item)) return
+    if (!item || !canOperateVisualChannels.value || !TimelineItemQueries.hasAudioProperties(item)) return
 
     await propertyMutationCommitter.commitConfigPatch(getCommitContext(item), {
       propertyId: 'audio.isMuted',
@@ -610,7 +610,7 @@ export function useUnifiedKeyframeTransformControls(
 
   const toggleProportionalScale = async () => {
     const item = selectedTimelineItem.value
-    if (!item || !canOperateTransforms.value || !TimelineItemQueries.hasVisualProperties(item)) return
+    if (!item || !canOperateVisualChannels.value || !TimelineItemQueries.hasVisualProperties(item)) return
 
     const nextProportionalScale = !TimelineItemQueries.getResolvedRenderConfig(item).visual.proportionalScale
     const operations: ChangeOperation[] = [
@@ -628,7 +628,7 @@ export function useUnifiedKeyframeTransformControls(
       if (typeof sizePatch.height === 'number') {
         const sizePlan = propertyMutationCommitter.createDirectPlan(
           getCommitContext(item),
-          'transform.size',
+          'visual.size',
           sizePatch,
         )
         operations.push(...sizePlan.operations)
@@ -636,7 +636,7 @@ export function useUnifiedKeyframeTransformControls(
     }
 
     await propertyMutationCommitter.commitConfigPatch(getCommitContext(item), {
-      propertyId: 'transform.proportionalScale',
+      propertyId: 'visual.proportionalScale',
       description: `${nextProportionalScale ? '开启' : '关闭'}等比缩放`,
       operations,
     })
@@ -645,7 +645,7 @@ export function useUnifiedKeyframeTransformControls(
   const alignHorizontal = async (mode: 'left' | 'center' | 'right') => {
     const item = selectedTimelineItem.value
     const currentRenderConfig = visualRenderConfig.value
-    if (!item || !canOperateTransforms.value || !currentRenderConfig) return
+    if (!item || !canOperateVisualChannels.value || !currentRenderConfig) return
 
     const canvasWidth = unifiedStore.videoResolution.width
     const itemWidth = currentRenderConfig.width ?? 0
@@ -662,7 +662,7 @@ export function useUnifiedKeyframeTransformControls(
   const alignVertical = async (mode: 'top' | 'middle' | 'bottom') => {
     const item = selectedTimelineItem.value
     const currentRenderConfig = visualRenderConfig.value
-    if (!item || !canOperateTransforms.value || !currentRenderConfig) return
+    if (!item || !canOperateVisualChannels.value || !currentRenderConfig) return
 
     const canvasHeight = unifiedStore.videoResolution.height
     const itemHeight = currentRenderConfig.height ?? 0
@@ -677,9 +677,9 @@ export function useUnifiedKeyframeTransformControls(
   }
 
   return {
-    canOperateTransforms,
-    transformX,
-    transformY,
+    canOperateVisualChannels,
+    visualX,
+    visualY,
     displayWidth,
     displayHeight,
     rotation,
@@ -689,27 +689,27 @@ export function useUnifiedKeyframeTransformControls(
     proportionalScale,
     elementWidth,
     elementHeight,
-    setTransformPositionDeferred,
-    setTransformXDeferred,
-    setTransformYDeferred,
-    setTransformSizeDeferred,
-    setTransformRotationDeferred,
+    setVisualPositionDeferred,
+    setVisualXDeferred,
+    setVisualYDeferred,
+    setVisualSizeDeferred,
+    setVisualRotationDeferred,
     setWidthDeferred,
     setHeightDeferred,
     setRotationDeferred,
     setOpacityDeferred,
     updateVolumeDeferred,
-    commitTransformXDeferredUpdate,
-    commitTransformYDeferredUpdate,
+    commitVisualXDeferredUpdate,
+    commitVisualYDeferredUpdate,
     commitWidthDeferredUpdate,
     commitHeightDeferredUpdate,
-    commitTransformPositionDeferredUpdate,
-    commitTransformGeometryDeferredUpdate,
+    commitVisualPositionDeferredUpdate,
+    commitVisualGeometryDeferredUpdate,
     commitRotationDeferredUpdate,
     commitOpacityDeferredUpdate,
     commitVolumeDeferredUpdate,
-    setTransformXDirectly,
-    setTransformYDirectly,
+    setVisualXDirectly,
+    setVisualYDirectly,
     setWidthDirectly,
     setHeightDirectly,
     setSizeDirectly,
@@ -733,3 +733,5 @@ export function useUnifiedKeyframeTransformControls(
     getChannelKeyframeTooltip,
   }
 }
+
+export const useUnifiedKeyframeTransformControls = useUnifiedKeyframeVisualControls

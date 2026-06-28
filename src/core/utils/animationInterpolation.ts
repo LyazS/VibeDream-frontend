@@ -74,7 +74,7 @@ export function resolveRenderConfigAtFrame<T extends MediaType>(
 
   for (const groupId of getActiveAnimationGroups(item)) {
     const definition = AnimationRegistry.get(groupId)
-    if (definition.scope === 'transform') {
+    if (definition.scope === 'visual') {
       if (!TimelineItemQueries.hasVisualProperties(item)) {
         continue
       }

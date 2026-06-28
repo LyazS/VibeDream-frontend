@@ -1,5 +1,4 @@
 import type { ToolDefinition } from '../core/toolTypes'
-import { buildToolError, buildToolSuccess } from './utils/result'
 import { ClipPropertyEditService } from './clip-property/ClipPropertyEditService'
 
 export async function executeReadClipProperties(args: Record<string, any>) {
@@ -8,21 +7,25 @@ export async function executeReadClipProperties(args: Record<string, any>) {
   try {
     const data = await service.readClipProperties({
       clipId: args.clipId,
-      groupIds: args.groupIds,
+      propertyGroups: args.propertyGroups,
+      frame: args.frame,
     })
 
-    return buildToolSuccess(
-      'read_clip_properties',
-      data,
-      `已读取 ${data.clipId} 的 ${Object.keys(data.groups).join('、')} 属性组。`,
-    )
+    return {
+      success: true,
+      output: JSON.stringify({
+        tool: 'read_clip_properties',
+        ...data,
+        summary: `已读取 ${data.clipId} 的 ${Object.keys(data.groups).join('、')} 属性组。`,
+      }, null, 2),
+    }
   } catch (error: any) {
-    return buildToolError(
-      'read_clip_properties',
-      error?.toolCode ?? 'internal_error',
-      error instanceof Error ? error.message : String(error),
-      error?.toolDetails,
-    )
+    const message = error instanceof Error ? error.message : String(error)
+    return {
+      success: false,
+      output: JSON.stringify({ tool: 'read_clip_properties', error: message }, null, 2),
+      error: message,
+    }
   }
 }
 

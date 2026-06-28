@@ -100,10 +100,10 @@ export type DynamicFilterParamValue =
   | DynamicFilterParamColorValue
 
 export type AnimationGroupValueMap = {
-  'transform.position': PositionAnimatableProps
-  'transform.size': SizeAnimatableProps
-  'transform.rotation': RotationAnimatableProps
-  'transform.opacity': OpacityAnimatableProps
+  'visual.position': PositionAnimatableProps
+  'visual.size': SizeAnimatableProps
+  'visual.rotation': RotationAnimatableProps
+  'visual.opacity': OpacityAnimatableProps
   'audio.volume': AudioAnimatableProps
   'filter.intensity': FilterIntensityValue
   'mask.center': MaskCenterValue
@@ -163,10 +163,10 @@ export interface AnimationGroupTrack<
 
 export type MediaAnimationGroupMap = {
   video: {
-    'transform.position': PositionAnimatableProps
-    'transform.size': SizeAnimatableProps
-    'transform.rotation': RotationAnimatableProps
-    'transform.opacity': OpacityAnimatableProps
+    'visual.position': PositionAnimatableProps
+    'visual.size': SizeAnimatableProps
+    'visual.rotation': RotationAnimatableProps
+    'visual.opacity': OpacityAnimatableProps
     'audio.volume': AudioAnimatableProps
     'filter.intensity': FilterIntensityValue
     'mask.center': MaskCenterValue
@@ -180,10 +180,10 @@ export type MediaAnimationGroupMap = {
     'mask.mirror.length': MaskMirrorValue
   }
   image: {
-    'transform.position': PositionAnimatableProps
-    'transform.size': SizeAnimatableProps
-    'transform.rotation': RotationAnimatableProps
-    'transform.opacity': OpacityAnimatableProps
+    'visual.position': PositionAnimatableProps
+    'visual.size': SizeAnimatableProps
+    'visual.rotation': RotationAnimatableProps
+    'visual.opacity': OpacityAnimatableProps
     'filter.intensity': FilterIntensityValue
     'mask.center': MaskCenterValue
     'mask.rotation': MaskRotationValue
@@ -199,10 +199,10 @@ export type MediaAnimationGroupMap = {
     'audio.volume': AudioAnimatableProps
   }
   text: {
-    'transform.position': PositionAnimatableProps
-    'transform.size': SizeAnimatableProps
-    'transform.rotation': RotationAnimatableProps
-    'transform.opacity': OpacityAnimatableProps
+    'visual.position': PositionAnimatableProps
+    'visual.size': SizeAnimatableProps
+    'visual.rotation': RotationAnimatableProps
+    'visual.opacity': OpacityAnimatableProps
     'mask.center': MaskCenterValue
     'mask.rotation': MaskRotationValue
     'mask.feather': MaskFeatherValue
@@ -258,17 +258,17 @@ export type TimelineBaseRenderConfig<T extends MediaType> = TimelineBaseRenderCo
 export type GetAnimation<T extends MediaType> = GetAnimationMap[T]
 
 export const VISUAL_CHANNELS = [
-  'transform.position',
-  'transform.size',
-  'transform.rotation',
-  'transform.opacity',
+  'visual.position',
+  'visual.size',
+  'visual.rotation',
+  'visual.opacity',
 ] as const satisfies readonly AnimationGroupId[]
 
 export const ALL_ANIMATION_GROUPS = [
-  'transform.position',
-  'transform.size',
-  'transform.rotation',
-  'transform.opacity',
+  'visual.position',
+  'visual.size',
+  'visual.rotation',
+  'visual.opacity',
   'audio.volume',
   'filter.intensity',
   'mask.center',
@@ -283,12 +283,12 @@ export const ALL_ANIMATION_GROUPS = [
 ] as const satisfies readonly AnimationGroupId[]
 
 export const PROPERTY_TO_GROUP_MAP = {
-  x: 'transform.position',
-  y: 'transform.position',
-  width: 'transform.size',
-  height: 'transform.size',
-  rotation: 'transform.rotation',
-  opacity: 'transform.opacity',
+  x: 'visual.position',
+  y: 'visual.position',
+  width: 'visual.size',
+  height: 'visual.size',
+  rotation: 'visual.rotation',
+  opacity: 'visual.opacity',
   volume: 'audio.volume',
   'filter.intensity': 'filter.intensity',
   'mask.centerX': 'mask.center',

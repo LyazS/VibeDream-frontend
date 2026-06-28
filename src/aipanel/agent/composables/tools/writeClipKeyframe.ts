@@ -1,5 +1,4 @@
 import type { ToolDefinition } from '../core/toolTypes'
-import { buildToolError, buildToolSuccess } from './utils/result'
 import { KeyframeChannelEditService } from './keyframe-channel/KeyframeChannelEditService'
 
 export async function executeWriteClipKeyframe(args: Record<string, any>) {
@@ -8,23 +7,26 @@ export async function executeWriteClipKeyframe(args: Record<string, any>) {
   try {
     const data = await service.writeClipKeyframe({
       itemId: args.itemId,
-      groupId: args.groupId,
+      channelId: args.channelId,
       keyframes: args.keyframes,
       options: args.options,
     })
 
-    return buildToolSuccess(
-      'write_clip_keyframe',
-      data,
-      `已重写 ${data.itemId} 的 ${data.groupId} 通道。`,
-    )
+    return {
+      success: true,
+      output: JSON.stringify({
+        tool: 'write_clip_keyframe',
+        ...data,
+        summary: `已重写 ${data.itemId} 的 ${data.channelId} 通道。`,
+      }, null, 2),
+    }
   } catch (error: any) {
-    return buildToolError(
-      'write_clip_keyframe',
-      error?.toolCode ?? 'internal_error',
-      error instanceof Error ? error.message : String(error),
-      error?.toolDetails,
-    )
+    const message = error instanceof Error ? error.message : String(error)
+    return {
+      success: false,
+      output: JSON.stringify({ tool: 'write_clip_keyframe', error: message }, null, 2),
+      error: message,
+    }
   }
 }
 

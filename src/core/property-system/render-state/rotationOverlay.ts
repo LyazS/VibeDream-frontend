@@ -1,6 +1,6 @@
 import { reactive } from 'vue'
 import { normalizeAngle } from '@/core/utils/rotationTransform'
-import { transformRotationSchema } from '@/core/property-system/schema'
+import { visualRotationSchema } from '@/core/property-system/schema'
 
 interface RotationOverlayEntry {
   rotation: number
@@ -8,9 +8,9 @@ interface RotationOverlayEntry {
 
 const rotationOverlays = reactive(new Map<string, RotationOverlayEntry>())
 
-export function setTransformRotationOverlay(timelineItemId: string, rotation: number): void {
-  if (!transformRotationSchema.supportsTransientOverlay) {
-    throw new Error(`Transient overlay is not supported: ${transformRotationSchema.propertyId}`)
+export function setVisualRotationOverlay(timelineItemId: string, rotation: number): void {
+  if (!visualRotationSchema.supportsTransientOverlay) {
+    throw new Error(`Transient overlay is not supported: ${visualRotationSchema.propertyId}`)
   }
 
   rotationOverlays.set(timelineItemId, {
@@ -18,10 +18,10 @@ export function setTransformRotationOverlay(timelineItemId: string, rotation: nu
   })
 }
 
-export function getTransformRotationOverlay(timelineItemId: string): RotationOverlayEntry | undefined {
+export function getVisualRotationOverlay(timelineItemId: string): RotationOverlayEntry | undefined {
   return rotationOverlays.get(timelineItemId)
 }
 
-export function clearTransformRotationOverlay(timelineItemId: string): void {
+export function clearVisualRotationOverlay(timelineItemId: string): void {
   rotationOverlays.delete(timelineItemId)
 }

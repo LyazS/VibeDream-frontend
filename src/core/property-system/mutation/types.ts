@@ -13,10 +13,10 @@ import type { MediaType } from '@/core/mediaitem'
 import type { TimelineExtraRenderConfig, UnifiedTimelineItemData } from '@/core/timelineitem/model/timelineItem'
 
 export type AnimatablePropertyId =
-  | 'transform.rotation'
-  | 'transform.position'
-  | 'transform.size'
-  | 'transform.opacity'
+  | 'visual.rotation'
+  | 'visual.position'
+  | 'visual.size'
+  | 'visual.opacity'
   | 'filter.intensity'
   | DynamicFilterParamPropertyId
   | 'audio.volume'
@@ -30,8 +30,8 @@ export type AnimatablePropertyId =
   | 'mask.intensity'
 
 export type ConfigPropertyId =
-  | 'transform.blendMode'
-  | 'transform.proportionalScale'
+  | 'visual.blendMode'
+  | 'visual.proportionalScale'
   | 'audio.isMuted'
   | 'mask.enabled'
   | 'mask.type'

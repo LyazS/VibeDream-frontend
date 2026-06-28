@@ -53,9 +53,9 @@ function assertFiniteNumberRecord(
   return value as Record<string, number>
 }
 
-export const transformRotationSchema: AnimatablePropertySchema = {
-  propertyId: 'transform.rotation',
-  animationGroupId: 'transform.rotation',
+export const visualRotationSchema: AnimatablePropertySchema = {
+  propertyId: 'visual.rotation',
+  animationGroupId: 'visual.rotation',
   target: 'visual',
   valueFields: ['rotation'],
   valueKind: 'number',
@@ -63,13 +63,13 @@ export const transformRotationSchema: AnimatablePropertySchema = {
   supportsKeyframeToggle: true,
   supportsTransientOverlay: true,
   normalizeDirectValue: (value) => ({
-    rotation: normalizeAngle(assertFiniteNumber(value, 'transform.rotation')),
+    rotation: normalizeAngle(assertFiniteNumber(value, 'visual.rotation')),
   }),
 }
 
-export const transformPositionSchema: AnimatablePropertySchema = {
-  propertyId: 'transform.position',
-  animationGroupId: 'transform.position',
+export const visualPositionSchema: AnimatablePropertySchema = {
+  propertyId: 'visual.position',
+  animationGroupId: 'visual.position',
   target: 'visual',
   valueFields: ['x', 'y'],
   valueKind: 'vec2',
@@ -77,12 +77,12 @@ export const transformPositionSchema: AnimatablePropertySchema = {
   supportsKeyframeToggle: true,
   supportsTransientOverlay: true,
   normalizeDirectValue: (value) =>
-    assertFiniteNumberRecord(value, ['x', 'y'], 'transform.position'),
+    assertFiniteNumberRecord(value, ['x', 'y'], 'visual.position'),
 }
 
-export const transformSizeSchema: AnimatablePropertySchema = {
-  propertyId: 'transform.size',
-  animationGroupId: 'transform.size',
+export const visualSizeSchema: AnimatablePropertySchema = {
+  propertyId: 'visual.size',
+  animationGroupId: 'visual.size',
   target: 'visual',
   valueFields: ['width', 'height'],
   valueKind: 'vec2',
@@ -90,12 +90,12 @@ export const transformSizeSchema: AnimatablePropertySchema = {
   supportsKeyframeToggle: true,
   supportsTransientOverlay: true,
   normalizeDirectValue: (value) =>
-    assertFiniteNumberRecord(value, ['width', 'height'], 'transform.size'),
+    assertFiniteNumberRecord(value, ['width', 'height'], 'visual.size'),
 }
 
-export const transformOpacitySchema: AnimatablePropertySchema = {
-  propertyId: 'transform.opacity',
-  animationGroupId: 'transform.opacity',
+export const visualOpacitySchema: AnimatablePropertySchema = {
+  propertyId: 'visual.opacity',
+  animationGroupId: 'visual.opacity',
   target: 'visual',
   valueFields: ['opacity'],
   valueKind: 'number',
@@ -103,7 +103,7 @@ export const transformOpacitySchema: AnimatablePropertySchema = {
   supportsKeyframeToggle: true,
   supportsTransientOverlay: true,
   normalizeDirectValue: (value) => ({
-    opacity: clamp(assertFiniteNumber(value, 'transform.opacity'), 0, 1),
+    opacity: clamp(assertFiniteNumber(value, 'visual.opacity'), 0, 1),
   }),
 }
 

@@ -10,7 +10,7 @@
           :value="localText"
           @blur="updateTextContent"
           @keyup.ctrl.enter="updateTextContent"
-          :disabled="!canOperateTransforms"
+          :disabled="!canOperateVisualChannels"
           class="text-content-input"
           :placeholder="t('properties.placeholders.enterText')"
           rows="3"
@@ -24,7 +24,7 @@
           <select
             :value="localStyle.fontFamily"
             @change="handleFontFamilyChange"
-            :disabled="!canOperateTransforms"
+            :disabled="!canOperateVisualChannels"
             class="font-family-select"
           >
             <option value="Arial, sans-serif">{{ t('properties.fonts.fontFamilyArial') }}</option>
@@ -53,7 +53,7 @@
           <SliderInput
             :model-value="localStyle.fontSize"
             @input="updateFontSize"
-            :disabled="!canOperateTransforms"
+            :disabled="!canOperateVisualChannels"
             :min="12"
             :max="200"
             :step="1"
@@ -62,7 +62,7 @@
           <NumberInput
             :model-value="localStyle.fontSize"
             @change="updateFontSize"
-            :disabled="!canOperateTransforms"
+            :disabled="!canOperateVisualChannels"
             :min="12"
             :max="200"
             :step="1"
@@ -81,7 +81,7 @@
           <select
             :value="localStyle.fontWeight"
             @change="handleFontWeightChange"
-            :disabled="!canOperateTransforms"
+            :disabled="!canOperateVisualChannels"
             class="font-weight-select"
           >
             <option value="normal">{{ t('properties.effects.normal') }}</option>
@@ -91,7 +91,7 @@
           <select
             :value="localStyle.fontStyle"
             @change="handleFontStyleChange"
-            :disabled="!canOperateTransforms"
+            :disabled="!canOperateVisualChannels"
             class="font-style-select"
           >
             <option value="normal">{{ t('properties.fonts.fontStyleNormal') }}</option>
@@ -108,7 +108,7 @@
             type="color"
             :value="localStyle.color"
             @change="handleColorChange"
-            :disabled="!canOperateTransforms"
+            :disabled="!canOperateVisualChannels"
             class="color-picker"
           />
         </div>
@@ -123,14 +123,14 @@
             :value="localStyle.backgroundColor || '#000000'"
             @change="handleBackgroundColorChange"
             class="color-picker"
-            :disabled="!backgroundColorEnabled || !canOperateTransforms"
+            :disabled="!backgroundColorEnabled || !canOperateVisualChannels"
           />
           <label class="checkbox-wrapper">
             <input
               type="checkbox"
               :checked="backgroundColorEnabled"
               @change="toggleBackgroundColor"
-              :disabled="!canOperateTransforms"
+              :disabled="!canOperateVisualChannels"
               class="background-color-checkbox"
             />
           </label>
@@ -145,7 +145,7 @@
             v-for="align in textAlignOptions"
             :key="align.value"
             @click="updateTextAlign"
-            :disabled="!canOperateTransforms"
+            :disabled="!canOperateVisualChannels"
             class="align-btn"
             :class="{ active: localStyle.textAlign === align.value }"
             :title="
@@ -177,7 +177,7 @@
               type="checkbox"
               :checked="shadowEnabled"
               @change="toggleShadow"
-              :disabled="!canOperateTransforms"
+              :disabled="!canOperateVisualChannels"
               class="effect-checkbox"
             />
           </label>
@@ -188,7 +188,7 @@
                 type="color"
                 :value="shadowColor"
                 @change="handleShadowColorChange"
-                :disabled="!canOperateTransforms"
+                :disabled="!canOperateVisualChannels"
                 class="color-picker small"
               />
             </div>
@@ -197,7 +197,7 @@
               <SliderInput
                 :model-value="shadowBlur"
                 @input="updateShadowBlur"
-                :disabled="!canOperateTransforms"
+                :disabled="!canOperateVisualChannels"
                 :min="0"
                 :max="20"
                 :step="1"
@@ -206,7 +206,7 @@
               <NumberInput
                 :model-value="shadowBlur"
                 @change="updateShadowBlur"
-                :disabled="!canOperateTransforms"
+                :disabled="!canOperateVisualChannels"
                 :min="0"
                 :max="20"
                 :step="1"
@@ -221,7 +221,7 @@
               <SliderInput
                 :model-value="shadowOffsetX"
                 @input="updateShadowOffsetX"
-                :disabled="!canOperateTransforms"
+                :disabled="!canOperateVisualChannels"
                 :min="-20"
                 :max="20"
                 :step="1"
@@ -230,7 +230,7 @@
               <NumberInput
                 :model-value="shadowOffsetX"
                 @change="updateShadowOffsetX"
-                :disabled="!canOperateTransforms"
+                :disabled="!canOperateVisualChannels"
                 :min="-20"
                 :max="20"
                 :step="1"
@@ -245,7 +245,7 @@
               <SliderInput
                 :model-value="shadowOffsetY"
                 @input="updateShadowOffsetY"
-                :disabled="!canOperateTransforms"
+                :disabled="!canOperateVisualChannels"
                 :min="-20"
                 :max="20"
                 :step="1"
@@ -254,7 +254,7 @@
               <NumberInput
                 :model-value="shadowOffsetY"
                 @change="updateShadowOffsetY"
-                :disabled="!canOperateTransforms"
+                :disabled="!canOperateVisualChannels"
                 :min="-20"
                 :max="20"
                 :step="1"
@@ -277,7 +277,7 @@
               type="checkbox"
               :checked="strokeEnabled"
               @change="toggleStroke"
-              :disabled="!canOperateTransforms"
+              :disabled="!canOperateVisualChannels"
               class="effect-checkbox"
             />
           </label>
@@ -288,7 +288,7 @@
                 type="color"
                 :value="strokeColor"
                 @change="handleStrokeColorChange"
-                :disabled="!canOperateTransforms"
+                :disabled="!canOperateVisualChannels"
                 class="color-picker small"
               />
             </div>
@@ -297,7 +297,7 @@
               <SliderInput
                 :model-value="strokeWidth"
                 @input="updateStrokeWidth"
-                :disabled="!canOperateTransforms"
+                :disabled="!canOperateVisualChannels"
                 :min="0"
                 :max="10"
                 :step="0.5"
@@ -306,7 +306,7 @@
               <NumberInput
                 :model-value="strokeWidth"
                 @change="updateStrokeWidth"
-                :disabled="!canOperateTransforms"
+                :disabled="!canOperateVisualChannels"
                 :min="0"
                 :max="10"
                 :step="0.5"
@@ -329,7 +329,7 @@
               type="checkbox"
               :checked="glowEnabled"
               @change="toggleGlow"
-              :disabled="!canOperateTransforms"
+              :disabled="!canOperateVisualChannels"
               class="effect-checkbox"
             />
           </label>
@@ -340,7 +340,7 @@
                 type="color"
                 :value="glowColor"
                 @change="handleGlowColorChange"
-                :disabled="!canOperateTransforms"
+                :disabled="!canOperateVisualChannels"
                 class="color-picker small"
               />
             </div>
@@ -349,7 +349,7 @@
               <SliderInput
                 :model-value="glowBlur"
                 @input="updateGlowBlur"
-                :disabled="!canOperateTransforms"
+                :disabled="!canOperateVisualChannels"
                 :min="1"
                 :max="30"
                 :step="1"
@@ -358,7 +358,7 @@
               <NumberInput
                 :model-value="glowBlur"
                 @change="updateGlowBlur"
-                :disabled="!canOperateTransforms"
+                :disabled="!canOperateVisualChannels"
                 :min="1"
                 :max="30"
                 :step="1"
@@ -373,7 +373,7 @@
               <SliderInput
                 :model-value="glowSpread"
                 @input="updateGlowSpread"
-                :disabled="!canOperateTransforms"
+                :disabled="!canOperateVisualChannels"
                 :min="0"
                 :max="20"
                 :step="1"
@@ -382,7 +382,7 @@
               <NumberInput
                 :model-value="glowSpread"
                 @change="updateGlowSpread"
-                :disabled="!canOperateTransforms"
+                :disabled="!canOperateVisualChannels"
                 :min="0"
                 :max="20"
                 :step="1"
@@ -404,7 +404,7 @@ import { computed } from 'vue'
 import { useAppI18n } from '@/core/composables/useI18n'
 import { useUnifiedStore } from '@/core/unifiedStore'
 import { TimelineItemQueries, isTextTimelineItem } from '@/core/timelineitem/queries'
-import { useUnifiedKeyframeTransformControls } from '@/core/composables'
+import { useUnifiedKeyframeVisualControls } from '@/core/composables'
 import type { UnifiedTimelineItemData } from '@/core/timelineitem/model/timelineItem'
 import type { TextStyleConfig } from '@/core/timelineitem/model/textStyle'
 import { propertyMutationCommitter } from '@/core/property-system'
@@ -421,8 +421,8 @@ const props = defineProps<Props>()
 const { t } = useAppI18n()
 const unifiedStore = useUnifiedStore()
 
-// 获取禁用状态（当播放头不在播放范围内时禁用）
-const { canOperateTransforms } = useUnifiedKeyframeTransformControls({
+// 获取可操作状态（当播放头不在播放范围内时禁用）
+const { canOperateVisualChannels } = useUnifiedKeyframeVisualControls({
   selectedTimelineItem: computed(() => props.selectedTimelineItem),
   currentFrame: computed(() => props.currentFrame),
 })

@@ -13,19 +13,19 @@ export {
   setTransitionParamOverlay,
 } from './transitionOverlay'
 export {
-  clearTransformPositionOverlay,
-  getTransformPositionOverlay,
-  setTransformPositionOverlay,
+  clearVisualPositionOverlay,
+  getVisualPositionOverlay,
+  setVisualPositionOverlay,
 } from './positionOverlay'
 export {
-  clearTransformRotationOverlay,
-  getTransformRotationOverlay,
-  setTransformRotationOverlay,
+  clearVisualRotationOverlay,
+  getVisualRotationOverlay,
+  setVisualRotationOverlay,
 } from './rotationOverlay'
 export {
-  clearTransformOpacityOverlay,
-  getTransformOpacityOverlay,
-  setTransformOpacityOverlay,
+  clearVisualOpacityOverlay,
+  getVisualOpacityOverlay,
+  setVisualOpacityOverlay,
 } from './opacityOverlay'
 export {
   clearAudioVolumeOverlay,
@@ -33,9 +33,9 @@ export {
   setAudioVolumeOverlay,
 } from './volumeOverlay'
 export {
-  clearTransformSizeOverlay,
-  getTransformSizeOverlay,
-  setTransformSizeOverlay,
+  clearVisualSizeOverlay,
+  getVisualSizeOverlay,
+  setVisualSizeOverlay,
 } from './sizeOverlay'
 export {
   clearMaskCenterOverlay,

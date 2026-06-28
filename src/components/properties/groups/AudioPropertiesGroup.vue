@@ -12,7 +12,7 @@
           :model-value="volume"
           @input="updateVolumeDeferred"
           @change="commitVolumeDeferredUpdate"
-          :disabled="!canOperateTransforms"
+          :disabled="!canOperateVisualChannels"
           :min="0"
           :max="1"
           :step="0.01"
@@ -21,7 +21,7 @@
         <NumberInput
           :model-value="volume"
           @change="setVolume"
-          :disabled="!canOperateTransforms"
+          :disabled="!canOperateVisualChannels"
           :min="0"
           :max="1"
           :step="0.01"
@@ -31,7 +31,7 @@
         />
         <button
           @click="toggleMute"
-          :disabled="!canOperateTransforms"
+          :disabled="!canOperateVisualChannels"
           class="mute-btn"
           :title="isMuted ? t('properties.playback.unmuteTitle') : t('properties.playback.muteTitle')"
         >
@@ -40,7 +40,7 @@
         <KeyframeNavButtons
           :state="audioButtonState"
           :tooltip="getChannelKeyframeTooltip('audio.volume')"
-          :disabled="!canOperateTransforms"
+          :disabled="!canOperateVisualChannels"
           :has-previous="hasPreviousChannelKeyframe('audio.volume')"
           :has-next="hasNextChannelKeyframe('audio.volume')"
           @previous="goToPreviousChannelKeyframe('audio.volume')"
@@ -56,7 +56,7 @@
 import { computed } from 'vue'
 import { useAppI18n } from '@/core/composables/useI18n'
 import { TimelineItemQueries, hasAudioProperties } from '@/core/timelineitem/queries'
-import { useUnifiedKeyframeTransformControls } from '@/core/composables'
+import { useUnifiedKeyframeVisualControls } from '@/core/composables'
 import { IconComponents, getMuteIcon } from '@/constants/iconComponents'
 import type { UnifiedTimelineItemData } from '@/core/timelineitem/model/timelineItem'
 import NumberInput from '@/components/base/NumberInput.vue'
@@ -71,13 +71,13 @@ interface Props {
 const props = defineProps<Props>()
 const { t } = useAppI18n()
 
-// 使用关键帧控制器获取音量（支持关键帧动画）和禁用状态
+// 使用关键帧控制器获取音量（支持关键帧动画）和可操作状态
 const {
   volume,
   setVolume,
   setMutedDirectly,
   updateVolumeDeferred,
-  canOperateTransforms,
+  canOperateVisualChannels,
   getChannelButtonState,
   hasPreviousChannelKeyframe,
   hasNextChannelKeyframe,
@@ -86,7 +86,7 @@ const {
   toggleChannelKeyframe,
   getChannelKeyframeTooltip,
   commitVolumeDeferredUpdate,
-} = useUnifiedKeyframeTransformControls({
+} = useUnifiedKeyframeVisualControls({
   selectedTimelineItem: computed(() => props.selectedTimelineItem),
   currentFrame: computed(() => props.currentFrame),
 })

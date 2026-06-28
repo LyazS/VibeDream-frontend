@@ -48,8 +48,8 @@
         :disabled="!canOperateMaskNumbers"
         :has-previous="hasPreviousMaskKeyframe('mask.center')"
         :has-next="hasNextMaskKeyframe('mask.center')"
-        :first-label="t('properties.transform.positionX')"
-        :second-label="t('properties.transform.positionY')"
+        :first-label="t('properties.visual.positionX')"
+        :second-label="t('properties.visual.positionY')"
         :first-value="maskConfig.centerX"
         :second-value="maskConfig.centerY"
         :first-min="-itemLocalSize.width / 2"
@@ -69,7 +69,7 @@
 
       <KeyframedSliderField
         v-if="hasMaskConfig"
-        :label="t('properties.transform.rotation')"
+        :label="t('properties.visual.rotation')"
         :state="getMaskChannelButtonState('mask.rotation')"
         :tooltip="getMaskKeyframeTooltip('mask.rotation')"
         :disabled="!canOperateMaskNumbers"

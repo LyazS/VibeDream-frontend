@@ -17,10 +17,10 @@ import {
   getFilterParamOverlay,
   getTransitionParamOverlay,
   getAudioVolumeOverlay,
-  getTransformOpacityOverlay,
-  getTransformPositionOverlay,
-  getTransformRotationOverlay,
-  getTransformSizeOverlay,
+  getVisualOpacityOverlay,
+  getVisualPositionOverlay,
+  getVisualRotationOverlay,
+  getVisualSizeOverlay,
   getMaskCenterOverlay,
   getMaskFeatherOverlay,
   getMaskIntensityOverlay,
@@ -40,10 +40,10 @@ import {
   maskMirrorLengthSchema,
   maskRectangleCornerRadiusSchema,
   maskRectangleSizeSchema,
-  transformOpacitySchema,
-  transformPositionSchema,
-  transformRotationSchema,
-  transformSizeSchema,
+  visualOpacitySchema,
+  visualPositionSchema,
+  visualRotationSchema,
+  visualSizeSchema,
 } from '@/core/property-system/schema'
 import { normalizeClipFilterConfig } from '@/core/timelineitem/features/filter'
 import { normalizeClipTransitionOutConfig } from '@/core/timelineitem/features/transition'
@@ -175,10 +175,10 @@ export function getResolvedRenderConfig<T extends MediaType>(
   item: UnifiedTimelineItemData<T>,
 ): TimelineBaseRenderConfig<T> {
   const mergedRenderConfig = getMergedRenderConfig(item)
-  const positionOverlay = getTransformPositionOverlay(item.id)
-  const sizeOverlay = getTransformSizeOverlay(item.id)
-  const rotationOverlay = getTransformRotationOverlay(item.id)
-  const opacityOverlay = getTransformOpacityOverlay(item.id)
+  const positionOverlay = getVisualPositionOverlay(item.id)
+  const sizeOverlay = getVisualSizeOverlay(item.id)
+  const rotationOverlay = getVisualRotationOverlay(item.id)
+  const opacityOverlay = getVisualOpacityOverlay(item.id)
   const volumeOverlay = getAudioVolumeOverlay(item.id)
   if (!positionOverlay && !sizeOverlay && !rotationOverlay && !opacityOverlay && !volumeOverlay) {
     return mergedRenderConfig
@@ -195,21 +195,21 @@ export function getResolvedRenderConfig<T extends MediaType>(
         ...visualRenderConfig,
         ...(positionOverlay
           ? {
-              [transformPositionSchema.valueFields[0]]: positionOverlay.x ?? visualRenderConfig.x,
-              [transformPositionSchema.valueFields[1]]: positionOverlay.y ?? visualRenderConfig.y,
+              [visualPositionSchema.valueFields[0]]: positionOverlay.x ?? visualRenderConfig.x,
+              [visualPositionSchema.valueFields[1]]: positionOverlay.y ?? visualRenderConfig.y,
             }
           : {}),
         ...(sizeOverlay
           ? {
-              [transformSizeSchema.valueFields[0]]: sizeOverlay.width ?? visualRenderConfig.width,
-              [transformSizeSchema.valueFields[1]]: sizeOverlay.height ?? visualRenderConfig.height,
+              [visualSizeSchema.valueFields[0]]: sizeOverlay.width ?? visualRenderConfig.width,
+              [visualSizeSchema.valueFields[1]]: sizeOverlay.height ?? visualRenderConfig.height,
             }
           : {}),
         ...(rotationOverlay
-          ? { [transformRotationSchema.valueFields[0]]: rotationOverlay.rotation }
+          ? { [visualRotationSchema.valueFields[0]]: rotationOverlay.rotation }
           : {}),
         ...(opacityOverlay
-          ? { [transformOpacitySchema.valueFields[0]]: opacityOverlay.opacity }
+          ? { [visualOpacitySchema.valueFields[0]]: opacityOverlay.opacity }
           : {}),
       }
     : null

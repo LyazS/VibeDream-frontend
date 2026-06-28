@@ -1,5 +1,5 @@
 import { reactive } from 'vue'
-import { transformPositionSchema } from '@/core/property-system/schema'
+import { visualPositionSchema } from '@/core/property-system/schema'
 
 interface PositionOverlayEntry {
   x?: number
@@ -8,12 +8,12 @@ interface PositionOverlayEntry {
 
 const positionOverlays = reactive(new Map<string, PositionOverlayEntry>())
 
-export function setTransformPositionOverlay(
+export function setVisualPositionOverlay(
   timelineItemId: string,
   patch: PositionOverlayEntry,
 ): void {
-  if (!transformPositionSchema.supportsTransientOverlay) {
-    throw new Error(`Transient overlay is not supported: ${transformPositionSchema.propertyId}`)
+  if (!visualPositionSchema.supportsTransientOverlay) {
+    throw new Error(`Transient overlay is not supported: ${visualPositionSchema.propertyId}`)
   }
 
   const current = positionOverlays.get(timelineItemId) ?? {}
@@ -24,10 +24,10 @@ export function setTransformPositionOverlay(
   positionOverlays.set(timelineItemId, nextEntry)
 }
 
-export function getTransformPositionOverlay(timelineItemId: string): PositionOverlayEntry | undefined {
+export function getVisualPositionOverlay(timelineItemId: string): PositionOverlayEntry | undefined {
   return positionOverlays.get(timelineItemId)
 }
 
-export function clearTransformPositionOverlay(timelineItemId: string): void {
+export function clearVisualPositionOverlay(timelineItemId: string): void {
   positionOverlays.delete(timelineItemId)
 }

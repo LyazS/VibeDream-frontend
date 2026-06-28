@@ -1,5 +1,4 @@
 import type { ToolDefinition } from '../core/toolTypes'
-import { buildToolError, buildToolSuccess } from './utils/result'
 import { KeyframeChannelEditService } from './keyframe-channel/KeyframeChannelEditService'
 
 export async function executeReadClipKeyframe(args: Record<string, any>) {
@@ -8,21 +7,23 @@ export async function executeReadClipKeyframe(args: Record<string, any>) {
   try {
     const data = await service.readClipKeyframe({
       itemId: args.itemId,
-      groupId: args.groupId,
+      channelId: args.channelId,
     })
 
-    return buildToolSuccess(
-      'read_clip_keyframe',
-      data,
-      `已读取 ${data.itemId} 的 ${data.groupId} 关键帧，共 ${data.keyframes.length} 个。`,
-    )
+    return {
+      success: true,
+      output: JSON.stringify({
+        tool: 'read_clip_keyframe',
+        ...data,
+      }, null, 2),
+    }
   } catch (error: any) {
-    return buildToolError(
-      'read_clip_keyframe',
-      error?.toolCode ?? 'internal_error',
-      error instanceof Error ? error.message : String(error),
-      error?.toolDetails,
-    )
+    const message = error instanceof Error ? error.message : String(error)
+    return {
+      success: false,
+      output: JSON.stringify({ tool: 'read_clip_keyframe', error: message }, null, 2),
+      error: message,
+    }
   }
 }
 
