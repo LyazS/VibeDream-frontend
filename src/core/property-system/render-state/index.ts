@@ -23,9 +23,9 @@ export {
   setVisualRotationOverlay,
 } from './rotationOverlay'
 export {
-  clearVisualOpacityOverlay,
-  getVisualOpacityOverlay,
-  setVisualOpacityOverlay,
+  clearVisualBlendIntensityOverlay,
+  getVisualBlendIntensityOverlay,
+  setVisualBlendIntensityOverlay,
 } from './opacityOverlay'
 export {
   clearAudioVolumeOverlay,

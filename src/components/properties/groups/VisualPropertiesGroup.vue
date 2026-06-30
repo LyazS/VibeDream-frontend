@@ -190,23 +190,23 @@
       <!-- 混合强度 -->
       <KeyframedSliderField
         :label="t('properties.visual.blendIntensity')"
-        :state="opacityButtonState"
-        :tooltip="getChannelKeyframeTooltip('visual.opacity')"
+        :state="blendIntensityButtonState"
+        :tooltip="getChannelKeyframeTooltip('visual.blendIntensity')"
         :disabled="!canOperateVisualChannels"
-        :has-previous="hasPreviousChannelKeyframe('visual.opacity')"
-        :has-next="hasNextChannelKeyframe('visual.opacity')"
-        :value="opacity"
+        :has-previous="hasPreviousChannelKeyframe('visual.blendIntensity')"
+        :has-next="hasNextChannelKeyframe('visual.blendIntensity')"
+        :value="blendIntensity"
         :min="0"
         :max="1"
         :step="0.01"
         :precision="2"
         slider-class="opacity-slider"
-        @slider-input="setOpacityDeferred"
-        @slider-change="commitOpacityDeferredUpdate"
-        @number-change="setOpacityDirectly"
-        @previous="goToPreviousChannelKeyframe('visual.opacity')"
-        @toggle="toggleChannelKeyframe('visual.opacity')"
-        @next="goToNextChannelKeyframe('visual.opacity')"
+        @slider-input="setBlendIntensityDeferred"
+        @slider-change="commitBlendIntensityDeferredUpdate"
+        @number-change="setBlendIntensityDirectly"
+        @previous="goToPreviousChannelKeyframe('visual.blendIntensity')"
+        @toggle="toggleChannelKeyframe('visual.blendIntensity')"
+        @next="goToNextChannelKeyframe('visual.blendIntensity')"
       />
     </div>
   </div>
@@ -241,16 +241,16 @@ const {
   displayWidth,
   displayHeight,
   rotation,
-  opacity,
+  blendIntensity,
   blendMode,
   proportionalScale,
   toggleProportionalScale,
   setRotationDeferred,
-  setOpacityDeferred,
+  setBlendIntensityDeferred,
   setWidthDeferred,
   setHeightDeferred,
   commitRotationDeferredUpdate,
-  commitOpacityDeferredUpdate,
+  commitBlendIntensityDeferredUpdate,
   setVisualXDeferred,
   setVisualYDeferred,
   commitVisualXDeferredUpdate,
@@ -266,7 +266,7 @@ const {
   fitToCanvas,
   fillCanvas,
   setRotationDirectly,
-  setOpacityDirectly,
+  setBlendIntensityDirectly,
   setBlendModeDirectly,
 
   alignHorizontal,
@@ -286,7 +286,7 @@ const {
 const positionButtonState = computed(() => getChannelButtonState('visual.position'))
 const sizeButtonState = computed(() => getChannelButtonState('visual.size'))
 const rotationButtonState = computed(() => getChannelButtonState('visual.rotation'))
-const opacityButtonState = computed(() => getChannelButtonState('visual.opacity'))
+const blendIntensityButtonState = computed(() => getChannelButtonState('visual.blendIntensity'))
 
 const blendModeOptions = computed(() =>
   BLEND_MODE_VALUES.map((value) => ({

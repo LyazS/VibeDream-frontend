@@ -9,7 +9,7 @@ export {
   maskIntensitySchema,
   maskRotationSchema,
   maskMirrorLengthSchema,
-  visualOpacitySchema,
+  visualBlendIntensitySchema,
   visualPositionSchema,
   visualRotationSchema,
   visualSizeSchema,

@@ -68,5 +68,5 @@ export interface DrawSourceUniforms {
   x: number
   y: number
   rotationRadians: number
-  opacity: number
+  blendIntensity: number
 }

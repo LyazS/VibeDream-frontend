@@ -96,7 +96,10 @@ export class CompositeToMainPass implements RenderPass {
     gl.uniform2f(gl.getUniformLocation(this.program, 'u_translation'), uniforms.x, uniforms.y)
     gl.uniform2f(gl.getUniformLocation(this.program, 'u_scale'), overlay.width, overlay.height)
     gl.uniform1f(gl.getUniformLocation(this.program, 'u_rotation'), uniforms.rotationRadians)
-    gl.uniform1f(gl.getUniformLocation(this.program, 'u_opacity'), uniforms.opacity)
+    gl.uniform1f(
+      gl.getUniformLocation(this.program, 'u_blendIntensity'),
+      uniforms.blendIntensity,
+    )
 
     gl.drawArrays(gl.TRIANGLES, 0, 6)
   }

@@ -183,7 +183,7 @@ export class TransitionChainBuilder {
           x: 0,
           y: 0,
           rotationRadians: 0,
-          opacity: 1,
+          blendIntensity: 1,
         }),
       ),
     ]
@@ -258,7 +258,7 @@ export class TransitionChainBuilder {
             x: config.x,
             y: config.y,
             rotationRadians: degreesToRadians(-config.rotation),
-            opacity: config.opacity ?? 1,
+            blendIntensity: config.blendIntensity ?? 1,
           }
         },
       ),

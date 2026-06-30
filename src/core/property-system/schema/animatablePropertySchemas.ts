@@ -93,17 +93,17 @@ export const visualSizeSchema: AnimatablePropertySchema = {
     assertFiniteNumberRecord(value, ['width', 'height'], 'visual.size'),
 }
 
-export const visualOpacitySchema: AnimatablePropertySchema = {
-  propertyId: 'visual.opacity',
-  animationGroupId: 'visual.opacity',
+export const visualBlendIntensitySchema: AnimatablePropertySchema = {
+  propertyId: 'visual.blendIntensity',
+  animationGroupId: 'visual.blendIntensity',
   target: 'visual',
-  valueFields: ['opacity'],
+  valueFields: ['blendIntensity'],
   valueKind: 'number',
   supportsDirectCommit: true,
   supportsKeyframeToggle: true,
   supportsTransientOverlay: true,
   normalizeDirectValue: (value) => ({
-    opacity: clamp(assertFiniteNumber(value, 'visual.opacity'), 0, 1),
+    blendIntensity: clamp(assertFiniteNumber(value, 'visual.blendIntensity'), 0, 1),
   }),
 }
 

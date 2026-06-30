@@ -17,7 +17,7 @@ import {
   getFilterParamOverlay,
   getTransitionParamOverlay,
   getAudioVolumeOverlay,
-  getVisualOpacityOverlay,
+  getVisualBlendIntensityOverlay,
   getVisualPositionOverlay,
   getVisualRotationOverlay,
   getVisualSizeOverlay,
@@ -40,7 +40,7 @@ import {
   maskMirrorLengthSchema,
   maskRectangleCornerRadiusSchema,
   maskRectangleSizeSchema,
-  visualOpacitySchema,
+  visualBlendIntensitySchema,
   visualPositionSchema,
   visualRotationSchema,
   visualSizeSchema,
@@ -178,9 +178,9 @@ export function getResolvedRenderConfig<T extends MediaType>(
   const positionOverlay = getVisualPositionOverlay(item.id)
   const sizeOverlay = getVisualSizeOverlay(item.id)
   const rotationOverlay = getVisualRotationOverlay(item.id)
-  const opacityOverlay = getVisualOpacityOverlay(item.id)
+  const blendIntensityOverlay = getVisualBlendIntensityOverlay(item.id)
   const volumeOverlay = getAudioVolumeOverlay(item.id)
-  if (!positionOverlay && !sizeOverlay && !rotationOverlay && !opacityOverlay && !volumeOverlay) {
+  if (!positionOverlay && !sizeOverlay && !rotationOverlay && !blendIntensityOverlay && !volumeOverlay) {
     return mergedRenderConfig
   }
 
@@ -208,8 +208,8 @@ export function getResolvedRenderConfig<T extends MediaType>(
         ...(rotationOverlay
           ? { [visualRotationSchema.valueFields[0]]: rotationOverlay.rotation }
           : {}),
-        ...(opacityOverlay
-          ? { [visualOpacitySchema.valueFields[0]]: opacityOverlay.opacity }
+        ...(blendIntensityOverlay
+          ? { [visualBlendIntensitySchema.valueFields[0]]: blendIntensityOverlay.blendIntensity }
           : {}),
       }
     : null

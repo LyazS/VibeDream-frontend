@@ -16,7 +16,7 @@ export type AnimatablePropertyId =
   | 'visual.rotation'
   | 'visual.position'
   | 'visual.size'
-  | 'visual.opacity'
+  | 'visual.blendIntensity'
   | 'filter.intensity'
   | DynamicFilterParamPropertyId
   | 'audio.volume'

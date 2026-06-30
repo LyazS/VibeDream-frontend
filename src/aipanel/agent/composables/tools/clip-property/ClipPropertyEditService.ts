@@ -34,7 +34,7 @@ type PropertyPath =
   | 'visual.width'
   | 'visual.height'
   | 'visual.rotation'
-  | 'visual.opacity'
+  | 'visual.blendIntensity'
   | 'visual.blendMode'
   | 'visual.proportionalScale'
   | 'audio.volume'
@@ -69,7 +69,7 @@ const PATH_DEFINITIONS: Record<PropertyPath, PathDefinition> = {
   'visual.width': { groupId: 'visual', validate: validatePositiveNumber('visual.width') },
   'visual.height': { groupId: 'visual', validate: validatePositiveNumber('visual.height') },
   'visual.rotation': { groupId: 'visual', validate: validateFiniteNumber('visual.rotation') },
-  'visual.opacity': { groupId: 'visual', validate: validateRangeNumber('visual.opacity', 0, 1) },
+  'visual.blendIntensity': { groupId: 'visual', validate: validateRangeNumber('visual.blendIntensity', 0, 1) },
   'visual.blendMode': { groupId: 'visual', validate: validateBlendMode },
   'visual.proportionalScale': { groupId: 'visual', validate: validateBoolean('visual.proportionalScale') },
   'audio.volume': { groupId: 'audio', validate: validateRangeNumber('audio.volume', 0, 1) },
@@ -223,15 +223,17 @@ export class ClipPropertyEditService {
       const animatedSize = frame !== undefined ? getCurrentGroupValue(item, frame, 'visual.size') : null
       const animatedRotation =
         frame !== undefined ? getCurrentGroupValue(item, frame, 'visual.rotation') : null
-      const animatedOpacity =
-        frame !== undefined ? getCurrentGroupValue(item, frame, 'visual.opacity') : null
+      const animatedBlendIntensity =
+        frame !== undefined ? getCurrentGroupValue(item, frame, 'visual.blendIntensity') : null
       return {
         x: roundNumeric(animatedPosition?.x ?? resolved.visual.x),
         y: roundNumeric(animatedPosition?.y ?? resolved.visual.y),
         width: roundNumeric(animatedSize?.width ?? resolved.visual.width),
         height: roundNumeric(animatedSize?.height ?? resolved.visual.height),
         rotation: roundNumeric(animatedRotation?.rotation ?? resolved.visual.rotation),
-        opacity: roundNumeric(animatedOpacity?.opacity ?? resolved.visual.opacity),
+        blendIntensity: roundNumeric(
+          animatedBlendIntensity?.blendIntensity ?? resolved.visual.blendIntensity,
+        ),
         blendMode: resolved.visual.blendMode,
         proportionalScale: resolved.visual.proportionalScale,
       }
@@ -281,7 +283,7 @@ export class ClipPropertyEditService {
       result['visual.width'] = visual.width
       result['visual.height'] = visual.height
       result['visual.rotation'] = visual.rotation
-      result['visual.opacity'] = visual.opacity
+      result['visual.blendIntensity'] = visual.blendIntensity
       result['visual.blendMode'] = visual.blendMode
       result['visual.proportionalScale'] = visual.proportionalScale
     }
@@ -347,8 +349,8 @@ export class ClipPropertyEditService {
         case 'visual.rotation':
           directEntries.push({ propertyId: 'visual.rotation', value })
           break
-        case 'visual.opacity':
-          directEntries.push({ propertyId: 'visual.opacity', value })
+        case 'visual.blendIntensity':
+          directEntries.push({ propertyId: 'visual.blendIntensity', value })
           break
         case 'audio.volume':
           directEntries.push({ propertyId: 'audio.volume', value })

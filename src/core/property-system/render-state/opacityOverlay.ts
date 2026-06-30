@@ -1,30 +1,30 @@
 import { reactive } from 'vue'
-import { visualOpacitySchema } from '@/core/property-system/schema'
+import { visualBlendIntensitySchema } from '@/core/property-system/schema'
 
-interface OpacityOverlayEntry {
-  opacity: number
+interface BlendIntensityOverlayEntry {
+  blendIntensity: number
 }
 
-const opacityOverlays = reactive(new Map<string, OpacityOverlayEntry>())
+const blendIntensityOverlays = reactive(new Map<string, BlendIntensityOverlayEntry>())
 
-function clampOpacity(opacity: number): number {
-  return Math.min(1, Math.max(0, opacity))
+function clampBlendIntensity(blendIntensity: number): number {
+  return Math.min(1, Math.max(0, blendIntensity))
 }
 
-export function setVisualOpacityOverlay(timelineItemId: string, opacity: number): void {
-  if (!visualOpacitySchema.supportsTransientOverlay) {
-    throw new Error(`Transient overlay is not supported: ${visualOpacitySchema.propertyId}`)
+export function setVisualBlendIntensityOverlay(timelineItemId: string, blendIntensity: number): void {
+  if (!visualBlendIntensitySchema.supportsTransientOverlay) {
+    throw new Error(`Transient overlay is not supported: ${visualBlendIntensitySchema.propertyId}`)
   }
 
-  opacityOverlays.set(timelineItemId, {
-    opacity: clampOpacity(opacity),
+  blendIntensityOverlays.set(timelineItemId, {
+    blendIntensity: clampBlendIntensity(blendIntensity),
   })
 }
 
-export function getVisualOpacityOverlay(timelineItemId: string): OpacityOverlayEntry | undefined {
-  return opacityOverlays.get(timelineItemId)
+export function getVisualBlendIntensityOverlay(timelineItemId: string): BlendIntensityOverlayEntry | undefined {
+  return blendIntensityOverlays.get(timelineItemId)
 }
 
-export function clearVisualOpacityOverlay(timelineItemId: string): void {
-  opacityOverlays.delete(timelineItemId)
+export function clearVisualBlendIntensityOverlay(timelineItemId: string): void {
+  blendIntensityOverlays.delete(timelineItemId)
 }

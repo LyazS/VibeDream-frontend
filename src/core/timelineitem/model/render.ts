@@ -40,7 +40,7 @@ export interface VisualProps {
   width: number
   height: number
   rotation: number
-  opacity: number
+  blendIntensity: number
   blendMode: BlendMode
   proportionalScale: boolean
 }
@@ -69,8 +69,8 @@ export interface RotationAnimatableProps {
   rotation: number
 }
 
-export interface OpacityAnimatableProps {
-  opacity: number
+export interface BlendIntensityAnimatableProps {
+  blendIntensity: number
 }
 
 export interface AudioAnimatableProps {
@@ -103,7 +103,7 @@ export type AnimationGroupValueMap = {
   'visual.position': PositionAnimatableProps
   'visual.size': SizeAnimatableProps
   'visual.rotation': RotationAnimatableProps
-  'visual.opacity': OpacityAnimatableProps
+  'visual.blendIntensity': BlendIntensityAnimatableProps
   'audio.volume': AudioAnimatableProps
   'filter.intensity': FilterIntensityValue
   'mask.center': MaskCenterValue
@@ -166,7 +166,7 @@ export type MediaAnimationGroupMap = {
     'visual.position': PositionAnimatableProps
     'visual.size': SizeAnimatableProps
     'visual.rotation': RotationAnimatableProps
-    'visual.opacity': OpacityAnimatableProps
+    'visual.blendIntensity': BlendIntensityAnimatableProps
     'audio.volume': AudioAnimatableProps
     'filter.intensity': FilterIntensityValue
     'mask.center': MaskCenterValue
@@ -183,7 +183,7 @@ export type MediaAnimationGroupMap = {
     'visual.position': PositionAnimatableProps
     'visual.size': SizeAnimatableProps
     'visual.rotation': RotationAnimatableProps
-    'visual.opacity': OpacityAnimatableProps
+    'visual.blendIntensity': BlendIntensityAnimatableProps
     'filter.intensity': FilterIntensityValue
     'mask.center': MaskCenterValue
     'mask.rotation': MaskRotationValue
@@ -202,7 +202,7 @@ export type MediaAnimationGroupMap = {
     'visual.position': PositionAnimatableProps
     'visual.size': SizeAnimatableProps
     'visual.rotation': RotationAnimatableProps
-    'visual.opacity': OpacityAnimatableProps
+    'visual.blendIntensity': BlendIntensityAnimatableProps
     'mask.center': MaskCenterValue
     'mask.rotation': MaskRotationValue
     'mask.feather': MaskFeatherValue
@@ -261,14 +261,14 @@ export const VISUAL_CHANNELS = [
   'visual.position',
   'visual.size',
   'visual.rotation',
-  'visual.opacity',
+  'visual.blendIntensity',
 ] as const satisfies readonly AnimationGroupId[]
 
 export const ALL_ANIMATION_GROUPS = [
   'visual.position',
   'visual.size',
   'visual.rotation',
-  'visual.opacity',
+  'visual.blendIntensity',
   'audio.volume',
   'filter.intensity',
   'mask.center',
@@ -288,7 +288,7 @@ export const PROPERTY_TO_GROUP_MAP = {
   width: 'visual.size',
   height: 'visual.size',
   rotation: 'visual.rotation',
-  opacity: 'visual.opacity',
+  blendIntensity: 'visual.blendIntensity',
   volume: 'audio.volume',
   'filter.intensity': 'filter.intensity',
   'mask.centerX': 'mask.center',

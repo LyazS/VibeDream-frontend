@@ -382,7 +382,7 @@ function createDefaultTimelineItemConfig(
     width,
     height,
     rotation: 0,
-    opacity: 1,
+    blendIntensity: 1,
     blendMode: DEFAULT_BLEND_MODE,
     proportionalScale: true,
   }

@@ -154,7 +154,7 @@ export interface ToggleProportionalScaleOperation extends BaseOperationConfig {
 
 /**
  * 更新时间轴项目属性操作
- * 支持更新变换属性（位置、大小、旋转、透明度）和音频属性（音量、静音）
+ * 支持更新变换属性（位置、大小、旋转、混合强度）和音频属性（音量、静音）
  *
  * 宽高设置规则（自动保持原始比例）：
  * - 只能提供 width 或 height 中的一个
@@ -183,7 +183,7 @@ export interface UpdateTimelineItemOperation extends BaseOperationConfig {
     width?: number // 宽度，提供时会自动根据原始宽高比计算高度
     height?: number // 高度，提供时会自动根据原始宽高比计算宽度
     rotation?: number // 旋转角度（弧度）
-    opacity?: number // 透明度 (0-1)
+    blendIntensity?: number // 混合强度 (0-1)
     blendMode?: string // 混合模式
     proportionalScale?: boolean // 等比缩放状态
     // 音频属性（可选）

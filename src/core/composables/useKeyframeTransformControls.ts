@@ -16,16 +16,16 @@ import { isBlendMode } from '@/core/timelineitem/model/blendMode'
 import { propertyMutationCommitter, type ChangeOperation } from '@/core/property-system'
 import {
   clearAudioVolumeOverlay,
-  clearVisualOpacityOverlay,
+  clearVisualBlendIntensityOverlay,
   clearVisualPositionOverlay,
   clearVisualRotationOverlay,
   clearVisualSizeOverlay,
   getAudioVolumeOverlay,
-  getVisualOpacityOverlay,
+  getVisualBlendIntensityOverlay,
   getVisualPositionOverlay,
   getVisualSizeOverlay,
   setAudioVolumeOverlay,
-  setVisualOpacityOverlay,
+  setVisualBlendIntensityOverlay,
   setVisualPositionOverlay,
   setVisualRotationOverlay,
   setVisualSizeOverlay,
@@ -38,7 +38,7 @@ interface UnifiedKeyframeVisualControlsOptions {
 
 type VisualKeyframeChannel =
   | 'audio.volume'
-  | 'visual.opacity'
+  | 'visual.blendIntensity'
   | 'visual.size'
   | 'visual.position'
   | 'visual.rotation'
@@ -108,7 +108,7 @@ export function useUnifiedKeyframeVisualControls(
   const displayWidth = computed(() => visualRenderConfig.value?.width ?? 0)
   const displayHeight = computed(() => visualRenderConfig.value?.height ?? 0)
   const rotation = computed(() => visualRenderConfig.value?.rotation ?? 0)
-  const opacity = computed(() => visualRenderConfig.value?.opacity ?? 1)
+  const blendIntensity = computed(() => visualRenderConfig.value?.blendIntensity ?? 1)
   const blendMode = computed(() => visualRenderConfig.value?.blendMode ?? 'normal')
   const volume = computed(() => audioRenderConfig.value?.volume ?? 1)
   const elementWidth = computed(() => getOriginalDimensions().width)
@@ -190,10 +190,10 @@ export function useUnifiedKeyframeVisualControls(
         await propertyMutationCommitter.toggleKeyframe(getCommitContext(item), 'audio.volume')
         return
       }
-      case 'visual.opacity': {
+      case 'visual.blendIntensity': {
         const item = selectedTimelineItem.value
         if (!item || !canOperateVisualChannels.value) return
-        await propertyMutationCommitter.toggleKeyframe(getCommitContext(item), 'visual.opacity')
+        await propertyMutationCommitter.toggleKeyframe(getCommitContext(item), 'visual.blendIntensity')
         return
       }
       case 'visual.size': {
@@ -312,21 +312,21 @@ export function useUnifiedKeyframeVisualControls(
     clearVisualSizeOverlay(item.id)
   }
 
-  async function commitOpacityDeferredUpdate(nextValue?: number) {
+  async function commitBlendIntensityDeferredUpdate(nextValue?: number) {
     const item = selectedTimelineItem.value
     if (!item || !canOperateVisualChannels.value) return
 
-    const opacityOverlay = getVisualOpacityOverlay(item.id)
+    const blendIntensityOverlay = getVisualBlendIntensityOverlay(item.id)
     const currentRenderConfig = visualRenderConfig.value
-    const nextOpacity =
+    const nextBlendIntensity =
       typeof nextValue === 'number'
         ? nextValue
-        : opacityOverlay?.opacity ?? currentRenderConfig?.opacity
+        : blendIntensityOverlay?.blendIntensity ?? currentRenderConfig?.blendIntensity
 
-    if (!isFiniteNumber(nextOpacity)) return
+    if (!isFiniteNumber(nextBlendIntensity)) return
 
-    await propertyMutationCommitter.commitDirect(getCommitContext(item), 'visual.opacity', nextOpacity)
-    clearVisualOpacityOverlay(item.id)
+    await propertyMutationCommitter.commitDirect(getCommitContext(item), 'visual.blendIntensity', nextBlendIntensity)
+    clearVisualBlendIntensityOverlay(item.id)
   }
 
   async function commitVolumeDeferredUpdate(nextValue?: number) {
@@ -476,10 +476,10 @@ export function useUnifiedKeyframeVisualControls(
     await commitSizeDeferredUpdate('height', height)
   }
 
-  const setOpacityDeferred = (nextOpacity: number) => {
+  const setBlendIntensityDeferred = (nextBlendIntensity: number) => {
     const item = selectedTimelineItem.value
     if (!item || !canOperateVisualChannels.value) return
-    setVisualOpacityOverlay(item.id, nextOpacity)
+    setVisualBlendIntensityOverlay(item.id, nextBlendIntensity)
   }
 
   const updateVolumeDeferred = (nextVolume: number) => {
@@ -559,10 +559,10 @@ export function useUnifiedKeyframeVisualControls(
     )
   }
 
-  const setOpacityDirectly = async (nextOpacity: number) => {
+  const setBlendIntensityDirectly = async (nextBlendIntensity: number) => {
     const item = selectedTimelineItem.value
     if (!item || !canOperateVisualChannels.value) return
-    await propertyMutationCommitter.commitDirect(getCommitContext(item), 'visual.opacity', nextOpacity)
+    await propertyMutationCommitter.commitDirect(getCommitContext(item), 'visual.blendIntensity', nextBlendIntensity)
   }
 
   const setBlendModeDirectly = async (nextBlendMode: BlendMode) => {
@@ -683,7 +683,7 @@ export function useUnifiedKeyframeVisualControls(
     displayWidth,
     displayHeight,
     rotation,
-    opacity,
+    blendIntensity,
     blendMode,
     volume,
     proportionalScale,
@@ -697,7 +697,7 @@ export function useUnifiedKeyframeVisualControls(
     setWidthDeferred,
     setHeightDeferred,
     setRotationDeferred,
-    setOpacityDeferred,
+    setBlendIntensityDeferred,
     updateVolumeDeferred,
     commitVisualXDeferredUpdate,
     commitVisualYDeferredUpdate,
@@ -706,7 +706,7 @@ export function useUnifiedKeyframeVisualControls(
     commitVisualPositionDeferredUpdate,
     commitVisualGeometryDeferredUpdate,
     commitRotationDeferredUpdate,
-    commitOpacityDeferredUpdate,
+    commitBlendIntensityDeferredUpdate,
     commitVolumeDeferredUpdate,
     setVisualXDirectly,
     setVisualYDirectly,
@@ -716,7 +716,7 @@ export function useUnifiedKeyframeVisualControls(
     fitToCanvas,
     fillCanvas,
     setRotationDirectly,
-    setOpacityDirectly,
+    setBlendIntensityDirectly,
     setBlendModeDirectly,
     setVolume,
     setMutedDirectly,

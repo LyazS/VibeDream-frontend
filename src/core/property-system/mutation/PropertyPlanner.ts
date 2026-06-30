@@ -379,7 +379,7 @@ export class PropertyPlanner {
     if (schema.propertyId === 'visual.rotation') return '旋转'
     if (schema.propertyId === 'visual.position') return '位置'
     if (schema.propertyId === 'visual.size') return '尺寸'
-    if (schema.propertyId === 'visual.opacity') return '混合强度'
+    if (schema.propertyId === 'visual.blendIntensity') return '混合强度'
     if (schema.propertyId === 'filter.intensity') return '滤镜强度'
     if (isFilterParamPropertyId(schema.propertyId)) return schema.label ?? schema.propertyId
     if (schema.propertyId === 'audio.volume') return '音量'

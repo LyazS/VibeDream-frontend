@@ -335,18 +335,18 @@ const animationGroupDefinitions: {
     uiMeta: { order: 30, allowDeferred: true, allowNavigation: true },
     historyMeta: { description: '修改旋转关键帧' },
   },
-  'visual.opacity': {
-    id: 'visual.opacity',
+  'visual.blendIntensity': {
+    id: 'visual.blendIntensity',
     scope: 'visual',
     supports: (item) => TimelineItemQueries.hasVisualProperties(item),
     isEnabled: (item) => TimelineItemQueries.hasVisualProperties(item),
-    getBaseValue: (item) => ({ opacity: getVisualConfigRecord(item).opacity }),
+    getBaseValue: (item) => ({ blendIntensity: getVisualConfigRecord(item).blendIntensity }),
     applyValueToConfig: (config, value) => {
       Object.assign(config, value)
     },
     interpolate: interpolateNumericRecord,
     uiMeta: { order: 40, allowDeferred: true, allowNavigation: true },
-    historyMeta: { description: '修改透明度关键帧' },
+    historyMeta: { description: '修改混合强度关键帧' },
   },
   'audio.volume': {
     id: 'audio.volume',

@@ -68,7 +68,7 @@ export class ChainBuilder {
             x: config.visual.x,
             y: config.visual.y,
             rotationRadians: degreesToRadians(-config.visual.rotation),
-            opacity: config.visual.opacity ?? 1,
+            blendIntensity: config.visual.blendIntensity ?? 1,
           }
         },
       ),

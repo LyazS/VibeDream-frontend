@@ -333,7 +333,7 @@ export class ConfigValidator {
       params.width !== undefined ||
       params.height !== undefined ||
       params.rotation !== undefined ||
-      params.opacity !== undefined ||
+      params.blendIntensity !== undefined ||
       params.volume !== undefined ||
       params.isMuted !== undefined ||
       params.playbackRate !== undefined
@@ -384,8 +384,8 @@ export class ConfigValidator {
       throw new Error('rotation 必须是数字')
     }
 
-    if (params.opacity !== undefined && (typeof params.opacity !== 'number' || params.opacity < 0 || params.opacity > 1)) {
-      throw new Error('opacity 必须是 0-1 之间的数字')
+    if (params.blendIntensity !== undefined && (typeof params.blendIntensity !== 'number' || params.blendIntensity < 0 || params.blendIntensity > 1)) {
+      throw new Error('blendIntensity 必须是 0-1 之间的数字')
     }
 
     if (params.volume !== undefined && (typeof params.volume !== 'number' || params.volume < 0 || params.volume > 1)) {

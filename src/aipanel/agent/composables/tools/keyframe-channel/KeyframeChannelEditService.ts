@@ -19,7 +19,7 @@ type ToolChannelId =
   | 'visual.position'
   | 'visual.size'
   | 'visual.rotation'
-  | 'visual.opacity'
+  | 'visual.blendIntensity'
   | 'audio.volume'
 
 type ExternalKeyframeValue = number | Record<string, unknown>
@@ -85,7 +85,7 @@ const SUPPORTED_TOOL_CHANNEL_IDS: ToolChannelId[] = [
   'visual.position',
   'visual.size',
   'visual.rotation',
-  'visual.opacity',
+  'visual.blendIntensity',
   'audio.volume',
 ]
 
@@ -99,7 +99,7 @@ const CHANNEL_VALUE_SHAPES: Record<
   'visual.position': { kind: 'object', keys: ['x', 'y'] },
   'visual.size': { kind: 'object', keys: ['width', 'height'] },
   'visual.rotation': { kind: 'scalar', keys: ['rotation'] },
-  'visual.opacity': { kind: 'scalar', keys: ['opacity'] },
+  'visual.blendIntensity': { kind: 'scalar', keys: ['blendIntensity'] },
   'audio.volume': { kind: 'scalar', keys: ['volume'] },
 }
 
@@ -368,7 +368,7 @@ export class KeyframeChannelEditService {
         )
       }
       const normalizedValue =
-        groupId === 'visual.opacity' || groupId === 'audio.volume' ? clamp01(value) : value
+        groupId === 'visual.blendIntensity' || groupId === 'audio.volume' ? clamp01(value) : value
       return { [shape.keys[0]]: normalizedValue }
     }
 

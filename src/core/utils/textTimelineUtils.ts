@@ -70,7 +70,7 @@ export async function createTextTimelineItem(
       width: 0,
       height: 0,
       rotation: 0,
-      opacity: 1,
+      blendIntensity: 1,
       blendMode: DEFAULT_BLEND_MODE,
       proportionalScale: true,
     },
