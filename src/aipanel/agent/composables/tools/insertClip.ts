@@ -11,7 +11,7 @@ import {
 } from './timelineEditShared'
 
 export async function executeInsertClip(args: Record<string, any>) {
-  const { mediaId, trackId, startTime, clipStartTime, clipEndTime } = args
+  const { mediaId, trackId, start, clipStart, clipEnd } = args
 
   if (typeof mediaId !== 'string' || !mediaId) {
     return buildToolError('insert_clip', 'invalid_arguments', 'mediaId 是必填字符串。')
@@ -21,23 +21,23 @@ export async function executeInsertClip(args: Record<string, any>) {
     return buildToolError('insert_clip', 'invalid_arguments', 'trackId 是必填字符串。')
   }
 
-  const startParsed = parseRequiredTimecode('insert_clip', startTime, 'startTime')
+  const startParsed = parseRequiredTimecode('insert_clip', start, 'start')
   if (!startParsed.ok) {
     return startParsed.error
   }
 
   const clipStartParsed =
-    clipStartTime === undefined
+    clipStart === undefined
       ? undefined
-      : parseRequiredTimecode('insert_clip', clipStartTime, 'clipStartTime')
+      : parseRequiredTimecode('insert_clip', clipStart, 'clipStart')
   if (clipStartParsed && !clipStartParsed.ok) {
     return clipStartParsed.error
   }
 
   const clipEndParsed =
-    clipEndTime === undefined
+    clipEnd === undefined
       ? undefined
-      : parseRequiredTimecode('insert_clip', clipEndTime, 'clipEndTime')
+      : parseRequiredTimecode('insert_clip', clipEnd, 'clipEnd')
   if (clipEndParsed && !clipEndParsed.ok) {
     return clipEndParsed.error
   }
@@ -61,8 +61,8 @@ export async function executeInsertClip(args: Record<string, any>) {
       mediaItem: readyMediaItem,
       trackId,
       timelineStartTime: startParsed.frames,
-      clipStartTime: clipStartParsed?.frames,
-      clipEndTime: clipEndParsed?.frames,
+      clipStart: clipStartParsed?.frames,
+      clipEnd: clipEndParsed?.frames,
     })
 
     const conflict = findTrackConflict({
@@ -79,10 +79,8 @@ export async function executeInsertClip(args: Record<string, any>) {
         clipId: nextItem.id,
         mediaId,
         trackId,
-        timeline: {
-          start: startParsed.timecode,
-          end: framesToTimecode(nextItem.timeRange.timelineEndTime),
-        },
+        start: startParsed.timecode,
+        end: framesToTimecode(nextItem.timeRange.timelineEndTime),
         ...(conflict
           ? {
               warning: `已执行，但与同轨片段发生重叠：${conflict.id}`,

@@ -6,7 +6,7 @@ export async function executeWriteClipKeyframe(args: Record<string, any>) {
 
   try {
     const data = await service.writeClipKeyframe({
-      itemId: args.itemId,
+      clipId: args.clipId,
       channelId: args.channelId,
       keyframes: args.keyframes,
       options: args.options,
@@ -17,7 +17,7 @@ export async function executeWriteClipKeyframe(args: Record<string, any>) {
       output: JSON.stringify({
         tool: 'write_clip_keyframe',
         ...data,
-        summary: `已重写 ${data.itemId} 的 ${data.channelId} 通道。`,
+        summary: `已重写 ${data.clipId} 的 ${data.channelId} 通道。`,
       }, null, 2),
     }
   } catch (error: any) {

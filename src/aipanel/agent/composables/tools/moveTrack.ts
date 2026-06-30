@@ -63,19 +63,10 @@ export async function executeMoveTrack(args: Record<string, any>) {
     }
 
     if (fromIndex !== index.from) {
-      const message = `轨道 ${trackId} 当前索引与 index.from 不一致。`
+      const message = `轨道 ${trackId} 当前索引与 index.from 不一致：期望 ${index.from}，实际 ${fromIndex}。`
       return {
         success: false,
-        output: JSON.stringify(
-          {
-            tool: 'move_track',
-            error: message,
-            expectedIndex: index.from,
-            actualIndex: fromIndex,
-          },
-          null,
-          2,
-        ),
+        output: JSON.stringify({ tool: 'move_track', error: message }, null, 2),
         error: message,
       }
     }

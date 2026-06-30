@@ -126,8 +126,8 @@ function formatResult(item: RetrievalResultItem): Record<string, any> {
     segment: item.segment
       ? {
           index: item.segment.segment_index,
-          start: item.segment.start_timecode,
-          end: item.segment.end_timecode,
+          clipStart: item.segment.start_timecode,
+          clipEnd: item.segment.end_timecode,
         }
       : undefined,
     evidence: getEvidence(item) || undefined,

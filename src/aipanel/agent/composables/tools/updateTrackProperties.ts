@@ -30,38 +30,38 @@ function getTrackPropertyValue(track: any, key: TrackPatchKey): string | boolean
 }
 
 export async function executeUpdateTrackProperties(args: Record<string, any>) {
-  const { trackId, match, patch } = args
+  const { trackId, match, apply } = args
 
   if (typeof trackId !== 'string' || !trackId) {
     return buildToolError('update_track_properties', 'invalid_arguments', 'trackId 是必填字符串。')
   }
 
-  if (!isPlainObject(match) || !isPlainObject(patch)) {
+  if (!isPlainObject(match) || !isPlainObject(apply)) {
     return buildToolError(
       'update_track_properties',
       'invalid_arguments',
-      'match 和 patch 都必须是对象。',
+      'match 和 apply 都必须是对象。',
     )
   }
 
   const matchKeys = Object.keys(match)
-  const patchKeys = Object.keys(patch)
+  const applyKeys = Object.keys(apply)
 
   if (!matchKeys.length) {
     return buildToolError(
       'update_track_properties',
       'invalid_arguments',
-      'match 和 patch 至少需要包含 1 个属性。',
+      'match 和 apply 至少需要包含 1 个属性。',
     )
   }
 
   const sortedMatchKeys = [...matchKeys].sort()
-  const sortedPatchKeys = [...patchKeys].sort()
-  if (JSON.stringify(sortedMatchKeys) !== JSON.stringify(sortedPatchKeys)) {
+  const sortedApplyKeys = [...applyKeys].sort()
+  if (JSON.stringify(sortedMatchKeys) !== JSON.stringify(sortedApplyKeys)) {
     return buildToolError(
       'update_track_properties',
       'invalid_arguments',
-      'match 和 patch 的 key 集合必须完全一致。',
+      'match 和 apply 的 key 集合必须完全一致。',
     )
   }
 
@@ -117,9 +117,9 @@ export async function executeUpdateTrackProperties(args: Record<string, any>) {
         return buildToolError('update_track_properties', 'invalid_arguments', validateMatchMessage)
       }
 
-      const validatePatchMessage = validatePatchValue(key, patch[key])
-      if (validatePatchMessage) {
-        return buildToolError('update_track_properties', 'invalid_arguments', validatePatchMessage)
+      const validateApplyMessage = validatePatchValue(key, apply[key])
+      if (validateApplyMessage) {
+        return buildToolError('update_track_properties', 'invalid_arguments', validateApplyMessage)
       }
 
       if (currentValue !== match[key]) {
@@ -141,7 +141,7 @@ export async function executeUpdateTrackProperties(args: Record<string, any>) {
 
     for (const rawKey of matchKeys) {
       const key = rawKey as TrackPatchKey
-      const nextValue = patch[key]
+      const nextValue = apply[key]
 
       if (key === 'name') {
         await executeSingleTrackCommand(helpers.createRenameTrackCommand(trackId, nextValue.trim()))

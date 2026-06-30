@@ -6,7 +6,6 @@ import {
   getSupportedAnimationGroups,
   getTrack,
 } from '@/core/animation/engine'
-import { TimelineItemQueries } from '@/core/timelineitem/queries'
 import type { MediaType } from '@/core/mediaitem'
 import type { ChangeOperation, ChangePlan } from '@/core/property-system'
 import type { UnifiedTimelineItemData } from '@/core/timelineitem/model/timelineItem'
@@ -16,21 +15,30 @@ import type {
   PropertyAnimationValueByGroup,
 } from '@/core/timelineitem/model/render'
 
+type ToolChannelId =
+  | 'visual.position'
+  | 'visual.size'
+  | 'visual.rotation'
+  | 'visual.opacity'
+  | 'audio.volume'
+
+type ExternalKeyframeValue = number | Record<string, unknown>
+
 type KeyframePayload = {
   frame: number
-  value: Record<string, unknown>
+  value: ExternalKeyframeValue
   easing?: {
     type: 'linear'
   }
 }
 
 type ReadArgs = {
-  itemId: string
+  clipId: string
   channelId: string
 }
 
 type WriteArgs = {
-  itemId: string
+  clipId: string
   channelId: string
   keyframes: KeyframePayload[]
   options?: {
@@ -42,7 +50,7 @@ type WriteArgs = {
 }
 
 type DiffApplyArgs = {
-  itemId: string
+  clipId: string
   channelId: string
   match: KeyframePayload[]
   apply: KeyframePayload[]
@@ -50,6 +58,16 @@ type DiffApplyArgs = {
     onMismatch?: 'reject'
     frameMode?: 'absolute'
     atomic?: boolean
+  }
+}
+
+type SerializedKeyframeRecord = {
+  frame: number
+  relativeFrame: number
+  position: number
+  value: ExternalKeyframeValue
+  easing: {
+    type: 'linear'
   }
 }
 
@@ -63,7 +81,29 @@ type TimelineKeyframeRecord = {
   }
 }
 
-function cloneRecord<T extends Record<string, unknown>>(value: T): T {
+const SUPPORTED_TOOL_CHANNEL_IDS: ToolChannelId[] = [
+  'visual.position',
+  'visual.size',
+  'visual.rotation',
+  'visual.opacity',
+  'audio.volume',
+]
+
+const CHANNEL_VALUE_SHAPES: Record<
+  ToolChannelId,
+  {
+    kind: 'scalar' | 'object'
+    keys: readonly string[]
+  }
+> = {
+  'visual.position': { kind: 'object', keys: ['x', 'y'] },
+  'visual.size': { kind: 'object', keys: ['width', 'height'] },
+  'visual.rotation': { kind: 'scalar', keys: ['rotation'] },
+  'visual.opacity': { kind: 'scalar', keys: ['opacity'] },
+  'audio.volume': { kind: 'scalar', keys: ['volume'] },
+}
+
+function cloneJson<T>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T
 }
 
@@ -110,14 +150,22 @@ function valuesEqual(left: unknown, right: unknown): boolean {
   return JSON.stringify(left) === JSON.stringify(right)
 }
 
+function isToolChannelId(groupId: string): groupId is ToolChannelId {
+  return SUPPORTED_TOOL_CHANNEL_IDS.includes(groupId as ToolChannelId)
+}
+
+function clamp01(value: number): number {
+  return Math.min(1, Math.max(0, value))
+}
+
 export class KeyframeChannelEditService {
   async readClipKeyframe(args: ReadArgs) {
-    const item = this.requireClip(args.itemId)
+    const item = this.requireClip(args.clipId)
     const groupId = this.requireSupportedGroup(item, args.channelId)
     const keyframes = this.readTimelineKeyframes(item, groupId)
 
     return {
-      itemId: item.id,
+      clipId: item.id,
       mediaType: item.mediaType,
       channelId: groupId,
       timelineRange: {
@@ -125,17 +173,17 @@ export class KeyframeChannelEditService {
         endFrame: item.timeRange.timelineEndTime,
         durationFrames: item.timeRange.timelineEndTime - item.timeRange.timelineStartTime,
       },
-      keyframes,
+      keyframes: keyframes.map((entry) => this.serializeTimelineKeyframe(groupId, entry)),
     }
   }
 
   async writeClipKeyframe(args: WriteArgs) {
-    const item = this.requireClip(args.itemId)
+    const item = this.requireClip(args.clipId)
     const groupId = this.requireSupportedGroup(item, args.channelId)
     this.assertFrameMode(args.options?.frameMode)
 
     const current = this.readTimelineKeyframes(item, groupId)
-    const next = this.normalizeInputKeyframes(item, groupId, args.keyframes)
+    const next = this.normalizeInputKeyframes(item, groupId, args.keyframes, 'keyframes')
     const plan = this.buildPlan(item, groupId, current, next, `重写 ${args.channelId} 关键帧`)
     const diff = this.summarizeDiff(current, next)
 
@@ -144,7 +192,7 @@ export class KeyframeChannelEditService {
     }
 
     return {
-      itemId: item.id,
+      clipId: item.id,
       channelId: groupId,
       status: 'applied' as const,
       diff: {
@@ -160,12 +208,12 @@ export class KeyframeChannelEditService {
   }
 
   async patchClipKeyframe(args: DiffApplyArgs) {
-    const item = this.requireClip(args.itemId)
+    const item = this.requireClip(args.clipId)
     const groupId = this.requireSupportedGroup(item, args.channelId)
     this.assertFrameMode(args.options?.frameMode)
 
     const current = this.readTimelineKeyframes(item, groupId)
-    const expected = this.normalizeInputKeyframes(item, groupId, args.match ?? [])
+    const expected = this.normalizeInputKeyframes(item, groupId, args.match ?? [], 'match')
     if (expected.length === 0) {
       throw toolError('invalid_arguments', 'match 至少需要 1 个关键帧', {
         field: 'match',
@@ -175,7 +223,7 @@ export class KeyframeChannelEditService {
     const startFrame = expected[0].frame
     const endFrame = expected[expected.length - 1].frame
 
-    const replacement = this.normalizeInputKeyframes(item, groupId, args.apply ?? [])
+    const replacement = this.normalizeInputKeyframes(item, groupId, args.apply ?? [], 'apply')
     const matched = current.filter((entry) => entry.frame >= startFrame && entry.frame <= endFrame)
 
     if (!this.keyframeListsEqual(matched, expected)) {
@@ -203,30 +251,24 @@ export class KeyframeChannelEditService {
       replacement.length > 0 ? replacement[replacement.length - 1].frame : endFrame
 
     return {
-      itemId: item.id,
+      clipId: item.id,
       channelId: groupId,
       beforeHasLeadingOmitted: current.some((entry) => entry.frame < startFrame),
       beforeHasTrailingOmitted: current.some((entry) => entry.frame > endFrame),
-      before: matched.map((entry) => ({
-        frame: entry.frame,
-        value: cloneRecord(entry.value),
-      })),
+      before: matched.map((entry) => this.serializeFrameValue(groupId, entry)),
       afterHasLeadingOmitted: next.some((entry) => entry.frame < afterRangeStartFrame),
       afterHasTrailingOmitted: next.some((entry) => entry.frame > afterRangeEndFrame),
-      after: replacement.map((entry) => ({
-        frame: entry.frame,
-        value: cloneRecord(entry.value),
-      })),
+      after: replacement.map((entry) => this.serializeFrameValue(groupId, entry)),
     }
   }
 
-  private requireClip(itemId: string) {
-    if (!itemId || typeof itemId !== 'string') {
-      throw toolError('invalid_arguments', 'itemId 必须是非空字符串')
+  private requireClip(clipId: string) {
+    if (!clipId || typeof clipId !== 'string') {
+      throw toolError('invalid_arguments', 'clipId 必须是非空字符串', { field: 'clipId', clipId })
     }
-    const item = useUnifiedStore().getTimelineItem(itemId)
+    const item = useUnifiedStore().getTimelineItem(clipId)
     if (!item) {
-      throw toolError('clip_not_found', '未找到该时间轴片段。', { itemId })
+      throw toolError('clip_not_found', '未找到该时间轴片段。', { clipId })
     }
     return item
   }
@@ -234,20 +276,26 @@ export class KeyframeChannelEditService {
   private requireSupportedGroup(
     item: UnifiedTimelineItemData<MediaType>,
     groupId: string,
-  ) {
+  ): ToolChannelId {
     if (!groupId || typeof groupId !== 'string') {
       throw toolError('invalid_group', 'groupId 必须是非空字符串')
     }
-    const definition = AnimationRegistry.get(groupId as PropertyAnimationGroupId)
+    if (!isToolChannelId(groupId)) {
+      throw toolError('invalid_group', `不支持的关键帧通道 ${groupId}`, {
+        groupId,
+        supportedGroups: SUPPORTED_TOOL_CHANNEL_IDS,
+      })
+    }
+    const definition = AnimationRegistry.get(groupId)
     if (!definition.supports(item)) {
       throw toolError('group_not_supported', `该 clip 不支持关键帧组 ${groupId}`, {
-        itemId: item.id,
+        clipId: item.id,
         mediaType: item.mediaType,
         groupId,
         supportedGroups: getSupportedAnimationGroups(item),
       })
     }
-    return groupId as PropertyAnimationGroupId
+    return groupId
   }
 
   private assertFrameMode(frameMode: 'absolute' | undefined) {
@@ -274,25 +322,25 @@ export class KeyframeChannelEditService {
       frame: item.timeRange.timelineStartTime + keyframe.frame,
       relativeFrame: keyframe.frame,
       position: keyframe.position,
-      value: cloneRecord(keyframe.value as Record<string, unknown>),
+      value: cloneJson(keyframe.value as Record<string, unknown>),
       easing: normalizeLinearEasing(keyframe.easing),
     }
   }
 
   private normalizeInputKeyframes(
     item: UnifiedTimelineItemData<MediaType>,
-    groupId: PropertyAnimationGroupId,
+    groupId: ToolChannelId,
     keyframes: KeyframePayload[],
+    fieldName: 'keyframes' | 'match' | 'apply',
   ): TimelineKeyframeRecord[] {
     if (!Array.isArray(keyframes)) {
-      throw toolError('invalid_arguments', 'keyframes 必须是数组')
+      throw toolError('invalid_arguments', `${fieldName} 必须是数组`, { field: fieldName })
     }
-    const definition = AnimationRegistry.get(groupId)
     return this.normalizeTimelineKeyframes(
       keyframes.map((entry, index) => {
-        const frame = normalizeFrame(entry?.frame, `keyframes[${index}].frame`)
+        const frame = normalizeFrame(entry?.frame, `${fieldName}[${index}].frame`)
         this.assertFrameInRange(item, frame)
-        const value = this.normalizeGroupValue(definition.id, definition.getBaseValue(item), entry?.value, index)
+        const value = this.normalizeGroupValue(groupId, entry?.value, `${fieldName}[${index}].value`)
         return {
           frame,
           relativeFrame: getRelativeFrame(item, frame),
@@ -305,35 +353,54 @@ export class KeyframeChannelEditService {
   }
 
   private normalizeGroupValue(
-    groupId: PropertyAnimationGroupId,
-    baseValue: PropertyAnimationValueByGroup<PropertyAnimationGroupId>,
+    groupId: ToolChannelId,
     value: unknown,
-    index: number,
+    field: string,
   ): Record<string, unknown> {
+    const shape = CHANNEL_VALUE_SHAPES[groupId]
+
+    if (shape.kind === 'scalar') {
+      if (typeof value !== 'number' || !Number.isFinite(value)) {
+        throw toolError(
+          'invalid_value',
+          `${field} 的值类型不正确：${groupId} 需要 number，当前收到 ${this.describeValueType(value)}。`,
+          { field, groupId, expectedShape: 'number', value },
+        )
+      }
+      const normalizedValue =
+        groupId === 'visual.opacity' || groupId === 'audio.volume' ? clamp01(value) : value
+      return { [shape.keys[0]]: normalizedValue }
+    }
+
     if (typeof value !== 'object' || value === null || Array.isArray(value)) {
-      throw toolError('invalid_value', `keyframes[${index}].value 必须是对象`, { groupId, value })
+      throw toolError(
+        'invalid_value',
+        `${field} 的值类型不正确：${groupId} 需要对象，当前收到 ${this.describeValueType(value)}。`,
+        { field, groupId, expectedShape: 'object', expectedKeys: shape.keys, value },
+      )
     }
     const nextValue = value as Record<string, unknown>
-    const baseKeys = Object.keys(baseValue as Record<string, unknown>)
     const nextKeys = Object.keys(nextValue)
-    if (baseKeys.length !== nextKeys.length || !baseKeys.every((key) => nextKeys.includes(key))) {
+    if (shape.keys.length !== nextKeys.length || !shape.keys.every((key) => nextKeys.includes(key))) {
       throw toolError('invalid_value_shape', `关键帧值结构不匹配: ${groupId}`, {
         groupId,
-        expectedKeys: baseKeys,
+        field,
+        expectedKeys: shape.keys,
         actualKeys: nextKeys,
       })
     }
-    for (const key of baseKeys) {
+    for (const key of shape.keys) {
       const entry = nextValue[key]
       if (typeof entry !== 'number' || !Number.isFinite(entry)) {
         throw toolError('invalid_value', `关键帧值必须是有限数字: ${groupId}.${key}`, {
+          field,
           groupId,
           key,
           value: entry,
         })
       }
     }
-    return cloneRecord(nextValue)
+    return cloneJson(nextValue)
   }
 
   private normalizeTimelineKeyframes(keyframes: TimelineKeyframeRecord[]): TimelineKeyframeRecord[] {
@@ -389,8 +456,8 @@ export class KeyframeChannelEditService {
             frame: relativeFrame,
             cachedFrame: relativeFrame,
             position: nextKeyframe.position,
-            value: cloneRecord(nextKeyframe.value),
-            properties: cloneRecord(nextKeyframe.value),
+            value: cloneJson(nextKeyframe.value),
+            properties: cloneJson(nextKeyframe.value),
             easing: nextKeyframe.easing,
           } as AnimateKeyframe<MediaType, PropertyAnimationGroupId>,
         })
@@ -404,7 +471,7 @@ export class KeyframeChannelEditService {
           frame: nextKeyframe.frame,
           groupId,
           relativeFrame,
-          value: cloneRecord(nextKeyframe.value) as PropertyAnimationValueByGroup<PropertyAnimationGroupId>,
+          value: cloneJson(nextKeyframe.value) as PropertyAnimationValueByGroup<PropertyAnimationGroupId>,
         })
       }
     }
@@ -423,37 +490,6 @@ export class KeyframeChannelEditService {
     }
   }
 
-  private summarizeDiff(current: TimelineKeyframeRecord[], next: TimelineKeyframeRecord[]) {
-    const currentMap = new Map(current.map((entry) => [entry.frame, entry]))
-    const nextMap = new Map(next.map((entry) => [entry.frame, entry]))
-    const createdFrames: number[] = []
-    const updatedFrames: number[] = []
-    const deletedFrames: number[] = []
-
-    for (const frame of currentMap.keys()) {
-      if (!nextMap.has(frame)) {
-        deletedFrames.push(frame)
-      }
-    }
-
-    for (const [frame, nextEntry] of nextMap) {
-      const currentEntry = currentMap.get(frame)
-      if (!currentEntry) {
-        createdFrames.push(frame)
-        continue
-      }
-      if (!valuesEqual(currentEntry.value, nextEntry.value)) {
-        updatedFrames.push(frame)
-      }
-    }
-
-    return {
-      createdFrames,
-      updatedFrames,
-      deletedFrames,
-    }
-  }
-
   private keyframeListsEqual(left: TimelineKeyframeRecord[], right: TimelineKeyframeRecord[]) {
     if (left.length !== right.length) return false
     return left.every((entry, index) => {
@@ -464,5 +500,65 @@ export class KeyframeChannelEditService {
         valuesEqual(entry.easing, other.easing)
       )
     })
+  }
+
+  private serializeTimelineKeyframe(
+    groupId: ToolChannelId,
+    entry: TimelineKeyframeRecord,
+  ): SerializedKeyframeRecord {
+    return {
+      frame: entry.frame,
+      relativeFrame: entry.relativeFrame,
+      position: entry.position,
+      value: this.serializeValue(groupId, entry.value),
+      easing: entry.easing,
+    }
+  }
+
+  private serializeFrameValue(groupId: ToolChannelId, entry: TimelineKeyframeRecord) {
+    return {
+      frame: entry.frame,
+      value: this.serializeValue(groupId, entry.value),
+    }
+  }
+
+  private serializeValue(groupId: ToolChannelId, value: Record<string, unknown>): ExternalKeyframeValue {
+    const shape = CHANNEL_VALUE_SHAPES[groupId]
+    if (shape.kind === 'scalar') {
+      return value[shape.keys[0]] as number
+    }
+    return cloneJson(value)
+  }
+
+  private summarizeDiff(current: TimelineKeyframeRecord[], next: TimelineKeyframeRecord[]) {
+    const currentMap = new Map(current.map((entry) => [entry.frame, entry]))
+    const nextMap = new Map(next.map((entry) => [entry.frame, entry]))
+    const createdFrames = next
+      .filter((entry) => !currentMap.has(entry.frame))
+      .map((entry) => entry.frame)
+    const updatedFrames = next
+      .filter((entry) => {
+        const previous = currentMap.get(entry.frame)
+        return (
+          previous &&
+          (!valuesEqual(previous.value, entry.value) || !valuesEqual(previous.easing, entry.easing))
+        )
+      })
+      .map((entry) => entry.frame)
+    const deletedFrames = current
+      .filter((entry) => !nextMap.has(entry.frame))
+      .map((entry) => entry.frame)
+
+    return {
+      createdFrames,
+      updatedFrames,
+      deletedFrames,
+    }
+  }
+
+  private describeValueType(value: unknown): string {
+    if (value === null) return 'null'
+    if (Array.isArray(value)) return 'array'
+    return typeof value
   }
 }

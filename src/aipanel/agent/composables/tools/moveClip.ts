@@ -14,35 +14,35 @@ function buildMoveState(params: {
   trackId: string
   startFrames: number
   includeTrackId: boolean
-  includeStartTime: boolean
+  includeStart: boolean
 }) {
   return {
     ...(params.includeTrackId ? { trackId: params.trackId } : {}),
-    ...(params.includeStartTime ? { startTime: framesToTimecode(params.startFrames) } : {}),
+    ...(params.includeStart ? { start: framesToTimecode(params.startFrames) } : {}),
   }
 }
 
 export async function executeMoveClip(args: Record<string, any>) {
-  const { clipId, startTime, trackId } = args
+  const { clipId, start, trackId } = args
 
   if (typeof clipId !== 'string' || !clipId) {
     return buildToolError('move_clip', 'invalid_arguments', 'clipId 是必填字符串。')
   }
 
-  if (!startTime || typeof startTime !== 'object' || Array.isArray(startTime)) {
+  if (!start || typeof start !== 'object' || Array.isArray(start)) {
     return buildToolError(
       'move_clip',
       'invalid_arguments',
-      'startTime 是必填对象，且必须包含 from 和 to。',
+      'start 是必填对象，且必须包含 from 和 to。',
     )
   }
 
-  const startFromParsed = parseRequiredTimecode('move_clip', startTime.from, 'startTime.from')
+  const startFromParsed = parseRequiredTimecode('move_clip', start.from, 'start.from')
   if (!startFromParsed.ok) {
     return startFromParsed.error
   }
 
-  const startToParsed = parseRequiredTimecode('move_clip', startTime.to, 'startTime.to')
+  const startToParsed = parseRequiredTimecode('move_clip', start.to, 'start.to')
   if (!startToParsed.ok) {
     return startToParsed.error
   }
@@ -97,11 +97,11 @@ export async function executeMoveClip(args: Record<string, any>) {
       return buildToolError(
         'move_clip',
         'clip_state_mismatch',
-        `片段 ${clipId} 当前开始时间与 startTime.from 不一致。`,
+        `片段 ${clipId} 当前开始时间与 start.from 不一致。`,
         {
           clipId,
-          expectedStartTime: startFromParsed.timecode,
-          actualStartTime: framesToTimecode(beforeStartFrames),
+          expectedStart: startFromParsed.timecode,
+          actualStart: framesToTimecode(beforeStartFrames),
         },
       )
     }
@@ -177,20 +177,20 @@ export async function executeMoveClip(args: Record<string, any>) {
     }
 
     const includeTrackId = beforeTrackId !== afterClip.trackId
-    const includeStartTime = beforeStartFrames !== afterClip.timeRange.timelineStartTime
+    const includeStart = beforeStartFrames !== afterClip.timeRange.timelineStartTime
 
     const before = buildMoveState({
       trackId: beforeTrackId,
       startFrames: beforeStartFrames,
       includeTrackId,
-      includeStartTime,
+      includeStart,
     })
 
     const after = buildMoveState({
       trackId: afterClip.trackId,
       startFrames: afterClip.timeRange.timelineStartTime,
       includeTrackId,
-      includeStartTime,
+      includeStart,
     })
 
     return buildToolSuccess('move_clip', {

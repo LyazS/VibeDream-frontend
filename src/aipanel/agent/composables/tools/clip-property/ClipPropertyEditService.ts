@@ -25,7 +25,7 @@ type ReadClipPropertiesArgs = {
 type UpdateClipPropertiesArgs = {
   clipId: string
   match: Record<string, unknown>
-  patch: Record<string, unknown>
+  apply: Record<string, unknown>
 }
 
 type PropertyPath =
@@ -109,11 +109,11 @@ export class ClipPropertyEditService {
 
   async updateClipProperties(args: UpdateClipPropertiesArgs) {
     const item = this.requireClip(args.clipId)
-    validatePatchPayload(args.match, args.patch)
+    validateApplyPayload(args.match, args.apply)
 
-    const keys = Object.keys(args.patch) as PropertyPath[]
+    const keys = Object.keys(args.apply) as PropertyPath[]
     const currentValues = this.buildCurrentPathValues(item)
-    const normalizedPatchValues = normalizePatchValues(args.patch, currentValues)
+    const normalizedPatchValues = normalizePatchValues(args.apply, currentValues)
     const resultKeys = getResultKeys(keys, normalizedPatchValues)
 
     for (const key of keys) {
@@ -198,8 +198,8 @@ export class ClipPropertyEditService {
         ...(item.mediaType === 'video' || item.mediaType === 'audio'
           ? {
               mediaId: item.mediaItemId ?? null,
-              sourceStart: framesToTimecode(item.timeRange.clipStartTime),
-              sourceEnd: framesToTimecode(item.timeRange.clipEndTime),
+              clipStart: framesToTimecode(item.timeRange.clipStartTime),
+              clipEnd: framesToTimecode(item.timeRange.clipEndTime),
             }
           : {}),
       }
@@ -573,22 +573,22 @@ function getCommitFrame(item: UnifiedTimelineItemData): number {
   return item.timeRange.timelineStartTime
 }
 
-function validatePatchPayload(match: Record<string, unknown>, patch: Record<string, unknown>) {
-  if (!isPlainObject(match) || !isPlainObject(patch)) {
-    throw toolError('invalid_arguments', 'match 和 patch 必须是对象')
+function validateApplyPayload(match: Record<string, unknown>, apply: Record<string, unknown>) {
+  if (!isPlainObject(match) || !isPlainObject(apply)) {
+    throw toolError('invalid_arguments', 'match 和 apply 必须是对象')
   }
 
   const matchKeys = Object.keys(match).sort()
-  const patchKeys = Object.keys(patch).sort()
+  const applyKeys = Object.keys(apply).sort()
 
-  if (matchKeys.length === 0 || patchKeys.length === 0) {
-    throw toolError('invalid_arguments', 'match 和 patch 不能为空')
+  if (matchKeys.length === 0 || applyKeys.length === 0) {
+    throw toolError('invalid_arguments', 'match 和 apply 不能为空')
   }
 
-  if (matchKeys.length !== patchKeys.length || matchKeys.some((key, index) => key !== patchKeys[index])) {
-    throw toolError('invalid_arguments', 'match 与 patch 的 key 集合必须一致', {
+  if (matchKeys.length !== applyKeys.length || matchKeys.some((key, index) => key !== applyKeys[index])) {
+    throw toolError('invalid_arguments', 'match 与 apply 的 key 集合必须一致', {
       matchKeys,
-      patchKeys,
+      applyKeys,
     })
   }
 }

@@ -93,8 +93,8 @@ export function buildClipSnapshot(item: UnifiedTimelineItemData) {
     source:
       item.mediaType === 'video' || item.mediaType === 'audio'
         ? {
-            start: framesToTimecode(item.timeRange.clipStartTime),
-            end: framesToTimecode(item.timeRange.clipEndTime),
+            clipStart: framesToTimecode(item.timeRange.clipStartTime),
+            clipEnd: framesToTimecode(item.timeRange.clipEndTime),
           }
         : undefined,
   }
@@ -282,8 +282,8 @@ export function buildTimelineItemFromMedia(params: {
   mediaItem: UnifiedMediaItemData
   trackId: string
   timelineStartTime: number
-  clipStartTime?: number
-  clipEndTime?: number
+  clipStart?: number
+  clipEnd?: number
 }) {
   const store = useUnifiedStore()
   const { mediaItem, trackId, timelineStartTime } = params
@@ -317,18 +317,18 @@ export function buildTimelineItemFromMedia(params: {
     throw new Error('素材时长信息不可用，请等待解析完成')
   }
 
-  const clipStartTime = params.clipStartTime ?? 0
-  const clipEndTime = params.clipEndTime ?? availableDuration
+  const clipStart = params.clipStart ?? 0
+  const clipEnd = params.clipEnd ?? availableDuration
 
-  if (clipStartTime < 0 || clipEndTime <= clipStartTime) {
+  if (clipStart < 0 || clipEnd <= clipStart) {
     throw new Error('素材裁切区间无效')
   }
 
-  if (clipEndTime > availableDuration) {
-    throw new Error('clipEndTime 超出素材时长范围')
+  if (clipEnd > availableDuration) {
+    throw new Error('clipEnd 超出素材时长范围')
   }
 
-  const duration = clipEndTime - clipStartTime
+  const duration = clipEnd - clipStart
   const timelineEndTime = timelineStartTime + duration
 
   let originalResolution: { width: number; height: number } | null = null
@@ -346,8 +346,8 @@ export function buildTimelineItemFromMedia(params: {
     timeRange: {
       timelineStartTime,
       timelineEndTime,
-      clipStartTime,
-      clipEndTime,
+      clipStartTime: clipStart,
+      clipEndTime: clipEnd,
     },
     baseRenderConfig: createDefaultTimelineItemConfig(mediaItem.mediaType, originalResolution),
     exRenderConfig: createDefaultTimelineExtraRenderConfig(),

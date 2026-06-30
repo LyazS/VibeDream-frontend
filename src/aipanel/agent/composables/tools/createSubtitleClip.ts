@@ -13,7 +13,7 @@ import {
 } from './timelineEditShared'
 
 export async function executeCreateSubtitleClip(args: Record<string, any>) {
-  const { text, trackId, startTime, duration } = args
+  const { text, trackId, start, duration } = args
 
   if (typeof text !== 'string' || !text.trim()) {
     return buildToolError('create_subtitle_clip', 'invalid_arguments', 'text 是必填非空字符串。')
@@ -23,7 +23,7 @@ export async function executeCreateSubtitleClip(args: Record<string, any>) {
     return buildToolError('create_subtitle_clip', 'invalid_arguments', 'trackId 是必填字符串。')
   }
 
-  const startParsed = parseRequiredTimecode('create_subtitle_clip', startTime, 'startTime')
+  const startParsed = parseRequiredTimecode('create_subtitle_clip', start, 'start')
   if (!startParsed.ok) {
     return startParsed.error
   }
@@ -112,7 +112,8 @@ export async function executeCreateSubtitleClip(args: Record<string, any>) {
         trackId,
         mediaType: nextItem.mediaType,
         text: text.trim(),
-        timeline: snapshot.timeline,
+        start: snapshot.timeline.start,
+        end: snapshot.timeline.end,
         ...(overlapClipIds.length > 0
           ? {
               warning: '发生同轨重叠',

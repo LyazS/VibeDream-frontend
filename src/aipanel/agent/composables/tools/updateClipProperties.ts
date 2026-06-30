@@ -9,7 +9,7 @@ export async function executeUpdateClipProperties(args: Record<string, any>) {
     const data = await service.updateClipProperties({
       clipId: args.clipId,
       match: args.match,
-      patch: args.patch,
+      apply: args.apply,
     })
 
     return buildToolSuccess(

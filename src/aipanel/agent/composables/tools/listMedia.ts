@@ -258,7 +258,7 @@ function logListMediaResult(result: Record<string, any>) {
 }
 
 export async function executeListMedia(args: Record<string, any>) {
-  const { filePath, offset = 1, limit = 2000 } = args
+  const { filePath, offset = 1, limit = 20 } = args
 
   try {
     if (typeof filePath !== 'string' || !filePath.trim()) {

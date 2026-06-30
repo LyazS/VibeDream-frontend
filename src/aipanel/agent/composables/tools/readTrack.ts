@@ -16,10 +16,8 @@ import { buildToolError, buildToolSuccess } from './utils/result'
 interface TrackItemInfo {
   clipId: string
   mediaId?: string
-  name: string
   start: string
   end: string
-  duration: string
   mediaType: string
 }
 
@@ -30,12 +28,12 @@ interface TrackItemInfo {
  *
  * @param args - 工具参数
  * @param args.trackId - 轨道ID
- * @param args.startTime - 筛选开始时间（时间码格式），只返回此时间之后的片段
- * @param args.endTime - 筛选结束时间（时间码格式），只返回此时间之前的片段
+ * @param args.start - 筛选开始时间（时间码格式），只返回此时间之后的片段
+ * @param args.end - 筛选结束时间（时间码格式），只返回此时间之前的片段
  * @returns JSON 格式的轨道项目列表
  */
 export async function executeReadTrack(args: Record<string, any>) {
-  const { trackId, startTime, endTime } = args
+  const { trackId, start, end } = args
 
   if (!trackId || typeof trackId !== 'string') {
     return buildToolError(
@@ -61,18 +59,18 @@ export async function executeReadTrack(args: Record<string, any>) {
     const allTrackItems = getTimelineItemsByTrack(trackId, store.timelineItems || [])
 
     let filteredItems = allTrackItems
-    if (startTime || endTime) {
-      if ((startTime && !isValidAgentToolTimecode(startTime)) || (endTime && !isValidAgentToolTimecode(endTime))) {
+    if (start || end) {
+      if ((start && !isValidAgentToolTimecode(start)) || (end && !isValidAgentToolTimecode(end))) {
         return buildToolError(
           'read_track',
           'invalid_timecode',
-          'startTime 或 endTime 不是合法的时间码，格式应为 HH:MM:SS+FF。',
-          { startTime, endTime },
+          'start 或 end 不是合法的时间码，格式应为 HH:MM:SS+FF。',
+          { start, end },
         )
       }
 
-      const startFrames = startTime ? parseAgentToolTimecode(startTime) : 0
-      const endFrames = endTime ? parseAgentToolTimecode(endTime) : Infinity
+      const startFrames = start ? parseAgentToolTimecode(start) : 0
+      const endFrames = end ? parseAgentToolTimecode(end) : Infinity
 
       filteredItems = allTrackItems.filter((item) => {
         const itemStart = item.timeRange.timelineStartTime
@@ -84,18 +82,16 @@ export async function executeReadTrack(args: Record<string, any>) {
     const itemInfos: TrackItemInfo[] = filteredItems.map((item) => ({
       clipId: item.id,
       mediaId: item.mediaItemId || undefined,
-      name: item.id,
       start: framesToTimecode(item.timeRange.timelineStartTime),
       end: framesToTimecode(item.timeRange.timelineEndTime),
-      duration: framesToTimecode(item.timeRange.timelineEndTime - item.timeRange.timelineStartTime),
       mediaType: item.mediaType,
     }))
 
     const filter =
-      startTime || endTime
+      start || end
         ? {
-            startTime: startTime || null,
-            endTime: endTime || null,
+            start: start || null,
+            end: end || null,
           }
         : undefined
 

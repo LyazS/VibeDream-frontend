@@ -1,6 +1,6 @@
 /**
  * read_media 工具实现
- * 按字段读取素材详情，必要时触发索引并等待完成，最终返回 JSON envelope。
+ * 读取素材详情，必要时等待内容分析完成，最终返回 JSON envelope。
  */
 
 import { computed, reactive } from 'vue'
@@ -29,6 +29,7 @@ import {
 
 const MAX_MEDIA_IDS = 10
 const MAX_WAIT_MS = 30 * 60 * 1000
+const DEFAULT_FIELDS: ReadMediaField[] = ['basic', 'summary']
 
 type ReadMediaField = 'basic' | 'summary' | 'segments'
 type ReadMediaItemStatus = 'success' | 'failed' | 'pending'
@@ -46,8 +47,6 @@ interface ReadMediaToolContext {
   ensureMediaIndexing: (mediaId: string) => Promise<unknown>
   onJobResourceEvent: (listener: (event: ResourceEvent) => void) => () => void
 }
-
-const SUPPORTED_FIELDS = new Set<ReadMediaField>(['basic', 'summary', 'segments'])
 
 export interface ReadMediaExecutionState extends IndexingRuntimeState {
   toolCallId: string
@@ -115,26 +114,18 @@ function finishExecutionState(toolCallId: string): void {
   unregisterToolCancellationHook('read_media', toolCallId)
 }
 
-function isReadMediaField(value: unknown): value is ReadMediaField {
-  return typeof value === 'string' && SUPPORTED_FIELDS.has(value as ReadMediaField)
+function normalizeIncludeSegments(includeSegments: unknown): boolean {
+  if (includeSegments === undefined || includeSegments === null) {
+    return false
+  }
+  if (typeof includeSegments !== 'boolean') {
+    throw new Error('includeSegments must be a boolean when provided')
+  }
+  return includeSegments
 }
 
-function normalizeFields(fields: unknown): ReadMediaField[] {
-  if (!Array.isArray(fields) || fields.length === 0) {
-    throw new Error('fields must be a non-empty array')
-  }
-
-  const normalized: ReadMediaField[] = []
-  for (const field of fields) {
-    if (!isReadMediaField(field)) {
-      throw new Error(`Unsupported read_media field: ${String(field)}`)
-    }
-    if (!normalized.includes(field)) {
-      normalized.push(field)
-    }
-  }
-
-  return normalized
+function buildReadFields(includeSegments: boolean): ReadMediaField[] {
+  return includeSegments ? [...DEFAULT_FIELDS, 'segments'] : [...DEFAULT_FIELDS]
 }
 
 function normalizeMediaIds(mediaIds: unknown): string[] {
@@ -292,8 +283,8 @@ function buildSegmentsData(indexing?: UnifiedVideoMediaIndexMetadata): Array<Rec
 
   return segments.map((segment) => ({
     index: segment.segmentIndex,
-    start: segment.startTimecode,
-    end: segment.endTimecode,
+    clipStart: segment.startTimecode,
+    clipEnd: segment.endTimecode,
     title: segment.title || undefined,
     summary: segment.summary || undefined,
   }))
@@ -306,25 +297,23 @@ function buildMediaData(
 ): Record<string, any> {
   const { mediaItem, suggestedItem } = context.resolveMediaRequest(controller.requestedId)
   if (!mediaItem) {
+    const message = controller.failureMessage
+      || (controller.suggestedId || suggestedItem?.id
+        ? `未找到素材，建议使用完整 ID ${controller.suggestedId || suggestedItem?.id}`
+        : '未找到素材')
+
     return {
       mediaId: controller.requestedId,
       status: 'not_found',
-      error: {
-        code: controller.failureReason || 'media_not_found',
-        message: controller.failureMessage || '未找到素材',
-        details: {
-          suggestedId: controller.suggestedId || suggestedItem?.id,
-        },
-      },
+      error: message,
     }
   }
 
   const indexing = getIndexMetadata(mediaItem)
   const mediaData: Record<string, any> = {
     mediaId: mediaItem.id,
-    status: controller.itemStatus === 'pending' ? 'failed' : 'found',
+    status: controller.itemStatus === 'failed' || controller.itemStatus === 'pending' ? 'failed' : 'found',
     mediaType: mediaItem.mediaType,
-    indexStatus: getIndexStatus(mediaItem),
   }
 
   if (fields.includes('basic')) {
@@ -337,9 +326,6 @@ function buildMediaData(
     )
     if (summaryData) {
       mediaData.summary = summaryData.summary
-      if (summaryData.title) {
-        mediaData.title = summaryData.title
-      }
     }
   }
 
@@ -350,11 +336,18 @@ function buildMediaData(
     }
   }
 
-  if (controller.itemStatus === 'failed') {
-    mediaData.error = {
-      code: controller.failureReason || 'internal_error',
-      message: controller.failureMessage || '读取素材失败',
+  if (fields.includes('segments')) {
+    const videoIndexing = getVideoMetadata(indexing)
+    if (mediaItem.mediaType === 'video' && videoIndexing?.indexStatus === 'partial_failed') {
+      const failedCount = videoIndexing.failedSegmentCount
+      mediaData.warning = failedCount && failedCount > 0
+        ? `有 ${failedCount} 个分镜分析失败，已返回可用分镜`
+        : '部分分镜分析失败，已返回可用分镜'
     }
+  }
+
+  if (controller.itemStatus === 'failed') {
+    mediaData.error = controller.failureMessage || '读取素材失败'
   }
 
   return mediaData
@@ -367,7 +360,7 @@ function buildResultData(
 ): Record<string, any> {
   const mediaItems = controllers.map((controller) => buildMediaData(controller, fields, context))
   return {
-      mediaItems,
+    mediaItems,
   }
 }
 
@@ -399,7 +392,7 @@ function updateExecutionProgress(
 
   let message = `已完成 ${completedCount}/${controllers.length} 个素材读取`
   if (pendingCount > 0) {
-    message = `正在索引并读取素材（${completedCount} 成功 / ${failedCount} 失败 / ${pendingCount} 进行中）`
+    message = `正在分析并读取素材（${completedCount} 成功 / ${failedCount} 失败 / ${pendingCount} 进行中）`
   }
 
   const indexingStatus = buildIndexingStatusMessage({
@@ -470,7 +463,7 @@ function refreshControllers(
     if (indexStatus === 'failed') {
       controller.itemStatus = 'failed'
       controller.failureReason = 'indexing_failed'
-      controller.failureMessage = controller.waitError || '素材索引失败'
+      controller.failureMessage = controller.waitError || '素材内容分析失败'
       continue
     }
 
@@ -626,7 +619,8 @@ export async function executeReadMedia(
 ){
   try {
     const mediaIds = normalizeMediaIds(args.mediaIds)
-    const fields = normalizeFields(args.fields)
+    const includeSegments = normalizeIncludeSegments(args.includeSegments)
+    const fields = buildReadFields(includeSegments)
     const unifiedStore = useUnifiedStore()
     const readMediaContext: ReadMediaToolContext = {
       resolveMediaRequest: (mediaId) =>
@@ -651,7 +645,7 @@ export async function executeReadMedia(
         updateExecutionState(toolCallId, {
           cancelled: true,
           canCancel: false,
-          message: '正在停止等待索引…',
+          message: '正在停止等待分析…',
           indexingStatus: createRuntimeI18nMessage('aiPanel.toolsState.indexingStopping'),
         })
         wakeWaiting?.()
@@ -691,7 +685,7 @@ export async function executeReadMedia(
         markFailures(
           controllers,
           'indexing_timeout',
-          '等待素材索引超时',
+          '等待素材内容分析超时',
         )
         break
       }
@@ -716,7 +710,7 @@ export async function executeReadMedia(
     return buildToolSuccess(
       'read_media',
       result,
-      `已返回 ${result.mediaItems.length} 个素材读取结果。`,
+      result.error ? undefined : `已返回 ${result.mediaItems.length} 个素材读取结果。`,
     )
   } catch (error: any) {
     const message = error instanceof Error ? error.message : String(error)

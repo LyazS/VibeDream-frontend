@@ -6,7 +6,7 @@ export async function executeReadClipKeyframe(args: Record<string, any>) {
 
   try {
     const data = await service.readClipKeyframe({
-      itemId: args.itemId,
+      clipId: args.clipId,
       channelId: args.channelId,
     })
 

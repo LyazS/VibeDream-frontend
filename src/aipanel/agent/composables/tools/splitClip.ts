@@ -83,14 +83,18 @@ export async function executeSplitClip(args: Record<string, any>) {
         }),
       )
       .sort((a, b) => a.timeRange.timelineStartTime - b.timeRange.timelineStartTime)
-      .map((item) => item.id)
+      .map((item) => ({
+        clipId: item.id,
+        start: framesToTimecode(item.timeRange.timelineStartTime),
+        end: framesToTimecode(item.timeRange.timelineEndTime),
+      }))
 
     return buildToolSuccess(
       'split_clip',
       {
         originalClipId: clipId,
         splitTimes: uniqueSortedFrames.map((frame) => framesToTimecode(frame)),
-        newClipIds: clips,
+        newClips: clips,
       },
       `已将 ${clipId} 按 ${uniqueSortedFrames.length} 个时间点切分。`,
     )
