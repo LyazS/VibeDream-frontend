@@ -4,9 +4,27 @@
     "agent": "智能助手",
     "tools": {
       "unknown": "未知工具",
+      "add_track": "新增轨道",
+      "create_subtitle_clip": "创建字幕片段",
+      "insert_clip": "插入片段",
       "list_media": "读取素材列表",
+      "list_tracks": "读取轨道列表",
+      "move_clip": "移动片段",
+      "move_track": "移动轨道",
+      "patch_clip_keyframe": "局部更新关键帧",
+      "read_clip_keyframe": "读取关键帧",
+      "read_clip_properties": "读取片段属性",
       "read_media": "查看素材",
-      "search_media": "检索素材"
+      "read_track": "读取轨道",
+      "remove_clip": "删除片段",
+      "remove_track": "删除轨道",
+      "search_media": "检索素材",
+      "split_clip": "分割片段",
+      "trim_clip": "裁剪片段",
+      "update_clip_properties": "修改片段属性",
+      "update_track_properties": "修改轨道属性",
+      "write_clip_keyframe": "重写关键帧",
+      "edit_sdk": "编辑脚本执行"
     },
     "toolsState": {
       "stop": "停止",

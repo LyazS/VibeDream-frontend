@@ -6,6 +6,7 @@ export enum AgentMessageRole {
 export enum MessagePartType {
   TEXT = 'text',
   IMAGE = 'image',
+  BACKGROUND_CONTEXT = 'background_context',
   TOOL_CALL = 'tool_call',
 }
 
@@ -25,6 +26,11 @@ export interface ImagePart {
   url: string
 }
 
+export interface BackgroundContextPart {
+  type: MessagePartType.BACKGROUND_CONTEXT
+  text: string
+}
+
 export interface ToolCallPart {
   type: MessagePartType.TOOL_CALL
   tool_call_id: string
@@ -33,7 +39,7 @@ export interface ToolCallPart {
   status: ToolCallStatus
 }
 
-export type AgentMessagePart = TextPart | ImagePart | ToolCallPart
+export type AgentMessagePart = TextPart | ImagePart | BackgroundContextPart | ToolCallPart
 
 export interface AgentMessage {
   id: string
@@ -112,7 +118,7 @@ export interface SessionHistory {
 }
 
 export interface RunInput {
-  parts: Array<TextPart | ImagePart>
+  parts: Array<TextPart | ImagePart | BackgroundContextPart>
 }
 
 export interface StartRunRequest {

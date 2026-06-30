@@ -8,6 +8,7 @@ import { createSubtitleClipTool } from './createSubtitleClip'
 import { patchClipKeyframeTool } from './patchClipKeyframe'
 import { listMediaTool } from './listMedia'
 import { listTracksTool } from './listTracks'
+import { modifyProjectInfoTool } from './modifyProjectInfo'
 import { insertClipTool } from './insertClip'
 import { moveClipTool } from './moveClip'
 import { moveTrackTool } from './moveTrack'
@@ -16,6 +17,7 @@ import { updateTrackPropertiesTool } from './updateTrackProperties'
 import { readClipPropertiesTool } from './readClipProperties'
 import { readClipKeyframeTool } from './readClipKeyframe'
 import { readMediaTool } from './readMedia'
+import { readProjectInfoTool } from './readProjectInfo'
 import { readTrackTool } from './readTrack'
 import { removeClipTool } from './removeClip'
 import { removeTrackTool } from './removeTrack'
@@ -76,6 +78,8 @@ registerTool(createSubtitleClipTool)
 registerTool(patchClipKeyframeTool)
 registerTool(listMediaTool)
 registerTool(listTracksTool)
+registerTool(readProjectInfoTool)
+registerTool(modifyProjectInfoTool)
 registerTool(insertClipTool)
 registerTool(moveClipTool)
 registerTool(moveTrackTool)
@@ -173,6 +177,8 @@ export {
   patchClipKeyframeTool,
   listMediaTool,
   listTracksTool,
+  readProjectInfoTool,
+  modifyProjectInfoTool,
   insertClipTool,
   moveClipTool,
   moveTrackTool,

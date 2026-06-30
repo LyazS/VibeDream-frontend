@@ -187,12 +187,17 @@ export class SessionManager {
         await this.resumePendingInteraction(sessionId, message, 'custom_input')
       } else {
         this.pendingUserMessage = this.createLocalUserMessage(message)
+        const passiveContext = this.agentToolRuntime.getPassiveContext()
         const runRequest: StartRunRequest = {
           input: {
             parts: [
               {
                 type: MessagePartType.TEXT,
                 text: message,
+              },
+              {
+                type: MessagePartType.BACKGROUND_CONTEXT,
+                text: passiveContext,
               },
             ],
           },

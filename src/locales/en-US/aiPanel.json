@@ -4,9 +4,27 @@
     "agent": "Agent",
     "tools": {
       "unknown": "Unknown Tool",
+      "add_track": "Add Track",
+      "create_subtitle_clip": "Create Subtitle Clip",
+      "insert_clip": "Insert Clip",
       "list_media": "List Media",
+      "list_tracks": "List Tracks",
+      "move_clip": "Move Clip",
+      "move_track": "Move Track",
+      "patch_clip_keyframe": "Patch Clip Keyframe",
+      "read_clip_keyframe": "Read Clip Keyframe",
+      "read_clip_properties": "Read Clip Properties",
       "read_media": "Read Media",
-      "search_media": "Search Media"
+      "read_track": "Read Track",
+      "remove_clip": "Remove Clip",
+      "remove_track": "Remove Track",
+      "search_media": "Search Media",
+      "split_clip": "Split Clip",
+      "trim_clip": "Trim Clip",
+      "update_clip_properties": "Update Clip Properties",
+      "update_track_properties": "Update Track Properties",
+      "write_clip_keyframe": "Rewrite Clip Keyframe",
+      "edit_sdk": "Run Edit Script"
     },
     "toolsState": {
       "stop": "Stop",

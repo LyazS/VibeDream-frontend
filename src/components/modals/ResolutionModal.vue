@@ -85,18 +85,20 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
 import UniversalModal from './UniversalModal.vue'
-import { useUnifiedStore } from '@/core/unifiedStore'
 import { useAppI18n } from '@/core/composables/useI18n'
+import {
+  createProjectCustomResolution,
+  listProjectResolutionPresets,
+  type ProjectResolutionValue,
+} from '@/core/utils/projectResolutionPresets'
+
+interface ModalResolutionValue extends ProjectResolutionValue {
+  name: string
+}
 
 const props = defineProps<{
   show: boolean
-  currentResolution: {
-    name: string
-    width: number
-    height: number
-    aspectRatio: string
-    category: string
-  }
+  currentResolution: ModalResolutionValue
 }>()
 
 const emit = defineEmits<{
@@ -108,119 +110,10 @@ const emit = defineEmits<{
 }>()
 
 const { t } = useAppI18n()
-const unifiedStore = useUnifiedStore()
-
-// 分辨率选项
-const resolutionOptions = computed(() => [
-  // 横屏 16:9
-  {
-    name: t('editor.resolution.4K'),
-    width: 3840,
-    height: 2160,
-    aspectRatio: '16:9',
-    category: t('editor.landscape'),
-  },
-  {
-    name: t('editor.resolution.1440p'),
-    width: 2560,
-    height: 1440,
-    aspectRatio: '16:9',
-    category: t('editor.landscape'),
-  },
-  {
-    name: t('editor.resolution.1080p'),
-    width: 1920,
-    height: 1080,
-    aspectRatio: '16:9',
-    category: t('editor.landscape'),
-  },
-  {
-    name: t('editor.resolution.720p'),
-    width: 1280,
-    height: 720,
-    aspectRatio: '16:9',
-    category: t('editor.landscape'),
-  },
-  {
-    name: t('editor.resolution.480p'),
-    width: 854,
-    height: 480,
-    aspectRatio: '16:9',
-    category: t('editor.landscape'),
-  },
-
-  // 竖屏 9:16
-  {
-    name: t('editor.resolution.4KPortrait'),
-    width: 2160,
-    height: 3840,
-    aspectRatio: '9:16',
-    category: t('editor.portrait'),
-  },
-  {
-    name: t('editor.resolution.1440pPortrait'),
-    width: 1440,
-    height: 2560,
-    aspectRatio: '9:16',
-    category: t('editor.portrait'),
-  },
-  {
-    name: t('editor.resolution.1080pPortrait'),
-    width: 1080,
-    height: 1920,
-    aspectRatio: '9:16',
-    category: t('editor.portrait'),
-  },
-  {
-    name: t('editor.resolution.720pPortrait'),
-    width: 720,
-    height: 1280,
-    aspectRatio: '9:16',
-    category: t('editor.portrait'),
-  },
-  {
-    name: t('editor.resolution.480pPortrait'),
-    width: 480,
-    height: 854,
-    aspectRatio: '9:16',
-    category: t('editor.portrait'),
-  },
-
-  // 正方形 1:1
-  {
-    name: t('editor.resolution.1080x1080'),
-    width: 1080,
-    height: 1080,
-    aspectRatio: '1:1',
-    category: t('editor.square'),
-  },
-  {
-    name: t('editor.resolution.720x720'),
-    width: 720,
-    height: 720,
-    aspectRatio: '1:1',
-    category: t('editor.square'),
-  },
-
-  // 超宽屏
-  {
-    name: t('editor.resolution.ultrawide21x9'),
-    width: 2560,
-    height: 1080,
-    aspectRatio: '21:9',
-    category: t('editor.ultrawide'),
-  },
-  {
-    name: t('editor.resolution.ultrawide32x9'),
-    width: 3840,
-    height: 1080,
-    aspectRatio: '32:9',
-    category: t('editor.ultrawide'),
-  },
-])
+const resolutionOptions = computed(() => listProjectResolutionPresets())
 
 // 临时选择的分辨率
-const tempSelectedResolution = ref({
+const tempSelectedResolution = ref<ModalResolutionValue>({
   name: '1080p',
   width: 1920,
   height: 1080,
@@ -233,23 +126,15 @@ const showCustomInput = ref(false)
 const customWidth = ref(1920)
 const customHeight = ref(1080)
 
-const customResolutionText = computed(() => {
-  const gcd = (a: number, b: number): number => (b === 0 ? a : gcd(b, a % b))
-  const divisor = gcd(customWidth.value, customHeight.value)
-  const ratioW = customWidth.value / divisor
-  const ratioH = customHeight.value / divisor
-  return `${ratioW}:${ratioH}`
-})
+const customResolutionText = computed(
+  () => createProjectCustomResolution(customWidth.value, customHeight.value).aspectRatio,
+)
 
 // 监听自定义分辨率输入变化，实时更新临时选择
 watch([customWidth, customHeight], () => {
   if (showCustomInput.value) {
     tempSelectedResolution.value = {
-      name: t('editor.custom'),
-      width: customWidth.value,
-      height: customHeight.value,
-      aspectRatio: customResolutionText.value,
-      category: t('editor.custom'),
+      ...createProjectCustomResolution(customWidth.value, customHeight.value),
     }
   }
 })
@@ -294,12 +179,7 @@ function confirmSelection() {
 
   if (showCustomInput.value) {
     // 使用自定义分辨率
-    selectedResolution = {
-      name: t('editor.custom'),
-      width: customWidth.value,
-      height: customHeight.value,
-      aspectRatio: customResolutionText.value,
-    }
+    selectedResolution = createProjectCustomResolution(customWidth.value, customHeight.value)
   } else {
     // 使用预设分辨率，转换为VideoResolution格式
     selectedResolution = {
@@ -341,11 +221,7 @@ function selectPresetResolution(resolution: {
 function selectCustomResolution() {
   showCustomInput.value = true
   tempSelectedResolution.value = {
-    name: t('editor.custom'),
-    width: customWidth.value,
-    height: customHeight.value,
-    aspectRatio: customResolutionText.value,
-    category: t('editor.custom'),
+    ...createProjectCustomResolution(customWidth.value, customHeight.value),
   }
 }
 
