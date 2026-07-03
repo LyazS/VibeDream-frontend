@@ -7,8 +7,15 @@ import {
   getTrack,
 } from '@/core/animation/engine'
 import type { MediaType } from '@/core/mediaitem'
-import type { ChangeOperation, ChangePlan } from '@/core/property-system'
-import type { AnimatablePropertyId } from '@/core/property-system'
+import {
+  AGENT_TOOL_KEYFRAME_PROPERTY_IDS,
+  isAgentToolKeyframePropertyId,
+  type ChangeOperation,
+  type ChangePlan,
+  type AgentToolKeyframePropertyId,
+} from '@/core/property-system'
+import { propertySchemaResolver } from '@/core/property-system/schema/resolver'
+import type { AnimatablePropertySchema } from '@/core/property-system/schema/animatablePropertySchemas'
 import type { UnifiedTimelineItemData } from '@/core/timelineitem/model/timelineItem'
 import type {
   AnimateKeyframe,
@@ -17,10 +24,6 @@ import type {
 } from '@/core/timelineitem/model/render'
 import { framesToTimecode } from '@/core/utils/timeUtils'
 import { isValidAgentToolTimecode, parseAgentToolTimecode } from '../utils/timecode'
-import {
-  AGENT_TOOL_KEYFRAME_VALUE_SHAPES,
-  type AgentToolKeyframePropertyId,
-} from '../shared/agentToolPropertyIds'
 
 type ExternalKeyframeValue = number | Record<string, unknown>
 
@@ -131,14 +134,6 @@ function valuesEqual(left: unknown, right: unknown): boolean {
   return JSON.stringify(left) === JSON.stringify(right)
 }
 
-function isToolPropertyId(propertyId: string): propertyId is AnimatablePropertyId {
-  return propertyId in AGENT_TOOL_KEYFRAME_VALUE_SHAPES
-}
-
-function clamp01(value: number): number {
-  return Math.min(1, Math.max(0, value))
-}
-
 export class KeyframePropertyEditService {
   async readClipKeyframe(args: ReadArgs) {
     const item = this.requireClip(args.clipId)
@@ -154,7 +149,7 @@ export class KeyframePropertyEditService {
         end: framesToTimecode(item.timeRange.timelineEndTime),
         duration: framesToTimecode(item.timeRange.timelineEndTime - item.timeRange.timelineStartTime),
       },
-      keyframes: keyframes.map((entry) => this.serializeTimelineKeyframe(groupId, entry)),
+      keyframes: keyframes.map((entry) => this.serializeTimelineKeyframe(item, groupId, entry)),
     }
   }
 
@@ -229,10 +224,10 @@ export class KeyframePropertyEditService {
       propertyId: groupId,
       beforeHasLeadingOmitted: current.some((entry) => entry.frame < startFrame),
       beforeHasTrailingOmitted: current.some((entry) => entry.frame > endFrame),
-      before: matched.map((entry) => this.serializeFrameValue(groupId, entry)),
+      before: matched.map((entry) => this.serializeFrameValue(item, groupId, entry)),
       afterHasLeadingOmitted: next.some((entry) => entry.frame < afterRangeStartFrame),
       afterHasTrailingOmitted: next.some((entry) => entry.frame > afterRangeEndFrame),
-      after: replacement.map((entry) => this.serializeFrameValue(groupId, entry)),
+      after: replacement.map((entry) => this.serializeFrameValue(item, groupId, entry)),
     }
   }
 
@@ -250,14 +245,14 @@ export class KeyframePropertyEditService {
   private requireSupportedProperty(
     item: UnifiedTimelineItemData<MediaType>,
     propertyId: string,
-  ): AnimatablePropertyId {
+  ): AgentToolKeyframePropertyId {
     if (!propertyId || typeof propertyId !== 'string') {
       throw toolError('invalid_group', 'propertyId 必须是非空字符串')
     }
-    if (!isToolPropertyId(propertyId)) {
+    if (!isAgentToolKeyframePropertyId(propertyId)) {
       throw toolError('invalid_group', `不支持的关键帧属性 ${propertyId}`, {
         propertyId,
-        supportedGroups: Object.keys(AGENT_TOOL_KEYFRAME_VALUE_SHAPES),
+        supportedGroups: AGENT_TOOL_KEYFRAME_PROPERTY_IDS,
       })
     }
     const definition = AnimationRegistry.get(propertyId)
@@ -303,7 +298,7 @@ export class KeyframePropertyEditService {
 
   private normalizeInputKeyframes(
     item: UnifiedTimelineItemData<MediaType>,
-    groupId: AnimatablePropertyId,
+    groupId: AgentToolKeyframePropertyId,
     keyframes: KeyframePayload[],
     fieldName: 'keyframes' | 'match' | 'apply',
   ): TimelineKeyframeRecord[] {
@@ -315,7 +310,7 @@ export class KeyframePropertyEditService {
         const frame = normalizeTimecode(entry?.time, `${fieldName}[${index}].time`)
         this.assertFrameInRange(item, frame)
         const relativeFrame = getRelativeFrame(item, frame)
-        const value = this.normalizeGroupValue(groupId, entry?.value, `${fieldName}[${index}].value`)
+        const value = this.normalizeGroupValue(item, groupId, entry?.value, `${fieldName}[${index}].value`)
         return {
           frame,
           relativeFrame,
@@ -328,16 +323,15 @@ export class KeyframePropertyEditService {
   }
 
   private normalizeGroupValue(
-    groupId: AnimatablePropertyId,
+    item: UnifiedTimelineItemData<MediaType>,
+    groupId: AgentToolKeyframePropertyId,
     value: unknown,
     field: string,
   ): Record<string, unknown> {
-    const shape =
-      AGENT_TOOL_KEYFRAME_VALUE_SHAPES[
-        groupId as AgentToolKeyframePropertyId
-      ]
+    const schema = this.getToolPropertySchema(item, groupId)
+    const isScalarValue = schema.valueFields.length === 1 && schema.valueKind !== 'vec2'
 
-    if (shape.kind === 'scalar') {
+    if (isScalarValue) {
       if (typeof value !== 'number' || !Number.isFinite(value)) {
         throw toolError(
           'invalid_value',
@@ -345,29 +339,30 @@ export class KeyframePropertyEditService {
           { field, groupId, expectedShape: 'number', value },
         )
       }
-      const normalizedValue =
-        groupId === 'visual.blendIntensity' || groupId === 'audio.volume' ? clamp01(value) : value
-      return { [shape.keys[0]]: normalizedValue }
+      return this.normalizeScalarSchemaValue(schema, value, field)
     }
 
     if (typeof value !== 'object' || value === null || Array.isArray(value)) {
       throw toolError(
         'invalid_value',
         `${field} 的值类型不正确：${groupId} 需要对象，当前收到 ${this.describeValueType(value)}。`,
-        { field, groupId, expectedShape: 'object', expectedKeys: shape.keys, value },
+        { field, groupId, expectedShape: 'object', expectedKeys: schema.valueFields, value },
       )
     }
     const nextValue = value as Record<string, unknown>
     const nextKeys = Object.keys(nextValue)
-    if (shape.keys.length !== nextKeys.length || !shape.keys.every((key) => nextKeys.includes(key))) {
+    if (
+      schema.valueFields.length !== nextKeys.length ||
+      !schema.valueFields.every((key) => nextKeys.includes(key))
+    ) {
       throw toolError('invalid_value_shape', `关键帧值结构不匹配: ${groupId}`, {
         groupId,
         field,
-        expectedKeys: shape.keys,
+        expectedKeys: schema.valueFields,
         actualKeys: nextKeys,
       })
     }
-    for (const key of shape.keys) {
+    for (const key of schema.valueFields) {
       const entry = nextValue[key]
       if (typeof entry !== 'number' || !Number.isFinite(entry)) {
         throw toolError('invalid_value', `关键帧值必须是有限数字: ${groupId}.${key}`, {
@@ -481,40 +476,74 @@ export class KeyframePropertyEditService {
   }
 
   private serializeTimelineKeyframe(
-    groupId: AnimatablePropertyId,
+    item: UnifiedTimelineItemData<MediaType>,
+    groupId: AgentToolKeyframePropertyId,
     entry: TimelineKeyframeRecord,
   ): SerializedKeyframeRecord {
     return {
       time: framesToTimecode(entry.frame),
       relativeTime: framesToTimecode(entry.relativeFrame),
       position: entry.position,
-      value: this.serializeValue(groupId, entry.value),
+      value: this.serializeValue(item, groupId, entry.value),
       easing: entry.easing,
     }
   }
 
   private serializeFrameValue(
-    groupId: AnimatablePropertyId,
+    item: UnifiedTimelineItemData<MediaType>,
+    groupId: AgentToolKeyframePropertyId,
     entry: TimelineKeyframeRecord,
   ) {
     return {
       time: framesToTimecode(entry.frame),
-      value: this.serializeValue(groupId, entry.value),
+      value: this.serializeValue(item, groupId, entry.value),
     }
   }
 
   private serializeValue(
-    groupId: AnimatablePropertyId,
+    item: UnifiedTimelineItemData<MediaType>,
+    groupId: AgentToolKeyframePropertyId,
     value: Record<string, unknown>,
   ): ExternalKeyframeValue {
-    const shape =
-      AGENT_TOOL_KEYFRAME_VALUE_SHAPES[
-        groupId as AgentToolKeyframePropertyId
-      ]
-    if (shape.kind === 'scalar') {
-      return value[shape.keys[0]] as number
+    const schema = this.getToolPropertySchema(item, groupId)
+    if (schema.valueFields.length === 1 && schema.valueKind !== 'vec2') {
+      return value[schema.valueFields[0]] as number
     }
     return cloneJson(value)
+  }
+
+  private getToolPropertySchema(
+    item: UnifiedTimelineItemData<MediaType>,
+    propertyId: AgentToolKeyframePropertyId,
+  ): AnimatablePropertySchema {
+    const schema = propertySchemaResolver.getSchema({ item }, propertyId)
+    if (!schema) {
+      throw toolError('invalid_group', `未找到关键帧属性 schema: ${propertyId}`, {
+        clipId: item.id,
+        propertyId,
+      })
+    }
+    return schema
+  }
+
+  private normalizeScalarSchemaValue(
+    schema: AnimatablePropertySchema,
+    value: number,
+    field: string,
+  ): Record<string, unknown> {
+    try {
+      if (schema.normalizeKeyframeValue) {
+        return schema.normalizeKeyframeValue(value)
+      }
+      return schema.normalizeDirectValue(value)
+    } catch (error) {
+      throw toolError('invalid_value', `${field} 的值不合法: ${schema.propertyId}`, {
+        field,
+        propertyId: schema.propertyId,
+        value,
+        reason: error instanceof Error ? error.message : String(error),
+      })
+    }
   }
 
   private describeValueType(value: unknown): string {

@@ -8,49 +8,16 @@ import type {
   VisualProps,
 } from '@/core/timelineitem/model/render'
 import type { AnimatablePropertyTarget } from '@/core/property-system/schema'
-import type { DynamicFilterParamPropertyId } from '@/core/property-system/schema/propertyIds'
+import type {
+  AnimatablePropertyId,
+  ConfigPropertyId,
+  DirectOnlyPropertyId,
+  DirectPropertyId,
+} from '@/core/property-system/catalog'
 import type { MediaType } from '@/core/mediaitem'
 import type { TimelineExtraRenderConfig, UnifiedTimelineItemData } from '@/core/timelineitem/model/timelineItem'
 
-export type AnimatablePropertyId =
-  | 'visual.rotation'
-  | 'visual.position'
-  | 'visual.size'
-  | 'visual.blendIntensity'
-  | 'filter.intensity'
-  | DynamicFilterParamPropertyId
-  | 'audio.volume'
-  | 'mask.rotation'
-  | 'mask.center'
-  | 'mask.rectangle.size'
-  | 'mask.rectangle.cornerRadius'
-  | 'mask.ellipse.size'
-  | 'mask.mirror.length'
-  | 'mask.feather'
-  | 'mask.intensity'
-
-export type ConfigPropertyId =
-  | 'visual.blendMode'
-  | 'visual.proportionalScale'
-  | 'audio.isMuted'
-  | 'mask.enabled'
-  | 'mask.type'
-  | 'mask.inverted'
-
-export type DirectOnlyPropertyId =
-  | 'text.content'
-  | 'text.style.fontSize'
-  | 'text.style.fontFamily'
-  | 'text.style.fontWeight'
-  | 'text.style.fontStyle'
-  | 'text.style.color'
-  | 'text.style.backgroundColor'
-  | 'text.style.textAlign'
-  | 'text.style.textShadow'
-  | 'text.style.textStroke'
-  | 'text.style.textGlow'
-
-export type DirectPropertyId = AnimatablePropertyId | DirectOnlyPropertyId
+export type { AnimatablePropertyId, ConfigPropertyId, DirectOnlyPropertyId, DirectPropertyId }
 
 export type ChangePlanPropertyId = DirectPropertyId | ConfigPropertyId | 'filter.batch'
 

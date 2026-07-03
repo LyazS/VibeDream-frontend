@@ -6,19 +6,21 @@ import { framesToTimecode } from '@/core/utils/timeUtils'
 import { getCurrentGroupValue, hasAnimation } from '@/core/animation/engine'
 import type { DirectPropertyBatchPlanEntry } from '@/core/property-system/mutation'
 import { propertyMutationCommitter } from '@/core/property-system/commit/PropertyMutationCommitter'
-import type { ChangePlan, ChangeOperation } from '@/core/property-system'
-import { isValidAgentToolTimecode, parseAgentToolTimecode } from '../utils/timecode'
 import {
   AGENT_TOOL_STATIC_PROPERTY_TO_ANIMATION_GROUP_MAP,
-} from '../shared/agentToolPropertyIds'
+  CLIP_PROPERTY_PATH_DEFINITIONS,
+  getSupportedClipPropertyGroups,
+  type ChangePlan,
+  type ChangeOperation,
+  type ClipPropertyGroupId,
+  type ClipPropertyPath,
+} from '@/core/property-system'
+import { isValidAgentToolTimecode, parseAgentToolTimecode } from '../utils/timecode'
 
 const NUMERIC_MATCH_EPSILON = 0.01
 const NUMERIC_DISPLAY_DECIMALS = 2
 
-type GroupId = 'visual' | 'audio' | 'text'
-type ReadGroupId = GroupId | 'timeline'
-type SupportedMediaType = UnifiedTimelineItemData['mediaType']
-type KnownMediaType = Exclude<SupportedMediaType, 'unknown'>
+type ReadGroupId = ClipPropertyGroupId | 'timeline'
 
 type ReadClipPropertiesArgs = {
   clipId: string
@@ -38,64 +40,44 @@ type ReadSampleContext = {
   effectiveSampleFrame: number
 }
 
-type PropertyPath =
-  | 'visual.position.x'
-  | 'visual.position.y'
-  | 'visual.size.width'
-  | 'visual.size.height'
-  | 'visual.rotation'
-  | 'visual.blendIntensity'
-  | 'visual.blendMode'
-  | 'visual.proportionalScale'
-  | 'audio.volume'
-  | 'audio.isMuted'
-  | 'text.content'
-  | 'text.style.fontFamily'
-  | 'text.style.fontSize'
-  | 'text.style.color'
-  | 'text.style.fontWeight'
-  | 'text.style.fontStyle'
-  | 'text.style.backgroundColor'
-  | 'text.style.textAlign'
-  | 'text.style.textShadow'
-  | 'text.style.textStroke'
-  | 'text.style.textGlow'
-
 type PathDefinition = {
-  groupId: GroupId
+  groupId: ClipPropertyGroupId
   validate: (value: unknown) => { ok: true; value: unknown } | { ok: false; code: string; message: string; details?: Record<string, any> }
 }
 
-const GROUP_SUPPORT_MATRIX: Record<KnownMediaType, GroupId[]> = {
-  video: ['visual', 'audio'],
-  image: ['visual'],
-  audio: ['audio'],
-  text: ['visual', 'text'],
-}
+const PATH_VALIDATORS = {
+  'visual.position.x': validateFiniteNumber('visual.position.x'),
+  'visual.position.y': validateFiniteNumber('visual.position.y'),
+  'visual.size.width': validatePositiveNumber('visual.size.width'),
+  'visual.size.height': validatePositiveNumber('visual.size.height'),
+  'visual.rotation': validateFiniteNumber('visual.rotation'),
+  'visual.blendIntensity': validateRangeNumber('visual.blendIntensity', 0, 1),
+  'visual.blendMode': validateBlendMode,
+  'visual.proportionalScale': validateBoolean('visual.proportionalScale'),
+  'audio.volume': validateRangeNumber('audio.volume', 0, 1),
+  'audio.isMuted': validateBoolean('audio.isMuted'),
+  'text.content': validateString('text.content'),
+  'text.style.fontFamily': validateString('text.style.fontFamily'),
+  'text.style.fontSize': validatePositiveNumber('text.style.fontSize'),
+  'text.style.color': validateString('text.style.color'),
+  'text.style.fontWeight': validateFontWeight,
+  'text.style.fontStyle': validateFontStyle,
+  'text.style.backgroundColor': validateOptionalString('text.style.backgroundColor'),
+  'text.style.textAlign': validateTextAlign,
+  'text.style.textShadow': validateOptionalString('text.style.textShadow'),
+  'text.style.textStroke': validateTextStroke,
+  'text.style.textGlow': validateTextGlow,
+} as const satisfies Record<ClipPropertyPath, PathDefinition['validate']>
 
-const PATH_DEFINITIONS: Record<PropertyPath, PathDefinition> = {
-  'visual.position.x': { groupId: 'visual', validate: validateFiniteNumber('visual.position.x') },
-  'visual.position.y': { groupId: 'visual', validate: validateFiniteNumber('visual.position.y') },
-  'visual.size.width': { groupId: 'visual', validate: validatePositiveNumber('visual.size.width') },
-  'visual.size.height': { groupId: 'visual', validate: validatePositiveNumber('visual.size.height') },
-  'visual.rotation': { groupId: 'visual', validate: validateFiniteNumber('visual.rotation') },
-  'visual.blendIntensity': { groupId: 'visual', validate: validateRangeNumber('visual.blendIntensity', 0, 1) },
-  'visual.blendMode': { groupId: 'visual', validate: validateBlendMode },
-  'visual.proportionalScale': { groupId: 'visual', validate: validateBoolean('visual.proportionalScale') },
-  'audio.volume': { groupId: 'audio', validate: validateRangeNumber('audio.volume', 0, 1) },
-  'audio.isMuted': { groupId: 'audio', validate: validateBoolean('audio.isMuted') },
-  'text.content': { groupId: 'text', validate: validateString('text.content') },
-  'text.style.fontFamily': { groupId: 'text', validate: validateString('text.style.fontFamily') },
-  'text.style.fontSize': { groupId: 'text', validate: validatePositiveNumber('text.style.fontSize') },
-  'text.style.color': { groupId: 'text', validate: validateString('text.style.color') },
-  'text.style.fontWeight': { groupId: 'text', validate: validateFontWeight },
-  'text.style.fontStyle': { groupId: 'text', validate: validateFontStyle },
-  'text.style.backgroundColor': { groupId: 'text', validate: validateOptionalString('text.style.backgroundColor') },
-  'text.style.textAlign': { groupId: 'text', validate: validateTextAlign },
-  'text.style.textShadow': { groupId: 'text', validate: validateOptionalString('text.style.textShadow') },
-  'text.style.textStroke': { groupId: 'text', validate: validateTextStroke },
-  'text.style.textGlow': { groupId: 'text', validate: validateTextGlow },
-}
+const PATH_DEFINITIONS = Object.fromEntries(
+  CLIP_PROPERTY_PATH_DEFINITIONS.map((definition) => [
+    definition.path,
+    {
+      groupId: definition.groupId,
+      validate: PATH_VALIDATORS[definition.path],
+    },
+  ]),
+) as Record<ClipPropertyPath, PathDefinition>
 
 export class ClipPropertyEditService {
   async readClipProperties(args: ReadClipPropertiesArgs) {
@@ -125,7 +107,7 @@ export class ClipPropertyEditService {
     const item = this.requireClip(args.clipId)
     validateApplyPayload(args.match, args.apply)
 
-    const keys = Object.keys(args.apply) as PropertyPath[]
+    const keys = Object.keys(args.apply) as ClipPropertyPath[]
     const currentValues = this.buildCurrentPathValues(item)
     const normalizedPatchValues = normalizePatchValues(args.apply, currentValues)
     const resultKeys = getResultKeys(keys, normalizedPatchValues)
@@ -183,7 +165,7 @@ export class ClipPropertyEditService {
     }
   }
 
-  private ensureStaticPropertyWritable(item: UnifiedTimelineItemData, key: PropertyPath) {
+  private ensureStaticPropertyWritable(item: UnifiedTimelineItemData, key: ClipPropertyPath) {
     const animationGroupId =
       AGENT_TOOL_STATIC_PROPERTY_TO_ANIMATION_GROUP_MAP[
         key as keyof typeof AGENT_TOOL_STATIC_PROPERTY_TO_ANIMATION_GROUP_MAP
@@ -215,7 +197,7 @@ export class ClipPropertyEditService {
     return item
   }
 
-  private ensureGroupSupported(item: UnifiedTimelineItemData, groupId: GroupId) {
+  private ensureGroupSupported(item: UnifiedTimelineItemData, groupId: ClipPropertyGroupId) {
     const supportedGroups = getSupportedGroups(item.mediaType)
     if (!['visual', 'audio', 'text'].includes(groupId)) {
       throw toolError('invalid_group', `无效的属性组: ${groupId}`, { groupId })
@@ -263,7 +245,7 @@ export class ClipPropertyEditService {
     return this.buildGroupProperties(item, groupId, frame)
   }
 
-  private buildGroupProperties(item: UnifiedTimelineItemData, groupId: GroupId, frame?: number) {
+  private buildGroupProperties(item: UnifiedTimelineItemData, groupId: ClipPropertyGroupId, frame?: number) {
     if (groupId === 'visual') {
       const resolved = TimelineItemQueries.getResolvedRenderConfig(item)
       if (!('visual' in resolved)) {
@@ -332,8 +314,8 @@ export class ClipPropertyEditService {
     }
   }
 
-  private buildCurrentPathValues(item: UnifiedTimelineItemData): Record<PropertyPath, unknown> {
-    const result: Partial<Record<PropertyPath, unknown>> = {}
+  private buildCurrentPathValues(item: UnifiedTimelineItemData): Record<ClipPropertyPath, unknown> {
+    const result: Partial<Record<ClipPropertyPath, unknown>> = {}
 
     if (getSupportedGroups(item.mediaType).includes('visual')) {
       const visual = this.buildGroupProperties(item, 'visual')
@@ -368,14 +350,14 @@ export class ClipPropertyEditService {
       result['text.style.textGlow'] = text.style?.textGlow
     }
 
-    return result as Record<PropertyPath, unknown>
+    return result as Record<ClipPropertyPath, unknown>
   }
 
   private buildPlan(
     item: UnifiedTimelineItemData,
-    keys: PropertyPath[],
+    keys: ClipPropertyPath[],
     patch: Record<string, unknown>,
-    currentValues: Record<PropertyPath, unknown>,
+    currentValues: Record<ClipPropertyPath, unknown>,
   ): ChangePlan {
     const frame = getCommitFrame(item)
     const context = {
@@ -543,21 +525,21 @@ function mergeDirectEntries(entries: DirectPropertyBatchPlanEntry[]): DirectProp
   return Array.from(grouped.values())
 }
 
-function getPlanPropertyId(keys: PropertyPath[]): ChangePlan['propertyId'] {
+function getPlanPropertyId(keys: ClipPropertyPath[]): ChangePlan['propertyId'] {
   if (keys.some((key) => key.startsWith('text.'))) return 'text.content'
   if (keys.some((key) => key.startsWith('audio.'))) return 'audio.volume'
   return 'visual.position'
 }
 
-function getSupportedGroups(mediaType: SupportedMediaType): GroupId[] {
-  return GROUP_SUPPORT_MATRIX[mediaType as KnownMediaType] ?? []
+function getSupportedGroups(mediaType: UnifiedTimelineItemData['mediaType']): ClipPropertyGroupId[] {
+  return [...getSupportedClipPropertyGroups(mediaType)]
 }
 
 function normalizePatchValues(
   patch: Record<string, unknown>,
-  currentValues: Record<PropertyPath, unknown>,
-): Record<PropertyPath, unknown> {
-  const normalized = { ...patch } as Record<PropertyPath, unknown>
+  currentValues: Record<ClipPropertyPath, unknown>,
+): Record<ClipPropertyPath, unknown> {
+  const normalized = { ...patch } as Record<ClipPropertyPath, unknown>
   const nextProportionalScale = (patch['visual.proportionalScale'] ??
     currentValues['visual.proportionalScale']) as boolean | undefined
   const hasWidth = Object.prototype.hasOwnProperty.call(patch, 'visual.size.width')
@@ -605,9 +587,9 @@ function normalizePatchValues(
 }
 
 function getResultKeys(
-  keys: PropertyPath[],
-  normalizedPatchValues: Record<PropertyPath, unknown>,
-): PropertyPath[] {
+  keys: ClipPropertyPath[],
+  normalizedPatchValues: Record<ClipPropertyPath, unknown>,
+): ClipPropertyPath[] {
   const resultKeys = new Set(keys)
 
   if (
