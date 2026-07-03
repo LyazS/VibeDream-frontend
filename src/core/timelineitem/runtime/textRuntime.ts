@@ -6,7 +6,7 @@ import { TimelineItemMutations } from '@/core/timelineitem/mutations'
 import { TimelineItemQueries } from '@/core/timelineitem/queries'
 
 export interface RebuildTextRuntimeOptions {
-  text?: string
+  content?: string
   stylePatch?: Partial<TextStyleConfig>
 }
 
@@ -20,7 +20,7 @@ export async function rebuildTextRuntime(
 ): Promise<void> {
   const visualConfig = TimelineItemQueries.getBaseVisualConfig(item)
   const textConfig = TimelineItemQueries.getBaseTextConfig(item)
-  const nextText = options.text ?? textConfig?.text ?? ''
+  const nextContent = options.content ?? textConfig?.content ?? ''
   const nextStyle: TextStyleConfig = {
     ...DEFAULT_TEXT_STYLE,
     ...(textConfig?.style ?? {}),
@@ -35,10 +35,10 @@ export async function rebuildTextRuntime(
   const bitmapHeightRatio = oldBitmapHeight > 0 ? oldConfigHeight / oldBitmapHeight : 1
   const bitmapWidthRatio = oldBitmapWidth > 0 ? oldConfigWidth / oldBitmapWidth : 1
 
-  const newTextBitmap = await textToImageBitmap2(nextText, nextStyle)
+  const newTextBitmap = await textToImageBitmap2(nextContent, nextStyle)
 
   TimelineItemMutations.patchBaseTextConfig(item, {
-    text: nextText,
+    content: nextContent,
     style: nextStyle,
   })
   TimelineItemMutations.patchBaseVisualConfig(item, {

@@ -310,7 +310,7 @@ export function useTimelineItemOperations() {
 
       console.log('✅ [UnifiedTimeline] 文本项目创建成功:', {
         id: textItem.id,
-        text: TimelineItemQueries.getBaseTextConfig(textItem)?.text,
+        content: TimelineItemQueries.getBaseTextConfig(textItem)?.content,
         position: timePosition,
       })
 

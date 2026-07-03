@@ -247,7 +247,7 @@ export const maskMirrorLengthSchema: AnimatablePropertySchema = {
 export const textContentSchema: AnimatablePropertySchema = {
   propertyId: 'text.content',
   target: 'text',
-  valueFields: ['text'],
+  valueFields: ['content'],
   valueKind: 'boolean',
   supportsDirectCommit: true,
   supportsKeyframeToggle: false,
@@ -262,7 +262,7 @@ export const textContentSchema: AnimatablePropertySchema = {
       throw new Error('text.content requires a non-empty string value')
     }
 
-    return { text }
+    return { content: text }
   },
 }
 

@@ -109,7 +109,7 @@ export async function applyKeyframeSnapshot(
   if (isTextTimelineItem(item)) {
     const textConfig = TimelineItemQueries.getBaseTextConfig(item)
     await rebuildTextRuntime(item, {
-      text: textConfig?.text,
+      content: textConfig?.content,
       stylePatch: textConfig?.style,
     })
   }

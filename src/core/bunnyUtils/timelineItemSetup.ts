@@ -38,7 +38,7 @@ export async function setupTimelineItemBunny(
         if (!textConfig) {
           throw new Error(`文本时间轴项目缺少文本配置: ${timelineItem.id}`)
         }
-        const bmap = await textToImageBitmap2(textConfig.text, textConfig.style)
+        const bmap = await textToImageBitmap2(textConfig.content, textConfig.style)
         timelineItem.runtime.textBitmap = bmap
         timelineItem.runtime.textBitmapVersion = (timelineItem.runtime.textBitmapVersion ?? 0) + 1
         // console.log(`✅ [timelineItemSetup] 文本 bunny 对象创建完成`)

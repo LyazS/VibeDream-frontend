@@ -438,7 +438,7 @@ function getCommitContext(item: UnifiedTimelineItemData<'text'>) {
 // 获取当前文本内容
 const localText = computed(() => {
   if (props.selectedTimelineItem && isTextTimelineItem(props.selectedTimelineItem)) {
-    return TimelineItemQueries.getBaseTextConfig(props.selectedTimelineItem)?.text ?? ''
+    return TimelineItemQueries.getBaseTextConfig(props.selectedTimelineItem)?.content ?? ''
   }
   return ''
 })

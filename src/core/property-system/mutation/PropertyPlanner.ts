@@ -90,7 +90,7 @@ export class PropertyPlanner {
           kind: 'text-rebuild',
           timelineItemId: intent.timelineItemId,
           frame: intent.frame,
-          text: String(nextStaticPatch.text ?? ''),
+          content: String(nextStaticPatch.content ?? ''),
         },
       ]
     }

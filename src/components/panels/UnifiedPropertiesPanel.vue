@@ -286,7 +286,7 @@ const getItemDisplayName = (item: UnifiedTimelineItemData) => {
 
   if (item.mediaType === 'text') {
     // 文本项目显示文本内容
-    const text = TimelineItemQueries.getBaseTextConfig(item)?.text || '空文本'
+    const text = TimelineItemQueries.getBaseTextConfig(item)?.content || '空文本'
     return text.length > 15 ? text.substring(0, 15) + '...' : text
   } else {
     // 其他类型显示素材名称

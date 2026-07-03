@@ -51,7 +51,7 @@ export interface AudioProps {
 }
 
 export interface TextProps {
-  text: string
+  content: string
   style: TextStyleConfig
 }
 

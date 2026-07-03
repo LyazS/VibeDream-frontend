@@ -93,7 +93,7 @@ export class ApplyChangePlanCommand implements SimpleCommand {
           throw new Error(`文本属性仅支持 text timeline item: ${operation.timelineItemId}`)
         }
         await rebuildTextRuntime(item, {
-          text: operation.text,
+          content: operation.content,
           stylePatch: operation.stylePatch as never,
         })
       } else if (operation.kind === 'animation-keyframe-update') {

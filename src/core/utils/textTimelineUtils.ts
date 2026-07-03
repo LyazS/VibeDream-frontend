@@ -75,7 +75,7 @@ export async function createTextTimelineItem(
       proportionalScale: true,
     },
     text: {
-      text,
+      content: text,
       style: completeStyle,
     },
   }

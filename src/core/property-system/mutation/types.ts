@@ -150,7 +150,7 @@ export interface TextRebuildOperation {
   kind: 'text-rebuild'
   timelineItemId: string
   frame: number
-  text?: string
+  content?: string
   stylePatch?: Record<string, unknown>
 }
 

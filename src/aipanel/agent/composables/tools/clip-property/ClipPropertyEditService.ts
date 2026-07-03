@@ -49,7 +49,7 @@ type PropertyPath =
   | 'visual.proportionalScale'
   | 'audio.volume'
   | 'audio.isMuted'
-  | 'text.text'
+  | 'text.content'
   | 'text.style.fontFamily'
   | 'text.style.fontSize'
   | 'text.style.color'
@@ -84,7 +84,7 @@ const PATH_DEFINITIONS: Record<PropertyPath, PathDefinition> = {
   'visual.proportionalScale': { groupId: 'visual', validate: validateBoolean('visual.proportionalScale') },
   'audio.volume': { groupId: 'audio', validate: validateRangeNumber('audio.volume', 0, 1) },
   'audio.isMuted': { groupId: 'audio', validate: validateBoolean('audio.isMuted') },
-  'text.text': { groupId: 'text', validate: validateString('text.text') },
+  'text.content': { groupId: 'text', validate: validateString('text.content') },
   'text.style.fontFamily': { groupId: 'text', validate: validateString('text.style.fontFamily') },
   'text.style.fontSize': { groupId: 'text', validate: validatePositiveNumber('text.style.fontSize') },
   'text.style.color': { groupId: 'text', validate: validateString('text.style.color') },
@@ -316,7 +316,7 @@ export class ClipPropertyEditService {
 
     const text = TimelineItemQueries.getBaseTextConfig(item)
     return {
-      text: String(text?.text ?? ''),
+      content: String(text?.content ?? ''),
       style: {
         fontFamily: nullIfUndefined(text?.style?.fontFamily),
         fontSize: nullIfUndefined(roundMaybeNumber(text?.style?.fontSize)),
@@ -355,7 +355,7 @@ export class ClipPropertyEditService {
 
     if (getSupportedGroups(item.mediaType).includes('text')) {
       const text = this.buildGroupProperties(item, 'text')
-      result['text.text'] = text.text
+      result['text.content'] = text.content
       result['text.style.fontFamily'] = text.style?.fontFamily
       result['text.style.fontSize'] = text.style?.fontSize
       result['text.style.color'] = text.style?.color
@@ -414,7 +414,7 @@ export class ClipPropertyEditService {
         case 'audio.volume':
           directEntries.push({ propertyId: 'audio.volume', value })
           break
-        case 'text.text':
+        case 'text.content':
           directEntries.push({ propertyId: 'text.content', value })
           break
         case 'text.style.fontFamily':
