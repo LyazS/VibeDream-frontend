@@ -1,17 +1,17 @@
 import type { ToolDefinition } from '../core/toolTypes'
-import { KeyframeChannelEditService } from './keyframe-channel/KeyframeChannelEditService'
+import { KeyframePropertyEditService } from './keyframe-property/KeyframePropertyEditService'
 
 function formatKeyframeValue(value: unknown): string {
   return JSON.stringify(value)
 }
 
-function formatKeyframe(entry: { frame: number; value: unknown }): string {
-  return `{ "frame": ${entry.frame}, "value": ${formatKeyframeValue(entry.value)} }`
+function formatKeyframe(entry: { time: string; value: unknown }): string {
+  return `{ "time": ${JSON.stringify(entry.time)}, "value": ${formatKeyframeValue(entry.value)} }`
 }
 
 function formatKeyframeSection(
   label: 'before' | 'after',
-  entries: Array<{ frame: number; value: unknown }>,
+  entries: Array<{ time: string; value: unknown }>,
   hasLeadingOmitted: boolean,
   hasTrailingOmitted: boolean,
 ): string {
@@ -38,12 +38,12 @@ function formatKeyframeSection(
 }
 
 export async function executePatchClipKeyframe(args: Record<string, any>) {
-  const service = new KeyframeChannelEditService()
+  const service = new KeyframePropertyEditService()
 
   try {
     const data = await service.patchClipKeyframe({
       clipId: args.clipId,
-      channelId: args.channelId,
+      propertyId: args.propertyId,
       match: args.match,
       apply: args.apply,
     })
@@ -66,7 +66,7 @@ export async function executePatchClipKeyframe(args: Record<string, any>) {
       output: `{
   "tool": "patch_clip_keyframe",
   "clipId": "${data.clipId}",
-  "channelId": "${data.channelId}",
+  "propertyId": "${data.propertyId}",
 ${beforeSection},
 ${afterSection}
 }`,

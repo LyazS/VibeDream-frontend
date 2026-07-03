@@ -8,7 +8,7 @@ export async function executeReadClipProperties(args: Record<string, any>) {
     const data = await service.readClipProperties({
       clipId: args.clipId,
       propertyGroups: args.propertyGroups,
-      frame: args.frame,
+      sampleTime: args.sampleTime,
     })
 
     return {

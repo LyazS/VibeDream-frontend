@@ -8,24 +8,24 @@ import {
 } from '@/core/animation/engine'
 import type { MediaType } from '@/core/mediaitem'
 import type { ChangeOperation, ChangePlan } from '@/core/property-system'
+import type { AnimatablePropertyId } from '@/core/property-system'
 import type { UnifiedTimelineItemData } from '@/core/timelineitem/model/timelineItem'
 import type {
   AnimateKeyframe,
   PropertyAnimationGroupId,
   PropertyAnimationValueByGroup,
 } from '@/core/timelineitem/model/render'
-
-type ToolChannelId =
-  | 'visual.position'
-  | 'visual.size'
-  | 'visual.rotation'
-  | 'visual.blendIntensity'
-  | 'audio.volume'
+import { framesToTimecode } from '@/core/utils/timeUtils'
+import { isValidAgentToolTimecode, parseAgentToolTimecode } from '../utils/timecode'
+import {
+  AGENT_TOOL_KEYFRAME_VALUE_SHAPES,
+  type AgentToolKeyframePropertyId,
+} from '../shared/agentToolPropertyIds'
 
 type ExternalKeyframeValue = number | Record<string, unknown>
 
 type KeyframePayload = {
-  frame: number
+  time: string
   value: ExternalKeyframeValue
   easing?: {
     type: 'linear'
@@ -34,12 +34,12 @@ type KeyframePayload = {
 
 type ReadArgs = {
   clipId: string
-  channelId: string
+  propertyId: string
 }
 
 type WriteArgs = {
   clipId: string
-  channelId: string
+  propertyId: string
   keyframes: KeyframePayload[]
   options?: {
     frameMode?: 'absolute'
@@ -51,7 +51,7 @@ type WriteArgs = {
 
 type DiffApplyArgs = {
   clipId: string
-  channelId: string
+  propertyId: string
   match: KeyframePayload[]
   apply: KeyframePayload[]
   options?: {
@@ -62,8 +62,8 @@ type DiffApplyArgs = {
 }
 
 type SerializedKeyframeRecord = {
-  frame: number
-  relativeFrame: number
+  time: string
+  relativeTime: string
   position: number
   value: ExternalKeyframeValue
   easing: {
@@ -79,28 +79,6 @@ type TimelineKeyframeRecord = {
   easing: {
     type: 'linear'
   }
-}
-
-const SUPPORTED_TOOL_CHANNEL_IDS: ToolChannelId[] = [
-  'visual.position',
-  'visual.size',
-  'visual.rotation',
-  'visual.blendIntensity',
-  'audio.volume',
-]
-
-const CHANNEL_VALUE_SHAPES: Record<
-  ToolChannelId,
-  {
-    kind: 'scalar' | 'object'
-    keys: readonly string[]
-  }
-> = {
-  'visual.position': { kind: 'object', keys: ['x', 'y'] },
-  'visual.size': { kind: 'object', keys: ['width', 'height'] },
-  'visual.rotation': { kind: 'scalar', keys: ['rotation'] },
-  'visual.blendIntensity': { kind: 'scalar', keys: ['blendIntensity'] },
-  'audio.volume': { kind: 'scalar', keys: ['volume'] },
 }
 
 function cloneJson<T>(value: T): T {
@@ -120,11 +98,14 @@ function toolError(code: string, message: string, details?: Record<string, any>)
   return error
 }
 
-function normalizeFrame(frame: unknown, field: string): number {
-  if (typeof frame !== 'number' || !Number.isInteger(frame)) {
-    throw toolError('invalid_arguments', `${field} 必须是整数帧`, { field, frame })
+function normalizeTimecode(time: unknown, field: string): number {
+  if (typeof time !== 'string' || !isValidAgentToolTimecode(time)) {
+    throw toolError('invalid_arguments', `${field} 必须是格式为 HH:MM:SS+FF 的时间码`, {
+      field,
+      time,
+    })
   }
-  return frame
+  return parseAgentToolTimecode(time)
 }
 
 function normalizeLinearEasing(
@@ -150,28 +131,28 @@ function valuesEqual(left: unknown, right: unknown): boolean {
   return JSON.stringify(left) === JSON.stringify(right)
 }
 
-function isToolChannelId(groupId: string): groupId is ToolChannelId {
-  return SUPPORTED_TOOL_CHANNEL_IDS.includes(groupId as ToolChannelId)
+function isToolPropertyId(propertyId: string): propertyId is AnimatablePropertyId {
+  return propertyId in AGENT_TOOL_KEYFRAME_VALUE_SHAPES
 }
 
 function clamp01(value: number): number {
   return Math.min(1, Math.max(0, value))
 }
 
-export class KeyframeChannelEditService {
+export class KeyframePropertyEditService {
   async readClipKeyframe(args: ReadArgs) {
     const item = this.requireClip(args.clipId)
-    const groupId = this.requireSupportedGroup(item, args.channelId)
+    const groupId = this.requireSupportedProperty(item, args.propertyId)
     const keyframes = this.readTimelineKeyframes(item, groupId)
 
     return {
       clipId: item.id,
       mediaType: item.mediaType,
-      channelId: groupId,
+      propertyId: groupId,
       timelineRange: {
-        startFrame: item.timeRange.timelineStartTime,
-        endFrame: item.timeRange.timelineEndTime,
-        durationFrames: item.timeRange.timelineEndTime - item.timeRange.timelineStartTime,
+        start: framesToTimecode(item.timeRange.timelineStartTime),
+        end: framesToTimecode(item.timeRange.timelineEndTime),
+        duration: framesToTimecode(item.timeRange.timelineEndTime - item.timeRange.timelineStartTime),
       },
       keyframes: keyframes.map((entry) => this.serializeTimelineKeyframe(groupId, entry)),
     }
@@ -179,13 +160,12 @@ export class KeyframeChannelEditService {
 
   async writeClipKeyframe(args: WriteArgs) {
     const item = this.requireClip(args.clipId)
-    const groupId = this.requireSupportedGroup(item, args.channelId)
+    const groupId = this.requireSupportedProperty(item, args.propertyId)
     this.assertFrameMode(args.options?.frameMode)
 
     const current = this.readTimelineKeyframes(item, groupId)
     const next = this.normalizeInputKeyframes(item, groupId, args.keyframes, 'keyframes')
-    const plan = this.buildPlan(item, groupId, current, next, `重写 ${args.channelId} 关键帧`)
-    const diff = this.summarizeDiff(current, next)
+    const plan = this.buildPlan(item, groupId, current, next, `重写 ${args.propertyId} 关键帧`)
 
     if (plan.operations.length > 0) {
       await useUnifiedStore().applyChangePlanWithHistory(plan)
@@ -193,23 +173,14 @@ export class KeyframeChannelEditService {
 
     return {
       clipId: item.id,
-      channelId: groupId,
+      propertyId: groupId,
       status: 'applied' as const,
-      diff: {
-        replaceMode: 'entire-channel' as const,
-        previousKeyframeCount: current.length,
-        finalKeyframeCount: next.length,
-        createdFrames: diff.createdFrames,
-        updatedFrames: diff.updatedFrames,
-        deletedFrames: diff.deletedFrames,
-        normalized: true,
-      },
     }
   }
 
   async patchClipKeyframe(args: DiffApplyArgs) {
     const item = this.requireClip(args.clipId)
-    const groupId = this.requireSupportedGroup(item, args.channelId)
+    const groupId = this.requireSupportedProperty(item, args.propertyId)
     this.assertFrameMode(args.options?.frameMode)
 
     const current = this.readTimelineKeyframes(item, groupId)
@@ -229,7 +200,10 @@ export class KeyframeChannelEditService {
     if (!this.keyframeListsEqual(matched, expected)) {
       throw toolError('match_failed', '关键帧 patch 匹配失败，请先重新读取当前通道。', {
         matched: false,
-        conflictRange: { startFrame, endFrame },
+        conflictRange: {
+          start: framesToTimecode(startFrame),
+          end: framesToTimecode(endFrame),
+        },
         expected,
         actual: matched,
       })
@@ -240,7 +214,7 @@ export class KeyframeChannelEditService {
       ...replacement,
     ])
 
-    const plan = this.buildPlan(item, groupId, current, next, `局部更新 ${args.channelId} 关键帧`)
+    const plan = this.buildPlan(item, groupId, current, next, `局部更新 ${args.propertyId} 关键帧`)
 
     if (plan.operations.length > 0) {
       await useUnifiedStore().applyChangePlanWithHistory(plan)
@@ -252,7 +226,7 @@ export class KeyframeChannelEditService {
 
     return {
       clipId: item.id,
-      channelId: groupId,
+      propertyId: groupId,
       beforeHasLeadingOmitted: current.some((entry) => entry.frame < startFrame),
       beforeHasTrailingOmitted: current.some((entry) => entry.frame > endFrame),
       before: matched.map((entry) => this.serializeFrameValue(groupId, entry)),
@@ -273,29 +247,29 @@ export class KeyframeChannelEditService {
     return item
   }
 
-  private requireSupportedGroup(
+  private requireSupportedProperty(
     item: UnifiedTimelineItemData<MediaType>,
-    groupId: string,
-  ): ToolChannelId {
-    if (!groupId || typeof groupId !== 'string') {
-      throw toolError('invalid_group', 'groupId 必须是非空字符串')
+    propertyId: string,
+  ): AnimatablePropertyId {
+    if (!propertyId || typeof propertyId !== 'string') {
+      throw toolError('invalid_group', 'propertyId 必须是非空字符串')
     }
-    if (!isToolChannelId(groupId)) {
-      throw toolError('invalid_group', `不支持的关键帧通道 ${groupId}`, {
-        groupId,
-        supportedGroups: SUPPORTED_TOOL_CHANNEL_IDS,
+    if (!isToolPropertyId(propertyId)) {
+      throw toolError('invalid_group', `不支持的关键帧属性 ${propertyId}`, {
+        propertyId,
+        supportedGroups: Object.keys(AGENT_TOOL_KEYFRAME_VALUE_SHAPES),
       })
     }
-    const definition = AnimationRegistry.get(groupId)
+    const definition = AnimationRegistry.get(propertyId)
     if (!definition.supports(item)) {
-      throw toolError('group_not_supported', `该 clip 不支持关键帧组 ${groupId}`, {
+      throw toolError('group_not_supported', `该 clip 不支持关键帧属性 ${propertyId}`, {
         clipId: item.id,
         mediaType: item.mediaType,
-        groupId,
+        propertyId,
         supportedGroups: getSupportedAnimationGroups(item),
       })
     }
-    return groupId
+    return propertyId
   }
 
   private assertFrameMode(frameMode: 'absolute' | undefined) {
@@ -329,7 +303,7 @@ export class KeyframeChannelEditService {
 
   private normalizeInputKeyframes(
     item: UnifiedTimelineItemData<MediaType>,
-    groupId: ToolChannelId,
+    groupId: AnimatablePropertyId,
     keyframes: KeyframePayload[],
     fieldName: 'keyframes' | 'match' | 'apply',
   ): TimelineKeyframeRecord[] {
@@ -338,13 +312,14 @@ export class KeyframeChannelEditService {
     }
     return this.normalizeTimelineKeyframes(
       keyframes.map((entry, index) => {
-        const frame = normalizeFrame(entry?.frame, `${fieldName}[${index}].frame`)
+        const frame = normalizeTimecode(entry?.time, `${fieldName}[${index}].time`)
         this.assertFrameInRange(item, frame)
+        const relativeFrame = getRelativeFrame(item, frame)
         const value = this.normalizeGroupValue(groupId, entry?.value, `${fieldName}[${index}].value`)
         return {
           frame,
-          relativeFrame: getRelativeFrame(item, frame),
-          position: getPosition(item, getRelativeFrame(item, frame)),
+          relativeFrame,
+          position: getPosition(item, relativeFrame),
           value,
           easing: normalizeLinearEasing(entry?.easing),
         }
@@ -353,11 +328,14 @@ export class KeyframeChannelEditService {
   }
 
   private normalizeGroupValue(
-    groupId: ToolChannelId,
+    groupId: AnimatablePropertyId,
     value: unknown,
     field: string,
   ): Record<string, unknown> {
-    const shape = CHANNEL_VALUE_SHAPES[groupId]
+    const shape =
+      AGENT_TOOL_KEYFRAME_VALUE_SHAPES[
+        groupId as AgentToolKeyframePropertyId
+      ]
 
     if (shape.kind === 'scalar') {
       if (typeof value !== 'number' || !Number.isFinite(value)) {
@@ -413,10 +391,10 @@ export class KeyframeChannelEditService {
 
   private assertFrameInRange(item: UnifiedTimelineItemData<MediaType>, frame: number) {
     if (frame < item.timeRange.timelineStartTime || frame > item.timeRange.timelineEndTime) {
-      throw toolError('frame_out_of_range', '关键帧帧号超出 clip 时间范围', {
-        frame,
-        startFrame: item.timeRange.timelineStartTime,
-        endFrame: item.timeRange.timelineEndTime,
+      throw toolError('time_out_of_range', '关键帧时间超出 clip 时间范围', {
+        time: framesToTimecode(frame),
+        start: framesToTimecode(item.timeRange.timelineStartTime),
+        end: framesToTimecode(item.timeRange.timelineEndTime),
       })
     }
   }
@@ -503,57 +481,40 @@ export class KeyframeChannelEditService {
   }
 
   private serializeTimelineKeyframe(
-    groupId: ToolChannelId,
+    groupId: AnimatablePropertyId,
     entry: TimelineKeyframeRecord,
   ): SerializedKeyframeRecord {
     return {
-      frame: entry.frame,
-      relativeFrame: entry.relativeFrame,
+      time: framesToTimecode(entry.frame),
+      relativeTime: framesToTimecode(entry.relativeFrame),
       position: entry.position,
       value: this.serializeValue(groupId, entry.value),
       easing: entry.easing,
     }
   }
 
-  private serializeFrameValue(groupId: ToolChannelId, entry: TimelineKeyframeRecord) {
+  private serializeFrameValue(
+    groupId: AnimatablePropertyId,
+    entry: TimelineKeyframeRecord,
+  ) {
     return {
-      frame: entry.frame,
+      time: framesToTimecode(entry.frame),
       value: this.serializeValue(groupId, entry.value),
     }
   }
 
-  private serializeValue(groupId: ToolChannelId, value: Record<string, unknown>): ExternalKeyframeValue {
-    const shape = CHANNEL_VALUE_SHAPES[groupId]
+  private serializeValue(
+    groupId: AnimatablePropertyId,
+    value: Record<string, unknown>,
+  ): ExternalKeyframeValue {
+    const shape =
+      AGENT_TOOL_KEYFRAME_VALUE_SHAPES[
+        groupId as AgentToolKeyframePropertyId
+      ]
     if (shape.kind === 'scalar') {
       return value[shape.keys[0]] as number
     }
     return cloneJson(value)
-  }
-
-  private summarizeDiff(current: TimelineKeyframeRecord[], next: TimelineKeyframeRecord[]) {
-    const currentMap = new Map(current.map((entry) => [entry.frame, entry]))
-    const nextMap = new Map(next.map((entry) => [entry.frame, entry]))
-    const createdFrames = next
-      .filter((entry) => !currentMap.has(entry.frame))
-      .map((entry) => entry.frame)
-    const updatedFrames = next
-      .filter((entry) => {
-        const previous = currentMap.get(entry.frame)
-        return (
-          previous &&
-          (!valuesEqual(previous.value, entry.value) || !valuesEqual(previous.easing, entry.easing))
-        )
-      })
-      .map((entry) => entry.frame)
-    const deletedFrames = current
-      .filter((entry) => !nextMap.has(entry.frame))
-      .map((entry) => entry.frame)
-
-    return {
-      createdFrames,
-      updatedFrames,
-      deletedFrames,
-    }
   }
 
   private describeValueType(value: unknown): string {

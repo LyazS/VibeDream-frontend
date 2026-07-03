@@ -3,10 +3,14 @@ import { TimelineItemQueries } from '@/core/timelineitem/queries'
 import type { UnifiedTimelineItemData } from '@/core/timelineitem/model/timelineItem'
 import { isBlendMode, type BlendMode } from '@/core/timelineitem/model/blendMode'
 import { framesToTimecode } from '@/core/utils/timeUtils'
-import { getCurrentGroupValue } from '@/core/animation/engine'
+import { getCurrentGroupValue, hasAnimation } from '@/core/animation/engine'
 import type { DirectPropertyBatchPlanEntry } from '@/core/property-system/mutation'
 import { propertyMutationCommitter } from '@/core/property-system/commit/PropertyMutationCommitter'
 import type { ChangePlan, ChangeOperation } from '@/core/property-system'
+import { isValidAgentToolTimecode, parseAgentToolTimecode } from '../utils/timecode'
+import {
+  AGENT_TOOL_STATIC_PROPERTY_TO_ANIMATION_GROUP_MAP,
+} from '../shared/agentToolPropertyIds'
 
 const NUMERIC_MATCH_EPSILON = 0.01
 const NUMERIC_DISPLAY_DECIMALS = 2
@@ -19,7 +23,7 @@ type KnownMediaType = Exclude<SupportedMediaType, 'unknown'>
 type ReadClipPropertiesArgs = {
   clipId: string
   propertyGroups: ReadGroupId[]
-  frame?: number
+  sampleTime?: string
 }
 
 type UpdateClipPropertiesArgs = {
@@ -28,11 +32,17 @@ type UpdateClipPropertiesArgs = {
   apply: Record<string, unknown>
 }
 
+type ReadSampleContext = {
+  requestedSampleFrame: number
+  requestedSampleTimecode: string
+  effectiveSampleFrame: number
+}
+
 type PropertyPath =
-  | 'visual.x'
-  | 'visual.y'
-  | 'visual.width'
-  | 'visual.height'
+  | 'visual.position.x'
+  | 'visual.position.y'
+  | 'visual.size.width'
+  | 'visual.size.height'
   | 'visual.rotation'
   | 'visual.blendIntensity'
   | 'visual.blendMode'
@@ -64,10 +74,10 @@ const GROUP_SUPPORT_MATRIX: Record<KnownMediaType, GroupId[]> = {
 }
 
 const PATH_DEFINITIONS: Record<PropertyPath, PathDefinition> = {
-  'visual.x': { groupId: 'visual', validate: validateFiniteNumber('visual.x') },
-  'visual.y': { groupId: 'visual', validate: validateFiniteNumber('visual.y') },
-  'visual.width': { groupId: 'visual', validate: validatePositiveNumber('visual.width') },
-  'visual.height': { groupId: 'visual', validate: validatePositiveNumber('visual.height') },
+  'visual.position.x': { groupId: 'visual', validate: validateFiniteNumber('visual.position.x') },
+  'visual.position.y': { groupId: 'visual', validate: validateFiniteNumber('visual.position.y') },
+  'visual.size.width': { groupId: 'visual', validate: validatePositiveNumber('visual.size.width') },
+  'visual.size.height': { groupId: 'visual', validate: validatePositiveNumber('visual.size.height') },
   'visual.rotation': { groupId: 'visual', validate: validateFiniteNumber('visual.rotation') },
   'visual.blendIntensity': { groupId: 'visual', validate: validateRangeNumber('visual.blendIntensity', 0, 1) },
   'visual.blendMode': { groupId: 'visual', validate: validateBlendMode },
@@ -91,18 +101,22 @@ export class ClipPropertyEditService {
   async readClipProperties(args: ReadClipPropertiesArgs) {
     const item = this.requireClip(args.clipId)
     const groupIds = normalizeReadGroupIds(args.propertyGroups)
-    const readFrame = normalizeReadFrame(args.frame)
+    const sampleContext = this.resolveReadSampleContext(item, args.sampleTime)
     const groups: Partial<Record<ReadGroupId, Record<string, unknown>>> = {}
 
     for (const groupId of groupIds) {
       this.ensureReadGroupSupported(item, groupId)
-      groups[groupId] = this.buildReadGroupProperties(item, groupId, readFrame)
+      groups[groupId] = this.buildReadGroupProperties(
+        item,
+        groupId,
+        sampleContext.effectiveSampleFrame,
+      )
     }
 
     return {
       clipId: item.id,
       mediaType: item.mediaType,
-      ...(readFrame !== undefined ? { frame: readFrame } : {}),
+      sampleTime: sampleContext.requestedSampleTimecode,
       groups,
     }
   }
@@ -122,6 +136,7 @@ export class ClipPropertyEditService {
         throw toolError('invalid_patch_path', `不支持的属性路径: ${key}`, { path: key })
       }
       this.ensureGroupSupported(item, definition.groupId)
+      this.ensureStaticPropertyWritable(item, key)
       const validated = definition.validate(normalizedPatchValues[key])
       if (!validated.ok) {
         throw toolError(validated.code, validated.message, validated.details)
@@ -146,6 +161,46 @@ export class ClipPropertyEditService {
       before,
       after,
     }
+  }
+
+  private resolveReadSampleContext(
+    item: UnifiedTimelineItemData,
+    sampleTime?: string,
+  ): ReadSampleContext {
+    const requestedSampleFrame =
+      sampleTime !== undefined ? normalizeSampleTime(sampleTime) : useUnifiedStore().currentFrame
+    const requestedSampleTimecode =
+      sampleTime !== undefined ? sampleTime : framesToTimecode(requestedSampleFrame)
+
+    return {
+      requestedSampleFrame,
+      requestedSampleTimecode,
+      effectiveSampleFrame: clampFrame(
+        requestedSampleFrame,
+        item.timeRange.timelineStartTime,
+        item.timeRange.timelineEndTime,
+      ),
+    }
+  }
+
+  private ensureStaticPropertyWritable(item: UnifiedTimelineItemData, key: PropertyPath) {
+    const animationGroupId =
+      AGENT_TOOL_STATIC_PROPERTY_TO_ANIMATION_GROUP_MAP[
+        key as keyof typeof AGENT_TOOL_STATIC_PROPERTY_TO_ANIMATION_GROUP_MAP
+      ]
+    if (!animationGroupId || !hasAnimation(item, animationGroupId)) {
+      return
+    }
+
+    throw toolError(
+      'animated_property_requires_keyframe_tool',
+      `属性 ${key} 当前由关键帧动画控制，不能通过 update_clip_properties 修改静态值。请改用 write_clip_keyframe 或 patch_clip_keyframe。`,
+      {
+        clipId: item.id,
+        path: key,
+        animationGroupId,
+      },
+    )
   }
 
   private requireClip(clipId: string) {
@@ -226,10 +281,14 @@ export class ClipPropertyEditService {
       const animatedBlendIntensity =
         frame !== undefined ? getCurrentGroupValue(item, frame, 'visual.blendIntensity') : null
       return {
-        x: roundNumeric(animatedPosition?.x ?? resolved.visual.x),
-        y: roundNumeric(animatedPosition?.y ?? resolved.visual.y),
-        width: roundNumeric(animatedSize?.width ?? resolved.visual.width),
-        height: roundNumeric(animatedSize?.height ?? resolved.visual.height),
+        position: {
+          x: roundNumeric(animatedPosition?.x ?? resolved.visual.x),
+          y: roundNumeric(animatedPosition?.y ?? resolved.visual.y),
+        },
+        size: {
+          width: roundNumeric(animatedSize?.width ?? resolved.visual.width),
+          height: roundNumeric(animatedSize?.height ?? resolved.visual.height),
+        },
         rotation: roundNumeric(animatedRotation?.rotation ?? resolved.visual.rotation),
         blendIntensity: roundNumeric(
           animatedBlendIntensity?.blendIntensity ?? resolved.visual.blendIntensity,
@@ -278,10 +337,10 @@ export class ClipPropertyEditService {
 
     if (getSupportedGroups(item.mediaType).includes('visual')) {
       const visual = this.buildGroupProperties(item, 'visual')
-      result['visual.x'] = visual.x
-      result['visual.y'] = visual.y
-      result['visual.width'] = visual.width
-      result['visual.height'] = visual.height
+      result['visual.position.x'] = visual.position?.x
+      result['visual.position.y'] = visual.position?.y
+      result['visual.size.width'] = visual.size?.width
+      result['visual.size.height'] = visual.size?.height
       result['visual.rotation'] = visual.rotation
       result['visual.blendIntensity'] = visual.blendIntensity
       result['visual.blendMode'] = visual.blendMode
@@ -329,22 +388,22 @@ export class ClipPropertyEditService {
     const visualConfigPatch: Record<string, unknown> = {}
     const audioConfigPatch: Record<string, unknown> = {}
     const nextPosition = {
-      x: (patch['visual.x'] ?? currentValues['visual.x']) as number,
-      y: (patch['visual.y'] ?? currentValues['visual.y']) as number,
+      x: (patch['visual.position.x'] ?? currentValues['visual.position.x']) as number,
+      y: (patch['visual.position.y'] ?? currentValues['visual.position.y']) as number,
     }
     const nextSize = {
-      width: (patch['visual.width'] ?? currentValues['visual.width']) as number,
-      height: (patch['visual.height'] ?? currentValues['visual.height']) as number,
+      width: (patch['visual.size.width'] ?? currentValues['visual.size.width']) as number,
+      height: (patch['visual.size.height'] ?? currentValues['visual.size.height']) as number,
     }
 
     for (const key of keys) {
       const value = patch[key]
       switch (key) {
-        case 'visual.x':
-        case 'visual.y':
+        case 'visual.position.x':
+        case 'visual.position.y':
           break
-        case 'visual.width':
-        case 'visual.height':
+        case 'visual.size.width':
+        case 'visual.size.height':
           break
         case 'visual.rotation':
           directEntries.push({ propertyId: 'visual.rotation', value })
@@ -400,11 +459,11 @@ export class ClipPropertyEditService {
       }
     }
 
-    if (keys.includes('visual.x') || keys.includes('visual.y')) {
+    if (keys.includes('visual.position.x') || keys.includes('visual.position.y')) {
       directEntries.push({ propertyId: 'visual.position', value: nextPosition })
     }
 
-    if (keys.includes('visual.width') || keys.includes('visual.height')) {
+    if (keys.includes('visual.size.width') || keys.includes('visual.size.height')) {
       directEntries.push({ propertyId: 'visual.size', value: nextSize })
     }
 
@@ -463,14 +522,15 @@ function normalizeReadGroupIds(groupIds: ReadGroupId[]) {
   return Array.from(new Set(groupIds))
 }
 
-function normalizeReadFrame(frame: unknown): number | undefined {
-  if (frame === undefined || frame === null) {
-    return undefined
+function normalizeSampleTime(sampleTime: unknown): number {
+  if (typeof sampleTime !== 'string' || !isValidAgentToolTimecode(sampleTime)) {
+    throw toolError('invalid_arguments', 'sampleTime 必须是格式为 HH:MM:SS+FF 的时间码')
   }
-  if (!Number.isInteger(frame) || Number(frame) < 0) {
-    throw toolError('invalid_arguments', 'frame 必须是大于等于 0 的整数')
-  }
-  return Number(frame)
+  return parseAgentToolTimecode(sampleTime)
+}
+
+function clampFrame(frame: number, min: number, max: number) {
+  return Math.min(Math.max(frame, min), max)
 }
 
 function mergeDirectEntries(entries: DirectPropertyBatchPlanEntry[]): DirectPropertyBatchPlanEntry[] {
@@ -500,8 +560,8 @@ function normalizePatchValues(
   const normalized = { ...patch } as Record<PropertyPath, unknown>
   const nextProportionalScale = (patch['visual.proportionalScale'] ??
     currentValues['visual.proportionalScale']) as boolean | undefined
-  const hasWidth = Object.prototype.hasOwnProperty.call(patch, 'visual.width')
-  const hasHeight = Object.prototype.hasOwnProperty.call(patch, 'visual.height')
+  const hasWidth = Object.prototype.hasOwnProperty.call(patch, 'visual.size.width')
+  const hasHeight = Object.prototype.hasOwnProperty.call(patch, 'visual.size.height')
 
   if (!nextProportionalScale) {
     return normalized
@@ -510,12 +570,12 @@ function normalizePatchValues(
   if (hasWidth && hasHeight) {
     throw toolError(
       'invalid_arguments',
-      '当 visual.proportionalScale 为 true 时，visual.width 和 visual.height 不能同时显式提供。请只修改其中一个，另一个会自动计算。',
+      '当 visual.proportionalScale 为 true 时，visual.size.width 和 visual.size.height 不能同时显式提供。请只修改其中一个，另一个会自动计算。',
     )
   }
 
-  const currentWidth = currentValues['visual.width']
-  const currentHeight = currentValues['visual.height']
+  const currentWidth = currentValues['visual.size.width']
+  const currentHeight = currentValues['visual.size.height']
   if (
     typeof currentWidth !== 'number' ||
     !Number.isFinite(currentWidth) ||
@@ -528,16 +588,16 @@ function normalizePatchValues(
   }
 
   if (hasWidth) {
-    const nextWidth = normalized['visual.width']
+    const nextWidth = normalized['visual.size.width']
     if (typeof nextWidth === 'number' && Number.isFinite(nextWidth) && nextWidth > 0) {
-      normalized['visual.height'] = roundNumeric((nextWidth * currentHeight) / currentWidth)
+      normalized['visual.size.height'] = roundNumeric((nextWidth * currentHeight) / currentWidth)
     }
   }
 
   if (hasHeight) {
-    const nextHeight = normalized['visual.height']
+    const nextHeight = normalized['visual.size.height']
     if (typeof nextHeight === 'number' && Number.isFinite(nextHeight) && nextHeight > 0) {
-      normalized['visual.width'] = roundNumeric((nextHeight * currentWidth) / currentHeight)
+      normalized['visual.size.width'] = roundNumeric((nextHeight * currentWidth) / currentHeight)
     }
   }
 
@@ -551,17 +611,17 @@ function getResultKeys(
   const resultKeys = new Set(keys)
 
   if (
-    Object.prototype.hasOwnProperty.call(normalizedPatchValues, 'visual.width') &&
-    !resultKeys.has('visual.width')
+    Object.prototype.hasOwnProperty.call(normalizedPatchValues, 'visual.size.width') &&
+    !resultKeys.has('visual.size.width')
   ) {
-    resultKeys.add('visual.width')
+    resultKeys.add('visual.size.width')
   }
 
   if (
-    Object.prototype.hasOwnProperty.call(normalizedPatchValues, 'visual.height') &&
-    !resultKeys.has('visual.height')
+    Object.prototype.hasOwnProperty.call(normalizedPatchValues, 'visual.size.height') &&
+    !resultKeys.has('visual.size.height')
   ) {
-    resultKeys.add('visual.height')
+    resultKeys.add('visual.size.height')
   }
 
   return Array.from(resultKeys)

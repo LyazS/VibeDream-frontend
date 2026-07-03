@@ -1,13 +1,13 @@
 import type { ToolDefinition } from '../core/toolTypes'
-import { KeyframeChannelEditService } from './keyframe-channel/KeyframeChannelEditService'
+import { KeyframePropertyEditService } from './keyframe-property/KeyframePropertyEditService'
 
 export async function executeWriteClipKeyframe(args: Record<string, any>) {
-  const service = new KeyframeChannelEditService()
+  const service = new KeyframePropertyEditService()
 
   try {
     const data = await service.writeClipKeyframe({
       clipId: args.clipId,
-      channelId: args.channelId,
+      propertyId: args.propertyId,
       keyframes: args.keyframes,
       options: args.options,
     })
@@ -16,8 +16,9 @@ export async function executeWriteClipKeyframe(args: Record<string, any>) {
       success: true,
       output: JSON.stringify({
         tool: 'write_clip_keyframe',
-        ...data,
-        summary: `已重写 ${data.clipId} 的 ${data.channelId} 通道。`,
+        clipId: data.clipId,
+        propertyId: data.propertyId,
+        status: data.status,
       }, null, 2),
     }
   } catch (error: any) {
