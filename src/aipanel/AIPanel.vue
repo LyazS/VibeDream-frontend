@@ -7,7 +7,6 @@
       <n-tab name="ai-generate" :tab="t('aiPanel.aiGenerate')"> </n-tab>
       <n-tab name="agent" :tab="t('aiPanel.agent')"> </n-tab>
       <n-tab name="frame-inspection" :tab="t('aiPanel.frameInspectionTab')"> </n-tab>
-      <n-tab v-if="unifiedStore.canShowCharacterEditor" name="character-editor" :tab="t('aiPanel.characterEditor')"> </n-tab>
       <template #suffix>
         <div class="header-buttons">
           <template v-if="unifiedStore.aiPanelActiveTab === 'agent'">
@@ -39,9 +38,6 @@
     <div v-show="unifiedStore.aiPanelActiveTab === 'frame-inspection'" style="flex: 1; display: flex; flex-direction: column; overflow: hidden;">
       <FrameInspectionPanel />
     </div>
-    <div v-show="unifiedStore.aiPanelActiveTab === 'character-editor'" style="flex: 1; display: flex; flex-direction: column; overflow: hidden;">
-      <CharacterEditor />
-    </div>
   </div>
 </template>
 
@@ -52,7 +48,6 @@ import { IconComponents } from '@/constants/iconComponents'
 import HoverButton from '@/components/base/HoverButton.vue'
 import AgentPanel from './agent/components/AgentPanel.vue'
 import GeneratePanel from './aigenerate/GeneratePanel.vue'
-import CharacterEditor from './character/CharacterEditor.vue'
 import FrameInspectionPanel from './inspection/FrameInspectionPanel.vue'
 import { useAppI18n } from '@/core/composables/useI18n'
 import { useUnifiedStore } from '@/core/unifiedStore'

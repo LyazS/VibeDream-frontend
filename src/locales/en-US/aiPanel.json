@@ -48,7 +48,6 @@
       "customPlaceholder": "Other, enter a custom response",
       "pausedNote": "Choose an option from the card above, or enter a custom response and submit it."
     },
-    "characterEditor": "Character Editor",
     "frameInspection": {
       "title": "Multi-frame Inspection",
       "description": "Enter one shared inspection instruction and several timeline timecodes. The panel will capture final composited frames and send them together for visual analysis.",

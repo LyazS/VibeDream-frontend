@@ -254,8 +254,7 @@
       "actions": "操作",
       "retry": "重试",
       "cancel": "取消",
-      "errorDetails": "错误详情",
-      "canCreateCharacter": "可创建真人角色"
+      "errorDetails": "错误详情"
     },
     "mediaTypes": {
       "video": "视频",

@@ -10,7 +10,6 @@ import type {
 import { useUnifiedStore } from '@/core/unifiedStore'
 import { generateMediaId } from '@/core/utils/idGenerator'
 import { BizyairFileUploader } from '@/core/utils/bizyairFileUploader'
-import { BltcyFileUploader } from '@/core/utils/bltcyFileUploader'
 import { RunningHubFileUploader } from '@/core/utils/runninghubFileUploader'
 import { RunningHubFileUploaderStd } from '@/core/utils/runninghubFileUploaderStd'
 import {
@@ -132,7 +131,6 @@ export function useAIGeneration() {
 
     const uploadHandlers = {
       bizyair: BizyairFileUploader,
-      bltcy: BltcyFileUploader,
       runninghub: RunningHubFileUploader,
       runninghubstd: RunningHubFileUploaderStd,
     }
@@ -451,18 +449,6 @@ export function useAIGeneration() {
 
           console.log('🔍 [useAIGeneration] 上传后的配置:')
           console.log(JSON.stringify(newConfig, null, 2))
-        } else if (uploadServer === 'bltcy') {
-          newConfig = await BltcyFileUploader.processConfigUploads(
-            flattenedConfig, // 传递扁平化后的配置
-            unifiedStore.getMediaItem,
-            unifiedStore.getTimelineItem,
-            (fileIndex, stage, progress) => {
-              console.log(`文件 ${fileIndex + 1}: ${stage} ${progress}%`)
-            },
-          )
-
-          console.log('🔍 [useAIGeneration] 上传后的配置:')
-          console.log(JSON.stringify(newConfig, null, 2))
         } else if (uploadServer === 'runninghub') {
           newConfig = await RunningHubFileUploader.processConfigUploads(
             flattenedConfig, // 传递扁平化后的配置
@@ -488,7 +474,6 @@ export function useAIGeneration() {
           console.log('🔍 [useAIGeneration] 上传后的配置:')
           console.log(JSON.stringify(newConfig, null, 2))
         } else {
-          // TODO: 实现其他上传处理器
           console.warn(`⚠️ [useAIGeneration] 不支持的上传服务器: ${uploadServer}`)
         }
       }

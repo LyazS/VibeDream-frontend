@@ -79,41 +79,7 @@ const characterTags = computed<TagItem[]>(() => {
     return []
   }
 
-  const tags: TagItem[] = []
-  const colorPalette = [
-    '#3b82f6', '#ef4444', '#10b981', '#f59e0b',
-    '#8b5cf6', '#ec4899', '#06b6d4', '#84cc16',
-  ]
-
-  for (const childDirId of currentDir.childDirIds) {
-    const childDir = unifiedStore.getDirectory(childDirId)
-
-    if (childDir && unifiedStore.isCharacterDirectory(childDir)) {
-      const characterDir = unifiedStore.getCharacterDirectory(childDirId)
-
-      if (characterDir) {
-        // 获取 sora2_username
-        let sora2Username: string | undefined
-        if (characterDir.character.profileMediaItemId) {
-          const mediaItem = unifiedStore.getMediaItem(characterDir.character.profileMediaItemId)
-          if (mediaItem && mediaItem.source.type === 'ai-generation' && mediaItem.source.resultData) {
-            sora2Username = mediaItem.source.resultData.sora2_username
-          }
-        }
-
-        // 只有当 sora2Username 存在时才添加到 tags
-        if (sora2Username) {
-          tags.push({
-            label: characterDir.name,
-            color: colorPalette[tags.length % colorPalette.length],
-            value: sora2Username
-          })
-        }
-      }
-    }
-  }
-
-  return tags
+  return []
 })
 
 // 字段样式类

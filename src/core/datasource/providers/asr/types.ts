@@ -79,8 +79,6 @@ export interface ASRRequestConfig {
  */
 export interface ASRTaskResultData {
   url: string
-  bltcy_task_id?: string
-  sora2_username?: string
   asr_result?: ASRQueryResponse // ASR 结果存储在 asr_result 字段中
 }
 

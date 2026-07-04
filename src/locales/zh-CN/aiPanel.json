@@ -48,7 +48,6 @@
       "customPlaceholder": "其他，请输入你的自定义回复",
       "pausedNote": "请在上方问题卡片中选择一个选项，或直接填写自定义回复后提交。"
     },
-    "characterEditor": "角色编辑器",
     "frameInspection": {
       "title": "多帧画面巡检",
       "description": "输入一条共享检查指令和多个时间点，系统会抽取最终合成画面并联合发送给视觉模型分析。",

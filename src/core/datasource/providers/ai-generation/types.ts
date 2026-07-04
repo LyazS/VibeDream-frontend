@@ -24,9 +24,7 @@ export enum AITaskType {
   TEXT_TO_IMAGE = 'text_to_image',
   REMOTE_IMAGE = 'remote_image',
   BIZYAIR_GENERATE_MEDIA = 'bizyair_generate_media',
-  BLTCY_SORA2 = 'bltcy_sora2', // BLTCY Sora2 视频生成（支持 T2V 和 I2V）
   RUNNINGHUB_GENERATE_MEDIA = 'runninghub_generate_media', // RunningHub 媒体生成
-  BLTCY_CHARACTER = 'bltcy_character', // BLTCY 角色创建
 }
 
 /**
@@ -81,10 +79,6 @@ export interface MediaGenerationRequest {
 export interface TaskResultData {
   /** 生成的媒体文件 URL */
   url: string
-  /** BLTCY 任务ID（可选） */
-  bltcy_task_id?: string
-  /** Sora2 角色用户名（可选） */
-  sora2_username?: string
 }
 
 /**
@@ -350,7 +344,7 @@ export type UIConfig = NumberInputConfig | TextareaInputConfig | SelectInputConf
 /**
  * 上传服务器类型
  */
-export type UploadServerType = 'bizyair' | 'bltcy' | 'runninghub' | 'runninghubstd'
+export type UploadServerType = 'bizyair' | 'runninghub' | 'runninghubstd'
 
 /**
  * AI 生成配置结构

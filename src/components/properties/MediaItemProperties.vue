@@ -127,15 +127,6 @@
       </div>
     </div>
 
-    <!-- AI 任务信息区 -->
-    <div v-if="canCreateCharacter" class="properties-section">
-      <div class="info-row">
-        <span class="info-value" style="color: var(--color-success)">{{
-          t('properties.mediaItem.canCreateCharacter')
-        }}</span>
-      </div>
-    </div>
-
     <!-- 操作区 -->
     <div v-if="showActions" class="properties-section actions-section">
       <h3 class="section-title">{{ t('properties.mediaItem.actions') }}</h3>
@@ -362,16 +353,6 @@ const canStartIndexing = computed(() => {
     (props.mediaItem.mediaType === 'video' || props.mediaItem.mediaType === 'image')
     && props.mediaItem.mediaStatus === 'ready'
   )
-})
-
-// 是否可创建真人角色（AI 生成视频且存在 bltcy_task_id）
-const canCreateCharacter = computed(() => {
-  const source = props.mediaItem.source
-  const isVideo = props.mediaItem.mediaType === 'video'
-  if (source.type === 'ai-generation' && source.resultData && isVideo) {
-    return !!source.resultData.bltcy_task_id
-  }
-  return false
 })
 
 // 格式化时长显示

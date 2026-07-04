@@ -900,21 +900,10 @@ export const useUnifiedStore = defineStore('unified', () => {
     effectTemplateCategorySelection: unifiedUIModule.effectTemplateCategorySelection,
     activePropertyTab: unifiedUIModule.activePropertyTab,
 
-    // 角色编辑器状态
-    characterEditorState: unifiedUIModule.characterEditorState,
-
-    // 角色编辑器计算属性
-    curCharacterDir: unifiedUIModule.curCharacterDir,
-    canShowCharacterEditor: unifiedUIModule.canShowCharacterEditor,
-
     // AI 面板状态管理方法
     setChatPanelVisible: unifiedUIModule.setChatPanelVisible,
     setLibrarySection: unifiedUIModule.setLibrarySection,
     setEffectTemplateCategory: unifiedUIModule.setEffectTemplateCategory,
     setActivePropertyTab: unifiedUIModule.setActivePropertyTab,
-
-    // 角色编辑器方法
-    openCharacterEditor: unifiedUIModule.openCharacterEditor,
-    closeCharacterEditor: unifiedUIModule.closeCharacterEditor,
   }
 })

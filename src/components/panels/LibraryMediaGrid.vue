@@ -440,24 +440,6 @@ const currentMenuItems = computed((): MenuItem[] => {
               showContextMenu.value = false
             },
           },
-          // 🆕 新增：创建角色
-          {
-            label: t('media.character.character'),
-            icon: IconComponents.USER,
-            onClick: () => {
-              // 检查是否选择了目录
-              if (!currentDir.value) {
-                unifiedStore.messageError(t('media.selectDirectoryFirst'))
-                return
-              }
-
-              // 打开角色编辑器（创建模式）
-              unifiedStore.openCharacterEditor('create')
-              // 打开 AI 面板
-              unifiedStore.setChatPanelVisible(true)
-              showContextMenu.value = false
-            },
-          },
           {
             label: t('media.importFiles'),
             icon: IconComponents.UPLOAD,
@@ -776,14 +758,7 @@ function isItemSelected(item: DisplayItem): boolean {
 // 双击项目处理
 function onItemDoubleClick(item: DisplayItem): void {
   if (item.type === 'directory') {
-    const dir = unifiedStore.getDirectory(item.id)
-
-    // 判断是否为角色文件夹
-    if (dir && unifiedStore.isCharacterDirectory(dir)) {
-      unifiedStore.openCharacterEditor('edit', item.id) // 打开角色编辑器
-    } else {
-      unifiedStore.navigateToDir(item.id) // 普通文件夹导航
-    }
+    unifiedStore.navigateToDir(item.id)
   } else {
     const asset = getMediaItem(item.id)
     if (!asset) {
