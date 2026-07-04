@@ -48,6 +48,10 @@
       "customPlaceholder": "其他，请输入你的自定义回复",
       "pausedNote": "请在上方问题卡片中选择一个选项，或直接填写自定义回复后提交。"
     },
+    "agentStatus": {
+      "thinking": "思考中",
+      "completed": "已完成"
+    },
     "frameInspection": {
       "title": "多帧画面巡检",
       "description": "输入一条共享检查指令和多个时间点，系统会抽取最终合成画面并联合发送给视觉模型分析。",
@@ -143,7 +147,6 @@
       "generatingAvatar": "正在生成角色头像...",
       "characterCreated": "角色创建完成"
     },
-    "taskComplete": "任务完成",
     "search": {
       "placeholder": "输入关键词搜索已索引素材...",
       "button": "搜索",

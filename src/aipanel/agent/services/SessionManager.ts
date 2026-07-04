@@ -40,7 +40,6 @@ export interface SessionInfo {
 interface SessionData {
   sessionId: string
   messages: AgentMessage[]
-  completedMessageIds: string[]
   interactions: SessionInteractionRecord[]
   createdAt: string
   updatedAt: string
@@ -90,7 +89,6 @@ function isAbortError(error: unknown): boolean {
 export class SessionManager {
   public currentSessionId = ref<string | null>(null)
   public messages = ref<AgentMessage[]>([])
-  public completedMessageIds = ref<string[]>([])
   public isLoading = ref(false)
   public sessionError = ref<string | null>(null)
   public isSending = ref(false)
@@ -118,7 +116,6 @@ export class SessionManager {
 
     this.currentSessionId.value = null
     this.messages.value = []
-    this.completedMessageIds.value = []
     this.interactions.value = []
     this.isSending.value = false
     this.currentAbortController = null
@@ -135,10 +132,6 @@ export class SessionManager {
     if (this.currentSessionId.value === sessionId) {
       this.clearCurrentSession()
     }
-  }
-
-  isTaskCompleteMessage(messageId: string): boolean {
-    return this.completedMessageIds.value.includes(messageId)
   }
 
   async abortCurrentMessage(): Promise<void> {
@@ -233,11 +226,9 @@ export class SessionManager {
     const localSession = await this.getSessionFromDB(sessionId)
     if (localSession) {
       this.messages.value = localSession.messages
-      this.completedMessageIds.value = localSession.completedMessageIds || []
       this.interactions.value = localSession.interactions || []
     } else {
       this.messages.value = []
-      this.completedMessageIds.value = []
       this.interactions.value = []
     }
 
@@ -334,9 +325,6 @@ export class SessionManager {
         await this.handlePausedRun(sessionId, event.run_id, event.interrupt)
         break
       case 'run.completed':
-        if (event.message_id) {
-          this.markMessageCompleted(event.message_id)
-        }
         this.activeRunId = null
         this.clearPendingInterrupt()
         break
@@ -393,12 +381,6 @@ export class SessionManager {
       return
     }
     this.messages.value.push(message)
-  }
-
-  private markMessageCompleted(messageId: string): void {
-    if (!this.completedMessageIds.value.includes(messageId)) {
-      this.completedMessageIds.value = [...this.completedMessageIds.value, messageId]
-    }
   }
 
   private async handlePausedRun(
@@ -628,7 +610,6 @@ export class SessionManager {
     const sessionData: SessionData = {
       sessionId: this.currentSessionId.value,
       messages: plainMessages,
-      completedMessageIds: [...this.completedMessageIds.value],
       interactions: JSON.parse(JSON.stringify(this.interactions.value)) as SessionInteractionRecord[],
       createdAt: existing?.createdAt || now,
       updatedAt: now,

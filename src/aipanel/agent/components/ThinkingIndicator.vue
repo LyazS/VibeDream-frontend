@@ -1,67 +1,80 @@
 <template>
-  <div class="thinking-indicator">
-    <span class="dot dot-1"></span>
-    <span class="dot dot-2"></span>
-    <span class="dot dot-3"></span>
-    <span class="dot dot-4"></span>
-    <span class="dot dot-5"></span>
+  <div class="thinking-indicator" role="status" aria-live="polite">
+    <template v-if="status === 'thinking'">
+      <span class="thinking-indicator__label">{{ t('aiPanel.agentStatus.thinking') }}</span>
+      <span class="thinking-indicator__ellipsis" aria-hidden="true">.....</span>
+    </template>
+    <span v-else class="thinking-indicator__label">{{ t('aiPanel.agentStatus.completed') }}</span>
   </div>
 </template>
 
 <script setup lang="ts">
-// AI 正在思考指示器组件
-// 显示5个白色点轮流闪动的动画
+import { useAppI18n } from '@/core/composables/useI18n'
+
+defineProps<{
+  status: 'thinking' | 'completed'
+}>()
+
+const { t } = useAppI18n()
 </script>
 
 <style scoped>
 .thinking-indicator {
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: 2px;
   padding: 12px 16px;
   background: var(--color-bg-secondary);
   border-radius: 12px;
   width: fit-content;
+  color: var(--color-text-secondary);
+  font-size: 14px;
+  line-height: 1.4;
+  -webkit-font-smoothing: antialiased;
+  text-wrap: pretty;
 }
 
-.thinking-indicator .dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background-color: #ffffff;
-  animation: dot-bounce 1.4s infinite ease-in-out both;
+.thinking-indicator__label,
+.thinking-indicator__ellipsis {
+  font-variant-numeric: tabular-nums;
 }
 
-.thinking-indicator .dot-1 {
-  animation-delay: -0.32s;
+.thinking-indicator__ellipsis {
+  display: inline-block;
+  width: 5ch;
+  overflow: hidden;
+  white-space: nowrap;
+  animation: thinking-ellipsis 1.6s step-end infinite;
 }
 
-.thinking-indicator .dot-2 {
-  animation-delay: -0.16s;
-}
-
-.thinking-indicator .dot-3 {
-  animation-delay: 0s;
-}
-
-.thinking-indicator .dot-4 {
-  animation-delay: 0.16s;
-}
-
-.thinking-indicator .dot-5 {
-  animation-delay: 0.32s;
-}
-
-@keyframes dot-bounce {
+@keyframes thinking-ellipsis {
   0%,
-  80%,
-  100% {
-    transform: scale(0);
-    opacity: 0.5;
+  11.11% {
+    width: 1ch;
   }
-  40% {
-    transform: scale(1);
-    opacity: 1;
+  22.22% {
+    width: 2ch;
+  }
+  33.33% {
+    width: 3ch;
+  }
+  44.44% {
+    width: 4ch;
+  }
+  55.56% {
+    width: 5ch;
+  }
+  66.67% {
+    width: 4ch;
+  }
+  77.78% {
+    width: 3ch;
+  }
+  88.89% {
+    width: 2ch;
+  }
+  100% {
+    width: 1ch;
   }
 }
 </style>

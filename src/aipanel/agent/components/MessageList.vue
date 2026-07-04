@@ -1,21 +1,17 @@
 <template>
   <div class="chat-messages-container" ref="messagesContainer">
-    <AgentMessage :messages="[welcomeMessage]" :completed-message-ids="completedMessageIds" />
+    <AgentMessage :messages="[welcomeMessage]" />
     <template v-for="block in renderBlocks" :key="block.id">
       <UserMessage v-if="block.type === 'user_message'" :message="block.message" />
-      <AgentMessage
-        v-else-if="block.type === 'assistant_group'"
-        :messages="block.messages"
-        :completed-message-ids="completedMessageIds"
-      />
+      <AgentMessage v-else-if="block.type === 'assistant_group'" :messages="block.messages" />
       <InteractionCard v-else-if="block.type === 'interaction'" :record="block.record" />
     </template>
-    <ThinkingIndicator v-if="isSending" />
+    <ThinkingIndicator v-if="indicatorStatus" :status="indicatorStatus" />
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, nextTick, watch, provide, computed } from 'vue'
+import { ref, nextTick, watch, provide, computed, onBeforeUnmount } from 'vue'
 import MarkdownIt from 'markdown-it'
 import UserMessage from './UserMessage.vue'
 import AgentMessage from './AgentMessage.vue'
@@ -37,6 +33,8 @@ import { useAppI18n } from '@/core/composables/useI18n'
 
 // AI 发送状态
 const isSending = computed(() => SESSION_MANAGER.isSending.value)
+const indicatorStatus = ref<'thinking' | 'completed' | null>(null)
+let completedIndicatorTimer: ReturnType<typeof setTimeout> | null = null
 
 // 创建共享的markdown-it实例
 const md = new MarkdownIt({
@@ -53,7 +51,6 @@ provide('renderMarkdown', renderMarkdown)
 
 const messages = computed(() => SESSION_MANAGER.messages.value.filter(isPublicMessage))
 const interactions = computed(() => SESSION_MANAGER.interactions.value)
-const completedMessageIds = computed(() => SESSION_MANAGER.completedMessageIds.value)
 
 type TimelineItem =
   | { type: 'message'; id: string; createdAt: string; message: AgentMessageModel }
@@ -156,6 +153,13 @@ const scrollToBottom = async () => {
   }
 }
 
+const clearCompletedIndicatorTimer = () => {
+  if (completedIndicatorTimer !== null) {
+    clearTimeout(completedIndicatorTimer)
+    completedIndicatorTimer = null
+  }
+}
+
 watch(
   renderBlocks,
   () => {
@@ -163,6 +167,33 @@ watch(
   },
   { deep: true },
 )
+
+watch(
+  isSending,
+  (sending, wasSending) => {
+    clearCompletedIndicatorTimer()
+
+    if (sending) {
+      indicatorStatus.value = 'thinking'
+      scrollToBottom()
+      return
+    }
+
+    if (wasSending) {
+      indicatorStatus.value = 'completed'
+      scrollToBottom()
+      completedIndicatorTimer = setTimeout(() => {
+        indicatorStatus.value = null
+        completedIndicatorTimer = null
+      }, 1200)
+    }
+  },
+  { immediate: true },
+)
+
+onBeforeUnmount(() => {
+  clearCompletedIndicatorTimer()
+})
 
 scrollToBottom()
 </script>
