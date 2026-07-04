@@ -15,7 +15,7 @@
       "read_clip_keyframe": "读取关键帧",
       "read_clip_properties": "读取片段属性",
       "read_media": "查看素材",
-      "read_track": "读取轨道",
+      "read_tracks": "读取多个轨道",
       "remove_clip": "删除片段",
       "remove_track": "删除轨道",
       "search_media": "检索素材",

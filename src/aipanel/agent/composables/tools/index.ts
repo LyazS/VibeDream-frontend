@@ -18,7 +18,7 @@ import { readClipPropertiesTool } from './readClipProperties'
 import { readClipKeyframeTool } from './readClipKeyframe'
 import { readMediaTool } from './readMedia'
 import { readProjectInfoTool } from './readProjectInfo'
-import { readTrackTool } from './readTrack'
+import { readTracksTool } from './readTracks'
 import { removeClipTool } from './removeClip'
 import { removeTrackTool } from './removeTrack'
 import { searchMediaTool } from './searchMedia'
@@ -88,7 +88,7 @@ registerTool(updateTrackPropertiesTool)
 registerTool(readClipPropertiesTool)
 registerTool(readClipKeyframeTool)
 registerTool(readMediaTool)
-registerTool(readTrackTool)
+registerTool(readTracksTool)
 registerTool(removeClipTool)
 registerTool(removeTrackTool)
 registerTool(searchMediaTool)
@@ -187,7 +187,7 @@ export {
   readClipPropertiesTool,
   readClipKeyframeTool,
   readMediaTool,
-  readTrackTool,
+  readTracksTool,
   removeClipTool,
   removeTrackTool,
   searchMediaTool,
