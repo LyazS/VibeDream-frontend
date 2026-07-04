@@ -17,6 +17,12 @@ import {
 import { propertySchemaResolver } from '@/core/property-system/schema/resolver'
 import type { AnimatablePropertySchema } from '@/core/property-system/schema/animatablePropertySchemas'
 import type { UnifiedTimelineItemData } from '@/core/timelineitem/model/timelineItem'
+import { TimelineItemQueries } from '@/core/timelineitem/queries'
+import {
+  getItemLocalSize,
+  normalizeMaskConfig,
+  type MaskType,
+} from '@/core/timelineitem/features/mask'
 import type {
   AnimateKeyframe,
   PropertyAnimationGroupId,
@@ -132,6 +138,21 @@ function normalizeLinearEasing(
 
 function valuesEqual(left: unknown, right: unknown): boolean {
   return JSON.stringify(left) === JSON.stringify(right)
+}
+
+function getRequiredMaskTypeForKeyframeProperty(
+  propertyId: AgentToolKeyframePropertyId,
+): MaskType | null {
+  if (propertyId === 'mask.rectangle.size' || propertyId === 'mask.rectangle.cornerRadius') {
+    return 'rectangle'
+  }
+  if (propertyId === 'mask.ellipse.size') {
+    return 'ellipse'
+  }
+  if (propertyId === 'mask.mirror.length') {
+    return 'mirror'
+  }
+  return null
 }
 
 export class KeyframePropertyEditService {
@@ -264,7 +285,56 @@ export class KeyframePropertyEditService {
         supportedGroups: getSupportedAnimationGroups(item),
       })
     }
+    this.ensureMaskPropertyEnabled(item, propertyId)
     return propertyId
+  }
+
+  private ensureMaskPropertyEnabled(
+    item: UnifiedTimelineItemData<MediaType>,
+    propertyId: AgentToolKeyframePropertyId,
+  ) {
+    if (!propertyId.startsWith('mask.')) {
+      return
+    }
+
+    const mask = this.getNormalizedMask(item)
+    if (!mask.enabled) {
+      throw toolError('mask_disabled', '蒙版未启用，不能读取或编辑蒙版关键帧。', {
+        clipId: item.id,
+        propertyId,
+      })
+    }
+
+    const requiredMaskType = getRequiredMaskTypeForKeyframeProperty(propertyId)
+    if (!requiredMaskType || mask.type === requiredMaskType) {
+      return
+    }
+
+    throw toolError(
+      'mask_type_mismatch',
+      `关键帧属性 ${propertyId} 仅适用于 ${requiredMaskType} 类型的蒙版。`,
+      {
+        clipId: item.id,
+        propertyId,
+        requiredMaskType,
+        actualMaskType: mask.type,
+      },
+    )
+  }
+
+  private getNormalizedMask(item: UnifiedTimelineItemData<MediaType>) {
+    const visualConfig = TimelineItemQueries.getResolvedRenderConfig(item)
+    if (!('visual' in visualConfig)) {
+      throw toolError('group_not_supported', '该 clip 不支持蒙版关键帧属性。', {
+        clipId: item.id,
+        mediaType: item.mediaType,
+      })
+    }
+
+    return normalizeMaskConfig(TimelineItemQueries.getResolvedMask(item), getItemLocalSize(
+      visualConfig.visual.width ?? 0,
+      visualConfig.visual.height ?? 0,
+    ))
   }
 
   private assertFrameMode(frameMode: 'absolute' | undefined) {

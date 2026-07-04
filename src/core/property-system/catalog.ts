@@ -50,14 +50,14 @@ export const DIRECT_ONLY_PROPERTY_IDS = [
 export type DirectOnlyPropertyId = (typeof DIRECT_ONLY_PROPERTY_IDS)[number]
 export type DirectPropertyId = AnimatablePropertyId | DirectOnlyPropertyId
 
-export type ClipPropertyGroupId = 'visual' | 'audio' | 'text'
+export type ClipPropertyGroupId = 'visual' | 'audio' | 'text' | 'mask'
 export type StaticPropertyId = StaticAnimatablePropertyId | ConfigPropertyId | DirectOnlyPropertyId
 
 export const CLIP_PROPERTY_GROUP_SUPPORT = {
-  video: ['visual', 'audio'],
-  image: ['visual'],
+  video: ['visual', 'audio', 'mask'],
+  image: ['visual', 'mask'],
   audio: ['audio'],
-  text: ['visual', 'text'],
+  text: ['visual', 'text', 'mask'],
 } as const satisfies Record<MediaType, readonly ClipPropertyGroupId[]>
 
 export function getSupportedClipPropertyGroups(mediaType: MediaType): readonly ClipPropertyGroupId[] {
@@ -128,6 +128,87 @@ export const CLIP_PROPERTY_PATH_DEFINITIONS = [
     path: 'audio.isMuted',
     propertyId: 'audio.isMuted',
     groupId: 'audio',
+  },
+  {
+    path: 'mask.enabled',
+    propertyId: 'mask.enabled',
+    groupId: 'mask',
+  },
+  {
+    path: 'mask.type',
+    propertyId: 'mask.type',
+    groupId: 'mask',
+  },
+  {
+    path: 'mask.inverted',
+    propertyId: 'mask.inverted',
+    groupId: 'mask',
+  },
+  {
+    path: 'mask.center.x',
+    propertyId: 'mask.center',
+    groupId: 'mask',
+    animationGroupId: 'mask.center',
+  },
+  {
+    path: 'mask.center.y',
+    propertyId: 'mask.center',
+    groupId: 'mask',
+    animationGroupId: 'mask.center',
+  },
+  {
+    path: 'mask.rotation',
+    propertyId: 'mask.rotation',
+    groupId: 'mask',
+    animationGroupId: 'mask.rotation',
+  },
+  {
+    path: 'mask.feather',
+    propertyId: 'mask.feather',
+    groupId: 'mask',
+    animationGroupId: 'mask.feather',
+  },
+  {
+    path: 'mask.intensity',
+    propertyId: 'mask.intensity',
+    groupId: 'mask',
+    animationGroupId: 'mask.intensity',
+  },
+  {
+    path: 'mask.rectangle.size.width',
+    propertyId: 'mask.rectangle.size',
+    groupId: 'mask',
+    animationGroupId: 'mask.rectangle.size',
+  },
+  {
+    path: 'mask.rectangle.size.height',
+    propertyId: 'mask.rectangle.size',
+    groupId: 'mask',
+    animationGroupId: 'mask.rectangle.size',
+  },
+  {
+    path: 'mask.rectangle.cornerRadius',
+    propertyId: 'mask.rectangle.cornerRadius',
+    groupId: 'mask',
+    animationGroupId: 'mask.rectangle.cornerRadius',
+  },
+  {
+    path: 'mask.ellipse.size.width',
+    propertyId: 'mask.ellipse.size',
+    groupId: 'mask',
+    animationGroupId: 'mask.ellipse.size',
+  },
+  {
+    path: 'mask.ellipse.size.height',
+    propertyId: 'mask.ellipse.size',
+    groupId: 'mask',
+    animationGroupId: 'mask.ellipse.size',
+  },
+  {
+    path: 'mask.mirror.length',
+    propertyId: 'mask.mirror.length',
+    groupId: 'mask',
+    animationGroupId: 'mask.mirror.length',
   },
   {
     path: 'text.content',
@@ -223,6 +304,14 @@ export const AGENT_TOOL_KEYFRAME_PROPERTY_DEFINITIONS = [
   { propertyId: 'visual.rotation', kind: 'scalar', keys: ['rotation'] },
   { propertyId: 'visual.blendIntensity', kind: 'scalar', keys: ['blendIntensity'] },
   { propertyId: 'audio.volume', kind: 'scalar', keys: ['volume'] },
+  { propertyId: 'mask.center', kind: 'object', keys: ['centerX', 'centerY'] },
+  { propertyId: 'mask.rotation', kind: 'scalar', keys: ['rotation'] },
+  { propertyId: 'mask.feather', kind: 'scalar', keys: ['outerRange'] },
+  { propertyId: 'mask.intensity', kind: 'scalar', keys: ['decayRate'] },
+  { propertyId: 'mask.rectangle.size', kind: 'object', keys: ['width', 'height'] },
+  { propertyId: 'mask.rectangle.cornerRadius', kind: 'scalar', keys: ['cornerRadius'] },
+  { propertyId: 'mask.ellipse.size', kind: 'object', keys: ['ellipseWidth', 'ellipseHeight'] },
+  { propertyId: 'mask.mirror.length', kind: 'scalar', keys: ['length'] },
 ] as const satisfies readonly AgentToolKeyframePropertyDefinition[]
 
 export type AgentToolKeyframePropertyId =

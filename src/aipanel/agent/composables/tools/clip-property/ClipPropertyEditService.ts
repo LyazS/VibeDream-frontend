@@ -2,6 +2,17 @@ import { useUnifiedStore } from '@/core/unifiedStore'
 import { TimelineItemQueries } from '@/core/timelineitem/queries'
 import type { UnifiedTimelineItemData } from '@/core/timelineitem/model/timelineItem'
 import { isBlendMode, type BlendMode } from '@/core/timelineitem/model/blendMode'
+import {
+  applyMaskGroupValue,
+  getItemLocalSize,
+  getMaskEllipseSizeValue,
+  getMaskMirrorValue,
+  getMaskRectangleCornerRadiusValue,
+  getMaskRectangleSizeValue,
+  normalizeMaskConfig,
+  replaceMaskType,
+  type MaskType,
+} from '@/core/timelineitem/features/mask'
 import { framesToTimecode } from '@/core/utils/timeUtils'
 import { getCurrentGroupValue, hasAnimation } from '@/core/animation/engine'
 import type { DirectPropertyBatchPlanEntry } from '@/core/property-system/mutation'
@@ -45,6 +56,19 @@ type PathDefinition = {
   validate: (value: unknown) => { ok: true; value: unknown } | { ok: false; code: string; message: string; details?: Record<string, any> }
 }
 
+const MASK_ANIMATION_GROUP_IDS = [
+  'mask.center',
+  'mask.rotation',
+  'mask.feather',
+  'mask.intensity',
+  'mask.rectangle.size',
+  'mask.rectangle.cornerRadius',
+  'mask.ellipse.size',
+  'mask.mirror.length',
+] as const
+
+type MaskAnimationGroupId = (typeof MASK_ANIMATION_GROUP_IDS)[number]
+
 const PATH_VALIDATORS = {
   'visual.position.x': validateFiniteNumber('visual.position.x'),
   'visual.position.y': validateFiniteNumber('visual.position.y'),
@@ -56,6 +80,20 @@ const PATH_VALIDATORS = {
   'visual.proportionalScale': validateBoolean('visual.proportionalScale'),
   'audio.volume': validateRangeNumber('audio.volume', 0, 1),
   'audio.isMuted': validateBoolean('audio.isMuted'),
+  'mask.enabled': validateBoolean('mask.enabled'),
+  'mask.type': validateMaskType,
+  'mask.inverted': validateBoolean('mask.inverted'),
+  'mask.center.x': validateFiniteNumber('mask.center.x'),
+  'mask.center.y': validateFiniteNumber('mask.center.y'),
+  'mask.rotation': validateFiniteNumber('mask.rotation'),
+  'mask.feather': validateFiniteNumber('mask.feather'),
+  'mask.intensity': validateRangeNumber('mask.intensity', 0, 1),
+  'mask.rectangle.size.width': validateFiniteNumber('mask.rectangle.size.width'),
+  'mask.rectangle.size.height': validateFiniteNumber('mask.rectangle.size.height'),
+  'mask.rectangle.cornerRadius': validateRangeNumber('mask.rectangle.cornerRadius', 0, 1),
+  'mask.ellipse.size.width': validateFiniteNumber('mask.ellipse.size.width'),
+  'mask.ellipse.size.height': validateFiniteNumber('mask.ellipse.size.height'),
+  'mask.mirror.length': validateNonNegativeNumber('mask.mirror.length'),
   'text.content': validateString('text.content'),
   'text.style.fontFamily': validateString('text.style.fontFamily'),
   'text.style.fontSize': validatePositiveNumber('text.style.fontSize'),
@@ -119,6 +157,7 @@ export class ClipPropertyEditService {
       }
       this.ensureGroupSupported(item, definition.groupId)
       this.ensureStaticPropertyWritable(item, key)
+      this.ensureMaskPathCompatible(key, normalizedPatchValues, currentValues)
       const validated = definition.validate(normalizedPatchValues[key])
       if (!validated.ok) {
         throw toolError(validated.code, validated.message, validated.details)
@@ -185,6 +224,28 @@ export class ClipPropertyEditService {
     )
   }
 
+  private ensureMaskPathCompatible(
+    key: ClipPropertyPath,
+    patch: Record<ClipPropertyPath, unknown>,
+    currentValues: Record<ClipPropertyPath, unknown>,
+  ) {
+    if (!key.startsWith('mask.')) {
+      return
+    }
+
+    const effectiveType = getEffectiveMaskType(patch, currentValues)
+    const requiredType = getRequiredMaskTypeForPath(key)
+    if (!requiredType || effectiveType === requiredType) {
+      return
+    }
+
+    throw toolError('mask_type_mismatch', `属性 ${key} 仅支持 ${requiredType} 类型的蒙版。`, {
+      path: key,
+      requiredMaskType: requiredType,
+      actualMaskType: effectiveType,
+    })
+  }
+
   private requireClip(clipId: string) {
     if (!clipId || typeof clipId !== 'string') {
       throw toolError('invalid_arguments', 'clipId 必须是非空字符串')
@@ -199,7 +260,7 @@ export class ClipPropertyEditService {
 
   private ensureGroupSupported(item: UnifiedTimelineItemData, groupId: ClipPropertyGroupId) {
     const supportedGroups = getSupportedGroups(item.mediaType)
-    if (!['visual', 'audio', 'text'].includes(groupId)) {
+    if (!['visual', 'audio', 'text', 'mask'].includes(groupId)) {
       throw toolError('invalid_group', `无效的属性组: ${groupId}`, { groupId })
     }
     if (!supportedGroups.includes(groupId)) {
@@ -296,6 +357,51 @@ export class ClipPropertyEditService {
       }
     }
 
+    if (groupId === 'mask') {
+      const { mask, textureSize } = this.buildMaskConfig(item, frame)
+      const rectangle = getMaskRectangleSizeValue(mask, textureSize)
+      const rectangleCornerRadius = getMaskRectangleCornerRadiusValue(mask, textureSize)
+      const ellipse = getMaskEllipseSizeValue(mask, textureSize)
+      const mirror = getMaskMirrorValue(mask, textureSize)
+
+      return {
+        enabled: mask.enabled,
+        type: mask.type,
+        inverted: mask.inverted,
+        center: {
+          x: roundNumeric(mask.centerX),
+          y: roundNumeric(mask.centerY),
+        },
+        rotation: roundNumeric(mask.rotation),
+        feather: roundNumeric(mask.falloff.outerRange),
+        intensity: roundNumeric(mask.falloff.decayRate),
+        ...(mask.type === 'rectangle'
+          ? {
+              rectangle: {
+                width: roundNumeric(rectangle.width),
+                height: roundNumeric(rectangle.height),
+                cornerRadius: roundNumeric(rectangleCornerRadius.cornerRadius),
+              },
+            }
+          : {}),
+        ...(mask.type === 'ellipse'
+          ? {
+              ellipse: {
+                width: roundNumeric(ellipse.ellipseWidth),
+                height: roundNumeric(ellipse.ellipseHeight),
+              },
+            }
+          : {}),
+        ...(mask.type === 'mirror'
+          ? {
+              mirror: {
+                length: roundNumeric(mirror.length),
+              },
+            }
+          : {}),
+      }
+    }
+
     const text = TimelineItemQueries.getBaseTextConfig(item)
     return {
       content: String(text?.content ?? ''),
@@ -312,6 +418,47 @@ export class ClipPropertyEditService {
         textGlow: nullIfUndefined(text?.style?.textGlow),
       },
     }
+  }
+
+  private buildMaskConfig(item: UnifiedTimelineItemData, frame?: number) {
+    const textureSize = this.getMaskTextureSize(item, frame)
+    let mask = normalizeMaskConfig(TimelineItemQueries.getBaseMask(item), textureSize)
+
+    if (frame === undefined) {
+      return { mask, textureSize }
+    }
+
+    for (const groupId of MASK_ANIMATION_GROUP_IDS) {
+      if (!hasAnimation(item, groupId)) {
+        continue
+      }
+
+      mask = applyMaskGroupValue(
+        mask,
+        groupId,
+        getCurrentGroupValue(item, frame, groupId),
+        textureSize,
+      )
+    }
+
+    return { mask, textureSize }
+  }
+
+  private getMaskTextureSize(item: UnifiedTimelineItemData, frame?: number) {
+    const resolved = TimelineItemQueries.getResolvedRenderConfig(item)
+    if (!('visual' in resolved)) {
+      throw toolError('group_not_supported', '该 clip 不支持属性组 mask', {
+        clipId: item.id,
+        mediaType: item.mediaType,
+        groupId: 'mask',
+      })
+    }
+
+    const animatedSize =
+      frame !== undefined ? getCurrentGroupValue(item, frame, 'visual.size') : null
+    const width = animatedSize?.width ?? resolved.visual.width ?? 0
+    const height = animatedSize?.height ?? resolved.visual.height ?? 0
+    return getItemLocalSize(width, height)
   }
 
   private buildCurrentPathValues(item: UnifiedTimelineItemData): Record<ClipPropertyPath, unknown> {
@@ -333,6 +480,29 @@ export class ClipPropertyEditService {
       const audio = this.buildGroupProperties(item, 'audio')
       result['audio.volume'] = audio.volume
       result['audio.isMuted'] = audio.isMuted
+    }
+
+    if (getSupportedGroups(item.mediaType).includes('mask')) {
+      const { mask, textureSize } = this.buildMaskConfig(item)
+      const rectangle = getMaskRectangleSizeValue(mask, textureSize)
+      const rectangleCornerRadius = getMaskRectangleCornerRadiusValue(mask, textureSize)
+      const ellipse = getMaskEllipseSizeValue(mask, textureSize)
+      const mirror = getMaskMirrorValue(mask, textureSize)
+
+      result['mask.enabled'] = mask.enabled
+      result['mask.type'] = mask.type
+      result['mask.inverted'] = mask.inverted
+      result['mask.center.x'] = roundNumeric(mask.centerX)
+      result['mask.center.y'] = roundNumeric(mask.centerY)
+      result['mask.rotation'] = roundNumeric(mask.rotation)
+      result['mask.feather'] = roundNumeric(mask.falloff.outerRange)
+      result['mask.intensity'] = roundNumeric(mask.falloff.decayRate)
+      result['mask.rectangle.size.width'] = roundNumeric(rectangle.width)
+      result['mask.rectangle.size.height'] = roundNumeric(rectangle.height)
+      result['mask.rectangle.cornerRadius'] = roundNumeric(rectangleCornerRadius.cornerRadius)
+      result['mask.ellipse.size.width'] = roundNumeric(ellipse.ellipseWidth)
+      result['mask.ellipse.size.height'] = roundNumeric(ellipse.ellipseHeight)
+      result['mask.mirror.length'] = roundNumeric(mirror.length)
     }
 
     if (getSupportedGroups(item.mediaType).includes('text')) {
@@ -369,6 +539,39 @@ export class ClipPropertyEditService {
     const directEntries: DirectPropertyBatchPlanEntry[] = []
     const visualConfigPatch: Record<string, unknown> = {}
     const audioConfigPatch: Record<string, unknown> = {}
+    const supportsMask = getSupportedGroups(item.mediaType).includes('mask')
+    const maskContext = supportsMask ? this.buildMaskConfig(item) : null
+    const hasMaskConfigPatch =
+      supportsMask &&
+      (Object.prototype.hasOwnProperty.call(patch, 'mask.enabled') ||
+        Object.prototype.hasOwnProperty.call(patch, 'mask.type') ||
+        Object.prototype.hasOwnProperty.call(patch, 'mask.inverted'))
+    const nextMaskConfig =
+      supportsMask && maskContext
+        ? (() => {
+            let nextMask = maskContext.mask
+            if (Object.prototype.hasOwnProperty.call(patch, 'mask.type')) {
+              nextMask = replaceMaskType(
+                nextMask,
+                patch['mask.type'] as MaskType,
+                maskContext.textureSize,
+              )
+            }
+            if (Object.prototype.hasOwnProperty.call(patch, 'mask.enabled')) {
+              nextMask = {
+                ...nextMask,
+                enabled: patch['mask.enabled'] as boolean,
+              }
+            }
+            if (Object.prototype.hasOwnProperty.call(patch, 'mask.inverted')) {
+              nextMask = {
+                ...nextMask,
+                inverted: patch['mask.inverted'] as boolean,
+              }
+            }
+            return nextMask
+          })()
+        : null
     const nextPosition = {
       x: (patch['visual.position.x'] ?? currentValues['visual.position.x']) as number,
       y: (patch['visual.position.y'] ?? currentValues['visual.position.y']) as number,
@@ -376,6 +579,22 @@ export class ClipPropertyEditService {
     const nextSize = {
       width: (patch['visual.size.width'] ?? currentValues['visual.size.width']) as number,
       height: (patch['visual.size.height'] ?? currentValues['visual.size.height']) as number,
+    }
+    const nextMaskCenter = {
+      centerX: (patch['mask.center.x'] ?? currentValues['mask.center.x']) as number,
+      centerY: (patch['mask.center.y'] ?? currentValues['mask.center.y']) as number,
+    }
+    const nextMaskRectangleSize = {
+      width: (patch['mask.rectangle.size.width'] ??
+        currentValues['mask.rectangle.size.width']) as number,
+      height: (patch['mask.rectangle.size.height'] ??
+        currentValues['mask.rectangle.size.height']) as number,
+    }
+    const nextMaskEllipseSize = {
+      ellipseWidth: (patch['mask.ellipse.size.width'] ??
+        currentValues['mask.ellipse.size.width']) as number,
+      ellipseHeight: (patch['mask.ellipse.size.height'] ??
+        currentValues['mask.ellipse.size.height']) as number,
     }
 
     for (const key of keys) {
@@ -395,6 +614,31 @@ export class ClipPropertyEditService {
           break
         case 'audio.volume':
           directEntries.push({ propertyId: 'audio.volume', value })
+          break
+        case 'mask.enabled':
+        case 'mask.type':
+        case 'mask.inverted':
+        case 'mask.center.x':
+        case 'mask.center.y':
+        case 'mask.rectangle.size.width':
+        case 'mask.rectangle.size.height':
+        case 'mask.ellipse.size.width':
+        case 'mask.ellipse.size.height':
+          break
+        case 'mask.rotation':
+          directEntries.push({ propertyId: 'mask.rotation', value })
+          break
+        case 'mask.feather':
+          directEntries.push({ propertyId: 'mask.feather', value })
+          break
+        case 'mask.intensity':
+          directEntries.push({ propertyId: 'mask.intensity', value })
+          break
+        case 'mask.rectangle.cornerRadius':
+          directEntries.push({ propertyId: 'mask.rectangle.cornerRadius', value })
+          break
+        case 'mask.mirror.length':
+          directEntries.push({ propertyId: 'mask.mirror.length', value })
           break
         case 'text.content':
           directEntries.push({ propertyId: 'text.content', value })
@@ -449,6 +693,24 @@ export class ClipPropertyEditService {
       directEntries.push({ propertyId: 'visual.size', value: nextSize })
     }
 
+    if (keys.includes('mask.center.x') || keys.includes('mask.center.y')) {
+      directEntries.push({ propertyId: 'mask.center', value: nextMaskCenter })
+    }
+
+    if (
+      keys.includes('mask.rectangle.size.width') ||
+      keys.includes('mask.rectangle.size.height')
+    ) {
+      directEntries.push({ propertyId: 'mask.rectangle.size', value: nextMaskRectangleSize })
+    }
+
+    if (
+      keys.includes('mask.ellipse.size.width') ||
+      keys.includes('mask.ellipse.size.height')
+    ) {
+      directEntries.push({ propertyId: 'mask.ellipse.size', value: nextMaskEllipseSize })
+    }
+
     const operations: ChangeOperation[] = []
 
     if (Object.keys(visualConfigPatch).length > 0) {
@@ -466,6 +728,17 @@ export class ClipPropertyEditService {
         timelineItemId: item.id,
         frame,
         patch: audioConfigPatch,
+      } as ChangeOperation)
+    }
+
+    if (hasMaskConfigPatch && nextMaskConfig) {
+      operations.push({
+        kind: 'extra-render-config-patch',
+        timelineItemId: item.id,
+        frame,
+        patch: {
+          mask: nextMaskConfig,
+        },
       } as ChangeOperation)
     }
 
@@ -496,7 +769,7 @@ function normalizeReadGroupIds(groupIds: ReadGroupId[]) {
   }
 
   for (const groupId of groupIds) {
-    if (!['visual', 'audio', 'text', 'timeline'].includes(groupId)) {
+    if (!['visual', 'audio', 'text', 'mask', 'timeline'].includes(groupId)) {
       throw toolError('invalid_group', `无效的属性组: ${groupId}`, { groupId })
     }
   }
@@ -528,6 +801,12 @@ function mergeDirectEntries(entries: DirectPropertyBatchPlanEntry[]): DirectProp
 function getPlanPropertyId(keys: ClipPropertyPath[]): ChangePlan['propertyId'] {
   if (keys.some((key) => key.startsWith('text.'))) return 'text.content'
   if (keys.some((key) => key.startsWith('audio.'))) return 'audio.volume'
+  if (keys.some((key) => key.startsWith('mask.'))) {
+    const firstMaskKey = keys.find((key) => key.startsWith('mask.'))
+    if (firstMaskKey) {
+      return getMaskPropertyIdForPath(firstMaskKey)
+    }
+  }
   return 'visual.position'
 }
 
@@ -674,6 +953,18 @@ function validateRangeNumber(path: string, min: number, max: number) {
   }
 }
 
+function validateNonNegativeNumber(path: string) {
+  return (value: unknown) => {
+    if (typeof value !== 'number' || !Number.isFinite(value)) {
+      return { ok: false as const, code: 'invalid_value_type', message: `${path} 必须是数字` }
+    }
+    if (value < 0) {
+      return { ok: false as const, code: 'invalid_value_type', message: `${path} 不能小于 0` }
+    }
+    return { ok: true as const, value }
+  }
+}
+
 function validateBoolean(path: string) {
   return (value: unknown) => {
     if (typeof value !== 'boolean') {
@@ -803,6 +1094,60 @@ function validateBlendMode(value: unknown) {
     }
   }
   return { ok: true as const, value: value as BlendMode }
+}
+
+function validateMaskType(value: unknown) {
+  if (!isMaskType(value)) {
+    return {
+      ok: false as const,
+      code: 'invalid_enum_value',
+      message: 'mask.type 必须是 rectangle、ellipse、linear 或 mirror',
+    }
+  }
+  return { ok: true as const, value }
+}
+
+function getEffectiveMaskType(
+  patch: Record<ClipPropertyPath, unknown>,
+  currentValues: Record<ClipPropertyPath, unknown>,
+): MaskType {
+  const nextType = patch['mask.type']
+  if (isMaskType(nextType)) {
+    return nextType
+  }
+
+  const currentType = currentValues['mask.type']
+  if (isMaskType(currentType)) {
+    return currentType
+  }
+
+  return 'rectangle'
+}
+
+function getRequiredMaskTypeForPath(key: ClipPropertyPath): MaskType | null {
+  if (key.startsWith('mask.rectangle.')) return 'rectangle'
+  if (key.startsWith('mask.ellipse.')) return 'ellipse'
+  if (key === 'mask.mirror.length') return 'mirror'
+  return null
+}
+
+function getMaskPropertyIdForPath(key: ClipPropertyPath): ChangePlan['propertyId'] {
+  if (key === 'mask.enabled' || key === 'mask.type' || key === 'mask.inverted') {
+    return key
+  }
+  if (key.startsWith('mask.center.')) return 'mask.center'
+  if (key === 'mask.rotation') return 'mask.rotation'
+  if (key === 'mask.feather') return 'mask.feather'
+  if (key === 'mask.intensity') return 'mask.intensity'
+  if (key.startsWith('mask.rectangle.size.')) return 'mask.rectangle.size'
+  if (key === 'mask.rectangle.cornerRadius') return 'mask.rectangle.cornerRadius'
+  if (key.startsWith('mask.ellipse.size.')) return 'mask.ellipse.size'
+  if (key === 'mask.mirror.length') return 'mask.mirror.length'
+  return 'mask.center'
+}
+
+function isMaskType(value: unknown): value is MaskType {
+  return value === 'rectangle' || value === 'ellipse' || value === 'linear' || value === 'mirror'
 }
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
