@@ -15,7 +15,7 @@ interface UploadPolicyResponse {
   data: UploadPolicyData
 }
 
-export type DashScopeUploadPurpose = 'tagging' | 'embedding'
+export type DashScopeUploadPurpose = 'tagging' | 'embedding' | 'inspection'
 
 export interface DashScopeUploadResult {
   success: boolean

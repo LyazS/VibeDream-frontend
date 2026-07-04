@@ -41,6 +41,11 @@ import {
 import { TimelineItemsBufferManager } from '@/core/mediabunny/TimelineItemsBufferManager'
 import { TimelineWebGLRenderer } from '@/core/webgl2/renderer/TimelineWebGLRenderer'
 import { TransitionEdgeFrameResolver } from '@/core/webgl2/transition/TransitionEdgeFrameResolver'
+import {
+  downloadBlob,
+  type CaptureTimelineFrameOptions,
+  TimelineFrameCaptureSession,
+} from '@/core/utils/timelineFrameCapture'
 
 if (!(await canEncodeAudio('mp3'))) {
   registerMp3Encoder()
@@ -54,6 +59,7 @@ export function createUnifiedMediaBunnyModule(
   const playbackModule = registry.get<UnifiedPlaybackModule>(MODULE_NAMES.PLAYBACK)
   const timelineModule = registry.get<UnifiedTimelineModule>(MODULE_NAMES.TIMELINE)
   const mediaModule = registry.get<UnifiedMediaModule>(MODULE_NAMES.MEDIA)
+  const configModule = registry.get<UnifiedConfigModule>(MODULE_NAMES.CONFIG)
   const trackModule = registry.get<UnifiedTrackModule>(MODULE_NAMES.TRACK)
   const selectionModule = registry.get<UnifiedSelectionModule>(MODULE_NAMES.SELECTION)
 
@@ -705,47 +711,65 @@ export function createUnifiedMediaBunnyModule(
 
   // ==================== 截帧功能 ====================
 
+  function createFrameCaptureSession(): TimelineFrameCaptureSession {
+    return new TimelineFrameCaptureSession({
+      videoWidth: configModule.videoResolution.value.width,
+      videoHeight: configModule.videoResolution.value.height,
+      timelineItems: [...timelineModule.timelineItems.value],
+      tracks: trackModule.tracks.value.map((track) => ({
+        id: track.id,
+        isVisible: track.isVisible,
+        isMuted: track.isMuted,
+      })),
+      getMediaItem: (mediaItemId: string) => mediaModule.getMediaItem(mediaItemId),
+      getAsset: (assetId: string | null) => mediaModule.getAsset(assetId),
+    })
+  }
+
   /**
-   * 截取当前画布画面并下载
+   * 使用独立离屏渲染会话截取指定时间轴帧。
+   * 不会修改当前预览画布、播放状态或播放头位置。
+   */
+  async function captureTimelineFrame(
+    frameNumber: number,
+    options: CaptureTimelineFrameOptions = {},
+  ): Promise<Blob> {
+    const session = createFrameCaptureSession()
+
+    try {
+      return await session.captureFrame(frameNumber, options)
+    } finally {
+      await session.dispose()
+    }
+  }
+
+  async function captureTimelineFrames(
+    frameNumbers: number[],
+    options: CaptureTimelineFrameOptions = {},
+  ): Promise<Blob[]> {
+    const session = createFrameCaptureSession()
+
+    try {
+      return await session.captureFrames(frameNumbers, options)
+    } finally {
+      await session.dispose()
+    }
+  }
+
+  /**
+   * 截取当前播放头对应的合成画面并下载
    * @param filename 下载文件名（可选，默认为 'screenshot-时间戳.png'）
    * @returns Promise<Blob> 返回截取的 Blob 对象
    */
   async function captureCanvasFrame(filename?: string): Promise<Blob> {
-    if (!mCanvas || !mWebGLRenderer) {
-      throw new Error('Canvas 未初始化，无法截帧')
-    }
-
     try {
-      // 将 Canvas 内容转换为 Blob
-      const blob = await new Promise<Blob>((resolve, reject) => {
-        mCanvas!.toBlob(
-          (blob) => {
-            if (blob) {
-              resolve(blob)
-            } else {
-              reject(new Error('Canvas 转换为 Blob 失败'))
-            }
-          },
-          'image/png',
-          1.0, // 最高质量
-        )
-      })
+      const blob = await captureTimelineFrame(playbackModule.currentFrame.value)
 
-      // 生成文件名
       const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5)
       const defaultFilename = `screenshot-${timestamp}.png`
       const finalFilename = filename || defaultFilename
 
-      // 创建下载链接并触发下载
-      const url = URL.createObjectURL(blob)
-      const link = document.createElement('a')
-      link.href = url
-      link.download = finalFilename
-      document.body.appendChild(link)
-      link.click()
-      document.body.removeChild(link)
-      URL.revokeObjectURL(url)
-
+      downloadBlob(blob, finalFilename)
       console.log(`📸 画布截帧成功: ${finalFilename}`)
       return blob
     } catch (error) {
@@ -774,6 +798,8 @@ export function createUnifiedMediaBunnyModule(
     updateTimelineDuration,
 
     // 截帧功能
+    captureTimelineFrame,
+    captureTimelineFrames,
     captureCanvasFrame,
 
     // 工具方法
