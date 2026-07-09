@@ -1,4 +1,5 @@
 import type { AIGenerateConfig } from '@/aipanel/aigenerate/types'
+import { addMoney, type MoneyString } from '@/utils/money'
 import { getValueByPathWithWrapper } from './pathUtils'
 
 /**
@@ -10,7 +11,7 @@ import { getValueByPathWithWrapper } from './pathUtils'
 export function calculateTotalCost(
   config: AIGenerateConfig,
   aiConfig: Record<string, any>
-): number {
+): MoneyString {
   let totalCost = config.cost // 基础成本
 
   // 遍历所有 UI 配置项，查找 select-input 类型的 add_cost
@@ -31,7 +32,7 @@ export function calculateTotalCost(
       )
       
       if (selectedOption?.add_cost) {
-        totalCost += selectedOption.add_cost
+        totalCost = addMoney(totalCost, selectedOption.add_cost)
       }
     }
   }

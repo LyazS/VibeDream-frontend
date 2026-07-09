@@ -5,7 +5,7 @@
   "name": "qwen3-tts-clone",
   "description": "Qwen3语音克隆 - 根据参考音频克隆声音并生成新的语音",
   "media_type": "audio",
-  "cost": 0.2,
+  "cost": "0.2",
   "input_mapping": {
     "target_text": {
       "mapping": "40:FB_Qwen3TTSVoiceClone.target_text",

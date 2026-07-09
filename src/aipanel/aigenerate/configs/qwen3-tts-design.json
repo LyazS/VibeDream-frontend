@@ -11,7 +11,7 @@
   "contentType": "audio",
   "aiTaskType": "bizyair_generate_media",
   "uploadServer": "bizyair",
-  "cost": 0.1,
+  "cost": "0.1",
   "aiConfig": {
     "text": {
       "type": "string",

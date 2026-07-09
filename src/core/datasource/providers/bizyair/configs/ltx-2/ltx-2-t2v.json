@@ -5,7 +5,7 @@
   "name": "ltx-2-t2v",
   "description": "使用LTX-2模型进行文本转视频，根据提示词直接生成高质量视频",
   "media_type": "video",
-  "cost": 0.3,
+  "cost": "0.3",
   "input_mapping": {
     "prompt": {
       "mapping": "121:CLIPTextEncode.text",
@@ -35,7 +35,14 @@
       "validation": {
         "required": false,
         "description": "宽高比（如 16:9, 9:16, 1:1, 4:3, 3:4, 21:9）",
-        "option": ["16:9", "9:16", "1:1", "4:3", "3:4", "21:9"]
+        "option": [
+          "16:9",
+          "9:16",
+          "1:1",
+          "4:3",
+          "3:4",
+          "21:9"
+        ]
       },
       "skip_mapping": true
     },

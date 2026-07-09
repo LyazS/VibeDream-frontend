@@ -25,17 +25,17 @@
 
         <div class="detail-item">
           <span class="label">{{ t('user.balance') }}：</span>
-          <span class="value">{{ user.balance.toFixed(2) }}</span>
+          <span class="value">{{ formatMoneyForDisplay(user.balance) }}</span>
         </div>
 
         <!-- <div class="detail-item">
           <span class="label">{{ t('user.totalRecharged') }}：</span>
-          <span class="value">{{ user.total_recharged.toFixed(2) }}</span>
+          <span class="value">{{ formatMoneyForDisplay(user.total_recharged) }}</span>
         </div>
 
         <div class="detail-item">
           <span class="label">{{ t('user.totalConsumed') }}：</span>
-          <span class="value">{{ user.total_consumed.toFixed(2) }}</span>
+          <span class="value">{{ formatMoneyForDisplay(user.total_consumed) }}</span>
         </div> -->
 
         <div v-if="user.last_login_at" class="detail-item">
@@ -84,6 +84,7 @@ import { useAppI18n } from '@/core/composables/useI18n'
 import { useUnifiedStore } from '@/core/unifiedStore'
 import type { User } from '@/core/modules/UnifiedUserModule'
 import { ref } from 'vue'
+import { formatMoneyForDisplay } from '@/utils/money'
 
 const { t } = useAppI18n()
 const unifiedStore = useUnifiedStore()

@@ -11,7 +11,7 @@
   "contentType": "video",
   "aiTaskType": "bizyair_generate_media",
   "uploadServer": "bizyair",
-  "cost": 0.3,
+  "cost": "0.3",
   "aiConfig": {
     "ref_images": {
       "type": "array",
@@ -46,7 +46,9 @@
         "zh": "参考图片"
       },
       "path": "aiConfig.ref_images",
-      "accept": ["image"],
+      "accept": [
+        "image"
+      ],
       "maxFiles": 1,
       "minFiles": 1,
       "placeholder": {
@@ -61,7 +63,9 @@
         "zh": "音频文件"
       },
       "path": "aiConfig.ref_audios",
-      "accept": ["audio"],
+      "accept": [
+        "audio"
+      ],
       "maxFiles": 1,
       "minFiles": 1,
       "placeholder": {

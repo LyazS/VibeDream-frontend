@@ -5,7 +5,7 @@
   "name": "wan-infinite-talk",
   "description": "Wan数字人对话 - 根据图片、音频和文本生成数字人对话视频",
   "media_type": "video",
-  "cost": 0.3,
+  "cost": "0.3",
   "input_mapping": {
     "ref_images": {
       "type": "array",
@@ -72,7 +72,10 @@
       "default": 121,
       "validation": {
         "required": false,
-        "enum": [81, 121],
+        "enum": [
+          81,
+          121
+        ],
         "description": "单次循环帧数（可选 81 或 121）"
       }
     }

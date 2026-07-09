@@ -16,14 +16,13 @@ export interface TaskSubmitSuccessResponse {
   task_id: string
   status: string
   created_at: string
-  cost: number
 }
 
 // 任务提交失败响应
 export interface TaskSubmitErrorResponse {
   success: false
   error_code: TaskSubmitErrorCode
-  error_details: Record<string, any>
+  error_details: Record<string, unknown>
 }
 
 // 任务提交响应（联合类型）

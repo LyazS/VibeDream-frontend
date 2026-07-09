@@ -12,6 +12,7 @@ import type {
   RegisterResponse,
   TokenStorage,
 } from '@/utils/types'
+import { addMoney, formatMoneyForDisplay } from '@/utils/money'
 
 // 重新导出类型以供其他模块使用
 export type {
@@ -341,8 +342,8 @@ export function createUnifiedUserModule(registry: ModuleRegistry) {
       isUsingActivationCode.value = true
 
       const response = await fetchClient.post<{
-        amount: number
-        current_balance: number
+        amount: string
+        current_balance: string
         detail?: string
       }>('/api/activation-code/use', {
         code: code.trim(),
@@ -352,15 +353,18 @@ export function createUnifiedUserModule(registry: ModuleRegistry) {
         // 显示成功通知
         useNaiveUIModule.messageSuccess(
           t('user.activationCodeSuccess', {
-            amount: response.data.amount,
-            balance: response.data.current_balance,
+            amount: formatMoneyForDisplay(response.data.amount),
+            balance: formatMoneyForDisplay(response.data.current_balance),
           }),
         )
 
         // 更新用户余额信息
         if (currentUser.value) {
           currentUser.value.balance = response.data.current_balance
-          currentUser.value.total_recharged += response.data.amount
+          currentUser.value.total_recharged = addMoney(
+            currentUser.value.total_recharged,
+            response.data.amount,
+          )
           saveUserData(currentUser.value)
         }
 

@@ -11,7 +11,7 @@
   "contentType": "video",
   "aiTaskType": "bizyair_generate_media",
   "uploadServer": "bizyair",
-  "cost": 0.5,
+  "cost": "0.5",
   "aiConfig": {
     "variant": {
       "type": "string",
@@ -54,7 +54,9 @@
         "zh": "图片"
       },
       "path": "aiConfig.ref_images",
-      "accept": ["image"],
+      "accept": [
+        "image"
+      ],
       "maxFiles": 1,
       "minFiles": 1,
       "placeholder": {

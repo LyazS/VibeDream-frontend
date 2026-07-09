@@ -72,6 +72,7 @@ import type { UIConfig, ValidationResult } from '@/aipanel/aigenerate/types'
 import { calculateTotalCost } from './utils/costCalculator'
 import { validateAiConfig } from './utils/validator'
 import { useUnifiedStore } from '@/core/unifiedStore'
+import { formatMoneyForDisplay } from '@/utils/money'
 
 interface Props {
   selectedConfig: ConfigKey | ''
@@ -111,7 +112,7 @@ const calculatedCost = computed(() => {
   if (!props.selectedConfig || !props.aiConfig) return '0.00'
   const config = collection[props.selectedConfig]
   const cost = calculateTotalCost(config, props.aiConfig)
-  return cost.toFixed(2)
+  return formatMoneyForDisplay(cost)
 })
 
 // 计算验证结果

@@ -11,7 +11,7 @@
   "contentType": "image",
   "aiTaskType": "bizyair_generate_media",
   "uploadServer": "bizyair",
-  "cost": 0.2,
+  "cost": "0.2",
   "aiConfig": {
     "ref_images": {
       "type": "array",
@@ -42,7 +42,9 @@
         "zh": "图片"
       },
       "path": "aiConfig.ref_images",
-      "accept": ["image"],
+      "accept": [
+        "image"
+      ],
       "maxFiles": 14,
       "minFiles": 0,
       "placeholder": {
@@ -164,7 +166,7 @@
             "zh": "2K"
           },
           "value": "2K",
-          "add_cost": 0.05
+          "add_cost": "0.05"
         },
         {
           "label": {
@@ -172,7 +174,7 @@
             "zh": "4K"
           },
           "value": "4K",
-          "add_cost": 0.1
+          "add_cost": "0.1"
         }
       ]
     },

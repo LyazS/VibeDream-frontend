@@ -1,10 +1,12 @@
+import type { MoneyString } from '@/utils/money'
+
 // 用户类型定义
 export interface User {
   username: string
   email?: string
-  balance: number
-  total_recharged: number
-  total_consumed: number
+  balance: MoneyString
+  total_recharged: MoneyString
+  total_consumed: MoneyString
   is_active: boolean
   is_superuser: boolean
   created_at: string

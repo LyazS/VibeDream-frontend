@@ -5,7 +5,7 @@
   "name": "qwen-image-4step",
   "description": "使用 Qwen 模型 4 步生成赛博朋克风格图片",
   "media_type": "image",
-  "cost": 0.02,
+  "cost": "0.02",
   "input_mapping": {
     "prompt": {
       "mapping": "84:CLIPTextEncode.text",

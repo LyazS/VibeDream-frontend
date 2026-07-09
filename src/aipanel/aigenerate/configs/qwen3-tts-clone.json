@@ -11,7 +11,7 @@
   "contentType": "audio",
   "aiTaskType": "bizyair_generate_media",
   "uploadServer": "bizyair",
-  "cost": 0.2,
+  "cost": "0.2",
   "aiConfig": {
     "ref_audio": {
       "type": "array",
@@ -34,7 +34,9 @@
         "zh": "参考音频"
       },
       "path": "aiConfig.ref_audio",
-      "accept": ["audio"],
+      "accept": [
+        "audio"
+      ],
       "maxFiles": 1,
       "minFiles": 1,
       "placeholder": {

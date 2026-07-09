@@ -1,3 +1,5 @@
+import type { MoneyString } from '@/utils/money'
+
 /**
  * AI生成数据源类型定义
  * 集中管理所有AI生成相关的类型、接口和枚举
@@ -237,7 +239,7 @@ export interface SelectInputConfig extends BaseUIConfig {
   options: Array<{
     label: I18nText
     value: string | number
-    add_cost?: number // 可选的额外成本字段
+    add_cost?: MoneyString // 可选的额外成本字段
   }>
 }
 
@@ -357,7 +359,7 @@ export interface AIGenerateConfig {
   aiTaskType: AITaskType
   uploadServer?: UploadServerType // 上传服务器类型，默认为 'default'
   subAiTaskType?: string // 子任务类型（可选），用于区分同一服务提供商的不同API类型
-  cost: number // 生成成本
+  cost: MoneyString // 生成成本
   aiConfig: AIConfigWithWrapper // 使用包装器结构
   uiConfig: UIConfig[]
 }

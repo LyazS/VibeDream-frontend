@@ -5,7 +5,7 @@
   "name": "qwen3-tts-design",
   "description": "Qwen3语音设计 - 支持角色定制的AI文本转语音生成",
   "media_type": "audio",
-  "cost": 0.1,
+  "cost": "0.1",
   "input_mapping": {
     "text": {
       "mapping": "38:FB_Qwen3TTSVoiceDesign.text",
@@ -33,7 +33,10 @@
       "default": "Chinese",
       "validation": {
         "required": false,
-        "enum": ["Chinese", "English"],
+        "enum": [
+          "Chinese",
+          "English"
+        ],
         "description": "语言选择"
       }
     }
