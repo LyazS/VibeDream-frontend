@@ -12,7 +12,7 @@ import type {
   RegisterResponse,
   TokenStorage,
 } from '@/utils/types'
-import { addMoney, formatMoneyForDisplay } from '@/utils/money'
+import { formatMoneyForDisplay } from '@/utils/money'
 
 // 重新导出类型以供其他模块使用
 export type {
@@ -132,7 +132,10 @@ export function createUnifiedUserModule(registry: ModuleRegistry) {
     } catch (error: unknown) {
       const userError = toUserModuleError(error)
       // 后端请求失败，但继续使用localStorage的数据
-      console.warn(`${debugPrefix} 后端用户信息获取失败，继续使用localStorage数据:`, userError.message)
+      console.warn(
+        `${debugPrefix} 后端用户信息获取失败，继续使用localStorage数据:`,
+        userError.message,
+      )
       if (userError.status === 401) {
         // 如果是认证错误，清除令牌
         tokenManager.clearTokens()
@@ -361,10 +364,6 @@ export function createUnifiedUserModule(registry: ModuleRegistry) {
         // 更新用户余额信息
         if (currentUser.value) {
           currentUser.value.balance = response.data.current_balance
-          currentUser.value.total_recharged = addMoney(
-            currentUser.value.total_recharged,
-            response.data.amount,
-          )
           saveUserData(currentUser.value)
         }
 
@@ -409,7 +408,10 @@ export function createUnifiedUserModule(registry: ModuleRegistry) {
     const trimmedKey = apiKey.trim()
     localStorage.setItem(BIZYAIR_API_KEY_STORAGE_KEY, trimmedKey)
     if (DEBUG_USER) {
-      console.log(`${debugPrefix} BizyAir API Key 已保存到 localStorage:`, trimmedKey.substring(0, 8) + '...')
+      console.log(
+        `${debugPrefix} BizyAir API Key 已保存到 localStorage:`,
+        trimmedKey.substring(0, 8) + '...',
+      )
     }
   }
 

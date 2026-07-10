@@ -28,16 +28,6 @@
           <span class="value">{{ formatMoneyForDisplay(user.balance) }}</span>
         </div>
 
-        <!-- <div class="detail-item">
-          <span class="label">{{ t('user.totalRecharged') }}：</span>
-          <span class="value">{{ formatMoneyForDisplay(user.total_recharged) }}</span>
-        </div>
-
-        <div class="detail-item">
-          <span class="label">{{ t('user.totalConsumed') }}：</span>
-          <span class="value">{{ formatMoneyForDisplay(user.total_consumed) }}</span>
-        </div> -->
-
         <div v-if="user.last_login_at" class="detail-item">
           <span class="label">{{ t('user.lastLogin') }}：</span>
           <span class="value">{{ formatDate(user.last_login_at) }}</span>
@@ -149,7 +139,6 @@ async function handleUseActivationCode() {
       const currentUser = unifiedStore.currentUser
       if (currentUser) {
         props.user.balance = currentUser.balance
-        props.user.total_recharged = currentUser.total_recharged
       }
     }
   } catch (error) {
