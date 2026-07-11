@@ -73,7 +73,7 @@ import { IconComponents } from '@/constants/iconComponents'
 import { useAppI18n } from '@/core/composables/useI18n'
 import { useUnifiedStore } from '@/core/unifiedStore'
 import type { User } from '@/core/modules/UnifiedUserModule'
-import { ref } from 'vue'
+import { ref, watch } from 'vue'
 import { formatMoneyForDisplay } from '@/utils/money'
 
 const { t } = useAppI18n()
@@ -93,6 +93,16 @@ const props = defineProps<{
 const emit = defineEmits<{
   close: []
 }>()
+
+watch(
+  () => props.show,
+  (visible) => {
+    if (visible) {
+      void unifiedStore.refreshBalance()
+    }
+  },
+  { immediate: true },
+)
 
 // 方法
 function handleClose() {

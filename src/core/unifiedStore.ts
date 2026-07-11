@@ -784,6 +784,7 @@ export const useUnifiedStore = defineStore('unified', () => {
     getCurrentUser: unifiedUserModule.getCurrentUser,
     getAccessToken: unifiedUserModule.getAccessToken,
     checkLoginStatus: unifiedUserModule.checkLoginStatus,
+    refreshBalance: unifiedUserModule.refreshBalance,
 
     // 激活码功能
     useActivationCode: unifiedUserModule.useActivationCode,

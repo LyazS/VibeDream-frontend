@@ -34,6 +34,8 @@ type UserModuleError = Error & {
   }
 }
 
+type BalanceInfo = Pick<User, 'balance'>
+
 // LocalStorage 键名常量
 const BIZYAIR_API_KEY_STORAGE_KEY = 'bizyair_api_key'
 
@@ -64,6 +66,7 @@ export function createUnifiedUserModule(registry: ModuleRegistry) {
 
   // BizyAir API Key（响应式状态，初始化时从 localStorage 加载）
   const bizyairApiKey = ref<string>(getBizyAirApiKey())
+  let refreshBalancePromise: Promise<void> | null = null
 
   // ==================== 计算属性 ====================
 
@@ -150,6 +153,40 @@ export function createUnifiedUserModule(registry: ModuleRegistry) {
   function clearUserData(): void {
     localStorage.removeItem('current_user')
     currentUser.value = null
+  }
+
+  /** Refresh only the balance shown in the shared user state. */
+  async function refreshBalance(): Promise<void> {
+    if (!currentUser.value) {
+      return
+    }
+    if (refreshBalancePromise) {
+      return refreshBalancePromise
+    }
+
+    const userAtRequest = currentUser.value
+    const balanceAtRequest = userAtRequest.balance
+    refreshBalancePromise = (async () => {
+      try {
+        const response = await fetchClient.get<BalanceInfo>('/api/balance')
+        if (response.status !== 200 || currentUser.value !== userAtRequest) {
+          return
+        }
+
+        // Do not overwrite a newer balance update that happened while this request was in flight.
+        if (currentUser.value.balance !== balanceAtRequest) {
+          return
+        }
+        saveUserData({ ...currentUser.value, balance: response.data.balance })
+      } catch (error: unknown) {
+        const userError = toUserModuleError(error)
+        console.warn(`${debugPrefix} 余额刷新失败，继续使用当前余额:`, userError.message)
+      } finally {
+        refreshBalancePromise = null
+      }
+    })()
+
+    return refreshBalancePromise
   }
 
   // ==================== 用户认证方法 ====================
@@ -485,6 +522,7 @@ export function createUnifiedUserModule(registry: ModuleRegistry) {
     getCurrentUser,
     getAccessToken,
     checkLoginStatus,
+    refreshBalance,
 
     // 激活码功能
     useActivationCode,
