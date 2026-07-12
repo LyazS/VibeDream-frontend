@@ -351,84 +351,68 @@ const handleBlendModeChange = async (value: BlendMode) => {
   cursor: pointer;
 }
 
+.alignment-controls,
 .scale-preset-controls {
   display: flex;
-  gap: var(--spacing-xs);
   flex: 1;
+  overflow: hidden;
+  border: 1px solid var(--color-bg-hover);
+  border-radius: var(--border-radius-small);
+  background: var(--color-bg-secondary);
 }
 
-.alignment-controls {
-  display: flex;
-  gap: var(--spacing-xs);
-}
-
-.align-btn {
-  background: var(--color-bg-active);
-  border: 1px solid var(--color-border-secondary);
-  border-radius: var(--border-radius-medium);
+.align-btn,
+.preset-btn {
+  min-width: 0;
+  min-height: 24px;
+  padding: var(--spacing-xs) var(--spacing-sm);
+  border: none;
+  border-radius: 0;
+  background: transparent;
   color: var(--color-text-secondary);
-  padding: var(--spacing-xs);
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: all var(--transition-fast);
+  transition-property: background-color, color, opacity, transform;
+  transition-duration: var(--transition-fast);
+  transition-timing-function: ease-out;
   flex: 1;
-  min-width: 28px;
-  height: 24px;
 }
 
 .preset-btn {
-  background: var(--color-bg-active);
-  border: 1px solid var(--color-border-secondary);
-  border-radius: var(--border-radius-medium);
-  color: var(--color-text-secondary);
-  padding: var(--spacing-xs) var(--spacing-sm);
-  cursor: pointer;
   font-size: var(--font-size-sm);
-  transition: all var(--transition-fast);
-  flex: 1;
-  min-height: 24px;
+  white-space: nowrap;
 }
 
-.preset-btn:hover {
-  background: var(--color-border-secondary);
+.align-btn + .align-btn,
+.preset-btn + .preset-btn {
+  border-left: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.align-btn:hover:not(:disabled),
+.preset-btn:hover:not(:disabled) {
+  background: var(--color-bg-hover);
   color: var(--color-text-primary);
-  border-color: var(--color-border-hover);
 }
 
-.preset-btn:active {
-  background: var(--color-border-hover);
-  transform: translateY(1px);
+.align-btn:active:not(:disabled),
+.preset-btn:active:not(:disabled) {
+  background: var(--color-bg-active);
+  transform: scale(0.96);
 }
 
-.align-btn:hover {
-  background: var(--color-border-secondary);
-  color: var(--color-text-primary);
-  border-color: var(--color-border-hover);
-}
-
-.align-btn:active {
-  background: var(--color-border-hover);
-  transform: translateY(1px);
+.align-btn:focus-visible,
+.preset-btn:focus-visible {
+  outline: 1px solid var(--color-border-hover);
+  outline-offset: -1px;
 }
 
 .align-btn:disabled,
 .preset-btn:disabled {
   opacity: 0.4;
   cursor: not-allowed;
-  background: var(--color-bg-tertiary);
   color: var(--color-text-muted);
-  border-color: var(--color-border-secondary);
-  box-shadow: none;
-}
-
-.align-btn:disabled:hover,
-.preset-btn:disabled:hover {
-  transform: none;
-  box-shadow: none;
-  background: var(--color-bg-tertiary);
-  border-color: var(--color-border-secondary);
 }
 
 .align-btn svg {

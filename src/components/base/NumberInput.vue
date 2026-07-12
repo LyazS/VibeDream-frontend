@@ -15,11 +15,23 @@
       :class="['number-input', inputClass]"
     />
     <div v-if="showControls" class="number-controls">
-      <button @click="handleIncrement" :disabled="disabled" class="number-btn number-btn-up">
-        ▲
+      <button
+        @click="handleIncrement"
+        :disabled="disabled"
+        class="number-btn number-btn-up"
+        title="Increase value"
+        aria-label="Increase value"
+      >
+        <RiArrowUpSLine class="number-btn-icon" aria-hidden="true" />
       </button>
-      <button @click="handleDecrement" :disabled="disabled" class="number-btn number-btn-down">
-        ▼
+      <button
+        @click="handleDecrement"
+        :disabled="disabled"
+        class="number-btn number-btn-down"
+        title="Decrease value"
+        aria-label="Decrease value"
+      >
+        <RiArrowDownSLine class="number-btn-icon" aria-hidden="true" />
       </button>
     </div>
     <span v-if="unit" class="number-unit">{{ unit }}</span>
@@ -28,6 +40,7 @@
 
 <script setup lang="ts">
 import { computed, ref } from 'vue'
+import { RiArrowDownSLine, RiArrowUpSLine } from '@remixicon/vue'
 
 interface Props {
   /** 当前值 */
@@ -180,13 +193,29 @@ const handleDecrement = () => {
 .number-input-container {
   display: flex;
   align-items: center;
-  background: var(--color-bg-quaternary);
-  border: 1px solid var(--color-border-secondary);
+  box-sizing: border-box;
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-bg-hover);
   border-radius: var(--border-radius-small);
   overflow: hidden;
   width: 78px;
   height: 24px;
   position: relative;
+  transition-property: background-color, border-color, box-shadow, transform;
+  transition-duration: var(--transition-fast);
+  transition-timing-function: ease-out;
+}
+
+.number-input-container:hover {
+  background: var(--color-bg-hover);
+}
+
+.number-input-container:focus-within {
+  background: var(--color-bg-hover);
+  box-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.45),
+    0 4px 10px rgba(0, 0, 0, 0.35);
+  transform: translateY(-1px);
 }
 
 .number-input-container.with-controls {
@@ -198,7 +227,9 @@ const handleDecrement = () => {
   background: transparent;
   border: none;
   color: var(--color-text-primary);
+  caret-color: var(--color-text-primary);
   font-size: var(--font-size-sm);
+  font-variant-numeric: tabular-nums;
   padding: 2px var(--spacing-xs);
   text-align: center;
   flex: 1;
@@ -230,45 +261,51 @@ const handleDecrement = () => {
 .number-input-container .number-controls {
   display: flex;
   flex-direction: column;
-  width: 18px;
+  width: 20px;
   flex-shrink: 0;
+  border-left: 1px solid rgba(255, 255, 255, 0.1);
 }
 
 /* 控制按钮 */
 .number-input-container .number-btn {
-  background: var(--color-bg-active);
-  border: 1px solid var(--color-border-secondary);
-  border-left: none;
-  color: var(--color-text-primary);
+  background: transparent;
+  border: none;
+  color: var(--color-text-muted);
   cursor: pointer;
-  font-size: 8px;
-  line-height: 1;
   padding: 0;
   width: 100%;
   height: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: background-color var(--transition-fast);
+  transition-property: background-color, color, transform;
+  transition-duration: var(--transition-fast);
+  transition-timing-function: ease-out;
   flex: 1;
 }
 
 .number-input-container .number-btn:hover {
-  background: var(--color-border-secondary);
+  background: var(--color-bg-quaternary);
+  color: var(--color-text-primary);
 }
 
 .number-input-container .number-btn:active {
-  background: var(--color-border-hover);
+  background: var(--color-bg-active);
+  transform: scale(0.96);
+}
+
+.number-input-container .number-btn-icon {
+  width: 12px;
+  height: 12px;
+  pointer-events: none;
 }
 
 .number-btn-up {
-  border-radius: 0 var(--border-radius-small) 0 0;
-  border-bottom: 0.5px solid var(--color-bg-quaternary);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
 }
 
 .number-btn-down {
-  border-radius: 0 0 var(--border-radius-small) 0;
-  border-top: 0.5px solid var(--color-bg-quaternary);
+  border-radius: 0;
 }
 
 /* 禁用状态样式 */

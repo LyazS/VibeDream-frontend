@@ -70,12 +70,12 @@
           </div>
 
           <!-- 文件名区域（不可拖拽） -->
-          <div class="item-name">
-            {{
-              item.type === 'directory'
-                ? getDirectory(item.id)?.name || ''
-                : getMediaItem(item.id)?.name || ''
-            }}
+          <div
+            class="item-name"
+            @mouseenter="showFileNameTooltip(item, $event)"
+            @mouseleave="hideFileNameTooltip"
+          >
+            <span class="item-name__label">{{ getItemName(item) }}</span>
           </div>
         </div>
       </div>
@@ -214,6 +214,19 @@
         @change="handleFileSelect"
       />
     </n-scrollbar>
+    <Teleport to="body">
+      <Transition name="file-name-tooltip">
+        <div
+          v-if="fileNameTooltip.visible"
+          class="library-media-name-tooltip"
+          :class="{ 'is-above': fileNameTooltip.isAbove }"
+          :style="{ left: `${fileNameTooltip.x}px`, top: `${fileNameTooltip.y}px` }"
+          role="tooltip"
+        >
+          {{ fileNameTooltip.name }}
+        </div>
+      </Transition>
+    </Teleport>
   </div>
 </template>
 
@@ -253,6 +266,13 @@ import { resetAIGeneratedMediaForRetry } from '@/core/jobs'
 
 const unifiedStore = useUnifiedStore()
 const { t } = useAppI18n()
+const fileNameTooltip = ref({
+  visible: false,
+  name: '',
+  x: 0,
+  y: 0,
+  isAbove: false,
+})
 
 // 检查是否为外部文件拖拽（区分内部项目拖拽）
 function isFileDrag(event: DragEvent): boolean {
@@ -692,6 +712,35 @@ function getDirectory(id: string): VirtualDirectory | undefined {
 
 function getMediaItem(id: string): UnifiedMediaItemData | undefined {
   return unifiedStore.getMediaItem(id)
+}
+
+function getItemName(item: DisplayItem): string {
+  return item.type === 'directory'
+    ? getDirectory(item.id)?.name || ''
+    : getMediaItem(item.id)?.name || ''
+}
+
+function showFileNameTooltip(item: DisplayItem, event: MouseEvent): void {
+  const target = event.currentTarget as HTMLElement
+  const rect = target.getBoundingClientRect()
+  const viewportInset = Math.min(156, Math.max(16, window.innerWidth / 2))
+  const x = Math.min(
+    Math.max(rect.left + rect.width / 2, viewportInset),
+    window.innerWidth - viewportInset,
+  )
+  const isAbove = rect.bottom > window.innerHeight - 120
+
+  fileNameTooltip.value = {
+    visible: true,
+    name: getItemName(item),
+    x,
+    y: isAbove ? rect.top - 4 : rect.bottom + 4,
+    isAbove,
+  }
+}
+
+function hideFileNameTooltip(): void {
+  fileNameTooltip.value.visible = false
 }
 
 // 获取图标大小（返回像素值）
@@ -1785,7 +1834,9 @@ async function handleBatchDelete(): Promise<void> {
   display: flex;
   flex-direction: column;
   align-items: center;
-  transition: all var(--transition-fast);
+  transition-property: background-color, border-color, opacity;
+  transition-duration: var(--transition-fast);
+  transition-timing-function: ease;
   position: relative;
   padding: 4px;
 }
@@ -1806,12 +1857,13 @@ async function handleBatchDelete(): Promise<void> {
   border-radius: 8px;
   overflow: hidden;
   cursor: pointer;
-  transition: all var(--transition-fast);
+  transition-property: transform;
+  transition-duration: var(--transition-fast);
+  transition-timing-function: ease;
   background-color: transparent;
 }
 
 .item-draggable-area:hover {
-  background-color: rgba(255, 255, 255, 0.05);
   transform: scale(1.05);
 }
 
@@ -1842,17 +1894,59 @@ async function handleBatchDelete(): Promise<void> {
   text-align: center;
   width: 100%;
   max-width: 90px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
   line-height: 1.2;
   cursor: default;
+  height: calc(2.4em + 4px);
   padding: 2px;
-  border-radius: 2px;
+  position: relative;
 }
 
-.item-name:hover {
-  background-color: rgba(255, 255, 255, 0.05);
+.item-name__label {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow-wrap: anywhere;
+}
+
+.library-media-name-tooltip {
+  position: fixed;
+  z-index: 3000;
+  width: max-content;
+  max-width: min(280px, calc(100vw - 32px));
+  padding: 6px 8px;
+  border-radius: var(--border-radius-small);
+  background-color: var(--color-bg-tertiary);
+  box-shadow:
+    0 2px 8px rgba(0, 0, 0, 0.3),
+    0 8px 20px rgba(0, 0, 0, 0.2);
+  color: var(--color-text-primary);
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+  pointer-events: none;
+  transform: translateX(-50%);
+}
+
+.library-media-name-tooltip.is-above {
+  transform: translate(-50%, -100%);
+}
+
+.file-name-tooltip-enter-active,
+.file-name-tooltip-leave-active {
+  transition-property: opacity, transform;
+  transition-duration: 160ms;
+  transition-timing-function: cubic-bezier(0.2, 0, 0, 1);
+}
+
+.file-name-tooltip-enter-from,
+.file-name-tooltip-leave-to {
+  opacity: 0;
+  transform: translate(-50%, 4px);
+}
+
+.library-media-name-tooltip.is-above.file-name-tooltip-enter-from,
+.library-media-name-tooltip.is-above.file-name-tooltip-leave-to {
+  transform: translate(-50%, calc(-100% + 4px));
 }
 
 /* 剪切状态样式 */

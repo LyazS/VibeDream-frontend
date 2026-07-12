@@ -17,7 +17,6 @@
           'can-drop-tab': tabDragState[tab.id]?.canDrop,
           'cannot-drop-tab': tabDragState[tab.id]?.isDragOver && !tabDragState[tab.id]?.canDrop,
         }"
-        :title="getDirectory(tab.dirId)?.name || ''"
         @click="switchTab(tab.id)"
         @dragenter="handleTabDragEnter($event, tab.id)"
         @dragover="handleTabDragOver($event, tab.id)"
@@ -32,7 +31,7 @@
           v-if="openTabs.length > 1"
           class="tab-close"
           @click.stop="closeTab(tab.id)"
-          :title="t('media.closeTab')"
+          :aria-label="t('media.closeTab')"
         >
           <component :is="IconComponents.CLOSE" size="14px" />
         </button>
@@ -41,7 +40,7 @@
 
     <!-- 固定在底部的新建按钮 -->
     <div class="tabs-footer">
-      <button class="add-tab-btn" @click="openNewTab" :title="t('media.newTab')">
+      <button class="add-tab-btn" @click="openNewTab" :aria-label="t('media.newTab')">
         <component :is="IconComponents.ADD" size="14px" />
         <span class="add-tab-label">{{ t('media.newTab') }}</span>
       </button>
@@ -211,11 +210,13 @@ async function handleTabDrop(event: DragEvent, tabId: string): Promise<void> {
   top: 0;
   height: 100%;
   width: 38px; /* 折叠状态宽度 */
-  background-color: var(--color-bg-tertiary);
+  background-color: var(--color-bg-secondary);
   border-right: 1px solid var(--color-border-primary);
   display: flex;
   flex-direction: column;
-  transition: width 0.3s ease;
+  transition-property: width, box-shadow;
+  transition-duration: 320ms;
+  transition-timing-function: cubic-bezier(0.2, 0, 0, 1);
   z-index: 100;
   overflow: hidden; /* 容器本身不滚动 */
 }
@@ -229,27 +230,29 @@ async function handleTabDrop(event: DragEvent, tabId: string): Promise<void> {
 /* 固定在底部的区域 */
 .tabs-footer {
   flex-shrink: 0;
-  padding: 4px 0;
-  border-top: 1px solid var(--color-border-primary);
+  padding: 2px 0;
 }
 
 /* 展开状态 */
 .library-tabs.expanded {
   width: 132px; /* 展开宽度 */
-  box-shadow: 2px 0 8px rgba(0, 0, 0, 0.3);
+  box-shadow: 2px 0 4px rgba(0, 0, 0, 0.16), 8px 0 16px rgba(0, 0, 0, 0.1);
 }
 
 .tab-item {
   display: flex;
   flex-direction: row;
   align-items: center;
-  padding: 6px 5px;
+  padding: 3px 5px;
   margin: 1px 3px;
+  border: 2px solid transparent;
   border-radius: var(--border-radius-small);
   cursor: pointer;
-  transition: all var(--transition-fast);
+  transition-property: background-color, border-color, box-shadow, color;
+  transition-duration: var(--transition-fast);
   position: relative;
-  min-height: 36px;
+  box-sizing: border-box;
+  min-height: 38px;
 }
 
 .tab-item:hover {
@@ -257,8 +260,7 @@ async function handleTabDrop(event: DragEvent, tabId: string): Promise<void> {
 }
 
 .tab-item.active {
-  background-color: var(--color-accent-primary);
-  color: white;
+  background-color: transparent;
 }
 
 .tab-icon {
@@ -266,21 +268,32 @@ async function handleTabDrop(event: DragEvent, tabId: string): Promise<void> {
   display: flex;
   align-items: center;
   justify-content: center;
+  transition-property: color;
+  transition-duration: var(--transition-fast);
+}
+
+.tab-item.active .tab-icon {
+  color: var(--color-success);
 }
 
 .tab-label {
   font-size: 12px;
   line-height: 1.2;
   margin-left: 6px;
+  min-width: 0;
+  flex: 1;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   opacity: 0;
-  transition: opacity 0.3s ease;
+  transition-property: opacity;
+  transition-duration: 160ms;
+  transition-timing-function: cubic-bezier(0.2, 0, 0, 1);
 }
 
 .library-tabs.expanded .tab-label {
   opacity: 1;
+  transition-delay: 100ms;
 }
 
 .tab-close {
@@ -289,19 +302,27 @@ async function handleTabDrop(event: DragEvent, tabId: string): Promise<void> {
   border: none;
   border-radius: 50%;
   color: currentColor;
-  width: 18px;
-  height: 18px;
+  width: 28px;
+  height: 28px;
   cursor: pointer;
-  display: none;
+  display: flex;
   align-items: center;
   justify-content: center;
-  opacity: 0.6;
-  transition: all var(--transition-fast);
+  opacity: 0;
+  transform: scale(0.25);
+  filter: blur(4px);
+  pointer-events: none;
+  transition-property: opacity, transform, filter, background-color;
+  transition-duration: 180ms;
+  transition-timing-function: cubic-bezier(0.2, 0, 0, 1);
   flex-shrink: 0;
 }
 
 .library-tabs.expanded .tab-item:hover .tab-close {
-  display: flex;
+  opacity: 0.6;
+  transform: scale(1);
+  filter: blur(0);
+  pointer-events: auto;
 }
 
 .tab-close:hover {
@@ -309,79 +330,70 @@ async function handleTabDrop(event: DragEvent, tabId: string): Promise<void> {
   background: rgba(255, 255, 255, 0.1);
 }
 
+.tab-close:active,
+.add-tab-btn:active {
+  transform: scale(0.96);
+}
+
 .add-tab-btn {
   display: flex;
   flex-direction: row;
   align-items: center;
   justify-content: center;
-  min-height: 30px;
-  margin: 4px 6px;
-  padding: 5px;
-  border: 1px dashed var(--color-border-secondary);
+  box-sizing: border-box;
+  min-height: 32px;
+  margin: 1px 3px;
+  padding: 3px 7px;
+  border: none;
   border-radius: var(--border-radius-small);
   background: transparent;
   color: var(--color-text-secondary);
   cursor: pointer;
-  transition: all var(--transition-fast);
+  transform: scale(1);
+  transition-property: background-color, color, transform;
+  transition-duration: var(--transition-fast);
+  transition-timing-function: cubic-bezier(0.2, 0, 0, 1);
 }
 
 .add-tab-label {
   font-size: 12px;
   margin-left: 0;
-  width: 0;
+  max-width: 0;
   opacity: 0;
   overflow: hidden;
-  transition: all 0.3s ease;
+  transition-property: max-width, margin-left, opacity;
+  transition-duration: 160ms;
+  transition-timing-function: cubic-bezier(0.2, 0, 0, 1);
   white-space: nowrap;
+}
+
+.library-tabs.expanded .add-tab-btn {
+  justify-content: flex-start;
 }
 
 .library-tabs.expanded .add-tab-label {
   margin-left: 6px;
-  width: auto;
+  max-width: 72px;
   opacity: 1;
+  transition-delay: 100ms;
 }
 
 /* 拖拽反馈样式 */
-.tab-item {
-  border: 2px solid transparent;
-}
-
 .tab-item.can-drop-tab {
   border-color: #28a745;
   background-color: rgba(40, 167, 69, 0.15);
-  box-shadow: 0 0 0 2px rgba(40, 167, 69, 0.3);
-  transform: scale(1.05);
+  box-shadow: inset 0 0 0 1px rgba(40, 167, 69, 0.32);
 }
 
 .tab-item.cannot-drop-tab {
   border-color: #dc3545;
   background-color: rgba(220, 53, 69, 0.15);
-  box-shadow: 0 0 0 2px rgba(220, 53, 69, 0.3);
+  box-shadow: inset 0 0 0 1px rgba(220, 53, 69, 0.32);
   cursor: not-allowed;
 }
 
 .add-tab-btn:hover {
-  border-color: var(--color-accent-primary);
-  color: var(--color-accent-primary);
-  background: rgba(59, 130, 246, 0.1);
-}
-
-/* 拖拽反馈样式 */
-.tab-item {
-  border: 2px solid transparent;
-}
-
-.tab-item.can-drop-tab {
-  border-color: #28a745;
-  background-color: rgba(40, 167, 69, 0.15);
-  box-shadow: 0 0 0 2px rgba(40, 167, 69, 0.3);
-  transform: scale(1.05);
-}
-
-.tab-item.cannot-drop-tab {
-  border-color: #dc3545;
-  background-color: rgba(220, 53, 69, 0.15);
-  box-shadow: 0 0 0 2px rgba(220, 53, 69, 0.3);
-  cursor: not-allowed;
+  color: var(--color-text-primary);
+  background-color: var(--color-bg-hover);
 }
 </style>

@@ -17,15 +17,14 @@
 
       <div v-if="hasMaskConfig" class="property-item">
         <label>{{ t('properties.mask.type') }}</label>
-        <select
-          class="property-input mask-select"
-          :value="maskConfig.type"
-          @change="setType(($event.target as HTMLSelectElement).value as MaskType)"
-        >
-          <option v-for="option in typeOptions" :key="option.value" :value="option.value">
-            {{ option.label }}
-          </option>
-        </select>
+        <SearchableSelect
+          class="mask-select"
+          :model-value="maskConfig.type"
+          :options="typeOptions"
+          :searchable="false"
+          :placeholder="t('properties.mask.type')"
+          @update:model-value="(value) => setType(value as MaskType)"
+        />
       </div>
 
       <div v-if="hasMaskConfig" class="property-item">
@@ -242,6 +241,7 @@ import { computed } from 'vue'
 import { useAppI18n, useUnifiedMaskKeyframeControls } from '@/core/composables'
 import type { UnifiedTimelineItemData } from '@/core/timelineitem/model/timelineItem'
 import type { MaskType } from '@/core/timelineitem/features/mask'
+import SearchableSelect from '@/components/base/SearchableSelect.vue'
 import KeyframedDualNumberField from '@/components/properties/common/KeyframedDualNumberField.vue'
 import KeyframedSliderField from '@/components/properties/common/KeyframedSliderField.vue'
 
@@ -351,21 +351,8 @@ async function commitEllipseMaskSizeChange(axis: 'ellipseWidth' | 'ellipseHeight
 }
 
 .mask-select {
-  min-height: 30px;
-  appearance: none;
-  -webkit-appearance: none;
-  padding-right: 32px;
-  background-color: var(--color-bg-quaternary);
-  background-image:
-    linear-gradient(45deg, transparent 50%, var(--color-text-secondary) 50%),
-    linear-gradient(135deg, var(--color-text-secondary) 50%, transparent 50%);
-  background-position:
-    calc(100% - 18px) calc(50% - 3px),
-    calc(100% - 12px) calc(50% - 3px);
-  background-size:
-    6px 6px,
-    6px 6px;
-  background-repeat: no-repeat;
+  flex: 1;
+  min-width: 0;
 }
 
 .compact-boolean-control {

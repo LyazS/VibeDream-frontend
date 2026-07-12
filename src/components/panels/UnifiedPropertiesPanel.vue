@@ -13,7 +13,9 @@
             <span class="item-name">
               {{ item?.name || t('properties.multiSelect.unknownMedia') }}
             </span>
-            <span class="item-type">{{ item ? getLibraryAssetTypeLabel(item) : t('properties.mediaTypes.unknown') }}</span>
+            <span class="item-type">{{
+              item ? getLibraryAssetTypeLabel(item) : t('properties.mediaTypes.unknown')
+            }}</span>
           </div>
         </div>
       </div>
@@ -43,7 +45,10 @@
       </div>
     </n-scrollbar>
 
-    <n-scrollbar v-else-if="selectedTransitionOverlay && selectedTransitionTimelineItem" class="properties-scroll-area">
+    <n-scrollbar
+      v-else-if="selectedTransitionOverlay && selectedTransitionTimelineItem"
+      class="properties-scroll-area"
+    >
       <div class="properties-content">
         <TransitionPropertiesGroup :selected-timeline-item="selectedTransitionTimelineItem" />
       </div>
@@ -53,20 +58,14 @@
     <template v-else-if="selectedTimelineItem">
       <!-- 只在ready状态时显示完整属性面板 -->
       <template v-if="selectedTimelineItem.timelineStatus === 'ready'">
-        <div class="property-tabs" role="tablist" aria-label="Property tabs">
-          <button
+        <n-tabs v-model:value="activePropertyTab" type="line" animated class="property-tabs">
+          <n-tab
             v-for="tab in propertyTabs"
             :key="tab.key"
-            type="button"
-            class="property-tab"
-            :class="{ active: activePropertyTab === tab.key }"
-            :aria-selected="activePropertyTab === tab.key"
-            :tabindex="activePropertyTab === tab.key ? 0 : -1"
-            @click="activePropertyTab = tab.key"
-          >
-            {{ t(tab.labelKey) }}
-          </button>
-        </div>
+            :name="tab.key"
+            :tab="t(tab.labelKey)"
+          />
+        </n-tabs>
 
         <n-scrollbar class="properties-scroll-area">
           <div class="properties-content properties-content--tabbed">
@@ -78,13 +77,21 @@
             />
 
             <MaskPropertiesGroup
-              v-else-if="activePropertyTab === 'mask' && selectedTimelineItem && hasVisualProperties(selectedTimelineItem)"
+              v-else-if="
+                activePropertyTab === 'mask' &&
+                selectedTimelineItem &&
+                hasVisualProperties(selectedTimelineItem)
+              "
               :selected-timeline-item="selectedTimelineItem"
               :current-frame="currentFrame"
             />
 
             <FilterPropertiesGroup
-              v-else-if="activePropertyTab === 'filter' && selectedTimelineItem && supportsClipFilter(selectedTimelineItem)"
+              v-else-if="
+                activePropertyTab === 'filter' &&
+                selectedTimelineItem &&
+                supportsClipFilter(selectedTimelineItem)
+              "
               :selected-timeline-item="selectedTimelineItem"
               :current-frame="currentFrame"
             />
@@ -136,7 +143,7 @@ import { effectTemplateRegistry } from '@/core/effect-template/EffectTemplateReg
 import { TimelineItemQueries } from '@/core/timelineitem/queries'
 import { useUnifiedStore } from '@/core/unifiedStore'
 import { useAppI18n } from '@/core/composables/useI18n'
-import { NScrollbar } from 'naive-ui'
+import { NScrollbar, NTab, NTabs } from 'naive-ui'
 import type { UnifiedTimelineItemData } from '@/core/timelineitem/model/timelineItem'
 import { getStatusText } from '@/core/timelineitem/queries'
 import { hasVisualProperties } from '@/core/timelineitem/queries'
@@ -220,8 +227,10 @@ const selectedMediaItem = computed(() => {
 const currentFrame = computed(() => unifiedStore.currentFrame)
 
 const activeTabLabelKey = computed(() => {
-  return propertyTabs.value.find((tab) => tab.key === activePropertyTab.value)?.labelKey
-    ?? 'properties.tabs.basic'
+  return (
+    propertyTabs.value.find((tab) => tab.key === activePropertyTab.value)?.labelKey ??
+    'properties.tabs.basic'
+  )
 })
 
 // 多选状态信息
@@ -307,11 +316,15 @@ function formatDate(value: string): string {
   return date.toLocaleString()
 }
 
-watch(propertyTabs, (tabs) => {
-  if (!tabs.some((tab) => tab.key === activePropertyTab.value)) {
-    unifiedStore.setActivePropertyTab('basic')
-  }
-}, { immediate: true })
+watch(
+  propertyTabs,
+  (tabs) => {
+    if (!tabs.some((tab) => tab.key === activePropertyTab.value)) {
+      unifiedStore.setActivePropertyTab('basic')
+    }
+  },
+  { immediate: true },
+)
 </script>
 
 <style scoped>
@@ -333,34 +346,31 @@ watch(propertyTabs, (tabs) => {
 /* 属性面板特定样式 - 通用属性样式已迁移到 styles/components/panels.css 和 styles/components/inputs.css */
 
 .property-tabs {
-  display: flex;
-  gap: var(--spacing-xs);
-  padding: var(--spacing-sm) var(--spacing-lg) 0;
-  border-bottom: 1px solid var(--color-border-primary);
-  background-color: var(--color-bg-secondary);
+  padding: 0 var(--spacing-lg);
   flex-shrink: 0;
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.06);
 }
 
-.property-tab {
-  border: none;
-  border-bottom: 2px solid transparent;
-  background: transparent;
-  color: var(--color-text-secondary);
-  cursor: pointer;
-  padding: var(--spacing-sm) var(--spacing-xs);
-  margin-bottom: -1px;
+.property-tabs:deep(.n-tabs-nav) {
+  padding: 0;
+}
+
+.property-tabs:deep(.n-tabs-tab) {
+  min-height: 34px;
+  padding: 0 var(--spacing-sm);
   font-size: var(--font-size-sm);
   font-weight: var(--font-weight-medium);
-  transition: color 0.2s ease, border-color 0.2s ease, background-color 0.2s ease;
+  transition-property: color, opacity;
+  transition-duration: var(--transition-fast);
+  transition-timing-function: ease-out;
 }
 
-.property-tab:hover {
-  color: var(--color-text-primary);
+.property-tabs:deep(.n-tabs-tab-wrapper:not(:last-child)) {
+  margin-right: var(--spacing-xs);
 }
 
-.property-tab.active {
-  color: var(--color-accent-primary);
-  border-bottom-color: var(--color-accent-primary);
+.property-tabs:deep(.n-tabs-bar) {
+  height: 2px;
 }
 
 .properties-content {
@@ -410,11 +420,12 @@ watch(propertyTabs, (tabs) => {
   display: flex;
   flex-direction: column;
   align-items: center;
+  justify-content: center;
   text-align: center;
   color: var(--color-text-secondary);
   padding: var(--spacing-lg);
-  height: 100%;
-  overflow: hidden;
+  min-height: 100%;
+  box-sizing: border-box;
 }
 
 .multi-select-state svg {
@@ -427,6 +438,11 @@ watch(propertyTabs, (tabs) => {
   font-size: var(--font-size-base);
 }
 
+.multi-select-state > p:first-of-type {
+  font-variant-numeric: tabular-nums;
+  text-wrap: balance;
+}
+
 .multi-select-state .hint {
   font-size: var(--font-size-sm);
   color: var(--color-text-hint);
@@ -435,19 +451,19 @@ watch(propertyTabs, (tabs) => {
 .selected-items-list {
   margin-top: var(--spacing-lg);
   width: 100%;
-  flex: 1;
-  overflow-y: auto;
-  min-height: 0;
+  max-width: 360px;
 }
 
 .selected-item {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  min-height: 32px;
   padding: var(--spacing-xs) var(--spacing-sm);
   margin-bottom: var(--spacing-xs);
-  background: var(--color-bg-quaternary);
-  border-radius: var(--border-radius-small);
+  background: rgba(255, 255, 255, 0.055);
+  border-radius: var(--border-radius-medium);
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.055);
   font-size: var(--font-size-sm);
 }
 
@@ -464,6 +480,7 @@ watch(propertyTabs, (tabs) => {
   color: var(--color-text-hint);
   font-size: var(--font-size-xs);
   flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
 }
 
 /* 加载状态样式 */
@@ -472,6 +489,8 @@ watch(propertyTabs, (tabs) => {
   flex-direction: column;
   align-items: center;
   justify-content: center;
+  min-height: 100%;
+  box-sizing: border-box;
   padding: var(--spacing-lg);
   text-align: center;
   color: var(--color-text-secondary);
@@ -502,6 +521,7 @@ watch(propertyTabs, (tabs) => {
   display: flex;
   flex-direction: column;
   align-items: center;
+  justify-content: center;
   text-align: center;
   color: var(--color-text-secondary);
   padding: var(--spacing-lg);
@@ -520,6 +540,7 @@ watch(propertyTabs, (tabs) => {
 .tab-placeholder-state p {
   margin: var(--spacing-xs) 0;
   font-size: var(--font-size-base);
+  text-wrap: balance;
 }
 
 .empty-state .hint,
@@ -527,6 +548,21 @@ watch(propertyTabs, (tabs) => {
 .tab-placeholder-state .hint {
   font-size: var(--font-size-sm);
   color: var(--color-text-hint);
+  text-wrap: pretty;
+}
+
+.media-multi-select-state > p:first-of-type {
+  font-variant-numeric: tabular-nums;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .property-tabs:deep(.n-tabs-tab) {
+    transition-duration: 0ms;
+  }
+
+  .loading-icon {
+    animation: none;
+  }
 }
 
 @keyframes spin {

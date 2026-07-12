@@ -59,7 +59,7 @@ const { t } = useAppI18n()
 }
 
 .keyframe-nav-btn {
-  width: 12px;
+  width: 10px;
   height: 22px;
   border-radius: 0;
   border: none;
@@ -70,7 +70,9 @@ const { t } = useAppI18n()
   align-items: center;
   justify-content: center;
   padding: 0;
-  transition: all var(--transition-fast);
+  transition-property: color, opacity, transform;
+  transition-duration: var(--transition-fast);
+  transition-timing-function: ease;
   flex: 0 0 auto;
 }
 
@@ -81,6 +83,11 @@ const { t } = useAppI18n()
 .keyframe-nav-btn:hover:not(:disabled) {
   background: transparent;
   color: var(--color-text-primary);
+  transform: scaleY(1.5);
+}
+
+.keyframe-nav-btn:active:not(:disabled) {
+  transform: scale(0.96);
 }
 
 .keyframe-nav-btn:disabled {
@@ -91,28 +98,37 @@ const { t } = useAppI18n()
 }
 
 .property-keyframe-btn {
-  width: 22px;
+  width: 15px;
   height: 22px;
   border-radius: var(--border-radius-small);
-  border: 1px solid var(--color-border-secondary);
-  background: var(--color-bg-active);
+  border: none;
+  background: transparent;
   color: var(--color-text-secondary);
   cursor: pointer;
-  font-size: 12px;
+  font-size: 15px;
   line-height: 1;
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  transition-property: transform;
+  transition-duration: var(--transition-fast);
+  transition-timing-function: ease;
+}
+
+.property-keyframe-btn:hover:not(:disabled) {
+  transform: scale(1.2);
+}
+
+.property-keyframe-btn:active:not(:disabled) {
+  transform: scale(0.96);
 }
 
 .property-keyframe-btn.state-on-keyframe {
   color: #5ba6ff;
-  border-color: #5ba6ff;
 }
 
 .property-keyframe-btn.state-between-keyframes {
   color: #d9a441;
-  border-color: #d9a441;
 }
 
 .property-keyframe-btn:disabled {

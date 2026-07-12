@@ -10,13 +10,7 @@
 
     <div class="effect-template-library">
       <div class="effect-template-library__toolbar">
-        <label class="effect-template-library__search">
-          <component :is="IconComponents.SEARCH" size="16px" />
-          <input
-            v-model="search"
-            :placeholder="searchPlaceholder"
-          />
-        </label>
+        <EffectTemplateSearch v-model="search" :placeholder="searchPlaceholder" />
       </div>
 
       <div v-if="filteredItems.length === 0" class="effect-template-library__empty">
@@ -41,7 +35,10 @@
           @click="void handleItemClick(item)"
           @dragstart="handleDragStart($event, item)"
         >
-          <div class="effect-template-item__icon" :class="`effect-template-item__icon--${props.effectType}`">
+          <div
+            class="effect-template-item__icon"
+            :class="`effect-template-item__icon--${props.effectType}`"
+          >
             <component :is="getEffectTypeIcon(props.effectType)" size="24px" />
             <div
               class="effect-template-item__status"
@@ -53,7 +50,9 @@
               <component
                 :is="getStatusIcon(item)"
                 size="12px"
-                :class="{ 'effect-template-item__status-icon--spin': getStatusTone(item) === 'processing' }"
+                :class="{
+                  'effect-template-item__status-icon--spin': getStatusTone(item) === 'processing',
+                }"
               />
             </div>
           </div>
@@ -74,7 +73,10 @@
           @click="void handleItemClick(item)"
           @dragstart="handleDragStart($event, item)"
         >
-          <div class="effect-template-list-item__icon" :class="`effect-template-list-item__icon--${props.effectType}`">
+          <div
+            class="effect-template-list-item__icon"
+            :class="`effect-template-list-item__icon--${props.effectType}`"
+          >
             <component :is="getEffectTypeIcon(props.effectType)" size="18px" />
             <div
               class="effect-template-item__status"
@@ -86,7 +88,9 @@
               <component
                 :is="getStatusIcon(item)"
                 size="12px"
-                :class="{ 'effect-template-item__status-icon--spin': getStatusTone(item) === 'processing' }"
+                :class="{
+                  'effect-template-item__status-icon--spin': getStatusTone(item) === 'processing',
+                }"
               />
             </div>
           </div>
@@ -101,9 +105,13 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import LibrarySidebarShell from './LibrarySidebarShell.vue'
 import EffectTemplateCategoryTabs from './EffectTemplateCategoryTabs.vue'
+import EffectTemplateSearch from './EffectTemplateSearch.vue'
 import { IconComponents, getEffectTypeIcon } from '@/constants/iconComponents'
 import { effectTemplateRegistry } from '@/core/effect-template/EffectTemplateRegistry'
-import type { CommonEffectType, CommonEffectTemplateStatus } from '@/core/effect-template/commonTypes'
+import type {
+  CommonEffectType,
+  CommonEffectTemplateStatus,
+} from '@/core/effect-template/commonTypes'
 import { DragSourceType, type MediaItemDragData } from '@/core/types/drag'
 import { useUnifiedStore } from '@/core/unifiedStore'
 import { useAppI18n } from '@/core/composables/useI18n'
@@ -150,9 +158,12 @@ onMounted(() => {
   void refresh()
 })
 
-watch(() => props.effectType, () => {
-  void refresh()
-})
+watch(
+  () => props.effectType,
+  () => {
+    void refresh()
+  },
+)
 
 const items = computed<DisplayItem[]>(() =>
   effectTemplateRegistry
@@ -160,17 +171,28 @@ const items = computed<DisplayItem[]>(() =>
     .map((state) => {
       const isZhLocale = locale.value === 'zh-CN'
       const localizedName = isZhLocale
-        ? (state.meta?.name.zh || state.meta?.name.en || state.templateId)
-        : (state.meta?.name.en || state.meta?.name.zh || state.templateId)
+        ? state.meta?.name.zh || state.meta?.name.en || state.templateId
+        : state.meta?.name.en || state.meta?.name.zh || state.templateId
       const localizedSummary = isZhLocale
-        ? (state.meta?.summary.zh || state.meta?.summary.en || '')
-        : (state.meta?.summary.en || state.meta?.summary.zh || '')
+        ? state.meta?.summary.zh || state.meta?.summary.en || ''
+        : state.meta?.summary.en || state.meta?.summary.zh || ''
       const localizedTags = isZhLocale
-        ? (state.meta?.tags.zh?.length ? state.meta.tags.zh : (state.meta?.tags.en || []))
-        : (state.meta?.tags.en?.length ? state.meta.tags.en : (state.meta?.tags.zh || []))
-      const categoryLabel = locale.value === 'zh-CN'
-        ? (state.meta?.category.label.zh || state.meta?.category.label.en || state.meta?.category.key || '')
-        : (state.meta?.category.label.en || state.meta?.category.label.zh || state.meta?.category.key || '')
+        ? state.meta?.tags.zh?.length
+          ? state.meta.tags.zh
+          : state.meta?.tags.en || []
+        : state.meta?.tags.en?.length
+          ? state.meta.tags.en
+          : state.meta?.tags.zh || []
+      const categoryLabel =
+        locale.value === 'zh-CN'
+          ? state.meta?.category.label.zh ||
+            state.meta?.category.label.en ||
+            state.meta?.category.key ||
+            ''
+          : state.meta?.category.label.en ||
+            state.meta?.category.label.zh ||
+            state.meta?.category.key ||
+            ''
 
       return {
         effectPackageId: state.effectPackageId,
@@ -193,7 +215,9 @@ const items = computed<DisplayItem[]>(() =>
         durationFrames: state.meta?.transitionDurationFrames,
       }
     })
-    .sort((a, b) => a.displayName.localeCompare(b.displayName, locale.value === 'zh-CN' ? 'zh-CN' : 'en')),
+    .sort((a, b) =>
+      a.displayName.localeCompare(b.displayName, locale.value === 'zh-CN' ? 'zh-CN' : 'en'),
+    ),
 )
 
 const categoryTabs = computed(() => {
@@ -220,15 +244,19 @@ const categoryTabs = computed(() => {
   ]
 })
 
-const activeCategoryKey = computed(() =>
-  unifiedStore.effectTemplateCategorySelection[props.effectType] || 'all',
+const activeCategoryKey = computed(
+  () => unifiedStore.effectTemplateCategorySelection[props.effectType] || 'all',
 )
 
-watch(categoryTabs, (tabs) => {
-  if (!tabs.some((tab) => tab.key === activeCategoryKey.value)) {
-    unifiedStore.setEffectTemplateCategory(props.effectType, 'all')
-  }
-}, { immediate: true })
+watch(
+  categoryTabs,
+  (tabs) => {
+    if (!tabs.some((tab) => tab.key === activeCategoryKey.value)) {
+      unifiedStore.setEffectTemplateCategory(props.effectType, 'all')
+    }
+  },
+  { immediate: true },
+)
 
 const filteredItems = computed(() => {
   const keyword = search.value.trim().toLowerCase()
@@ -333,40 +361,14 @@ function handleDragStart(event: DragEvent, item: DisplayItem): void {
   height: 100%;
   display: flex;
   flex-direction: column;
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.02), transparent),
-    var(--color-bg-secondary);
+  background: var(--color-bg-secondary);
 }
 
 .effect-template-library__toolbar {
   display: flex;
   align-items: center;
   padding: 10px;
-  border-bottom: 1px solid var(--color-border-primary);
-  background: var(--color-bg-tertiary);
-}
-
-.effect-template-library__search {
-  flex: 1;
-  min-width: 0;
-  height: 34px;
-  border: 1px solid var(--color-border-secondary);
-  border-radius: 10px;
   background: var(--color-bg-secondary);
-  color: var(--color-text-secondary);
-  padding: 0 10px;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.effect-template-library__search input {
-  flex: 1;
-  min-width: 0;
-  background: transparent;
-  border: none;
-  color: var(--color-text-primary);
-  outline: none;
 }
 
 .effect-template-library__empty {

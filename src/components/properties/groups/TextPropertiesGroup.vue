@@ -1007,6 +1007,14 @@ const handleGlowColorChange = (event: Event) => {
   align-items: center;
   gap: var(--spacing-md);
   flex: 1;
+  min-width: 0;
+  container-type: inline-size;
+}
+
+@container (max-width: 148px) {
+  .font-size-controls :deep(.slider-container) {
+    display: none;
+  }
 }
 
 .font-style-controls {
@@ -1140,6 +1148,16 @@ const handleGlowColorChange = (event: Event) => {
   display: flex;
   align-items: center;
   gap: var(--spacing-sm);
+  min-width: 0;
+  container-type: inline-size;
+}
+
+@container (max-width: 180px) {
+  .shadow-setting-row :deep(.slider-container),
+  .stroke-setting-row :deep(.slider-container),
+  .glow-setting-row :deep(.slider-container) {
+    display: none;
+  }
 }
 
 .setting-label {

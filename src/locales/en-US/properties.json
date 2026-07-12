@@ -1,9 +1,6 @@
 {
   "properties": {
     "basic": {
-      "basicInfo": "Basic Information",
-      "name": "Name",
-      "resolution": "Resolution",
       "textContent": "Text Content",
       "fontFamily": "Font",
       "fontSize": "Font Size",

@@ -33,7 +33,10 @@
           @click="toggleMute"
           :disabled="!canOperateVisualChannels"
           class="mute-btn"
+          :class="{ 'is-muted': isMuted }"
           :title="isMuted ? t('properties.playback.unmuteTitle') : t('properties.playback.muteTitle')"
+          :aria-label="isMuted ? t('properties.playback.unmuteTitle') : t('properties.playback.muteTitle')"
+          :aria-pressed="isMuted"
         >
           <component :is="getMuteIcon(isMuted)" size="14px" />
         </button>
@@ -119,39 +122,63 @@ const toggleMute = async () => {
   align-items: center;
   gap: var(--spacing-md);
   flex: 1;
+  min-width: 0;
+  container-type: inline-size;
+}
+
+@container (max-width: 223px) {
+  .volume-controls :deep(.slider-container) {
+    display: none;
+  }
 }
 
 .mute-btn {
-  background: var(--color-bg-quaternary);
-  border: 1px solid var(--color-border-secondary);
+  box-sizing: border-box;
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-bg-hover);
   border-radius: var(--border-radius-small);
-  color: var(--color-text-primary);
+  color: var(--color-text-secondary);
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
   padding: var(--spacing-xs);
-  transition: all 0.2s ease;
+  transition-property: background-color, border-color, box-shadow, color, transform;
+  transition-duration: var(--transition-fast);
+  transition-timing-function: ease-out;
   width: 24px;
   height: 24px;
 }
 
-.mute-btn:hover {
+.mute-btn:hover:not(:disabled) {
+  background: var(--color-bg-hover);
+  color: var(--color-text-primary);
+}
+
+.mute-btn:active:not(:disabled) {
+  background: var(--color-bg-active);
+  transform: scale(0.96);
+}
+
+.mute-btn:focus-visible {
+  outline: 1px solid var(--color-border-hover);
+  outline-offset: -1px;
+}
+
+.mute-btn.is-muted {
   background: var(--color-bg-tertiary);
-  border-color: var(--color-border-focus);
+  color: var(--color-accent-warning);
+}
+
+.mute-btn.is-muted:hover:not(:disabled) {
+  background: var(--color-bg-active);
+  color: var(--color-accent-warning);
 }
 
 .mute-btn:disabled {
   opacity: 0.4;
   cursor: not-allowed;
-  background: var(--color-bg-tertiary);
   color: var(--color-text-muted);
-  border-color: var(--color-border-secondary);
-}
-
-.mute-btn:disabled:hover {
-  background: var(--color-bg-tertiary);
-  border-color: var(--color-border-secondary);
 }
 
 .animated-property-label--on-keyframe {

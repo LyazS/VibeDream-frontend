@@ -52,18 +52,22 @@ const isExpanded = ref(false)
   top: 0;
   height: 100%;
   width: 38px;
-  background-color: var(--color-bg-tertiary);
+  background-color: var(--color-bg-secondary);
   border-right: 1px solid var(--color-border-primary);
   display: flex;
   flex-direction: column;
-  transition: width 0.3s ease;
+  transition-property: width, box-shadow;
+  transition-duration: 320ms;
+  transition-timing-function: cubic-bezier(0.2, 0, 0, 1);
   z-index: 100;
   overflow: hidden;
 }
 
 .template-category-tabs.expanded {
   width: 132px;
-  box-shadow: 2px 0 8px rgba(0, 0, 0, 0.3);
+  box-shadow:
+    2px 0 4px rgba(0, 0, 0, 0.16),
+    8px 0 16px rgba(0, 0, 0, 0.1);
 }
 
 .template-category-tabs__scroll {
@@ -76,18 +80,20 @@ const isExpanded = ref(false)
   display: flex;
   flex-direction: row;
   align-items: center;
-  padding: 6px 5px;
+  padding: 3px 5px;
   margin: 1px 3px;
+  border: 2px solid transparent;
   border-radius: var(--border-radius-small);
   cursor: pointer;
-  transition: all var(--transition-fast);
-  min-height: 36px;
-  border: none;
+  transition-property: background-color, border-color, color;
+  transition-duration: var(--transition-fast);
+  min-height: 38px;
   background: transparent;
   color: var(--color-text-secondary);
   text-align: left;
   appearance: none;
   -webkit-appearance: none;
+  box-sizing: border-box;
 }
 
 .template-category-tabs__item:hover {
@@ -96,8 +102,8 @@ const isExpanded = ref(false)
 }
 
 .template-category-tabs__item.active {
-  background-color: var(--color-accent-primary);
-  color: #fff;
+  background-color: transparent;
+  color: var(--color-text-primary);
 }
 
 .template-category-tabs__icon {
@@ -105,18 +111,27 @@ const isExpanded = ref(false)
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
+  transition-property: color;
+  transition-duration: var(--transition-fast);
+}
+
+.template-category-tabs__item.active .template-category-tabs__icon {
+  color: var(--color-accent-primary);
 }
 
 .template-category-tabs__label {
   margin-left: 6px;
   white-space: nowrap;
   opacity: 0;
-  transition: opacity 0.2s ease;
+  transition-property: opacity;
+  transition-duration: 160ms;
+  transition-timing-function: cubic-bezier(0.2, 0, 0, 1);
   font-size: 12px;
   font-weight: 500;
 }
 
 .template-category-tabs.expanded .template-category-tabs__label {
   opacity: 1;
+  transition-delay: 100ms;
 }
 </style>

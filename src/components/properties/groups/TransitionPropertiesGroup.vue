@@ -420,6 +420,15 @@ function handleTimecodeError(message: string) {
   display: flex;
   align-items: center;
   gap: var(--spacing-xs);
+  flex: 1;
+  min-width: 0;
+  container-type: inline-size;
+}
+
+@container (max-width: 152px) {
+  .transition-properties-group__slider-row :deep(.slider-container) {
+    display: none;
+  }
 }
 
 .transition-properties-group__vec2-row {

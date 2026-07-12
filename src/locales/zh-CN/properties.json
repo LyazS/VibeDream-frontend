@@ -1,9 +1,6 @@
 {
   "properties": {
     "basic": {
-      "basicInfo": "基本信息",
-      "name": "名称",
-      "resolution": "分辨率",
       "textContent": "文本内容",
       "fontFamily": "字体",
       "fontSize": "字体大小",

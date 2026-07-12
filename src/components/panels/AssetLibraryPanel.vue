@@ -65,10 +65,6 @@ function switchSection(section: LibrarySectionKey): void {
 .asset-library-panel__tabs {
   flex-shrink: 0;
   padding: 0 10px;
-  border-bottom: 1px solid var(--color-border-primary);
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.03), transparent),
-    var(--color-bg-tertiary);
 }
 
 .asset-library-panel__tabs:deep(.n-tabs-nav) {
@@ -77,8 +73,6 @@ function switchSection(section: LibrarySectionKey): void {
 
 .asset-library-panel__tabs:deep(.n-tabs-tab) {
   padding: 8px 0 7px;
-  font-size: 12px;
-  font-weight: 600;
 }
 
 .asset-library-panel__tabs:deep(.n-tabs-nav-scroll-wrapper) {

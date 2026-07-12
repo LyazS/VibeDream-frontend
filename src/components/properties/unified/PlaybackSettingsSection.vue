@@ -23,6 +23,7 @@
           :min="0"
           :max="100"
           :step="1"
+          container-class="speed-slider-container"
           slider-class="segmented-speed-slider"
           :segments="speedSliderSegments"
         />
@@ -238,5 +239,13 @@ const updateTargetDurationFrames = async (newDurationFrames: number) => {
   align-items: center;
   gap: var(--spacing-md);
   flex: 1;
+  min-width: 0;
+  container-type: inline-size;
+}
+
+@container (max-width: 140px) {
+  .speed-controls :deep(.speed-slider-container) {
+    display: none;
+  }
 }
 </style>

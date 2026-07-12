@@ -112,7 +112,7 @@
 import { computed } from 'vue'
 import { useUnifiedStore } from '@/core/unifiedStore'
 import { useAppI18n } from '@/core/composables/useI18n'
-import { framesToTimecode } from '@/core/utils/timeUtils'
+import { framesToTimecodeCompact } from '@/core/utils/timeUtils'
 import { IconComponents } from '@/constants/iconComponents'
 
 interface Props {
@@ -138,7 +138,7 @@ function handleDragEnd() {
 
 // 格式化时长显示（使用时间码格式）
 function formatDuration(frames: number): string {
-  return framesToTimecode(frames)
+  return framesToTimecodeCompact(frames).replace(/\+\d+$/, '')
 }
 </script>
 
@@ -178,7 +178,6 @@ function formatDuration(frames: number): string {
   display: flex;
   align-items: center;
   justify-content: center;
-  background-color: rgba(0, 0, 0, 0.1);
   color: var(--color-primary);
 }
 
@@ -204,7 +203,7 @@ function formatDuration(frames: number): string {
   position: absolute;
   top: 2px;
   right: 2px;
-  background-color: rgba(0, 0, 0, 0.8);
+  background-color: rgba(107, 114, 128, 0.65);
   color: white;
   font-size: 9px;
   padding: 2px 4px;

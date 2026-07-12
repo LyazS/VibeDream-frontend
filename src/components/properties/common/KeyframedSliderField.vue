@@ -86,6 +86,13 @@ const labelClass = computed(() => ({
   gap: var(--spacing-xs);
   flex: 1;
   min-width: 0;
+  container-type: inline-size;
+}
+
+@container (max-width: 184px) {
+  .slider-number-controls :deep(.slider-container) {
+    display: none;
+  }
 }
 
 .animated-property-label--on-keyframe {

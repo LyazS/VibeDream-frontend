@@ -1,12 +1,5 @@
 <template>
   <div class="unified-clip-properties">
-    <!-- 基本信息 - 非文本类型显示 -->
-    <BasicInfoSection
-      v-if="selectedTimelineItem && !isTextTimelineItem(selectedTimelineItem)"
-      :selected-timeline-item="selectedTimelineItem"
-      :show-resolution="selectedTimelineItem ? hasVisualProperties(selectedTimelineItem) : false"
-    />
-
     <!-- 播放设置 -->
     <PlaybackSettingsSection
       v-if="selectedTimelineItem"
@@ -48,7 +41,6 @@ import {
 } from '@/core/timelineitem/queries'
 import type { UnifiedTimelineItemData } from '@/core/timelineitem/model/timelineItem'
 
-import BasicInfoSection from './BasicInfoSection.vue'
 import PlaybackSettingsSection from './PlaybackSettingsSection.vue'
 import TextPropertiesGroup from '../groups/TextPropertiesGroup.vue'
 import VisualPropertiesGroup from '../groups/VisualPropertiesGroup.vue'
