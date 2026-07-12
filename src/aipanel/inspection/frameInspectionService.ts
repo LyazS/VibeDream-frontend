@@ -33,6 +33,17 @@ export interface FrameInspectionApiResponse {
   model: string
 }
 
+export type FrameInspectionRunStage = 'capturing' | 'captured' | 'uploading' | 'inspecting'
+
+export interface FrameInspectionRunProgress {
+  stage: FrameInspectionRunStage
+  capturedFrames?: CapturedFrameInspectionPoint[]
+  completedCount?: number
+  totalCount?: number
+  fileProgress?: number
+  point?: CapturedFrameInspectionPoint
+}
+
 export interface CaptureInspectionFramesOptions {
   points: FrameInspectionPoint[]
   timelineItems: UnifiedTimelineItemData<MediaType>[]
@@ -42,8 +53,20 @@ export interface CaptureInspectionFramesOptions {
   videoResolution: { width: number; height: number }
 }
 
+export interface RunFrameInspectionOptions extends CaptureInspectionFramesOptions {
+  instruction: string
+  signal?: AbortSignal
+  onProgress?: (progress: FrameInspectionRunProgress) => void
+}
+
+export interface FrameInspectionRunResult {
+  capturedFrames: CapturedFrameInspectionPoint[]
+  uploadedFrames: UploadedFrameInspectionPoint[]
+  response: FrameInspectionApiResponse
+}
+
 export function normalizeInspectionTimecode(value: string): string {
-  return value.trim().replace("+", ":")
+  return value.trim().replace('+', ':')
 }
 
 export function parseInspectionTimecode(value: string): number {
@@ -58,11 +81,7 @@ export function parseInspectionTimecode(value: string): number {
   const seconds = Number(match[3])
   const frames = Number(match[4])
 
-  if (
-    minutes >= 60
-    || seconds >= 60
-    || frames >= TimeConstants.FRAME_RATE
-  ) {
+  if (minutes >= 60 || seconds >= 60 || frames >= TimeConstants.FRAME_RATE) {
     throw new Error('invalid_timecode_value')
   }
 
@@ -180,4 +199,46 @@ export async function callFrameInspectionApi(
   }
 
   return response.data
+}
+
+function throwIfAborted(signal?: AbortSignal): void {
+  if (signal?.aborted) {
+    throw new DOMException('Frame inspection execution aborted', 'AbortError')
+  }
+}
+
+/** Shared browser-side workflow used by the inspection panel and Agent tools. */
+export async function runFrameInspection(
+  options: RunFrameInspectionOptions,
+): Promise<FrameInspectionRunResult> {
+  const { instruction, points, signal, onProgress, ...captureOptions } = options
+
+  throwIfAborted(signal)
+  onProgress?.({ stage: 'capturing' })
+  const capturedFrames = await captureInspectionFrames({
+    ...captureOptions,
+    points,
+  })
+
+  throwIfAborted(signal)
+  onProgress?.({ stage: 'captured', capturedFrames })
+  onProgress?.({ stage: 'uploading', completedCount: 0, totalCount: capturedFrames.length })
+  const uploadedFrames = await uploadInspectionFrames(
+    capturedFrames,
+    (completedCount, totalCount, fileProgress, point) => {
+      onProgress?.({
+        stage: 'uploading',
+        completedCount,
+        totalCount,
+        fileProgress,
+        point,
+      })
+    },
+  )
+
+  throwIfAborted(signal)
+  onProgress?.({ stage: 'inspecting' })
+  const response = await callFrameInspectionApi(instruction, uploadedFrames, signal)
+
+  return { capturedFrames, uploadedFrames, response }
 }

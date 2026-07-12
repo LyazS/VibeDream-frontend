@@ -1,12 +1,16 @@
 <template>
   <div class="panel">
-    <n-tabs v-model:value="unifiedStore.aiPanelActiveTab" type="line" animated style="padding: 0 var(--spacing-md)">
+    <n-tabs
+      v-model:value="unifiedStore.aiPanelActiveTab"
+      type="line"
+      animated
+      style="padding: 0 var(--spacing-md)"
+    >
       <template #prefix>
         <component :is="IconComponents.SPARKLING" size="16px" style="padding: 0" />
       </template>
       <n-tab name="ai-generate" :tab="t('aiPanel.aiGenerate')"> </n-tab>
       <n-tab name="agent" :tab="t('aiPanel.agent')"> </n-tab>
-      <n-tab name="frame-inspection" :tab="t('aiPanel.frameInspectionTab')"> </n-tab>
       <template #suffix>
         <div class="header-buttons">
           <template v-if="unifiedStore.aiPanelActiveTab === 'agent'">
@@ -29,14 +33,17 @@
         </div>
       </template>
     </n-tabs>
-    <div v-show="unifiedStore.aiPanelActiveTab === 'ai-generate'" style="flex: 1; display: flex; flex-direction: column; overflow: hidden;">
+    <div
+      v-show="unifiedStore.aiPanelActiveTab === 'ai-generate'"
+      style="flex: 1; display: flex; flex-direction: column; overflow: hidden"
+    >
       <GeneratePanel />
     </div>
-    <div v-show="unifiedStore.aiPanelActiveTab === 'agent'" style="flex: 1; display: flex; flex-direction: column; overflow: hidden;">
+    <div
+      v-show="unifiedStore.aiPanelActiveTab === 'agent'"
+      style="flex: 1; display: flex; flex-direction: column; overflow: hidden"
+    >
       <AgentPanel v-model:showHistory="showHistory" />
-    </div>
-    <div v-show="unifiedStore.aiPanelActiveTab === 'frame-inspection'" style="flex: 1; display: flex; flex-direction: column; overflow: hidden;">
-      <FrameInspectionPanel />
     </div>
   </div>
 </template>
@@ -48,7 +55,6 @@ import { IconComponents } from '@/constants/iconComponents'
 import HoverButton from '@/components/base/HoverButton.vue'
 import AgentPanel from './agent/components/AgentPanel.vue'
 import GeneratePanel from './aigenerate/GeneratePanel.vue'
-import FrameInspectionPanel from './inspection/FrameInspectionPanel.vue'
 import { useAppI18n } from '@/core/composables/useI18n'
 import { useUnifiedStore } from '@/core/unifiedStore'
 import { SESSION_MANAGER } from '@/aipanel/agent/services'
@@ -57,7 +63,7 @@ const { t } = useAppI18n()
 const unifiedStore = useUnifiedStore()
 
 // 定义事件
-const emit = defineEmits<{
+defineEmits<{
   close: []
 }>()
 

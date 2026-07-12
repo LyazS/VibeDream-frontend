@@ -12,7 +12,7 @@ export type LibrarySectionKey = 'media' | 'transition' | 'filter'
 export function createUnifiedUIModule(_registry: ModuleRegistry): {
   // 状态
   isChatPanelVisible: Ref<boolean>
-  aiPanelActiveTab: Ref<'ai-generate' | 'agent' | 'frame-inspection'>
+  aiPanelActiveTab: Ref<'ai-generate' | 'agent'>
   librarySection: Ref<LibrarySectionKey>
   effectTemplateCategorySelection: Ref<Record<CommonEffectType, string>>
   activePropertyTab: Ref<PropertyTabKey>
@@ -29,7 +29,7 @@ export function createUnifiedUIModule(_registry: ModuleRegistry): {
   const isChatPanelVisible = ref(true)
 
   // AI 面板当前激活的标签页
-  const aiPanelActiveTab = ref<'ai-generate' | 'agent' | 'frame-inspection'>('agent')
+  const aiPanelActiveTab = ref<'ai-generate' | 'agent'>('agent')
 
   // 素材区当前激活的一级分区
   const librarySection = ref<LibrarySectionKey>('media')

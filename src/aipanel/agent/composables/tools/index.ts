@@ -10,6 +10,7 @@ import { listMediaTool } from './listMedia'
 import { listTracksTool } from './listTracks'
 import { modifyProjectInfoTool } from './modifyProjectInfo'
 import { insertClipTool } from './insertClip'
+import { inspectTimelineFramesTool } from './inspectTimelineFrames'
 import { moveClipTool } from './moveClip'
 import { moveTrackTool } from './moveTrack'
 import { updateClipPropertiesTool } from './updateClipProperties'
@@ -32,7 +33,7 @@ const tools = new Map<string, ToolDefinition>()
 
 function logToolExecution(params: {
   name: string
-  args: Record<string, any>
+  args: Record<string, unknown>
   context?: ToolExecutionContext
   success: boolean
   result?: string
@@ -81,6 +82,7 @@ registerTool(listTracksTool)
 registerTool(readProjectInfoTool)
 registerTool(modifyProjectInfoTool)
 registerTool(insertClipTool)
+registerTool(inspectTimelineFramesTool)
 registerTool(moveClipTool)
 registerTool(moveTrackTool)
 registerTool(updateClipPropertiesTool)
@@ -101,7 +103,7 @@ registerTool(writeClipKeyframeTool)
  */
 export function executeTool(
   name: string,
-  args: Record<string, any>,
+  args: Record<string, unknown>,
   context?: ToolExecutionContext,
 ): Promise<ToolResult> {
   const tool = tools.get(name)
@@ -180,6 +182,7 @@ export {
   readProjectInfoTool,
   modifyProjectInfoTool,
   insertClipTool,
+  inspectTimelineFramesTool,
   moveClipTool,
   moveTrackTool,
   updateClipPropertiesTool,

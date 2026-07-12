@@ -2,7 +2,6 @@
   "aiPanel": {
     "aiGenerate": "AI生成",
     "agent": "智能助手",
-    "frameInspectionTab": "画面巡检",
     "tools": {
       "unknown": "未知工具",
       "add_track": "新增轨道",
@@ -25,10 +24,16 @@
       "update_clip_properties": "修改片段属性",
       "update_track_properties": "修改轨道属性",
       "write_clip_keyframe": "重写关键帧",
-      "edit_sdk": "编辑脚本执行"
+      "edit_sdk": "编辑脚本执行",
+      "inspect_timeline_frames": "巡检时间轴画面"
     },
     "toolsState": {
       "stop": "停止",
+      "inspectionCapturing": "正在截取画面",
+      "inspectionUploading": "正在上传画面",
+      "inspectionInspecting": "正在巡检画面",
+      "inspectionStopping": "正在停止画面巡检",
+      "inspectionFrameCount": "共 {count} 帧",
       "indexing": "索引中",
       "indexingPreparing": "准备索引",
       "indexingRunning": "正在补齐索引",
@@ -51,45 +56,6 @@
     "agentStatus": {
       "thinking": "思考中",
       "completed": "已完成"
-    },
-    "frameInspection": {
-      "title": "多帧画面巡检",
-      "description": "输入一条共享检查指令和多个时间点，系统会抽取最终合成画面并联合发送给视觉模型分析。",
-      "instructionLabel": "检查内容",
-      "instructionPlaceholder": "例如：请检查这些时间点里是否有字幕挡脸、主体被裁切，或明显的构图问题。",
-      "timecodesLabel": "时间点",
-      "timecodesPlaceholder": "每行一个时间码，例如：\n00:00:03:12\n00:00:08:05\n00:00:12:18",
-      "timecodesHelp": "仅支持工程时间轴时间点。会自动去空行、去重并按时间升序处理。",
-      "inspectButton": "开始巡检",
-      "inspectingButton": "巡检中...",
-      "maxPoints": "最多 {count} 个时间点",
-      "durationHint": "工程时长 {timecode}",
-      "resultTitle": "巡检结果",
-      "answerLabel": "模型回复",
-      "emptyResult": "尚未执行巡检",
-      "status": {
-        "capturing": "正在抽帧",
-        "uploading": "正在上传",
-        "inspecting": "正在巡检",
-        "done": "巡检完成",
-        "error": "巡检失败"
-      },
-      "progressCapturing": "正在准备离屏抽帧...",
-      "progressUploading": "正在准备上传图片...",
-      "progressUploadingDetail": "正在上传第 {current}/{total} 张图片：{timecode}",
-      "progressInspecting": "正在向视觉模型发起联合巡检...",
-      "messages": {
-        "success": "画面巡检完成",
-        "failed": "画面巡检失败"
-      },
-      "errors": {
-        "emptyInstruction": "检查内容不能为空",
-        "emptyTimecodes": "请至少输入一个时间点",
-        "emptyTimeline": "当前工程没有可巡检的有效画面",
-        "invalidTimecode": "时间码格式无效：{timecode}",
-        "timecodeOutOfRange": "时间点超出工程时长：{timecode}，当前最大可用时间约为 {maxTimecode}",
-        "tooManyTimecodes": "时间点数量不能超过 {count} 个"
-      }
     },
     "indexAllMediaSuccess": "已提交 {count} 个素材的索引任务",
     "indexAllMediaNoItems": "没有可索引的素材",

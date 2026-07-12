@@ -2,7 +2,6 @@
   "aiPanel": {
     "aiGenerate": "AI Generate",
     "agent": "Agent",
-    "frameInspectionTab": "Frame Inspection",
     "tools": {
       "unknown": "Unknown Tool",
       "add_track": "Add Track",
@@ -25,10 +24,16 @@
       "update_clip_properties": "Update Clip Properties",
       "update_track_properties": "Update Track Properties",
       "write_clip_keyframe": "Rewrite Clip Keyframe",
-      "edit_sdk": "Run Edit Script"
+      "edit_sdk": "Run Edit Script",
+      "inspect_timeline_frames": "Inspect Timeline Frames"
     },
     "toolsState": {
       "stop": "Stop",
+      "inspectionCapturing": "Capturing frames",
+      "inspectionUploading": "Uploading frames",
+      "inspectionInspecting": "Inspecting frames",
+      "inspectionStopping": "Stopping frame inspection",
+      "inspectionFrameCount": "{count} frames",
       "indexing": "Indexing",
       "indexingPreparing": "Preparing indexing",
       "indexingRunning": "Backfilling index",
@@ -51,45 +56,6 @@
     "agentStatus": {
       "thinking": "Thinking",
       "completed": "Completed"
-    },
-    "frameInspection": {
-      "title": "Multi-frame Inspection",
-      "description": "Enter one shared inspection instruction and several timeline timecodes. The panel will capture final composited frames and send them together for visual analysis.",
-      "instructionLabel": "Inspection Instruction",
-      "instructionPlaceholder": "Example: Check whether subtitles cover faces, subjects are cropped, or the composition breaks at these moments.",
-      "timecodesLabel": "Timecodes",
-      "timecodesPlaceholder": "One timecode per line, for example:\n00:00:03:12\n00:00:08:05\n00:00:12:18",
-      "timecodesHelp": "Only timeline timecodes are supported. Empty lines and duplicates will be removed automatically, then sorted in ascending order.",
-      "inspectButton": "Run Inspection",
-      "inspectingButton": "Inspecting...",
-      "maxPoints": "Up to {count} timecodes",
-      "durationHint": "Timeline duration {timecode}",
-      "resultTitle": "Inspection Result",
-      "answerLabel": "Model Response",
-      "emptyResult": "No inspection run yet",
-      "status": {
-        "capturing": "Capturing Frames",
-        "uploading": "Uploading Frames",
-        "inspecting": "Inspecting",
-        "done": "Inspection Complete",
-        "error": "Inspection Failed"
-      },
-      "progressCapturing": "Preparing offscreen frame capture...",
-      "progressUploading": "Preparing uploads...",
-      "progressUploadingDetail": "Uploading image {current}/{total}: {timecode}",
-      "progressInspecting": "Requesting joint visual inspection...",
-      "messages": {
-        "success": "Frame inspection completed",
-        "failed": "Frame inspection failed"
-      },
-      "errors": {
-        "emptyInstruction": "Inspection instruction cannot be empty",
-        "emptyTimecodes": "Please enter at least one timecode",
-        "emptyTimeline": "The current project has no inspectable frames",
-        "invalidTimecode": "Invalid timecode format: {timecode}",
-        "timecodeOutOfRange": "Timecode exceeds the timeline duration: {timecode}. Current maximum is about {maxTimecode}",
-        "tooManyTimecodes": "No more than {count} timecodes are allowed"
-      }
     },
     "indexAllMediaSuccess": "Submitted indexing tasks for {count} media items",
     "indexAllMediaNoItems": "No media items to index",
