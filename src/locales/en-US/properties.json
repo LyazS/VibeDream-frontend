@@ -34,6 +34,8 @@
       "width": "W",
       "height": "H",
       "rotation": "Rotation",
+      "rotationKnobLabel": "{label}: {value} degrees",
+      "rotationKnobTooltip": "Hold and drag to adjust rotation. Double-click to reset.",
       "blendMode": "Blend Mode",
       "blendIntensity": "Blend Intensity",
       "blendModes": {

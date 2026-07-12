@@ -10,7 +10,6 @@ import {
   getNextKeyframeFrame,
 } from '@/core/utils/unifiedKeyframeUtils'
 import { isPlayheadInTimelineItem } from '@/core/utils/timelineSearchUtils'
-import { normalizeAngle } from '@/core/utils/rotationTransform'
 import type { BlendMode } from '@/core/timelineitem/model/blendMode'
 import { isBlendMode } from '@/core/timelineitem/model/blendMode'
 import { propertyMutationCommitter, type ChangeOperation } from '@/core/property-system'
@@ -241,7 +240,7 @@ export function useUnifiedKeyframeVisualControls(
   async function commitRotationDeferredUpdate(nextValue?: number) {
     const item = selectedTimelineItem.value
     if (!item || !canOperateVisualChannels.value) return
-    const nextRotation = typeof nextValue === 'number' ? normalizeAngle(nextValue) : rotation.value
+    const nextRotation = typeof nextValue === 'number' ? nextValue : rotation.value
     await propertyMutationCommitter.commitDirect(getCommitContext(item), 'visual.rotation', nextRotation)
     clearVisualRotationOverlay(item.id)
   }
@@ -433,7 +432,7 @@ export function useUnifiedKeyframeVisualControls(
   const setVisualRotationDeferred = (nextRotation: number) => {
     const item = selectedTimelineItem.value
     if (!item || !canOperateVisualChannels.value) return
-    setVisualRotationOverlay(item.id, normalizeAngle(nextRotation))
+    setVisualRotationOverlay(item.id, nextRotation)
   }
 
   const setRotationDeferred = (nextRotation: number) => {
@@ -555,7 +554,7 @@ export function useUnifiedKeyframeVisualControls(
     await propertyMutationCommitter.commitDirect(
       getCommitContext(item),
       'visual.rotation',
-      normalizeAngle(nextRotation),
+      nextRotation,
     )
   }
 

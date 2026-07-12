@@ -677,7 +677,7 @@ onUnmounted(() => {
 
 .timeline-scale {
   flex: 1;
-  height: 40px;
+  height: 32px;
   background-color: var(--color-bg-primary);
   border-bottom: 1px solid var(--color-bg-quaternary);
   position: relative;
@@ -695,19 +695,19 @@ onUnmounted(() => {
 .mark-line {
   width: 1px;
   background-color: var(--color-border-secondary);
-  height: 10px;
-  margin-top: 30px;
+  height: 8px;
+  margin-top: 24px;
 }
 
 .mark-line.major {
   background-color: var(--color-text-hint);
-  height: 20px;
-  margin-top: 20px;
+  height: 15px;
+  margin-top: 17px;
 }
 
 .mark-label {
   position: absolute;
-  top: 5px;
+  top: 2px;
   left: 50%;
   transform: translateX(-50%);
   font-size: 12px;
@@ -724,8 +724,8 @@ onUnmounted(() => {
 
 .track-manager-header {
   width: var(--track-control-width, 150px);
-  padding: var(--spacing-md);
-  background-color: var(--color-bg-tertiary);
+  padding: var(--spacing-xs) var(--spacing-md);
+  background-color: var(--color-bg-secondary);
   border-right: 1px solid var(--color-border-primary);
   display: flex;
   justify-content: space-between;
@@ -753,7 +753,7 @@ onUnmounted(() => {
 
 .track-controls {
   width: var(--track-control-width, 150px);
-  background-color: var(--color-bg-tertiary);
+  background-color: var(--color-bg-secondary);
   border-right: 1px solid var(--color-border-primary);
   padding: var(--spacing-sm) var(--spacing-md);
   display: flex;

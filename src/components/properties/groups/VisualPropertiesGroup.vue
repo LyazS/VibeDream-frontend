@@ -153,7 +153,7 @@
         </div>
       </div>
       <!-- 旋转 -->
-      <KeyframedSliderField
+      <KeyframedRotationField
         :label="t('properties.visual.rotation')"
         :state="rotationButtonState"
         :tooltip="getChannelKeyframeTooltip('visual.rotation')"
@@ -161,13 +161,10 @@
         :has-previous="hasPreviousChannelKeyframe('visual.rotation')"
         :has-next="hasNextChannelKeyframe('visual.rotation')"
         :value="rotation"
-        :min="-180"
-        :max="180"
         :step="0.1"
         :precision="1"
-        slider-class="rotation-slider"
-        @slider-input="setRotationDeferred"
-        @slider-change="commitRotationDeferredUpdate"
+        @rotation-input="setRotationDeferred"
+        @rotation-change="commitRotationDeferredUpdate"
         @number-change="setRotationDirectly"
         @previous="goToPreviousChannelKeyframe('visual.rotation')"
         @toggle="toggleChannelKeyframe('visual.rotation')"
@@ -223,6 +220,7 @@ import { BLEND_MODE_VALUES } from '@/core/timelineitem/model/blendMode'
 import SearchableSelect from '@/components/base/SearchableSelect.vue'
 import KeyframedDualNumberField from '@/components/properties/common/KeyframedDualNumberField.vue'
 import KeyframedSliderField from '@/components/properties/common/KeyframedSliderField.vue'
+import KeyframedRotationField from '@/components/properties/common/KeyframedRotationField.vue'
 
 interface Props {
   selectedTimelineItem: UnifiedTimelineItemData | null

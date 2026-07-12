@@ -34,6 +34,8 @@
       "width": "宽",
       "height": "高",
       "rotation": "旋转",
+      "rotationKnobLabel": "{label}：{value} 度",
+      "rotationKnobTooltip": "按住并拖动以调整旋转角度，双击复位",
       "blendMode": "混合模式",
       "blendIntensity": "混合强度",
       "blendModes": {

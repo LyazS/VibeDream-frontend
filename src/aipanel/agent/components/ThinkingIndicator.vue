@@ -1,10 +1,7 @@
 <template>
-  <div class="thinking-indicator" role="status" aria-live="polite">
-    <template v-if="status === 'thinking'">
-      <span class="thinking-indicator__label">{{ t('aiPanel.agentStatus.thinking') }}</span>
-      <span class="thinking-indicator__ellipsis" aria-hidden="true">.....</span>
-    </template>
-    <span v-else class="thinking-indicator__label">{{ t('aiPanel.agentStatus.completed') }}</span>
+  <div v-if="status === 'thinking'" class="thinking-indicator" role="status" aria-live="polite">
+    <span class="thinking-indicator__label">{{ t('aiPanel.agentStatus.thinking') }}</span>
+    <span class="thinking-indicator__ellipsis" aria-hidden="true">.....</span>
   </div>
 </template>
 

@@ -66,7 +66,7 @@
         @next="goToNextMaskKeyframe('mask.center')"
       />
 
-      <KeyframedSliderField
+      <KeyframedRotationField
         v-if="hasMaskConfig"
         :label="t('properties.visual.rotation')"
         :state="getMaskChannelButtonState('mask.rotation')"
@@ -75,12 +75,10 @@
         :has-previous="hasPreviousMaskKeyframe('mask.rotation')"
         :has-next="hasNextMaskKeyframe('mask.rotation')"
         :value="maskConfig.rotation"
-        :min="-180"
-        :max="180"
         :step="1"
         :precision="0"
-        @slider-input="setMaskRotationDeferred"
-        @slider-change="commitMaskRotationDeferredUpdate"
+        @rotation-input="setMaskRotationDeferred"
+        @rotation-change="commitMaskRotationDeferredUpdate"
         @number-change="(value) => setMaskProperty('mask.rotation', value)"
         @previous="goToPreviousMaskKeyframe('mask.rotation')"
         @toggle="toggleMaskKeyframe('mask.rotation')"
@@ -244,6 +242,7 @@ import type { MaskType } from '@/core/timelineitem/features/mask'
 import SearchableSelect from '@/components/base/SearchableSelect.vue'
 import KeyframedDualNumberField from '@/components/properties/common/KeyframedDualNumberField.vue'
 import KeyframedSliderField from '@/components/properties/common/KeyframedSliderField.vue'
+import KeyframedRotationField from '@/components/properties/common/KeyframedRotationField.vue'
 
 interface Props {
   selectedTimelineItem: UnifiedTimelineItemData

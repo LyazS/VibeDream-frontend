@@ -1,6 +1,5 @@
 import type { PropertyAnimationGroupId } from '@/core/timelineitem/model/render'
 import type { DirectPropertyId } from '@/core/property-system/mutation/types'
-import { normalizeAngle } from '@/core/utils/rotationTransform'
 
 export type AnimatablePropertyTarget = 'visual' | 'audio' | 'text' | 'mask' | 'filter'
 export type PropertyValueKind = 'number' | 'boolean' | 'color' | 'vec2'
@@ -63,7 +62,7 @@ export const visualRotationSchema: AnimatablePropertySchema = {
   supportsKeyframeToggle: true,
   supportsTransientOverlay: true,
   normalizeDirectValue: (value) => ({
-    rotation: normalizeAngle(assertFiniteNumber(value, 'visual.rotation')),
+    rotation: assertFiniteNumber(value, 'visual.rotation'),
   }),
 }
 

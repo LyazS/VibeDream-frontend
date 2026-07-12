@@ -1,5 +1,4 @@
 import { reactive } from 'vue'
-import { normalizeAngle } from '@/core/utils/rotationTransform'
 import { visualRotationSchema } from '@/core/property-system/schema'
 
 interface RotationOverlayEntry {
@@ -14,7 +13,7 @@ export function setVisualRotationOverlay(timelineItemId: string, rotation: numbe
   }
 
   rotationOverlays.set(timelineItemId, {
-    rotation: normalizeAngle(rotation),
+    rotation,
   })
 }
 

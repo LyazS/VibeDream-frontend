@@ -490,9 +490,8 @@ function debugHistory() {
 
 <style scoped>
 .clip-management-toolbar {
-  background-color: #333;
+  background-color: var(--color-bg-secondary);
   padding: 6px 12px;
-  border-bottom: 1px solid #444;
   display: flex;
   align-items: center;
   gap: 12px;
