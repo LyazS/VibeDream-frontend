@@ -11,6 +11,7 @@
       </template>
       <n-tab name="ai-generate" :tab="t('aiPanel.aiGenerate')"> </n-tab>
       <n-tab name="agent" :tab="t('aiPanel.agent')"> </n-tab>
+      <n-tab name="transition-search" :tab="t('aiPanel.transitionSearch.tab')"> </n-tab>
       <template #suffix>
         <div class="header-buttons">
           <template v-if="unifiedStore.aiPanelActiveTab === 'agent'">
@@ -45,6 +46,12 @@
     >
       <AgentPanel v-model:showHistory="showHistory" />
     </div>
+    <div
+      v-show="unifiedStore.aiPanelActiveTab === 'transition-search'"
+      style="flex: 1; display: flex; flex-direction: column; overflow: hidden"
+    >
+      <TransitionSearchPanel />
+    </div>
   </div>
 </template>
 
@@ -55,6 +62,7 @@ import { IconComponents } from '@/constants/iconComponents'
 import HoverButton from '@/components/base/HoverButton.vue'
 import AgentPanel from './agent/components/AgentPanel.vue'
 import GeneratePanel from './aigenerate/GeneratePanel.vue'
+import TransitionSearchPanel from './agent/components/TransitionSearchPanel.vue'
 import { useAppI18n } from '@/core/composables/useI18n'
 import { useUnifiedStore } from '@/core/unifiedStore'
 import { SESSION_MANAGER } from '@/aipanel/agent/services'

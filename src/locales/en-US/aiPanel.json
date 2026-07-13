@@ -2,6 +2,17 @@
   "aiPanel": {
     "aiGenerate": "AI Generate",
     "agent": "Agent",
+    "transitionSearch": {
+      "tab": "Transition Search",
+      "placeholder": "Describe the transition you need...",
+      "button": "Search",
+      "searching": "Searching transitions...",
+      "noResults": "No matching transitions found",
+      "error": "Search failed: {error}",
+      "resultCount": "Found {count} transitions",
+      "frames": "frames",
+      "parameters": "Parameters"
+    },
     "tools": {
       "unknown": "Unknown Tool",
       "add_track": "Add Track",

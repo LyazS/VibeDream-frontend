@@ -2,6 +2,17 @@
   "aiPanel": {
     "aiGenerate": "AI生成",
     "agent": "智能助手",
+    "transitionSearch": {
+      "tab": "转场检索",
+      "placeholder": "描述你需要的转场效果...",
+      "button": "检索",
+      "searching": "正在检索转场...",
+      "noResults": "未找到匹配的转场",
+      "error": "检索失败: {error}",
+      "resultCount": "找到 {count} 个转场",
+      "frames": "帧",
+      "parameters": "参数"
+    },
     "tools": {
       "unknown": "未知工具",
       "add_track": "新增轨道",
