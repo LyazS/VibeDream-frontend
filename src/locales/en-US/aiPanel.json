@@ -2,17 +2,6 @@
   "aiPanel": {
     "aiGenerate": "AI Generate",
     "agent": "Agent",
-    "transitionSearch": {
-      "tab": "Transition Search",
-      "placeholder": "Describe the transition you need...",
-      "button": "Search",
-      "searching": "Searching transitions...",
-      "noResults": "No matching transitions found",
-      "error": "Search failed: {error}",
-      "resultCount": "Found {count} transitions",
-      "frames": "frames",
-      "parameters": "Parameters"
-    },
     "tools": {
       "unknown": "Unknown Tool",
       "add_track": "Add Track",
@@ -24,7 +13,7 @@
       "move_track": "Move Track",
       "patch_clip_keyframe": "Patch Clip Keyframe",
       "read_clip_keyframe": "Read Clip Keyframe",
-      "read_clip_properties": "Read Clip Properties",
+      "read_item": "Read Item",
       "read_media": "Read Media",
       "read_tracks": "Read Tracks",
       "remove_clip": "Remove Clip",
@@ -32,7 +21,7 @@
       "search_media": "Search Media",
       "split_clip": "Split Clip",
       "trim_clip": "Trim Clip",
-      "update_clip_properties": "Update Clip Properties",
+      "update_item": "Update Item",
       "update_track_properties": "Update Track Properties",
       "write_clip_keyframe": "Rewrite Clip Keyframe",
       "edit_sdk": "Run Edit Script",

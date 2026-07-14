@@ -215,7 +215,7 @@ export class ClipPropertyEditService {
 
     throw toolError(
       'animated_property_requires_keyframe_tool',
-      `属性 ${key} 当前由关键帧动画控制，不能通过 update_clip_properties 修改静态值。请改用 write_clip_keyframe 或 patch_clip_keyframe。`,
+      `属性 ${key} 当前由关键帧动画控制，不能通过 update_item 修改静态值。请改用 write_clip_keyframe 或 patch_clip_keyframe。`,
       {
         clipId: item.id,
         path: key,

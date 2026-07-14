@@ -11,6 +11,7 @@ export interface TransitionSearchResult {
   score: number
   matched_traits: string[]
   parameter_keys: string[]
+  agent_description?: string
 }
 
 export interface TransitionSearchResponse {

@@ -86,7 +86,7 @@ export async function executeMoveClip(args: Record<string, any>) {
       return buildToolError(
         'move_clip',
         'clip_not_found',
-        `未找到片段 ${clipId}。请使用 read_tracks 或 read_clip_properties 确认正确 ID。`,
+        `未找到片段 ${clipId}。请使用 read_tracks 或 read_item 确认正确 ID。`,
         { clipId },
       )
     }

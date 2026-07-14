@@ -13,14 +13,14 @@ import { insertClipTool } from './insertClip'
 import { inspectTimelineFramesTool } from './inspectTimelineFrames'
 import { moveClipTool } from './moveClip'
 import { moveTrackTool } from './moveTrack'
-import { updateClipPropertiesTool } from './updateClipProperties'
 import { updateTrackPropertiesTool } from './updateTrackProperties'
-import { readClipPropertiesTool } from './readClipProperties'
 import { readClipKeyframeTool } from './readClipKeyframe'
 import { readMediaTool } from './readMedia'
 import { readProjectInfoTool } from './readProjectInfo'
 import { readTracksTool } from './readTracks'
-import { removeClipTool } from './removeClip'
+import { readItemTool } from './readItem'
+import { updateItemTool } from './updateItem'
+import { applyTransitionTool, removeItemTool, searchTransitionsTool } from './transitionTools'
 import { removeTrackTool } from './removeTrack'
 import { searchMediaTool } from './searchMedia'
 import { splitClipTool } from './splitClip'
@@ -85,13 +85,15 @@ registerTool(insertClipTool)
 registerTool(inspectTimelineFramesTool)
 registerTool(moveClipTool)
 registerTool(moveTrackTool)
-registerTool(updateClipPropertiesTool)
 registerTool(updateTrackPropertiesTool)
-registerTool(readClipPropertiesTool)
 registerTool(readClipKeyframeTool)
 registerTool(readMediaTool)
 registerTool(readTracksTool)
-registerTool(removeClipTool)
+registerTool(readItemTool)
+registerTool(updateItemTool)
+registerTool(searchTransitionsTool)
+registerTool(applyTransitionTool)
+registerTool(removeItemTool)
 registerTool(removeTrackTool)
 registerTool(searchMediaTool)
 registerTool(splitClipTool)
@@ -185,13 +187,15 @@ export {
   inspectTimelineFramesTool,
   moveClipTool,
   moveTrackTool,
-  updateClipPropertiesTool,
   updateTrackPropertiesTool,
-  readClipPropertiesTool,
   readClipKeyframeTool,
   readMediaTool,
   readTracksTool,
-  removeClipTool,
+  readItemTool,
+  updateItemTool,
+  searchTransitionsTool,
+  applyTransitionTool,
+  removeItemTool,
   removeTrackTool,
   searchMediaTool,
   splitClipTool,

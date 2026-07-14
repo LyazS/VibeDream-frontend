@@ -2,17 +2,6 @@
   "aiPanel": {
     "aiGenerate": "AI生成",
     "agent": "智能助手",
-    "transitionSearch": {
-      "tab": "转场检索",
-      "placeholder": "描述你需要的转场效果...",
-      "button": "检索",
-      "searching": "正在检索转场...",
-      "noResults": "未找到匹配的转场",
-      "error": "检索失败: {error}",
-      "resultCount": "找到 {count} 个转场",
-      "frames": "帧",
-      "parameters": "参数"
-    },
     "tools": {
       "unknown": "未知工具",
       "add_track": "新增轨道",
@@ -24,7 +13,7 @@
       "move_track": "移动轨道",
       "patch_clip_keyframe": "局部更新关键帧",
       "read_clip_keyframe": "读取关键帧",
-      "read_clip_properties": "读取片段属性",
+      "read_item": "读取时间轴项目",
       "read_media": "查看素材",
       "read_tracks": "读取多个轨道",
       "remove_clip": "删除片段",
@@ -32,7 +21,7 @@
       "search_media": "检索素材",
       "split_clip": "分割片段",
       "trim_clip": "裁剪片段",
-      "update_clip_properties": "修改片段属性",
+      "update_item": "修改时间轴项目",
       "update_track_properties": "修改轨道属性",
       "write_clip_keyframe": "重写关键帧",
       "edit_sdk": "编辑脚本执行",

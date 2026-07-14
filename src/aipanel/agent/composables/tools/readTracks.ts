@@ -9,23 +9,13 @@ import { framesToTimecode } from '@/core/utils/timeUtils'
 import type { ToolDefinition } from '../core/toolTypes'
 import { isValidAgentToolTimecode, parseAgentToolTimecode } from './utils/timecode'
 import { buildToolError, buildToolSuccess } from './utils/result'
+import { getTransitionSnapshot } from './transitionItemShared'
 
 const MAX_TRACK_IDS = 10
 
-/**
- * 轨道上的时间轴项目信息
- */
-interface TrackItemInfo {
-  clipId: string
-  mediaId?: string
-  start: string
-  end: string
-  mediaType: string
-}
-
 interface ReadTracksSuccessEntry {
   trackId: string
-  clips: TrackItemInfo[]
+  items: Array<Record<string, unknown>>
   total: number
 }
 
@@ -130,18 +120,54 @@ export async function executeReadTracks(args: Record<string, any>) {
         })
         .sort((left, right) => left.timeRange.timelineStartTime - right.timeRange.timelineStartTime)
 
-      const clips: TrackItemInfo[] = filteredItems.map((item) => ({
-        clipId: item.id,
-        mediaId: item.mediaItemId || undefined,
-        start: framesToTimecode(item.timeRange.timelineStartTime),
-        end: framesToTimecode(item.timeRange.timelineEndTime),
-        mediaType: item.mediaType,
+      const clips = filteredItems.map((item) => ({
+        item: {
+          itemId: item.id,
+          itemType: 'clip' as const,
+          mediaId: item.mediaItemId || undefined,
+          start: framesToTimecode(item.timeRange.timelineStartTime),
+          end: framesToTimecode(item.timeRange.timelineEndTime),
+          mediaType: item.mediaType,
+        },
+        sortFrame: item.timeRange.timelineStartTime,
+        // A transition at a seam is listed before the right clip at the same frame.
+        sortOrder: 1,
       }))
 
+      const transitions = getTimelineItemsByTrack(trackId, timelineItems)
+        .flatMap((item) => {
+          const transition = getTransitionSnapshot(item)
+          if (!transition) return []
+          const intersects = transition.startFrame !== null && transition.endFrame !== null
+            ? startFrames < transition.endFrame && endFrames > transition.startFrame
+            : startFrames <= transition.seamFrame && endFrames >= transition.seamFrame
+          return intersects ? [{
+            item: {
+              itemId: transition.itemId,
+              itemType: 'transition' as const,
+              leftClipId: transition.leftClipId,
+              ...(transition.rightClipId ? { rightClipId: transition.rightClipId } : {}),
+              ...(transition.startFrame !== null && transition.endFrame !== null
+                ? {
+                    start: framesToTimecode(transition.startFrame),
+                    end: framesToTimecode(transition.endFrame),
+                  }
+                : {}),
+            },
+            // Keep this internal seam frame even when seamTime is intentionally omitted.
+            sortFrame: transition.seamFrame,
+            sortOrder: 0,
+          }] : []
+        })
+      const items = [
+        ...clips,
+        ...transitions,
+      ].sort((left, right) => left.sortFrame - right.sortFrame || left.sortOrder - right.sortOrder)
+        .map((entry) => entry.item)
       return {
         trackId: track.id,
-        clips,
-        total: clips.length,
+        items,
+        total: items.length,
       }
     })
 
