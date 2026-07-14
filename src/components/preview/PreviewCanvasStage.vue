@@ -38,17 +38,11 @@
       />
     </div>
 
-    <HoverButton
+    <PreviewResetButton
       v-if="isPreviewTransformed"
-      class="preview-reset-btn"
-      variant="small"
       title="还原预览缩放"
       @click="handleResetButtonClick"
-    >
-      <template #icon>
-        <component :is="IconComponents.REFRESH" size="16px" />
-      </template>
-    </HoverButton>
+    />
 
     <ContextMenu v-model:show="showContextMenu" :options="contextMenuOptions">
       <template v-for="(item, index) in contextMenuItems" :key="index">
@@ -73,7 +67,7 @@ import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
 import BunnyRender from '@/components/panels/BunnyRender.vue'
 import SelectionIndicator from '@/components/preview/SelectionIndicator.vue'
 import MaskOverlay from '@/components/preview/MaskOverlay.vue'
-import HoverButton from '@/components/base/HoverButton.vue'
+import PreviewResetButton from '@/components/base/PreviewResetButton.vue'
 import { IconComponents } from '@/constants/iconComponents'
 import { useUnifiedStore } from '@/core/unifiedStore'
 import { useAppI18n } from '@/core/composables/useI18n'
@@ -742,14 +736,5 @@ onUnmounted(() => {
 .preview-stage-content {
   position: absolute;
   inset: 0;
-}
-
-.preview-reset-btn {
-  position: absolute;
-  right: var(--spacing-sm);
-  bottom: var(--spacing-sm);
-  z-index: 30;
-  background-color: rgba(0, 0, 0, 0.45);
-  backdrop-filter: blur(8px);
 }
 </style>

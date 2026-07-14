@@ -255,50 +255,55 @@ function getPreviewStyle(resolution: { width: number; height: number }) {
 .resolution-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-  gap: 16px;
+  gap: var(--spacing-xl);
   max-height: 400px;
   overflow-y: auto;
 }
 
 .resolution-option {
-  background-color: #333;
-  border: 2px solid #444;
-  border-radius: 8px;
-  padding: 12px;
+  background-color: var(--color-bg-tertiary);
+  border: 1px solid var(--color-border-light);
+  border-radius: var(--border-radius-xlarge);
+  padding: var(--spacing-lg);
   cursor: pointer;
-  transition: all 0.2s;
+  transition-property: background-color, border-color, box-shadow;
+  transition-duration: var(--transition-fast);
+  transition-timing-function: ease-out;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 8px;
+  gap: var(--spacing-md);
 }
 
 .resolution-option:hover {
-  border-color: #666;
-  background-color: #3a3a3a;
+  border-color: var(--color-border-hover);
+  background-color: var(--color-bg-hover);
 }
 
 .resolution-option.active {
-  border-color: #ff4444;
-  background-color: #4a2a2a;
+  border-color: var(--color-primary);
+  background-color: var(--color-accent-primary-alpha);
+  box-shadow: 0 0 0 1px var(--color-primary);
 }
 
 .resolution-preview {
-  background-color: #555;
-  border: 1px solid #666;
-  border-radius: 3px;
-  transition: all 0.2s;
+  background-color: var(--color-bg-active);
+  border: 1px solid var(--color-border-secondary);
+  border-radius: var(--border-radius-small);
+  transition-property: background-color, border-color;
+  transition-duration: var(--transition-fast);
+  transition-timing-function: ease-out;
   flex-shrink: 0;
 }
 
 .resolution-option:hover .resolution-preview {
-  background-color: #666;
-  border-color: #777;
+  background-color: var(--color-bg-quaternary);
+  border-color: var(--color-border-hover);
 }
 
 .resolution-option.active .resolution-preview {
-  background-color: #ff4444;
-  border-color: #ff6666;
+  background-color: var(--color-primary);
+  border-color: var(--color-primary-hover);
 }
 
 .resolution-info {
@@ -308,64 +313,72 @@ function getPreviewStyle(resolution: { width: number; height: number }) {
 
 .resolution-name {
   font-weight: bold;
-  color: white;
-  margin-bottom: 4px;
-  font-size: 13px;
+  color: var(--color-text-primary);
+  margin-bottom: var(--spacing-xs);
+  font-size: var(--font-size-md);
 }
 
 .resolution-size {
-  color: #ccc;
-  font-size: 11px;
-  margin-bottom: 2px;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+  margin-bottom: var(--spacing-xxs);
+  font-variant-numeric: tabular-nums;
 }
 
 .resolution-ratio {
-  color: #999;
-  font-size: 10px;
+  color: var(--color-text-hint);
+  font-size: var(--font-size-xs);
   font-family: monospace;
+  font-variant-numeric: tabular-nums;
 }
 
 /* 自定义分辨率输入（集成在选项内） */
 .custom-inputs {
   width: 100%;
-  margin-top: 4px;
+  margin-top: var(--spacing-xs);
 }
 
 .input-row {
   display: flex;
   align-items: center;
-  gap: 6px;
-  margin-bottom: 6px;
+  gap: var(--spacing-sm);
+  margin-bottom: var(--spacing-sm);
 }
 
 .custom-input {
   flex: 1;
-  padding: 4px 6px;
-  background-color: #444;
-  border: 1px solid #555;
-  border-radius: 3px;
-  color: white;
-  font-size: 11px;
+  padding: var(--spacing-xs) var(--spacing-sm);
+  background-color: var(--color-bg-secondary);
+  border: 1px solid var(--color-bg-hover);
+  border-radius: var(--border-radius-small);
+  color: var(--color-text-primary);
+  font-size: var(--font-size-sm);
   text-align: center;
   min-width: 0;
+  font-variant-numeric: tabular-nums;
+  transition-property: background-color, border-color, box-shadow;
+  transition-duration: var(--transition-fast);
+  transition-timing-function: ease-out;
 }
 
 .custom-input:focus {
   outline: none;
-  border-color: #ff4444;
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 2px var(--color-accent-primary-alpha);
 }
 
 .input-separator {
-  color: #ccc;
-  font-size: 12px;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-base);
   font-weight: bold;
 }
 
 .custom-ratio {
-  color: #999;
-  font-size: 10px;
+  color: var(--color-text-hint);
+  font-size: var(--font-size-xs);
   font-family: monospace;
   text-align: center;
+  font-variant-numeric: tabular-nums;
 }
 
 /* 滚动条样式已在全局样式中定义 */

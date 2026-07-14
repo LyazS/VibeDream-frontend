@@ -10,52 +10,39 @@
     :confirm-text="t('editor.export')"
     :cancel-text="t('common.cancel')"
   >
-    <div class="dialog-body">
+    <div class="modal-form-fields">
       <!-- 视频标题 -->
-      <div class="form-group">
-        <label>{{ t('editor.videoTitle') }}</label>
+      <ModalFormField :label="t('editor.videoTitle')" input-id="export-title">
         <input
+          id="export-title"
           v-model="form.title"
           type="text"
-          class="form-input"
           :placeholder="t('editor.videoTitlePlaceholder')"
           maxlength="100"
           @keydown.enter="handleExport"
         />
-      </div>
+      </ModalFormField>
 
       <!-- 导出类型 -->
-      <div class="form-group">
-        <label>{{ t('editor.exportType') }}</label>
+      <ModalFormField :label="t('editor.exportType')">
         <div class="radio-group">
           <label class="radio-option" :class="{ active: form.exportType === 'video' }">
-            <input
-              type="radio"
-              v-model="form.exportType"
-              value="video"
-              name="exportType"
-            />
+            <input type="radio" v-model="form.exportType" value="video" name="exportType" />
             <span class="radio-label">{{ t('editor.exportTypeVideo') }}</span>
           </label>
           <label class="radio-option" :class="{ active: form.exportType === 'audio' }">
-            <input
-              type="radio"
-              v-model="form.exportType"
-              value="audio"
-              name="exportType"
-            />
+            <input type="radio" v-model="form.exportType" value="audio" name="exportType" />
             <span class="radio-label">{{ t('editor.exportTypeAudio') }}</span>
           </label>
         </div>
-        <div class="quality-hint">{{ getExportTypeHint(form.exportType) }}</div>
-      </div>
+        <template #hint>{{ getExportTypeHint(form.exportType) }}</template>
+      </ModalFormField>
 
       <!-- 视频相关设置：仅在导出视频时显示 -->
       <template v-if="form.exportType === 'video'">
         <!-- 帧率选择 -->
-        <div class="form-group">
-          <label>{{ t('editor.frameRate') }}</label>
-          <select v-model="form.frameRate" class="form-select">
+        <ModalFormField :label="t('editor.frameRate')" input-id="frame-rate">
+          <select id="frame-rate" v-model="form.frameRate">
             <option :value="8">{{ t('editor.frameRate8') }}</option>
             <option :value="12">{{ t('editor.frameRate12') }}</option>
             <option :value="16">{{ t('editor.frameRate16') }}</option>
@@ -66,35 +53,33 @@
             <option :value="50">{{ t('editor.frameRate50') }}</option>
             <option :value="60">{{ t('editor.frameRate60') }}</option>
           </select>
-          <div class="quality-hint">{{ getFrameRateHint(form.frameRate) }}</div>
-        </div>
+          <template #hint>{{ getFrameRateHint(form.frameRate) }}</template>
+        </ModalFormField>
 
         <!-- 视频质量 -->
-        <div class="form-group">
-          <label>{{ t('editor.videoQuality') }}</label>
-          <select v-model="form.videoQuality" class="form-select">
+        <ModalFormField :label="t('editor.videoQuality')" input-id="video-quality">
+          <select id="video-quality" v-model="form.videoQuality">
             <option value="very_low">{{ t('editor.qualityVeryLow') }}</option>
             <option value="low">{{ t('editor.qualityLow') }}</option>
             <option value="medium">{{ t('editor.qualityMedium') }}</option>
             <option value="high">{{ t('editor.qualityHigh') }}</option>
             <option value="very_high">{{ t('editor.qualityVeryHigh') }}</option>
           </select>
-          <div class="quality-hint">{{ getVideoQualityHint(form.videoQuality) }}</div>
-        </div>
+          <template #hint>{{ getVideoQualityHint(form.videoQuality) }}</template>
+        </ModalFormField>
       </template>
 
       <!-- 音频质量 -->
-      <div class="form-group">
-        <label>{{ t('editor.audioQuality') }}</label>
-        <select v-model="form.audioQuality" class="form-select">
+      <ModalFormField :label="t('editor.audioQuality')" input-id="audio-quality">
+        <select id="audio-quality" v-model="form.audioQuality">
           <option value="very_low">{{ t('editor.qualityVeryLow') }}</option>
           <option value="low">{{ t('editor.qualityLow') }}</option>
           <option value="medium">{{ t('editor.qualityMedium') }}</option>
           <option value="high">{{ t('editor.qualityHigh') }}</option>
           <option value="very_high">{{ t('editor.qualityVeryHigh') }}</option>
         </select>
-        <div class="quality-hint">{{ getAudioQualityHint(form.audioQuality) }}</div>
-      </div>
+        <template #hint>{{ getAudioQualityHint(form.audioQuality) }}</template>
+      </ModalFormField>
     </div>
   </UniversalModal>
 </template>
@@ -102,6 +87,7 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue'
 import UniversalModal from './UniversalModal.vue'
+import ModalFormField from '@/components/base/ModalFormField.vue'
 import { useAppI18n } from '@/core/composables/useI18n'
 import {
   QUALITY_VERY_LOW,
@@ -164,7 +150,7 @@ watch(
       // 模态框打开时，重置表单为默认值
       form.value.title = props.defaultTitle || ''
     }
-  }
+  },
 )
 
 // 将字符串质量级别转换为 Quality 对象
@@ -245,71 +231,20 @@ function getAudioQualityHint(level: QualityLevel): string {
 
 // 获取导出类型提示
 function getExportTypeHint(type: ExportType): string {
-  return type === 'audio'
-    ? t('editor.exportTypeAudioHint')
-    : t('editor.exportTypeVideoHint')
+  return type === 'audio' ? t('editor.exportTypeAudioHint') : t('editor.exportTypeVideoHint')
 }
 </script>
 
 <style scoped>
-.dialog-body {
-  padding: 0;
-}
-
-.form-group {
-  margin-bottom: 1.5rem;
-}
-
-.form-group:last-child {
-  margin-bottom: 0;
-}
-
-.form-group label {
-  display: block;
-  margin-bottom: 0.5rem;
-  font-size: 0.875rem;
-  font-weight: 500;
-  color: var(--color-text-primary);
-}
-
-.form-input,
-.form-select {
-  width: 100%;
-  padding: 0.75rem;
-  background: var(--color-bg-primary);
-  border: 1px solid transparent;
-  border-radius: var(--border-radius-medium);
-  color: var(--color-text-primary);
-  font-size: 0.875rem;
-  transition: all 0.2s ease;
-  box-sizing: border-box;
-}
-
-.form-input:focus,
-.form-select:focus {
-  outline: none;
-  border: 1px solid white;
-}
-
-.form-select {
-  cursor: pointer;
-  appearance: none;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23ffffff' d='M6 9L1 4h10z'/%3E%3C/svg%3E");
-  background-repeat: no-repeat;
-  background-position: right 0.75rem center;
-  padding-right: 2.5rem;
-}
-
-.quality-hint {
-  margin-top: 0.5rem;
-  font-size: 0.75rem;
-  color: var(--color-text-secondary);
-  line-height: 1.4;
+.modal-form-fields {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xxl);
 }
 
 .radio-group {
   display: flex;
-  gap: 1rem;
+  gap: var(--spacing-xl);
 }
 
 .radio-option {
@@ -317,32 +252,35 @@ function getExportTypeHint(type: ExportType): string {
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 0.75rem 1rem;
-  background: var(--color-bg-primary);
-  border: 2px solid transparent;
+  padding: var(--spacing-lg) var(--spacing-xl);
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-bg-hover);
   border-radius: var(--border-radius-medium);
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition-property: background-color, border-color, color;
+  transition-duration: var(--transition-fast);
+  transition-timing-function: ease-out;
   user-select: none;
 }
 
 .radio-option:hover {
-  background: var(--color-bg-secondary);
-  border-color: var(--color-border);
+  background: var(--color-bg-hover);
+  border-color: var(--color-border-hover);
 }
 
 .radio-option.active {
-  background: var(--color-accent);
-  border-color: #22c55e;
-  color: white;
+  background: var(--color-accent-primary-alpha);
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 1px var(--color-primary);
+  color: var(--color-text-primary);
 }
 
-.radio-option input[type="radio"] {
+.radio-option input[type='radio'] {
   display: none;
 }
 
 .radio-label {
-  font-size: 0.875rem;
+  font-size: var(--font-size-sm);
   font-weight: 500;
 }
 </style>

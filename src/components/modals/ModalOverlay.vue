@@ -151,12 +151,31 @@ onUnmounted(() => {
 /* 过渡动画 */
 .modal-fade-enter-active,
 .modal-fade-leave-active {
-  transition: all 0.2s ease;
+  transition-property: opacity;
+  transition-duration: 0.2s;
+  transition-timing-function: ease;
+}
+
+.modal-fade-enter-active :deep(.base-modal),
+.modal-fade-leave-active :deep(.base-modal) {
+  transition-property: opacity, transform;
+  transition-duration: 0.2s;
+  transition-timing-function: ease-out;
 }
 
 .modal-fade-enter-from,
 .modal-fade-leave-to {
   opacity: 0;
+}
+
+.modal-fade-enter-from :deep(.base-modal) {
+  opacity: 0;
+  transform: translateY(4px);
+}
+
+.modal-fade-leave-to :deep(.base-modal) {
+  opacity: 0;
+  transform: translateY(2px);
 }
 
 .modal-fade-enter-to,

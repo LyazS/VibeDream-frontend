@@ -165,6 +165,8 @@
                     class="project-card"
                     @click="openProjectById(project.id)"
                     @contextmenu="showProjectMenu($event, project)"
+                    @mouseenter="hoveredProjectId = project.id"
+                    @mouseleave="hoveredProjectId = null"
                   >
                     <div class="project-thumbnail">
                       <img v-if="project.thumbnail" :src="project.thumbnail" :alt="project.name" />
@@ -172,16 +174,11 @@
                         <component :is="IconComponents.VIDEO" size="20px" />
                       </div>
                       <!-- 设置按钮移到缩略图右上角 -->
-                      <HoverButton
-                        variant="small"
-                        class="settings-btn-overlay"
+                      <ProjectSettingsButton
                         @click.stop="showProjectMenu($event, project)"
                         :title="t('common.settings')"
-                      >
-                        <template #icon>
-                          <component :is="IconComponents.MORE" size="20px" />
-                        </template>
-                      </HoverButton>
+                        :visible="hoveredProjectId === project.id"
+                      />
                     </div>
                     <div class="project-info">
                       <h3 class="project-name">{{ project.name }}</h3>
@@ -281,6 +278,7 @@ import EditProjectModal from '@/components/modals/EditProjectModal.vue'
 import LanguageSelector from '@/components/utils/LanguageSelector.vue'
 import { IconComponents, getUserStatusIcon } from '@/constants/iconComponents'
 import HoverButton from '@/components/base/HoverButton.vue'
+import ProjectSettingsButton from '@/components/base/ProjectSettingsButton.vue'
 import { useProjectThumbnailService } from '@/core/composables/useProjectThumbnailService'
 import LoginModal from '@/components/modals/LoginModal.vue'
 import UserInfoModal from '@/components/modals/UserInfoModal.vue'
@@ -320,6 +318,7 @@ const permissionError = ref(false)
 const showLoginDialog = ref(false)
 const showUserInfoDialog = ref(false)
 const showProviderConfigDialog = ref(false)
+const hoveredProjectId = ref<string | null>(null)
 
 // 上下文菜单相关
 const showContextMenu = ref(false)
@@ -941,14 +940,6 @@ onMounted(async () => {
   flex-shrink: 0;
 }
 
-/* 列表视图中的设置按钮调整 */
-.list-view .settings-btn-overlay {
-  top: 4px;
-  right: 4px;
-  width: 28px;
-  height: 28px;
-}
-
 .project-thumbnail img {
   width: 100%;
   height: 100%;
@@ -985,37 +976,6 @@ onMounted(async () => {
   align-items: center;
   font-size: 0.75rem;
   color: var(--color-text-secondary);
-}
-
-/* 右上角设置按钮样式 */
-.settings-btn-overlay {
-  position: absolute;
-  top: 8px;
-  right: 8px;
-  width: 36px;
-  height: 36px;
-  background: rgba(0, 0, 0, 0.6);
-  border: none;
-  border-radius: var(--border-radius-medium);
-  color: var(--color-text-primary);
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: all 0.2s ease;
-  opacity: 0;
-  transform: scale(0.9);
-  backdrop-filter: blur(4px);
-}
-
-.project-card:hover .settings-btn-overlay {
-  opacity: 1;
-  transform: scale(1);
-}
-
-.settings-btn-overlay:hover {
-  background: rgba(0, 0, 0, 0.8);
-  transform: scale(1.05);
 }
 
 .spinning {
