@@ -84,6 +84,19 @@ function resolveExportSize(
   }
 }
 
+function resolveEvenVideoExportSize(
+  sourceWidth: number,
+  sourceHeight: number,
+  options?: Pick<ExportMediaItemOptions, 'outputWidth' | 'outputHeight'>,
+): { width: number; height: number } {
+  const size = resolveExportSize(sourceWidth, sourceHeight, options)
+
+  return {
+    width: normalizeEvenExportDimension(size.width)!,
+    height: normalizeEvenExportDimension(size.height)!,
+  }
+}
+
 async function exportImageMediaItem(
   mediaItem: UnifiedMediaItemData,
   onProgress?: (progress: number) => void,
@@ -136,7 +149,7 @@ async function exportVideoMediaItem(
     throw new Error('媒体项目未就绪：bunnyMedia 不存在')
   }
   await bunnyMedia.ready
-  const outputSize = resolveExportSize(bunnyMedia.width, bunnyMedia.height, sizeOptions)
+  const outputSize = resolveEvenVideoExportSize(bunnyMedia.width, bunnyMedia.height, sizeOptions)
 
   const durationInFrames = Number(bunnyMedia.durationN)
   const baseRenderConfig: VideoMediaConfig = {
@@ -274,8 +287,11 @@ async function exportVideoTimelineItem(
   }
   await bunnyMedia.ready
 
-  const outputWidth = normalizeEvenExportDimension(sizeOptions?.outputWidth) ?? bunnyMedia.width
-  const outputHeight = normalizeEvenExportDimension(sizeOptions?.outputHeight) ?? bunnyMedia.height
+  const { width: outputWidth, height: outputHeight } = resolveEvenVideoExportSize(
+    bunnyMedia.width,
+    bunnyMedia.height,
+    sizeOptions,
+  )
 
   const baseRenderConfig: VideoMediaConfig = {
     visual: {

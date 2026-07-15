@@ -9,7 +9,7 @@
       <template #prefix>
         <component :is="IconComponents.SPARKLING" size="16px" style="padding: 0" />
       </template>
-      <n-tab name="ai-generate" :tab="t('aiPanel.aiGenerate')"> </n-tab>
+      <!-- <n-tab name="ai-generate" :tab="t('aiPanel.aiGenerate')"> </n-tab> -->
       <n-tab name="agent" :tab="t('aiPanel.agent')"> </n-tab>
       <template #suffix>
         <div class="header-buttons">
