@@ -4,6 +4,9 @@
  */
 
 import type { FileInputConfig, MultiFileData } from '@/core/datasource/providers/ai-generation/types'
+import type { AssetKind, EffectType } from '@/core/asset/types'
+import type { AnyEffectPackagePayload } from '@/core/effect-package/types'
+import type { MediaTypeOrUnknown } from '@/core/mediaitem/types'
 
 // ==================== 拖拽源类型 ====================
 
@@ -11,6 +14,7 @@ import type { FileInputConfig, MultiFileData } from '@/core/datasource/providers
  * 拖拽源类型枚举
  */
 export enum DragSourceType {
+  ASSET = 'asset', // 通用资产
   MEDIA_ITEM = 'media-item', // 素材项目
   FOLDER = 'folder', // 文件夹
   TIMELINE_ITEM = 'timeline-item', // 时间轴项目
@@ -19,9 +23,9 @@ export enum DragSourceType {
 /**
  * 素材项目拖拽参数
  */
-export interface MediaItemDragParams {
-  mediaItemId: string
-  selectedMediaItemIds?: string[] // 可选：支持多选
+export interface AssetDragParams {
+  assetId: string
+  selectedAssetIds?: string[]
 }
 
 /**
@@ -41,7 +45,7 @@ export interface TimelineItemDragParams {
 /**
  * 拖拽源参数联合类型
  */
-export type DragSourceParams = MediaItemDragParams | FolderDragParams | TimelineItemDragParams
+export type DragSourceParams = AssetDragParams | FolderDragParams | TimelineItemDragParams
 
 // ==================== 拖拽目标类型 ====================
 
@@ -53,6 +57,7 @@ export enum DropTargetType {
   TAB = 'tab', // 垂直标签页
   TIMELINE_TRACK = 'timeline-track', // 时间轴轨道
   AI_GENERATION_PANEL = 'ai-generation-panel', // AI生成面板
+  CLIP_FILTER_DROPZONE = 'clip-filter-dropzone', // 片段滤镜专用投放区
 }
 
 // ==================== 拖拽数据类型 ====================
@@ -68,16 +73,25 @@ export interface BaseDragData {
 /**
  * 素材项目拖拽数据
  */
-export interface MediaItemDragData extends BaseDragData {
-  sourceType: DragSourceType.MEDIA_ITEM
-  mediaItemIds: string[] // 支持多选
+export interface AssetDragData extends BaseDragData {
+  sourceType: DragSourceType.ASSET | DragSourceType.MEDIA_ITEM
+  assetIds: string[]
+  assetId: string
   sourceFolderId?: string // 来源文件夹ID
-  mediaItemId: string // 主要拖拽项ID（第一个）
   name: string
-  duration: number
-  mediaType: 'video' | 'image' | 'audio' | 'text' | 'unknown'
+  assetKind: AssetKind
+  duration?: number
+  mediaType?: MediaTypeOrUnknown
+  effectType?: EffectType
+  templatePayload?: AnyEffectPackagePayload | unknown
+  effectPackageId?: string
+  templateId?: string
+  packageVersion?: string
+  catalogVersion?: string
   type?: 'media-item' // 兼容旧代码
 }
+
+export type MediaItemDragData = AssetDragData
 
 /**
  * 文件夹拖拽数据
@@ -94,7 +108,7 @@ export interface FolderDragData extends BaseDragData {
  */
 export interface TimelineItemDragData extends BaseDragData {
   sourceType: DragSourceType.TIMELINE_ITEM
-  itemId: string
+  timelineItemId: string
   trackId: string
   startTime: number
   selectedItems: string[]
@@ -105,7 +119,7 @@ export interface TimelineItemDragData extends BaseDragData {
 /**
  * 联合类型：所有拖拽数据
  */
-export type UnifiedDragData = MediaItemDragData | FolderDragData | TimelineItemDragData
+export type UnifiedDragData = AssetDragData | FolderDragData | TimelineItemDragData
 
 // ==================== 拖拽目标信息 ====================
 
@@ -147,6 +161,12 @@ export interface AIGenerationPanelDropTargetInfo {
   position?: never
 }
 
+export interface ClipFilterDropTargetInfo {
+  targetType: DropTargetType.CLIP_FILTER_DROPZONE
+  timelineItemId: string
+  position?: never
+}
+
 /**
  * 拖拽目标信息联合类型
  */
@@ -154,6 +174,7 @@ export type DropTargetInfo =
   | TimelineTrackDropTargetInfo
   | FolderOrTabDropTargetInfo
   | AIGenerationPanelDropTargetInfo
+  | ClipFilterDropTargetInfo
 
 // ==================== 拖拽预览数据（保留现有定义） ====================
 

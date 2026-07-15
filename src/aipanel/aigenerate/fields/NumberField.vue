@@ -6,6 +6,7 @@
         <span v-if="isRequired" class="required-mark">*</span>
       </label>
       <SliderInput
+        v-if="showSlider"
         :modelValue="modelValue"
         :min="config.min"
         :max="config.max"
@@ -51,6 +52,9 @@ interface Emits {
 
 const props = defineProps<Props>()
 const emit = defineEmits<Emits>()
+
+// 是否显示滑块，默认为 true
+const showSlider = computed(() => props.config.showSlider !== false)
 
 // 是否显示必填标记
 const isRequired = computed(() => props.config.required)

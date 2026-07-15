@@ -2,8 +2,9 @@
  * 统一Clip架构相关工具函数
  */
 
-import type { UnifiedTimelineItemData } from '@/core/timelineitem/type'
+import type { UnifiedTimelineItemData } from '@/core/timelineitem/model/timelineItem'
 import type { MediaType } from '@/core/mediaitem'
+import { TimelineItemQueries } from '@/core/timelineitem/queries'
 
 // ==================== 媒体项目信息工具 ====================
 
@@ -12,8 +13,8 @@ import type { MediaType } from '@/core/mediaitem'
  */
 export function getTimelineItemDisplayName(data: UnifiedTimelineItemData<MediaType>): string {
   // 对于文本类型，优先显示文本内容
-  if (data.mediaType === 'text' && 'text' in data.config) {
-    const textContent = (data.config as any).text
+  if (data.mediaType === 'text') {
+    const textContent = TimelineItemQueries.getBaseTextConfig(data)?.content
     if (textContent && typeof textContent === 'string') {
       return textContent.length > 20 ? textContent.substring(0, 20) + '...' : textContent
     }

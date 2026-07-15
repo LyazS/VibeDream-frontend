@@ -207,6 +207,22 @@ export function createUnifiedHistoryModule(registry: ModuleRegistry) {
     canRedo.value = canRedoInternal()
   }
 
+  function removeCommandAt(index: number, reason: string): void {
+    const command = commands[index]
+    if (!command) {
+      return
+    }
+
+    commands.splice(index, 1)
+    disposeCommand(command)
+
+    if (currentIndex >= index) {
+      currentIndex--
+    }
+
+    console.warn(`🧹 已移除失效历史命令: ${command.description} (${reason})`)
+  }
+
   // ==================== 公共方法 ====================
 
   /**
@@ -261,7 +277,8 @@ export function createUnifiedHistoryModule(registry: ModuleRegistry) {
     }
 
     try {
-      const command = commands[currentIndex]
+      const commandIndex = currentIndex
+      const command = commands[commandIndex]
       await command.undo()
       currentIndex--
 
@@ -277,6 +294,8 @@ export function createUnifiedHistoryModule(registry: ModuleRegistry) {
       return true
     } catch (error) {
       console.error('❌ 撤销操作失败', error)
+      removeCommandAt(currentIndex, 'undo failed')
+      updateReactiveState()
 
       // 显示错误通知
       useNaiveUIModule.messageError(
@@ -303,7 +322,8 @@ export function createUnifiedHistoryModule(registry: ModuleRegistry) {
 
     try {
       currentIndex++
-      const command = commands[currentIndex]
+      const commandIndex = currentIndex
+      const command = commands[commandIndex]
       await command.execute()
 
       console.log(`↪️ 已重做: ${command.description}`)
@@ -318,7 +338,8 @@ export function createUnifiedHistoryModule(registry: ModuleRegistry) {
       return true
     } catch (error) {
       console.error('❌ 重做操作失败', error)
-      currentIndex-- // 回滚索引
+      removeCommandAt(currentIndex, 'redo failed')
+      updateReactiveState()
 
       // 显示错误通知
       useNaiveUIModule.messageError(

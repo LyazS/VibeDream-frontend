@@ -8,6 +8,9 @@ import type { BaseUserSelectedFileSourceData } from '@/core/datasource/providers
 import type { BaseAIGenerationSourceData } from '@/core/datasource/providers/ai-generation/AIGenerationSource'
 import type { BaseBizyAirSourceData } from '@/core/datasource/providers/bizyair/types'
 import { BizyAirSourceFactory } from '@/core/datasource/providers/bizyair/BizyAirSource'
+import type { BaseASRSourceData } from '@/core/datasource/providers/asr/ASRSource'
+import { ASRSourceFactory } from '@/core/datasource/providers/asr/ASRSource'
+import type { UnifiedLibraryAssetData } from '@/core/asset/types'
 
 /**
  * 媒体项目加载器（阶段二彻底重构版）
@@ -21,7 +24,7 @@ export class MediaItemLoader {
    * @param projectId 项目 ID
    * @returns 媒体项目数组
    */
-  async loadMediaItemsFromMeta(projectId: string): Promise<UnifiedMediaItemData[]> {
+  async loadMediaItemsFromMeta(projectId: string): Promise<UnifiedLibraryAssetData[]> {
     try {
       console.log(`📂 [MediaItemLoader] 开始从 Meta 文件加载媒体项目: ${projectId}`)
 
@@ -30,14 +33,22 @@ export class MediaItemLoader {
       console.log(`📄 [MediaItemLoader] 发现 ${metaFiles.length} 个 Meta 文件`)
 
       // 2. 从每个 Meta 文件重建媒体项目
-      const mediaItems: UnifiedMediaItemData[] = []
+      const mediaItems: UnifiedLibraryAssetData[] = []
 
       for (const metaData of metaFiles) {
         try {
+          if (metaData.assetKind === 'effect-template') {
+            continue
+          }
+
           const mediaItem = await this.rebuildMediaItemFromMeta(metaData)
 
-          // 3. 只对 ready 状态的媒体项目验证文件是否存在
-          if (mediaItem.mediaStatus === 'ready') {
+          if (mediaItem.assetKind === 'effect-template') {
+            console.log(`✨ [MediaItemLoader] 模板资产加载成功: ${metaData.name}`)
+          } else if (mediaItem.mediaType === 'text') {
+            // text 类型没有实际媒体文件，跳过文件验证
+            console.log(`📝 [MediaItemLoader] 文本媒体项目加载（无文件）: ${metaData.name}`)
+          } else if (mediaItem.mediaStatus === 'ready') {
             const fileExists = await globalMetaFileManager.verifyMediaFileExists(metaData.id)
 
             if (fileExists) {
@@ -71,12 +82,15 @@ export class MediaItemLoader {
    * @param metaData Meta 文件数据
    * @returns 重建的媒体项目
    */
-  private async rebuildMediaItemFromMeta(metaData: MediaMetaFile): Promise<UnifiedMediaItemData> {
+  private async rebuildMediaItemFromMeta(metaData: MediaMetaFile): Promise<UnifiedLibraryAssetData> {
+    if (metaData.assetKind === 'effect-template') {
+      throw new Error('新链路不再支持从项目媒体目录恢复 effect-template 资产')
+    }
+
     // 1. 根据数据源类型创建相应的数据源（运行时状态）
     let source
 
-    // 🌟 使用类型断言确保 metaData.source 有 type 属性
-    const sourceType = (metaData.source as any).type
+    const sourceType = metaData.source.type
 
     if (sourceType === 'user-selected') {
       // 用户选择文件数据源
@@ -95,6 +109,12 @@ export class MediaItemLoader {
         metaData.source as BaseBizyAirSourceData,
         SourceOrigin.PROJECT_LOAD,
       )
+    } else if (sourceType === 'asr') {
+      // ASR 数据源（从项目加载）
+      source = ASRSourceFactory.createASRSource(
+        metaData.source as BaseASRSourceData,
+        SourceOrigin.PROJECT_LOAD,
+      )
     } else {
       throw new Error(`不支持的数据源类型: ${sourceType}`)
     }
@@ -109,6 +129,10 @@ export class MediaItemLoader {
         mediaType: metaData.mediaType,
         duration: metaData.duration,
         mediaStatus: metaData.mediaStatus || 'pending', // 🌟 如果 meta 文件中有终态状态，使用它；否则默认为 pending
+        // 🌟 新增：恢复 AI 生成的元数据
+        ...(metaData.metadata && {
+          metadata: metaData.metadata,
+        }),
       },
     )
 

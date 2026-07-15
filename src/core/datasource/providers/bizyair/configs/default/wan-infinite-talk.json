@@ -1,0 +1,83 @@
+{
+  "id": "wan-infinite-talk",
+  "variant": "default",
+  "web_app_id": 46384,
+  "name": "wan-infinite-talk",
+  "description": "Wan数字人对话 - 根据图片、音频和文本生成数字人对话视频",
+  "media_type": "video",
+  "cost": "0.3",
+  "input_mapping": {
+    "ref_images": {
+      "type": "array",
+      "items": [
+        {
+          "mapping": "112:LoadImage.image",
+          "type": "string",
+          "default": "",
+          "validation": {
+            "required": true,
+            "description": "参考图片URL"
+          }
+        }
+      ]
+    },
+    "ref_audios": {
+      "type": "array",
+      "items": [
+        {
+          "mapping": "48:LoadAudio.audio",
+          "type": "string",
+          "default": "",
+          "validation": {
+            "required": true,
+            "description": "音频文件URL"
+          }
+        }
+      ]
+    },
+    "start_index": {
+      "mapping": "114:TrimAudioDuration.start_index",
+      "type": "float",
+      "default": 0,
+      "validation": {
+        "required": false,
+        "min": 0,
+        "description": "起始时间（秒）"
+      }
+    },
+    "duration": {
+      "mapping": "114:TrimAudioDuration.duration",
+      "type": "float",
+      "default": 5,
+      "validation": {
+        "required": false,
+        "min": 0.1,
+        "description": "时长（秒）"
+      }
+    },
+    "text": {
+      "mapping": "105:Text Multiline.text",
+      "type": "string",
+      "default": "女孩在深情歌唱",
+      "validation": {
+        "required": true,
+        "minLength": 1,
+        "maxLength": 500,
+        "description": "文本描述"
+      }
+    },
+    "loop_frames": {
+      "mapping": "83:easy int.value",
+      "type": "integer",
+      "default": 121,
+      "validation": {
+        "required": false,
+        "enum": [
+          81,
+          121
+        ],
+        "description": "单次循环帧数（可选 81 或 121）"
+      }
+    }
+  }
+}

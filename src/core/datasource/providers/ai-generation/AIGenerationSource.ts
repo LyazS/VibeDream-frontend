@@ -1,6 +1,5 @@
 /**
- * AI生成数据源查询函数和工厂函数
- * 基于"核心数据与行为分离"的重构方案
+ * AI 生成 datasource 类型定义、工厂和查询函数。
  */
 
 import type {
@@ -21,18 +20,18 @@ import type { MediaGenerationRequest, TaskResultData } from './types'
 // ==================== 数据源接口定义 ====================
 
 /**
- * AI生成数据源基类型 - 只包含持久化数据
+ * AI 生成 datasource 的持久化数据。
  */
 export interface BaseAIGenerationSourceData extends BaseDataSourceData {
   type: 'ai-generation'
   aiTaskId: string
   requestParams: MediaGenerationRequest
   resultData?: TaskResultData // 远程任务完成后的结果数据
-  taskStatus: TaskStatus // 🌟 新增：持久化任务状态（必填）
+  taskStatus: TaskStatus
 }
 
 /**
- * AI生成数据源 - 继承基类型和运行时状态
+ * AI 生成 datasource 运行时结构。
  */
 export interface AIGenerationSourceData
   extends BaseAIGenerationSourceData,
@@ -45,13 +44,13 @@ export interface AIGenerationSourceData
  */
 export const AIGenerationSourceFactory = {
   /**
-   * 创建AI生成数据源
+   * 创建 AI 生成 datasource
    * @param param 基础数据
-   * @param origin 数据源来源标识（必须明确传入）
+   * @param origin 数据源来源标识
    */
   createAIGenerationSource(
     param: BaseAIGenerationSourceData,
-    origin: SourceOrigin, // 必须明确传入来源
+    origin: SourceOrigin,
   ): AIGenerationSourceData {
     return reactive({
       ...param,
@@ -63,7 +62,7 @@ export const AIGenerationSourceFactory = {
 // ==================== 类型守卫 ====================
 
 /**
- * AI生成类型守卫
+ * AI 生成类型守卫
  */
 export const AIGenerationTypeGuards = {
   isAIGenerationSource(source: BaseDataSourceData): source is AIGenerationSourceData {
@@ -71,14 +70,14 @@ export const AIGenerationTypeGuards = {
   },
 }
 
-// ==================== AI生成特定查询函数 ====================
+// ==================== AI 生成查询函数 ====================
 
 /**
- * AI生成特定查询函数
+ * AI 生成查询函数。
  */
 export const AIGenerationQueries = {
   /**
-   * 获取AI任务ID
+   * 获取 AI 任务 ID
    */
   getAITaskId(source: BaseDataSourceData): string | null {
     return AIGenerationTypeGuards.isAIGenerationSource(source) ? source.aiTaskId : null
@@ -108,23 +107,11 @@ export function extractAIGenerationSourceData(
   source: AIGenerationSourceData,
 ): BaseAIGenerationSourceData {
   return {
-    // 基础字段
     type: source.type,
-    // 🌟 阶段二彻底重构：不再保存 id 和 mediaReferenceId
-
-    // 特定字段
     aiTaskId: source.aiTaskId,
     requestParams: source.requestParams,
-    resultData: source.resultData, // 保存结果数据
-    taskStatus: source.taskStatus, // 🌟 新增：保存任务状态
-
-    // 不需要保存运行时状态
-    // estimatedTime: source.estimatedTime, // 运行时状态
-    // streamConnected: source.streamConnected, // 运行时状态
-    // currentStage: source.currentStage, // 运行时状态
-    // progress: source.progress, // 重新加载时会重置
-    // errorMessage: source.errorMessage, // 重新加载时会重置
-    // sourceOrigin: source.sourceOrigin, // 重新加载时会重新设置
+    resultData: source.resultData,
+    taskStatus: source.taskStatus,
   }
 }
 

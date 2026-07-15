@@ -39,6 +39,11 @@
     "loading": "加载中...",
     "retry": "重试",
     "seconds": "秒",
-    "minutes": "分"
+    "minutes": "分",
+    "trackDrag": {
+      "dragToTop": "拖到上方",
+      "dragToBottom": "拖到下方",
+      "dragHandle": "拖拽以调整轨道顺序"
+    }
   }
 }

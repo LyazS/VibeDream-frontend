@@ -1,5 +1,5 @@
 /**
- * 核心层统一导出
+ * datasource core 统一导出。
  */
 
 export * from './BaseDataSource'

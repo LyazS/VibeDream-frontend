@@ -1,6 +1,8 @@
 <template>
   <div class="media-grid" :class="{ 'drag-over': isDragOver }">
+    <LibraryBreadcrumb />
     <n-scrollbar
+      class="media-grid__scrollbar"
       @dragover="handleDragOver"
       @dragleave="handleDragLeave"
       @drop="handleDrop"
@@ -26,7 +28,7 @@
           class="content-item"
           :class="{
             'directory-item': item.type === 'directory',
-            'media-item': item.type === 'media',
+            'media-item': item.type === 'asset',
             selected: isItemSelected(item),
             'is-cut': isItemCut(item),
             'is-copy': isItemCopy(item),
@@ -59,7 +61,7 @@
               </div>
             </template>
 
-            <!-- 媒体项目 -->
+            <!-- 资产项目 -->
             <template v-else>
               <div class="item-icon media-icon">
                 <MediaItemThumbnail :media-id="item.id" />
@@ -68,12 +70,12 @@
           </div>
 
           <!-- 文件名区域（不可拖拽） -->
-          <div class="item-name">
-            {{
-              item.type === 'directory'
-                ? getDirectory(item.id)?.name || ''
-                : getMediaItem(item.id)?.name || ''
-            }}
+          <div
+            class="item-name"
+            @mouseenter="showFileNameTooltip(item, $event)"
+            @mouseleave="hideFileNameTooltip"
+          >
+            <span class="item-name__label">{{ getItemName(item) }}</span>
           </div>
         </div>
       </div>
@@ -86,7 +88,7 @@
           class="list-item"
           :class="{
             'directory-item': item.type === 'directory',
-            'media-item': item.type === 'media',
+            'media-item': item.type === 'asset',
             selected: isItemSelected(item),
             'is-cut': isItemCut(item),
             'is-copy': isItemCopy(item),
@@ -129,7 +131,7 @@
 
           <!-- 类型列 -->
           <div class="list-item-type">
-            {{ item.type === 'directory' ? t('media.folder') : getMediaTypeLabel(item.id) }}
+            {{ item.type === 'directory' ? t('media.folder') : getAssetTypeLabel(item.id) }}
           </div>
         </div>
       </div>
@@ -211,8 +213,20 @@
         style="display: none"
         @change="handleFileSelect"
       />
-
     </n-scrollbar>
+    <Teleport to="body">
+      <Transition name="file-name-tooltip">
+        <div
+          v-if="fileNameTooltip.visible"
+          class="library-media-name-tooltip"
+          :class="{ 'is-above': fileNameTooltip.isAbove }"
+          :style="{ left: `${fileNameTooltip.x}px`, top: `${fileNameTooltip.y}px` }"
+          role="tooltip"
+        >
+          {{ fileNameTooltip.name }}
+        </div>
+      </Transition>
+    </Teleport>
   </div>
 </template>
 
@@ -221,27 +235,19 @@ import { ref, computed } from 'vue'
 import { NScrollbar } from 'naive-ui'
 import { useAppI18n } from '@/core/composables/useI18n'
 import { useUnifiedStore } from '@/core/unifiedStore'
-import type { DisplayItem, VirtualDirectory, ClipboardItem, ViewMode, SortBy, SortOrder } from '@/core/directory/types'
+import type { DisplayItem, VirtualDirectory, ClipboardItem, SortBy } from '@/core/directory/types'
 import {
   DragSourceType,
   DropTargetType,
-  type MediaItemDragParams,
+  type AssetDragParams,
   type FolderDragParams,
   type DropTargetInfo,
 } from '@/core/types/drag'
 import type { UnifiedMediaItemData } from '@/core'
 import { DataSourceFactory } from '@/core'
 import { generateMediaId, extractExtension } from '@/core/utils/idGenerator'
-import {
-  AIGenerationSourceFactory,
-  TaskStatus,
-  ContentType,
-  AITaskType,
-  type MediaGenerationRequest,
-  type AIGenerationSourceData,
-} from '@/core/datasource/providers/ai-generation/AIGenerationSource'
+import { ContentType, AITaskType } from '@/core/datasource/providers/ai-generation/AIGenerationSource'
 import { SourceOrigin } from '@/core/datasource/core/BaseDataSource'
-import { fetchClient } from '@/utils/fetchClient'
 import { IconComponents } from '@/constants/iconComponents'
 import {
   ContextMenu,
@@ -254,16 +260,19 @@ import RenameModal from '@/components/modals/RenameModal.vue'
 import MediaItemThumbnail from '@/components/panels/MediaItemThumbnail.vue'
 import MediaPreviewModal from '@/components/modals/MediaPreviewModal.vue'
 import FolderIcon from '@/components/utils/FolderIcon.vue'
-import type { TaskSubmitResponse } from '@/types/taskApi'
-import { TaskSubmitErrorCode } from '@/types/taskApi'
-import {
-  buildTaskErrorMessage,
-  shouldShowRechargePrompt,
-  isRetryableError,
-} from '@/utils/errorMessageBuilder'
+import LibraryBreadcrumb from './LibraryBreadcrumb.vue'
+import { globalMetaFileManager } from '@/core/managers/media/globalMetaFileManager'
+import { resetAIGeneratedMediaForRetry } from '@/core/jobs'
 
 const unifiedStore = useUnifiedStore()
 const { t } = useAppI18n()
+const fileNameTooltip = ref({
+  visible: false,
+  name: '',
+  x: 0,
+  y: 0,
+  isAbove: false,
+})
 
 // 检查是否为外部文件拖拽（区分内部项目拖拽）
 function isFileDrag(event: DragEvent): boolean {
@@ -291,7 +300,6 @@ const renameTarget = ref<DisplayItem | null>(null)
 // 预览模态框状态
 const showMediaPreviewModal = ref(false)
 const previewMediaItemId = ref<string>('')
-
 
 // 文件夹拖拽状态（每个文件夹独立状态）
 const folderDragState = ref<Record<string, { isDragOver: boolean; canDrop: boolean }>>({})
@@ -406,10 +414,9 @@ function sortItems(items: DisplayItem[]): DisplayItem[] {
           const nameA = (getDirectory(a.id)?.name || '').toLowerCase()
           const nameB = (getDirectory(b.id)?.name || '').toLowerCase()
           comparison = nameA.localeCompare(nameB, 'zh-CN')
-        } else if (a.type === 'media' && b.type === 'media') {
-          // 两个都是媒体，按媒体类型排序
-          const typeA = getMediaItem(a.id)?.mediaType || 'unknown'
-          const typeB = getMediaItem(b.id)?.mediaType || 'unknown'
+        } else if (a.type === 'asset' && b.type === 'asset') {
+          const typeA = getAssetSortKey(a.id)
+          const typeB = getAssetSortKey(b.id)
           comparison = typeA.localeCompare(typeB)
           // 如果类型相同，按名称排序
           if (comparison === 0) {
@@ -450,24 +457,6 @@ const currentMenuItems = computed((): MenuItem[] => {
             icon: IconComponents.FOLDER_ADD,
             onClick: () => {
               showCreateDirModal.value = true
-              showContextMenu.value = false
-            },
-          },
-          // 🆕 新增：创建角色
-          {
-            label: t('media.character.character'),
-            icon: IconComponents.USER,
-            onClick: () => {
-              // 检查是否选择了目录
-              if (!currentDir.value) {
-                unifiedStore.messageError(t('media.selectDirectoryFirst'))
-                return
-              }
-
-              // 打开角色编辑器（创建模式）
-              unifiedStore.openCharacterEditor('create')
-              // 打开 AI 面板
-              unifiedStore.setChatPanelVisible(true)
               showContextMenu.value = false
             },
           },
@@ -582,7 +571,7 @@ const currentMenuItems = computed((): MenuItem[] => {
   }
 
   // 检查是否为多选状态
-  if (unifiedStore.selectedMediaItemIds.size > 1) {
+  if (unifiedStore.selectedLibraryAssetIds.size > 1) {
     // 多选状态菜单
     return [
       {
@@ -653,7 +642,7 @@ const currentMenuItems = computed((): MenuItem[] => {
       },
     ]
   } else {
-    // 媒体文件菜单
+    // 资产菜单
     return [
       {
         label: t('media.cut'),
@@ -674,27 +663,39 @@ const currentMenuItems = computed((): MenuItem[] => {
           showContextMenu.value = false
         },
       },
-      { type: 'separator' },
-      // 🆕 新增：取消选项
-      {
-        label: t('media.cancel'),
-        icon: IconComponents.CLOSE,
-        onClick: handleCancelTask,
-        disabled: !canCancel(target),
-      },
-      // 🆕 新增：重试选项
-      {
-        label: t('media.retry'),
-        icon: IconComponents.REFRESH,
-        onClick: handleRetry,
-        disabled: !canRetry(target),
-      },
+      ...(canStartMediaIndexing(target)
+        ? ([
+            { type: 'separator' as const },
+            {
+              label: t('media.startIndexing'),
+              icon: IconComponents.SEARCH,
+              onClick: handleStartMediaIndexing,
+            },
+          ] satisfies MenuItem[])
+        : []),
+      ...(getMediaItem(target.id)
+        ? ([
+            { type: 'separator' as const },
+            {
+              label: t('media.cancel'),
+              icon: IconComponents.CLOSE,
+              onClick: handleCancelTask,
+              disabled: !canCancel(target),
+            },
+            {
+              label: t('media.retry'),
+              icon: IconComponents.REFRESH,
+              onClick: handleRetry,
+              disabled: !canRetry(target),
+            },
+          ] satisfies MenuItem[])
+        : []),
       { type: 'separator' },
       {
         label: t('media.delete'),
         icon: IconComponents.DELETE,
         onClick: () => {
-          removeMediaItem(target.id)
+          removeAssetItem(target.id)
           showContextMenu.value = false
         },
       },
@@ -709,9 +710,37 @@ function getDirectory(id: string): VirtualDirectory | undefined {
   return unifiedStore.getDirectory(id)
 }
 
-// 获取媒体项
 function getMediaItem(id: string): UnifiedMediaItemData | undefined {
   return unifiedStore.getMediaItem(id)
+}
+
+function getItemName(item: DisplayItem): string {
+  return item.type === 'directory'
+    ? getDirectory(item.id)?.name || ''
+    : getMediaItem(item.id)?.name || ''
+}
+
+function showFileNameTooltip(item: DisplayItem, event: MouseEvent): void {
+  const target = event.currentTarget as HTMLElement
+  const rect = target.getBoundingClientRect()
+  const viewportInset = Math.min(156, Math.max(16, window.innerWidth / 2))
+  const x = Math.min(
+    Math.max(rect.left + rect.width / 2, viewportInset),
+    window.innerWidth - viewportInset,
+  )
+  const isAbove = rect.bottom > window.innerHeight - 120
+
+  fileNameTooltip.value = {
+    visible: true,
+    name: getItemName(item),
+    x,
+    y: isAbove ? rect.top - 4 : rect.bottom + 4,
+    isAbove,
+  }
+}
+
+function hideFileNameTooltip(): void {
+  fileNameTooltip.value.visible = false
 }
 
 // 获取图标大小（返回像素值）
@@ -728,12 +757,11 @@ function getIconSize() {
   }
 }
 
-// 获取媒体类型标签
-function getMediaTypeLabel(mediaId: string): string {
-  const mediaItem = getMediaItem(mediaId)
-  if (!mediaItem) return t('media.unknown')
+function getAssetTypeLabel(assetId: string): string {
+  const asset = getMediaItem(assetId)
+  if (!asset) return t('media.unknown')
 
-  switch (mediaItem.mediaType) {
+  switch (asset.mediaType) {
     case 'video':
       return t('media.video')
     case 'audio':
@@ -743,6 +771,12 @@ function getMediaTypeLabel(mediaId: string): string {
     default:
       return t('media.unknown')
   }
+}
+
+function getAssetSortKey(assetId: string): string {
+  const asset = getMediaItem(assetId)
+  if (!asset) return 'unknown'
+  return `media-${asset.mediaType}`
 }
 
 // 检查媒体项是否可拖拽
@@ -765,7 +799,7 @@ function isDraggable(item: DisplayItem): boolean {
 
 // 检查项目是否被选中
 function isItemSelected(item: DisplayItem): boolean {
-  return unifiedStore.isMediaItemSelected(item.id)
+  return unifiedStore.isLibraryAssetSelected(item.id)
 }
 
 // ==================== 交互处理 ====================
@@ -773,25 +807,17 @@ function isItemSelected(item: DisplayItem): boolean {
 // 双击项目处理
 function onItemDoubleClick(item: DisplayItem): void {
   if (item.type === 'directory') {
-    const dir = unifiedStore.getDirectory(item.id)
-    
-    // 判断是否为角色文件夹
-    if (dir && unifiedStore.isCharacterDirectory(dir)) {
-      unifiedStore.openCharacterEditor('edit', item.id)  // 打开角色编辑器
-    } else {
-      unifiedStore.navigateToDir(item.id)  // 普通文件夹导航
-    }
+    unifiedStore.navigateToDir(item.id)
   } else {
-    // 检查媒体是否已经ready
-    const mediaItem = getMediaItem(item.id)
-    if (!mediaItem) {
+    const asset = getMediaItem(item.id)
+    if (!asset) {
       unifiedStore.messageError(t('media.mediaNotFound'))
       return
     }
 
     // 只有ready状态的媒体才能预览
-    if (mediaItem.mediaStatus !== 'ready') {
-      unifiedStore.messageWarning(t('media.previewNotReady', { name: mediaItem.name }))
+    if (asset.mediaStatus !== 'ready') {
+      unifiedStore.messageWarning(t('media.previewNotReady', { name: asset.name }))
       return
     }
 
@@ -805,13 +831,13 @@ function onItemDoubleClick(item: DisplayItem): void {
 function onItemClick(item: DisplayItem, event: MouseEvent): void {
   if (event.ctrlKey || event.metaKey) {
     // Ctrl+点击：切换选择状态
-    unifiedStore.selectMediaItems([item.id], 'toggle')
+    unifiedStore.selectLibraryAssets([item.id], 'toggle')
   } else if (event.shiftKey) {
     // Shift+点击：范围选择
-    unifiedStore.selectMediaItems([item.id], 'range')
+    unifiedStore.selectLibraryAssets([item.id], 'range')
   } else {
     // 普通点击：单选
-    unifiedStore.selectMediaItems([item.id], 'replace')
+    unifiedStore.selectLibraryAssets([item.id], 'replace')
   }
 }
 
@@ -822,7 +848,7 @@ function onItemContextMenu(item: DisplayItem, event: MouseEvent): void {
 
   // 如果右键的项目不在选中列表中，则将其设为唯一选中项
   if (!isItemSelected(item)) {
-    unifiedStore.selectMediaItems([item.id], 'replace')
+    unifiedStore.selectLibraryAssets([item.id], 'replace')
   }
 
   contextMenuOptions.value.x = event.clientX
@@ -843,8 +869,14 @@ function handleContextMenu(event: MouseEvent): void {
 
 // 点击空白区域
 function handleContainerClick(event: MouseEvent): void {
-  if (!event.target || !(event.target as Element).closest('.content-item')) {
-    unifiedStore.clearMediaSelection()
+  if (!event.target) {
+    unifiedStore.clearLibraryAssetSelection()
+    return
+  }
+
+  const target = event.target as Element
+  if (!target.closest('.content-item') && !target.closest('.list-item')) {
+    unifiedStore.clearLibraryAssetSelection()
   }
 }
 
@@ -853,7 +885,7 @@ function handleContainerClick(event: MouseEvent): void {
 // 拖拽开始（使用新的统一拖拽架构）
 function handleItemDragStart(event: DragEvent, item: DisplayItem): void {
   // 根据项目类型选择不同的处理器
-  if (item.type === 'media') {
+  if (item.type === 'asset') {
     handleMediaItemDrag(event, item)
   } else if (item.type === 'directory') {
     handleFolderDrag(event, item)
@@ -862,23 +894,24 @@ function handleItemDragStart(event: DragEvent, item: DisplayItem): void {
 
 // 处理媒体项拖拽
 function handleMediaItemDrag(event: DragEvent, item: DisplayItem): void {
-  const mediaItem = getMediaItem(item.id)
-  if (!mediaItem) return
+  const asset = getMediaItem(item.id)
+  if (!asset) return
 
   // 获取源处理器
-  const sourceHandler = unifiedStore.getSourceHandler(DragSourceType.MEDIA_ITEM)
+  const sourceHandler = unifiedStore.getSourceHandler(DragSourceType.ASSET)
   if (!sourceHandler) {
     console.warn('⚠️ [LibraryMediaGrid] 未找到 MediaItem 源处理器')
     return
   }
 
+  const selectedAssetIds = isItemSelected(item)
+    ? Array.from(unifiedStore.selectedLibraryAssetIds)
+    : undefined
+
   // 准备拖拽参数
-  const params: MediaItemDragParams = {
-    mediaItemId: item.id,
-    // TODO: 支持多选拖拽
-    // selectedMediaItemIds: selectedItems.value
-    //   .filter(item => item.type === 'media')
-    //   .map(item => item.id)
+  const params: AssetDragParams = {
+    assetId: item.id,
+    selectedAssetIds,
   }
 
   try {
@@ -1060,8 +1093,8 @@ function startRename(item: DisplayItem): void {
     const dir = getDirectory(item.id)
     renameCurrentName.value = dir?.name || ''
   } else {
-    const media = getMediaItem(item.id)
-    renameCurrentName.value = media?.name || ''
+    const asset = getMediaItem(item.id)
+    renameCurrentName.value = asset?.name || ''
   }
 
   showRenameModal.value = true
@@ -1085,15 +1118,15 @@ async function handleRenameConfirm(newName: string): Promise<void> {
   try {
     if (target.type === 'directory') {
       // 重命名文件夹
-      const success = unifiedStore.renameDirectory(target.id, newName)
-      if (success) {
+      const result = unifiedStore.renameDirectory(target.id, newName)
+      if (result.success) {
         unifiedStore.messageSuccess(t('media.folderRenameSuccess'))
       } else {
-        unifiedStore.messageError(t('media.folderRenameFailed'))
+        unifiedStore.messageError(result.error || t('media.folderRenameFailed'))
+        return
       }
     } else {
-      // 重命名媒体项
-      unifiedStore.updateMediaItemName(target.id, newName)
+      unifiedStore.updateAssetName(target.id, newName)
       unifiedStore.messageSuccess(t('media.mediaRenameSuccess'))
     }
 
@@ -1112,7 +1145,11 @@ async function handleCreateFolder(folderName: string): Promise<void> {
   }
 
   try {
-    unifiedStore.createDirectory(folderName, currentDir.value.id)
+    const result = unifiedStore.createDirectory(folderName, currentDir.value.id)
+    if (!result.success) {
+      unifiedStore.messageError(result.error || t('media.folderCreateFailed'))
+      return
+    }
     showCreateDirModal.value = false
     unifiedStore.messageSuccess(t('media.folderCreateSuccess'))
   } catch (error) {
@@ -1181,7 +1218,7 @@ async function handlePasteFromClipboard(): Promise<void> {
     // 遍历剪贴板项目
     for (const item of clipboardItems) {
       // 查找图片类型
-      const imageType = item.types.find(type => type.startsWith('image/'))
+      const imageType = item.types.find((type) => type.startsWith('image/'))
 
       if (imageType) {
         // 获取图片 Blob
@@ -1207,17 +1244,15 @@ async function handlePasteFromClipboard(): Promise<void> {
     // 处理图片文件
     await processFiles(imageFiles)
     unifiedStore.messageSuccess(t('media.pasteImportSuccess', { count: imageFiles.length }))
-
   } catch (error) {
     console.error('从剪贴板粘贴图片失败:', error)
     unifiedStore.messageError(
       t('media.pasteImportFailed', {
-        error: error instanceof Error ? error.message : '未知错误'
-      })
+        error: error instanceof Error ? error.message : '未知错误',
+      }),
     )
   }
 }
-
 
 // 添加媒体项
 async function addMediaItem(file: File): Promise<void> {
@@ -1242,10 +1277,13 @@ async function addMediaItem(file: File): Promise<void> {
     unifiedStore.addMediaItem(mediaItem)
 
     // 添加到当前目录
-    unifiedStore.addMediaToDirectory(mediaId, currentDir.value.id)
+    unifiedStore.addAssetToDirectory(mediaId, currentDir.value.id)
 
-    // 启动媒体处理流程
-    unifiedStore.startMediaProcessing(mediaItem)
+    // 通过 Resource DAG 声明媒体资源需要 ready。
+    // 这里不 await，保持手动导入“加入后后台处理”的现有交互节奏。
+    void unifiedStore.ensureMediaReady(mediaId).catch((error) => {
+      console.error(t('media.fileProcessFailed', { name: file.name }), error)
+    })
 
     console.log(t('media.fileProcessStarted', { name: file.name }))
   } catch (error) {
@@ -1253,77 +1291,51 @@ async function addMediaItem(file: File): Promise<void> {
   }
 }
 
-// 提交AI生成任务到后端
-async function submitAIGenerationTask(
-  requestParams: MediaGenerationRequest,
-): Promise<TaskSubmitResponse> {
-  try {
-    const response = await fetchClient.post<TaskSubmitResponse>(
-      '/api/media/generate',
-      requestParams,
-    )
-
-    if (response.status !== 200) {
-      throw new Error(`提交任务失败: ${response.statusText}`)
-    }
-
-    return response.data
-  } catch (error) {
-    // 网络错误时返回失败响应
-    return {
-      success: false,
-      error_code: TaskSubmitErrorCode.UNKNOWN_ERROR,
-      error_details: {
-        error: error instanceof Error ? error.message : '网络请求失败',
-      },
-    }
-  }
-}
-
 // ==================== 取消功能 ====================
 
 /**
  * 判断素材是否可以取消
- * 只有 pending 状态的任务才可以取消
+ * 仅媒体处理链路的根任务支持取消；索引任务单独走 indexStatus，不在这里混用。
  */
 function canCancel(item: DisplayItem): boolean {
-  if (item.type !== 'media') return false
+  if (item.type !== 'asset') return false
 
   const mediaItem = getMediaItem(item.id)
   if (!mediaItem) return false
 
-  // 🌟 只有 pending 状态才可以取消
-  return mediaItem.mediaStatus === 'pending'
+  return (
+    ['pending', 'asyncprocessing', 'decoding'].includes(mediaItem.mediaStatus)
+    && Boolean(unifiedStore.findMediaProcessingTaskView(mediaItem.id))
+  )
 }
 
 /**
  * 处理取消操作
  */
 async function handleCancelTask(): Promise<void> {
-  if (!contextMenuTarget.value || contextMenuTarget.value.type !== 'media') return
+  if (!contextMenuTarget.value || contextMenuTarget.value.type !== 'asset') return
 
   const mediaItem = getMediaItem(contextMenuTarget.value.id)
   if (!mediaItem) return
 
   showContextMenu.value = false
 
-  try {
-    console.log(`🛑 [LibraryMediaGrid] 尝试取消任务: ${mediaItem.name}`)
+  const taskView = unifiedStore.findMediaProcessingTaskView(mediaItem.id)
 
-    const success = await unifiedStore.cancelMediaProcessing(mediaItem.id)
-
-    if (success) {
-      unifiedStore.messageSuccess(t('media.cancelSuccess', { name: mediaItem.name }))
-    } else {
-      unifiedStore.messageWarning(t('media.cancelFailed', { name: mediaItem.name }))
+  if (taskView) {
+    try {
+      const success = await unifiedStore.cancelJobTask(taskView.rootResourceId)
+      if (success) {
+        unifiedStore.messageSuccess(t('media.cancelSuccess', { name: mediaItem.name }))
+      } else {
+        unifiedStore.messageWarning(t('media.cancelFailed', { name: mediaItem.name }))
+      }
+    } catch (error) {
+      console.error('取消媒体资源失败:', error)
+      unifiedStore.messageError(t('media.cancelFailed', { name: mediaItem.name }))
     }
-  } catch (error) {
-    console.error('取消任务失败:', error)
-    unifiedStore.messageError(
-      t('media.cancelFailed', {
-        name: mediaItem.name,
-      }),
-    )
+  } else {
+    unifiedStore.messageWarning(t('media.cancelFailed', { name: mediaItem.name }))
   }
 }
 
@@ -1333,7 +1345,7 @@ async function handleCancelTask(): Promise<void> {
  * 判断素材是否可以重试
  */
 function canRetry(item: DisplayItem): boolean {
-  if (item.type !== 'media') return false
+  if (item.type !== 'asset') return false
 
   const mediaItem = getMediaItem(item.id)
   if (!mediaItem) return false
@@ -1344,14 +1356,14 @@ function canRetry(item: DisplayItem): boolean {
   }
 
   // 🌟 只有 AI 生成类型支持重试
-  return mediaItem.source.type === 'ai-generation'
+  return mediaItem.source.type === 'ai-generation' || mediaItem.source.type === 'bizyair'
 }
 
 /**
  * 处理重试操作
  */
 async function handleRetry(): Promise<void> {
-  if (!contextMenuTarget.value || contextMenuTarget.value.type !== 'media') return
+  if (!contextMenuTarget.value || contextMenuTarget.value.type !== 'asset') return
 
   const mediaItem = getMediaItem(contextMenuTarget.value.id)
   if (!mediaItem) return
@@ -1360,7 +1372,7 @@ async function handleRetry(): Promise<void> {
 
   try {
     // 🌟 只支持 AI 生成类型的重试
-    if (mediaItem.source.type === 'ai-generation') {
+    if (mediaItem.source.type === 'ai-generation' || mediaItem.source.type === 'bizyair') {
       await retryAIGeneration(mediaItem)
     } else {
       // 其他类型不支持重试
@@ -1377,49 +1389,82 @@ async function handleRetry(): Promise<void> {
   }
 }
 
+function canStartMediaIndexing(item: DisplayItem): boolean {
+  if (item.type !== 'asset') {
+    return false
+  }
+
+  const mediaItem = getMediaItem(item.id)
+  return Boolean(
+    mediaItem
+      && (mediaItem.mediaType === 'video' || mediaItem.mediaType === 'image')
+      && mediaItem.mediaStatus === 'ready',
+  )
+}
+
+async function handleStartMediaIndexing(): Promise<void> {
+  if (!contextMenuTarget.value || contextMenuTarget.value.type !== 'asset') return
+
+  const mediaItem = getMediaItem(contextMenuTarget.value.id)
+  if (!mediaItem || (mediaItem.mediaType !== 'video' && mediaItem.mediaType !== 'image')) {
+    return
+  }
+
+  showContextMenu.value = false
+  unifiedStore.messageSuccess(t('media.startIndexingStarted', { name: mediaItem.name }))
+
+  try {
+    await unifiedStore.ensureMediaIndexing(mediaItem.id)
+    const status = mediaItem.metadata?.indexing?.indexStatus
+    unifiedStore.messageSuccess(
+      t(
+        status === 'partial_failed'
+          ? 'media.startIndexingPartialSuccess'
+          : 'media.startIndexingSuccess',
+        { name: mediaItem.name },
+      ),
+    )
+  } catch (error) {
+    console.error('素材索引失败:', error)
+    unifiedStore.messageError(
+      t('media.startIndexingFailed', {
+        name: mediaItem.name,
+        error: error instanceof Error ? error.message : t('media.unknown'),
+      }),
+    )
+  }
+}
+
 /**
  * 重试AI生成素材
  */
 async function retryAIGeneration(mediaItem: UnifiedMediaItemData): Promise<void> {
-  const aiSource = mediaItem.source as AIGenerationSourceData
+  resetAIGeneratedMediaForRetry(mediaItem)
 
-  // 1. 重新提交任务到后端
-  const submitResult = await submitAIGenerationTask(aiSource.requestParams)
-
-  if (!submitResult.success) {
-    const errorMessage = buildTaskErrorMessage(
-      submitResult.error_code,
-      submitResult.error_details,
-      t,
-    )
-    throw new Error(errorMessage)
+  const saved = await globalMetaFileManager.saveMetaFile(mediaItem)
+  if (!saved) {
+    throw new Error(`保存重试状态失败: ${mediaItem.name}`)
   }
 
-  // 2. 更新任务ID和状态
-  aiSource.aiTaskId = submitResult.task_id
-  aiSource.taskStatus = TaskStatus.PENDING
-  aiSource.resultData = undefined
-
-  // 3. 重置数据源状态
-  aiSource.progress = 0
-  aiSource.errorMessage = undefined
-
-  // 4. 重置媒体状态
-  mediaItem.mediaStatus = 'pending'
-
-  // 5. 重新启动处理流程
-  unifiedStore.startMediaProcessing(mediaItem)
+  void unifiedStore.ensureAIGeneratedMedia(mediaItem.id).catch((error) => {
+    console.error('重试 AI 生成素材失败:', error)
+    unifiedStore.messageError(
+      t('media.retryFailed', {
+        error: error instanceof Error ? error.message : '未知错误',
+      }),
+    )
+  })
 
   unifiedStore.messageSuccess(t('media.retryStarted', { name: mediaItem.name }))
 }
 
-// 移除媒体项（考虑引用计数）
-function removeMediaItem(mediaId: string): void {
+// 移除资产（考虑引用计数）
+function removeAssetItem(mediaId: string): void {
   if (!currentDir.value) return
 
   const mediaItem = getMediaItem(mediaId)
 
-  // 如果媒体项不存在，直接移除无效引用
+  // 如果资产不存在，直接移除无效引用
   if (!mediaItem) {
     unifiedStore.dialogWarning({
       title: t('media.deleteMedia'),
@@ -1429,7 +1474,7 @@ function removeMediaItem(mediaId: string): void {
       draggable: true,
       onPositiveClick: async () => {
         try {
-          const result = await unifiedStore.deleteMediaItem(mediaId, currentDir.value!.id)
+          const result = await unifiedStore.deleteAssetItem(mediaId, currentDir.value!.id)
           if (result.success) {
             unifiedStore.messageSuccess(t('media.invalidMediaRemoved'))
           } else {
@@ -1467,8 +1512,7 @@ function removeMediaItem(mediaId: string): void {
     draggable: true,
     onPositiveClick: async () => {
       try {
-        // 使用统一的 deleteMediaItem 方法
-        const result = await unifiedStore.deleteMediaItem(mediaId, currentDir.value!.id)
+        const result = await unifiedStore.deleteAssetItem(mediaId, currentDir.value!.id)
 
         if (result.success) {
           if (result.deletedFile) {
@@ -1544,8 +1588,8 @@ async function deleteFolder(folderId: string): Promise<void> {
 
 // 获取选中的显示项列表
 function getSelectedDisplayItems(): DisplayItem[] {
-  const selectedIds = Array.from(unifiedStore.selectedMediaItemIds)
-  return displayItems.value.filter(item => selectedIds.includes(item.id))
+  const selectedIds = Array.from(unifiedStore.selectedLibraryAssetIds)
+  return displayItems.value.filter((item) => selectedIds.includes(item.id))
 }
 
 // 剪切操作
@@ -1581,7 +1625,7 @@ async function handlePaste(): Promise<void> {
   }
 
   // 清空选择
-  unifiedStore.clearMediaSelection()
+  unifiedStore.clearLibraryAssetSelection()
 }
 
 // 粘贴到指定文件夹
@@ -1664,7 +1708,7 @@ async function handleBatchDelete(): Promise<void> {
       }
 
       // 清空选择
-      unifiedStore.clearMediaSelection()
+      unifiedStore.clearLibraryAssetSelection()
 
       // 显示结果消息
       if (failedCount === 0) {
@@ -1685,13 +1729,22 @@ async function handleBatchDelete(): Promise<void> {
   })
 }
 
+// ==================== AI 描述分析功能 ====================
 </script>
 
 <style scoped>
 /* 媒体网格样式 */
 .media-grid {
   height: 100%;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
   transition: background-color var(--transition-fast);
+}
+
+.media-grid__scrollbar {
+  flex: 1;
+  min-height: 0;
 }
 
 .media-grid.drag-over {
@@ -1781,7 +1834,9 @@ async function handleBatchDelete(): Promise<void> {
   display: flex;
   flex-direction: column;
   align-items: center;
-  transition: all var(--transition-fast);
+  transition-property: background-color, border-color, opacity;
+  transition-duration: var(--transition-fast);
+  transition-timing-function: ease;
   position: relative;
   padding: 4px;
 }
@@ -1802,12 +1857,13 @@ async function handleBatchDelete(): Promise<void> {
   border-radius: 8px;
   overflow: hidden;
   cursor: pointer;
-  transition: all var(--transition-fast);
+  transition-property: transform;
+  transition-duration: var(--transition-fast);
+  transition-timing-function: ease;
   background-color: transparent;
 }
 
 .item-draggable-area:hover {
-  background-color: rgba(255, 255, 255, 0.05);
   transform: scale(1.05);
 }
 
@@ -1838,17 +1894,59 @@ async function handleBatchDelete(): Promise<void> {
   text-align: center;
   width: 100%;
   max-width: 90px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
   line-height: 1.2;
   cursor: default;
+  height: calc(2.4em + 4px);
   padding: 2px;
-  border-radius: 2px;
+  position: relative;
 }
 
-.item-name:hover {
-  background-color: rgba(255, 255, 255, 0.05);
+.item-name__label {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow-wrap: anywhere;
+}
+
+.library-media-name-tooltip {
+  position: fixed;
+  z-index: 3000;
+  width: max-content;
+  max-width: min(280px, calc(100vw - 32px));
+  padding: 6px 8px;
+  border-radius: var(--border-radius-small);
+  background-color: var(--color-bg-tertiary);
+  box-shadow:
+    0 2px 8px rgba(0, 0, 0, 0.3),
+    0 8px 20px rgba(0, 0, 0, 0.2);
+  color: var(--color-text-primary);
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+  pointer-events: none;
+  transform: translateX(-50%);
+}
+
+.library-media-name-tooltip.is-above {
+  transform: translate(-50%, -100%);
+}
+
+.file-name-tooltip-enter-active,
+.file-name-tooltip-leave-active {
+  transition-property: opacity, transform;
+  transition-duration: 160ms;
+  transition-timing-function: cubic-bezier(0.2, 0, 0, 1);
+}
+
+.file-name-tooltip-enter-from,
+.file-name-tooltip-leave-to {
+  opacity: 0;
+  transform: translate(-50%, 4px);
+}
+
+.library-media-name-tooltip.is-above.file-name-tooltip-enter-from,
+.library-media-name-tooltip.is-above.file-name-tooltip-leave-to {
+  transform: translate(-50%, calc(-100% + 4px));
 }
 
 /* 剪切状态样式 */
@@ -2007,4 +2105,5 @@ async function handleBatchDelete(): Promise<void> {
   overflow: hidden;
   text-overflow: ellipsis;
 }
+
 </style>

@@ -74,10 +74,56 @@
       </div>
     </div>
 
-    <!-- AI 任务信息区 -->
-    <div v-if="canCreateCharacter" class="properties-section">
-      <div class="info-row">
-        <span class="info-value" style="color: var(--color-success);">{{ t('properties.mediaItem.canCreateCharacter') }}</span>
+    <div v-if="indexingTitle || indexingSummary || indexingStatus" class="properties-section">
+      <h3 class="section-title">{{ t('properties.mediaItem.indexingInfo') }}</h3>
+      <div v-if="indexingStatus" class="info-row">
+        <span class="info-label">{{ t('properties.mediaItem.indexStatus') }}</span>
+        <span class="info-value">{{ indexingStatusText }}</span>
+      </div>
+      <div v-if="indexedAt" class="info-row">
+        <span class="info-label">{{ t('properties.mediaItem.indexedAt') }}</span>
+        <span class="info-value">{{ formatCreatedAt(indexedAt) }}</span>
+      </div>
+      <div v-if="isVideoIndexing && segmentCount !== null" class="info-row">
+        <span class="info-label">{{ t('properties.mediaItem.segmentCount') }}</span>
+        <span class="info-value">{{ segmentCount }}</span>
+      </div>
+      <div v-if="isVideoIndexing && failedSegmentCount !== null" class="info-row">
+        <span class="info-label">{{ t('properties.mediaItem.failedSegmentCount') }}</span>
+        <span class="info-value">{{ failedSegmentCount }}</span>
+      </div>
+      <div v-if="isVideoIndexing && (indexingTitle || indexingSummary)" class="segment-summary-list">
+        <div class="segment-summary-card">
+          <div v-if="indexingTitle" class="segment-summary-title">{{ indexingTitle }}</div>
+          <div v-if="indexingSummary" class="segment-summary-text">{{ indexingSummary }}</div>
+        </div>
+      </div>
+      <div v-if="isVideoIndexing && indexingSegmentSummaries.length > 0" class="segment-summary-list">
+        <div
+          v-for="segment in indexingSegmentSummaries"
+          :key="`${segment.segmentIndex ?? 'image'}-${segment.startTimecode || ''}-${segment.endTimecode || ''}-${segment.title || ''}`"
+          class="segment-summary-card"
+        >
+          <div class="segment-summary-header">
+            <span v-if="segment.segmentIndex !== undefined" class="segment-summary-index">
+              #{{ segment.segmentIndex + 1 }}
+            </span>
+            <span
+              v-if="segment.startTimecode || segment.endTimecode"
+              class="segment-summary-timecode"
+            >
+              {{ segment.startTimecode || '--' }} - {{ segment.endTimecode || '--' }}
+            </span>
+          </div>
+          <div v-if="segment.title" class="segment-summary-title">{{ segment.title }}</div>
+          <div v-if="segment.summary" class="segment-summary-text">{{ segment.summary }}</div>
+        </div>
+      </div>
+      <div v-if="!isVideoIndexing && (indexingTitle || indexingSummary)" class="segment-summary-list">
+        <div class="segment-summary-card">
+          <div v-if="indexingTitle" class="segment-summary-title">{{ indexingTitle }}</div>
+          <div v-if="indexingSummary" class="segment-summary-text">{{ indexingSummary }}</div>
+        </div>
       </div>
     </div>
 
@@ -93,9 +139,8 @@
         {{ t('properties.mediaItem.retry') }}
       </n-button>
 
-      <!-- 取消按钮（pending 状态） -->
       <n-button
-        v-if="mediaItem.mediaStatus === 'pending'"
+        v-if="canCancelMedia"
         type="error"
         size="small"
         @click="handleCancel"
@@ -105,6 +150,19 @@
         </template>
         {{ t('properties.mediaItem.cancel') }}
       </n-button>
+
+      <n-button
+        v-if="canStartIndexing"
+        type="primary"
+        size="small"
+        @click="handleStartIndexing"
+      >
+        <template #icon>
+          <component :is="IconComponents.SEARCH" size="16px" />
+        </template>
+        {{ t('media.startIndexing') }}
+      </n-button>
+
     </div>
   </div>
 </template>
@@ -117,16 +175,8 @@ import { useAppI18n } from '@/core/composables/useI18n'
 import { framesToTimecode } from '@/core/utils/timeUtils'
 import { IconComponents } from '@/constants/iconComponents'
 import type { UnifiedMediaItemData } from '@/core/mediaitem/types'
-import {
-  AIGenerationSourceFactory,
-  TaskStatus,
-  type MediaGenerationRequest,
-  type AIGenerationSourceData,
-} from '@/core/datasource/providers/ai-generation/AIGenerationSource'
-import { fetchClient } from '@/utils/fetchClient'
-import type { TaskSubmitResponse } from '@/types/taskApi'
-import { TaskSubmitErrorCode } from '@/types/taskApi'
-import { buildTaskErrorMessage } from '@/utils/errorMessageBuilder'
+import { globalMetaFileManager } from '@/core/managers/media/globalMetaFileManager'
+import { resetAIGeneratedMediaForRetry } from '@/core/jobs'
 
 interface Props {
   mediaItem: UnifiedMediaItemData
@@ -219,27 +269,90 @@ const filePath = computed(() => {
   return null
 })
 
+const indexingStatus = computed(() => props.mediaItem.metadata?.indexing?.indexStatus || '')
+const indexingMediaKind = computed(() => props.mediaItem.metadata?.indexing?.mediaKind)
+const isVideoIndexing = computed(() => indexingMediaKind.value !== 'image')
+const indexedAt = computed(() => props.mediaItem.metadata?.indexing?.indexedAt || '')
+const segmentCount = computed(() => {
+  const indexing = props.mediaItem.metadata?.indexing
+  return indexing?.mediaKind === 'video' ? indexing.segmentCount ?? null : null
+})
+const failedSegmentCount = computed(
+  () => {
+    const indexing = props.mediaItem.metadata?.indexing
+    return indexing?.mediaKind === 'video' ? indexing.failedSegmentCount ?? null : null
+  },
+)
+const indexingSegmentSummaries = computed(() => {
+  const indexing = props.mediaItem.metadata?.indexing
+  return indexing?.mediaKind === 'video' ? indexing.segmentSummaries || [] : []
+})
+const indexingSummary = computed(() => {
+  const indexing = props.mediaItem.metadata?.indexing
+  if (indexing?.mediaKind === 'image' || indexing?.mediaKind === 'video') {
+    return indexing.summary?.summary?.trim() || ''
+  }
+  return ''
+})
+const indexingTitle = computed(() => {
+  const indexing = props.mediaItem.metadata?.indexing
+  if (indexing?.mediaKind === 'image' || indexing?.mediaKind === 'video') {
+    return indexing.summary?.title?.trim() || ''
+  }
+  return ''
+})
+
+const indexingStatusText = computed(() => {
+  switch (indexingStatus.value) {
+    case 'pending':
+      return t('media.indexStatus.pending')
+    case 'processing':
+      return t('media.indexStatus.processing')
+    case 'completed':
+      return t('media.indexStatus.completed')
+    case 'partial_failed':
+      return t('media.indexStatus.partialFailed')
+    case 'failed':
+      return t('media.indexStatus.failed')
+    case 'idle':
+      return t('media.indexStatus.idle')
+    default:
+      return ''
+  }
+})
+
 // 是否显示操作区
 const showActions = computed(() => {
   const status = props.mediaItem.mediaStatus
-  return status === 'pending' || status === 'error' || status === 'cancelled'
+  return (
+    status === 'pending' ||
+    status === 'error' ||
+    status === 'cancelled' ||
+    status === 'asyncprocessing' ||
+    status === 'decoding'
+  )
 })
 
 // 是否可以重试（仅 AI 生成类型）
 const canRetry = computed(() => {
   const status = props.mediaItem.mediaStatus
-  const isAIType = props.mediaItem.source.type === 'ai-generation'
+  const isAIType =
+    props.mediaItem.source.type === 'ai-generation' || props.mediaItem.source.type === 'bizyair'
   return (status === 'error' || status === 'cancelled') && isAIType
 })
 
-// 是否可创建真人角色（AI 生成视频且存在 bltcy_task_id）
-const canCreateCharacter = computed(() => {
-  const source = props.mediaItem.source
-  const isVideo = props.mediaItem.mediaType === 'video'
-  if (source.type === 'ai-generation' && source.resultData && isVideo) {
-    return !!source.resultData.bltcy_task_id
-  }
-  return false
+const canCancelMedia = computed(() => {
+  return (
+    ['pending', 'asyncprocessing', 'decoding'].includes(props.mediaItem.mediaStatus)
+    && Boolean(unifiedStore.findMediaProcessingTaskView(props.mediaItem.id))
+  )
+})
+
+const canStartIndexing = computed(() => {
+  return (
+    (props.mediaItem.mediaType === 'video' || props.mediaItem.mediaType === 'image')
+    && props.mediaItem.mediaStatus === 'ready'
+  )
 })
 
 // 格式化时长显示
@@ -269,63 +382,23 @@ function getMediaTypeLabel(mediaType: string): string {
   }
 }
 
-// 提交AI生成任务到后端
-async function submitAIGenerationTask(
-  requestParams: MediaGenerationRequest,
-): Promise<TaskSubmitResponse> {
-  try {
-    const response = await fetchClient.post<TaskSubmitResponse>(
-      '/api/media/generate',
-      requestParams,
-    )
-
-    if (response.status !== 200) {
-      throw new Error(`提交任务失败: ${response.statusText}`)
-    }
-
-    return response.data
-  } catch (error) {
-    // 网络错误时返回失败响应
-    return {
-      success: false,
-      error_code: TaskSubmitErrorCode.UNKNOWN_ERROR,
-      error_details: {
-        error: error instanceof Error ? error.message : '网络请求失败',
-      },
-    }
-  }
-}
-
 // 重试AI生成素材
 async function retryAIGeneration(mediaItem: UnifiedMediaItemData): Promise<void> {
-  const aiSource = mediaItem.source as AIGenerationSourceData
+  resetAIGeneratedMediaForRetry(mediaItem)
 
-  // 1. 重新提交任务到后端
-  const submitResult = await submitAIGenerationTask(aiSource.requestParams)
-
-  if (!submitResult.success) {
-    const errorMessage = buildTaskErrorMessage(
-      submitResult.error_code,
-      submitResult.error_details,
-      t,
-    )
-    throw new Error(errorMessage)
+  const saved = await globalMetaFileManager.saveMetaFile(mediaItem)
+  if (!saved) {
+    throw new Error(`保存重试状态失败: ${mediaItem.name}`)
   }
 
-  // 2. 更新任务ID和状态
-  aiSource.aiTaskId = submitResult.task_id
-  aiSource.taskStatus = TaskStatus.PENDING
-  aiSource.resultData = undefined
-
-  // 3. 重置数据源状态
-  aiSource.progress = 0
-  aiSource.errorMessage = undefined
-
-  // 4. 重置媒体状态
-  mediaItem.mediaStatus = 'pending'
-
-  // 5. 重新启动处理流程
-  unifiedStore.startMediaProcessing(mediaItem)
+  void unifiedStore.ensureAIGeneratedMedia(mediaItem.id).catch((error) => {
+    console.error('重试 AI 生成素材失败:', error)
+    unifiedStore.messageError(
+      t('media.retryFailed', {
+        error: error instanceof Error ? error.message : '未知错误',
+      }),
+    )
+  })
 
   unifiedStore.messageSuccess(t('media.retryStarted', { name: mediaItem.name }))
 }
@@ -337,7 +410,7 @@ async function handleRetry(): Promise<void> {
 
   try {
     // 🌟 只支持 AI 生成类型的重试
-    if (mediaItem.source.type === 'ai-generation') {
+    if (mediaItem.source.type === 'ai-generation' || mediaItem.source.type === 'bizyair') {
       await retryAIGeneration(mediaItem)
     } else {
       // 其他类型不支持重试
@@ -354,30 +427,56 @@ async function handleRetry(): Promise<void> {
   }
 }
 
-// 取消操作
 async function handleCancel(): Promise<void> {
   const mediaItem = props.mediaItem
   if (!mediaItem) return
 
-  try {
-    console.log(`🛑 [MediaItemProperties] 尝试取消任务: ${mediaItem.name}`)
+  const taskView = unifiedStore.findMediaProcessingTaskView(mediaItem.id)
 
-    const success = await unifiedStore.cancelMediaProcessing(mediaItem.id)
-
-    if (success) {
-      unifiedStore.messageSuccess(t('media.cancelSuccess', { name: mediaItem.name }))
-    } else {
-      unifiedStore.messageWarning(t('media.cancelFailed', { name: mediaItem.name }))
+  if (taskView) {
+    try {
+      const success = await unifiedStore.cancelJobTask(taskView.rootResourceId)
+      if (success) {
+        unifiedStore.messageSuccess(t('media.cancelSuccess', { name: mediaItem.name }))
+      } else {
+        unifiedStore.messageWarning(t('media.cancelFailed', { name: mediaItem.name }))
+      }
+    } catch (error) {
+      console.error('取消媒体资源失败:', error)
+      unifiedStore.messageError(t('media.cancelFailed', { name: mediaItem.name }))
     }
+  } else {
+    unifiedStore.messageWarning(t('media.cancelFailed', { name: mediaItem.name }))
+  }
+}
+
+async function handleStartIndexing(): Promise<void> {
+  const mediaItem = props.mediaItem
+  if (!mediaItem || (mediaItem.mediaType !== 'video' && mediaItem.mediaType !== 'image')) return
+
+  try {
+    unifiedStore.messageSuccess(t('media.startIndexingStarted', { name: mediaItem.name }))
+    await unifiedStore.ensureMediaIndexing(mediaItem.id)
+    const status = mediaItem.metadata?.indexing?.indexStatus
+    unifiedStore.messageSuccess(
+      t(
+        status === 'partial_failed'
+          ? 'media.startIndexingPartialSuccess'
+          : 'media.startIndexingSuccess',
+        { name: mediaItem.name },
+      ),
+    )
   } catch (error) {
-    console.error('取消任务失败:', error)
+    console.error('素材索引失败:', error)
     unifiedStore.messageError(
-      t('media.cancelFailed', {
+      t('media.startIndexingFailed', {
         name: mediaItem.name,
+        error: error instanceof Error ? error.message : '未知错误',
       }),
     )
   }
 }
+
 </script>
 
 <style scoped>
@@ -517,5 +616,72 @@ async function handleCancel(): Promise<void> {
 .actions-section .n-button {
   width: 100%;
   justify-content: center;
+}
+
+.summary-card {
+  white-space: pre-wrap;
+  line-height: 1.6;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-primary);
+  background: var(--color-bg-quaternary);
+  border-radius: var(--border-radius-small);
+  padding: var(--spacing-sm);
+}
+
+.summary-title {
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.summary-divider {
+  height: 1px;
+  margin: var(--spacing-xs) 0;
+  background: var(--color-border-hover);
+}
+
+.segment-summary-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+  margin-top: var(--spacing-sm);
+}
+
+.segment-summary-card {
+  padding: var(--spacing-sm);
+  border-radius: var(--border-radius-small);
+  border: 1px solid var(--color-border-default);
+  background: var(--color-bg-secondary);
+}
+
+.segment-summary-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--spacing-sm);
+  margin-bottom: var(--spacing-xs);
+}
+
+.segment-summary-index {
+  font-size: var(--font-size-xs);
+  font-weight: 600;
+  color: var(--color-primary);
+}
+
+.segment-summary-timecode {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+}
+
+.segment-summary-title {
+  font-weight: 600;
+  color: var(--color-text-primary);
+  margin-bottom: 4px;
+}
+
+.segment-summary-text {
+  white-space: pre-wrap;
+  line-height: 1.6;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-primary);
 }
 </style>

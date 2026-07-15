@@ -23,6 +23,7 @@
           :min="0"
           :max="100"
           :step="1"
+          container-class="speed-slider-container"
           slider-class="segmented-speed-slider"
           :segments="speedSliderSegments"
         />
@@ -45,8 +46,12 @@
 import { computed } from 'vue'
 import { useAppI18n } from '@/core/composables/useI18n'
 import { useUnifiedStore } from '@/core/unifiedStore'
-import { isVideoTimelineItem, isImageTimelineItem } from '@/core/timelineitem/queries'
-import type { UnifiedTimelineItemData } from '@/core/timelineitem/type'
+import {
+  isVideoTimelineItem,
+  isImageTimelineItem,
+  isAudioTimelineItem,
+} from '@/core/timelineitem/queries'
+import type { UnifiedTimelineItemData } from '@/core/timelineitem/model/timelineItem'
 import NumberInput from '@/components/base/NumberInput.vue'
 import SliderInput from '@/components/base/SliderInput.vue'
 import TimecodeInput from '@/components/base/TimecodeInput.vue'
@@ -93,8 +98,11 @@ const playbackRate = computed(() => {
     return 1
   }
 
-  // 对于视频类型，从timeRange计算播放速度
-  if (isVideoTimelineItem(props.selectedTimelineItem)) {
+  // 对于视频和音频类型，从 timeRange 计算播放速度
+  if (
+    isVideoTimelineItem(props.selectedTimelineItem)
+    || isAudioTimelineItem(props.selectedTimelineItem)
+  ) {
     const timeRange = props.selectedTimelineItem.timeRange
     const clipDurationFrames = timeRange.clipEndTime - timeRange.clipStartTime
     const timelineDurationFrames = timeRange.timelineEndTime - timeRange.timelineStartTime
@@ -146,14 +154,16 @@ const speedToNormalized = (speed: number) => {
 
 // 更新播放速度
 const updatePlaybackRate = async (newRate?: number) => {
-  if (props.selectedTimelineItem && isVideoTimelineItem(props.selectedTimelineItem)) {
+  if (
+    props.selectedTimelineItem
+    && (isVideoTimelineItem(props.selectedTimelineItem)
+      || isAudioTimelineItem(props.selectedTimelineItem))
+  ) {
     // 暂停播放
     unifiedStore.pause()
-    
+
     const rate = newRate || playbackRate.value
-    await unifiedStore.updateTimelineItemTransformWithHistory(props.selectedTimelineItem.id, {
-      playbackRate: rate,
-    })
+    await unifiedStore.updatePlaybackRateWithHistory(props.selectedTimelineItem.id, rate)
   }
 }
 
@@ -229,5 +239,13 @@ const updateTargetDurationFrames = async (newDurationFrames: number) => {
   align-items: center;
   gap: var(--spacing-md);
   flex: 1;
+  min-width: 0;
+  container-type: inline-size;
+}
+
+@container (max-width: 140px) {
+  .speed-controls :deep(.speed-slider-container) {
+    display: none;
+  }
 }
 </style>

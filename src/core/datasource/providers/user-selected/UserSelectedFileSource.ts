@@ -1,7 +1,5 @@
 /**
- * 用户选择文件数据源类型定义和查询函数
- * 基于"核心数据与行为分离"的重构方案
- * 行为函数已移动到 UserSelectedFileManager 中
+ * 用户选择文件 datasource 类型定义、工厂和提取函数。
  */
 import type {
   BaseDataSourceData,
@@ -13,14 +11,14 @@ import { RuntimeStateFactory, SourceOrigin } from '@/core/datasource/core/BaseDa
 // ==================== 用户选择文件数据源类型定义 ====================
 
 /**
- * 用户选择文件数据源基类型 - 只包含持久化数据
+ * 用户选择文件 datasource 的持久化数据。
  */
 export interface BaseUserSelectedFileSourceData extends BaseDataSourceData {
   type: 'user-selected'
 }
 
 /**
- * 用户选择文件数据源 - 继承基类型和运行时状态
+ * 用户选择文件 datasource 运行时结构。
  * selectedFile 可以是 File 或 null：
  * - USER_CREATE 时初始为 File，使用后设为 null
  * - PROJECT_LOAD 时始终为 null
@@ -82,13 +80,6 @@ export function extractUserSelectedFileSourceData(
   return {
     // 基础字段
     type: source.type,
-    // 🌟 阶段二彻底重构：不再保存 id 和 mediaReferenceId
-    // 所有引用统一使用 UnifiedMediaItemData.id
-
-    // 不需要保存运行时状态
-    // progress: source.progress, // 重新加载时会重置
-    // errorMessage: source.errorMessage, // 重新加载时会重置
-    // sourceOrigin: source.sourceOrigin, // 重新加载时会重新设置
-    // selectedFile 是 File 对象，不能直接序列化
+    // 运行时状态不会持久化；selectedFile 也不能直接序列化。
   }
 }

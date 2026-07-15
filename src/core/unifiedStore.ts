@@ -16,17 +16,52 @@ import { createUnifiedUserModule } from '@/core/modules/UnifiedUserModule'
 import { createUnifiedDirectoryModule } from '@/core/modules/UnifiedDirectoryModule'
 import { createUnifiedMediaBunnyModule } from '@/core/modules/UnifiedMediaBunnyModule'
 import { createUnifiedUIModule } from '@/core/modules/UnifiedUIModule'
+import {
+  AI_GENERATED_MEDIA_RESOURCE_TYPE,
+  createAIGeneratedMediaRequest,
+  createAIGeneratedMediaResolver,
+  createAIInputPreparedResolver,
+  createAITaskSubmittedResolver,
+  createASRRemoteTaskCompletedResolver,
+  createASRSubtitlesRequest,
+  createASRSubtitlesResolver,
+  createEffectTemplateReadyRequest,
+  createEffectTemplateReadyResolver,
+  createMediaIndexMetadataWritebackRequest,
+  createMediaIndexMetadataWritebackResolver,
+  createMediaIndexTaskCompleteResolver,
+  createMediaIndexTaskSubmitResolver,
+  getResourceId,
+  createJobRuntime,
+  createMediaDecodedResolver,
+  createMediaFileAvailableResolver,
+  createMediaReadyRequest,
+  createMediaReadyResolver,
+  createMediaSourceProcessedResolver,
+  createRemoteTaskCompletedResolver,
+  MEDIA_INDEX_METADATA_WRITEBACK_RESOURCE_TYPE,
+  MEDIA_READY_RESOURCE_TYPE,
+  createTimelineItemReadyRequest,
+  createTimelineItemReadyResolver,
+  createVideoSceneSegmentsResolver,
+  createVideoSegmentExportsResolver,
+  createVideoSegmentOssUploadsResolver,
+  persistMediaItem,
+  setIndexingMetadata,
+  canResumeMediaIndexingFromRemote,
+  useJobTaskCenter,
+} from '@/core/jobs'
 import { ModuleRegistry, MODULE_NAMES } from '@/core/modules/ModuleRegistry'
 import { useHistoryOperations } from '@/core/composables/useHistoryOperations'
 import { useUnifiedDrag } from '@/core/composables/useUnifiedDrag'
-import { useEditSDK } from '@/aipanel/agent/composables/useEditSDK'
-import type { UnifiedTimelineItemData } from '@/core/timelineitem'
+import type { UnifiedTimelineItemData } from '@/core/timelineitem/model/timelineItem'
 import { frameToPixel, pixelToFrame } from '@/core/utils/timelineScaleUtils'
 import {
   getTimelineItemsByTrack,
   isPlayheadInTimelineItem,
   findOverlappingTimelineItems,
 } from '@/core/utils/timelineSearchUtils'
+export type { TimelineEdgeEditMode } from '@/core/modules/UnifiedConfigModule'
 
 /**
  * 统一视频编辑器存储
@@ -105,6 +140,231 @@ export const useUnifiedStore = defineStore('unified', () => {
   const unifiedUIModule = createUnifiedUIModule(registry)
   registry.register(MODULE_NAMES.UI, unifiedUIModule)
 
+  const jobRuntime = createJobRuntime()
+  jobRuntime.registerResolver(createMediaFileAvailableResolver(unifiedMediaModule))
+  jobRuntime.registerResolver(createMediaDecodedResolver(unifiedMediaModule))
+  jobRuntime.registerResolver(createMediaSourceProcessedResolver(unifiedMediaModule))
+  jobRuntime.registerResolver(createMediaReadyResolver(unifiedMediaModule))
+  jobRuntime.registerResolver(
+    createVideoSceneSegmentsResolver({
+      getMediaItem: unifiedMediaModule.getMediaItem,
+      ensureMediaReady,
+      getProjectId: () => {
+        const projectId = unifiedConfigModule.projectId.value
+        if (!projectId) {
+          throw new Error('当前项目未初始化')
+        }
+        return projectId
+      },
+    }),
+  )
+  jobRuntime.registerResolver(
+    createVideoSegmentExportsResolver({
+      getMediaItem: unifiedMediaModule.getMediaItem,
+      ensureMediaReady,
+      getProjectId: () => {
+        const projectId = unifiedConfigModule.projectId.value
+        if (!projectId) {
+          throw new Error('当前项目未初始化')
+        }
+        return projectId
+      },
+    }),
+  )
+  jobRuntime.registerResolver(
+    createVideoSegmentOssUploadsResolver({
+      getMediaItem: unifiedMediaModule.getMediaItem,
+      ensureMediaReady,
+      getProjectId: () => {
+        const projectId = unifiedConfigModule.projectId.value
+        if (!projectId) {
+          throw new Error('当前项目未初始化')
+        }
+        return projectId
+      },
+    }),
+  )
+  jobRuntime.registerResolver(
+    createMediaIndexTaskSubmitResolver({
+      getMediaItem: unifiedMediaModule.getMediaItem,
+      ensureMediaReady,
+      getProjectId: () => {
+        const projectId = unifiedConfigModule.projectId.value
+        if (!projectId) {
+          throw new Error('当前项目未初始化')
+        }
+        return projectId
+      },
+    }),
+  )
+  jobRuntime.registerResolver(
+    createMediaIndexTaskCompleteResolver({
+      getMediaItem: unifiedMediaModule.getMediaItem,
+      ensureMediaReady,
+      getProjectId: () => {
+        const projectId = unifiedConfigModule.projectId.value
+        if (!projectId) {
+          throw new Error('当前项目未初始化')
+        }
+        return projectId
+      },
+    }),
+  )
+  jobRuntime.registerResolver(
+    createMediaIndexMetadataWritebackResolver({
+      getMediaItem: unifiedMediaModule.getMediaItem,
+      ensureMediaReady,
+      getProjectId: () => {
+        const projectId = unifiedConfigModule.projectId.value
+        if (!projectId) {
+          throw new Error('当前项目未初始化')
+        }
+        return projectId
+      },
+    }),
+  )
+  jobRuntime.registerResolver(
+    createAIInputPreparedResolver({
+      getMediaItem: unifiedMediaModule.getMediaItem,
+      ensureMediaReady,
+      getBizyAirApiKey: async () => unifiedUserModule.getBizyAirApiKey(),
+    }),
+  )
+  jobRuntime.registerResolver(
+    createAITaskSubmittedResolver({
+      getMediaItem: unifiedMediaModule.getMediaItem,
+      ensureMediaReady,
+      getBizyAirApiKey: async () => unifiedUserModule.getBizyAirApiKey(),
+    }),
+  )
+  jobRuntime.registerResolver(
+    createRemoteTaskCompletedResolver({
+      getMediaItem: unifiedMediaModule.getMediaItem,
+      ensureMediaReady,
+      getBizyAirApiKey: async () => unifiedUserModule.getBizyAirApiKey(),
+    }),
+  )
+  jobRuntime.registerResolver(
+    createAIGeneratedMediaResolver({
+      getMediaItem: unifiedMediaModule.getMediaItem,
+      ensureMediaReady,
+      getBizyAirApiKey: async () => unifiedUserModule.getBizyAirApiKey(),
+    }),
+  )
+  jobRuntime.registerResolver(createASRRemoteTaskCompletedResolver())
+  jobRuntime.registerResolver(
+    createASRSubtitlesResolver({
+      getTimelineItem: unifiedTimelineModule.getTimelineItem,
+      getTimelineItems: () => unifiedTimelineModule.timelineItems.value,
+      addTimelineItem: unifiedTimelineModule.addTimelineItem,
+      removeTimelineItem: unifiedTimelineModule.removeTimelineItem,
+      getTrack: unifiedTrackModule.getTrack,
+    }),
+  )
+  jobRuntime.registerResolver(
+    createTimelineItemReadyResolver({
+      getTimelineItem: unifiedTimelineModule.getTimelineItem,
+      getMediaItem: unifiedMediaModule.getMediaItem,
+    }),
+  )
+  jobRuntime.registerResolver(
+    createEffectTemplateReadyResolver({
+      getAsset: (assetId) => {
+        const asset = unifiedMediaModule.getAsset(assetId)
+        return asset?.assetKind === 'effect-template' ? asset : undefined
+      },
+      getProjectId: () => {
+        const projectId = unifiedConfigModule.projectId.value
+        if (!projectId) {
+          throw new Error('当前项目未初始化')
+        }
+        return projectId
+      },
+    }),
+  )
+  const jobTaskCenter = useJobTaskCenter(jobRuntime)
+
+  function ensureMediaReady(mediaId: string) {
+    return jobRuntime.ensure(createMediaReadyRequest(mediaId))
+  }
+  function ensureAIGeneratedMedia(mediaId: string) {
+    return jobRuntime.ensure(createAIGeneratedMediaRequest(mediaId))
+  }
+  async function ensureMediaIndexing(mediaId: string) {
+    const mediaItem = unifiedMediaModule.getMediaItem(mediaId)
+    if (mediaItem && (mediaItem.mediaType === 'video' || mediaItem.mediaType === 'image')) {
+      const indexing = mediaItem.metadata?.indexing
+      if (!canResumeMediaIndexingFromRemote(indexing)) {
+        setIndexingMetadata(mediaItem, {
+          mediaKind: mediaItem.mediaType,
+          indexStatus: 'pending',
+          indexedAt: undefined,
+          lastIndexTaskId: undefined,
+          failedSegmentCount: mediaItem.mediaType === 'video' ? 0 : undefined,
+          segmentCount:
+            mediaItem.mediaType === 'video' && indexing?.mediaKind === 'video'
+              ? indexing.segmentCount
+              : undefined,
+          segmentSummaries: undefined,
+          summary: undefined,
+        })
+        await persistMediaItem(mediaItem)
+      }
+    }
+
+    return jobRuntime.ensure(createMediaIndexMetadataWritebackRequest(mediaId))
+  }
+  function ensureTimelineItemReady(timelineItemId: string) {
+    return jobRuntime.ensure(createTimelineItemReadyRequest(timelineItemId))
+  }
+  function ensureASRSubtitles(placeholderTimelineItemId: string) {
+    return jobRuntime.ensure(createASRSubtitlesRequest(placeholderTimelineItemId))
+  }
+  function ensureEffectTemplateReady(assetId: string) {
+    return jobRuntime.ensure(createEffectTemplateReadyRequest(assetId))
+  }
+  async function retryEffectTemplateReady(assetId: string) {
+    await jobRuntime.ensure(createEffectTemplateReadyRequest(assetId))
+  }
+  function cancelEffectTemplateReady(assetId: string) {
+    const request = createEffectTemplateReadyRequest(assetId)
+    return jobRuntime.cancel(getResourceId(request.type, assetId))
+  }
+  function findMediaProcessingTaskView(mediaId: string) {
+    const candidateRootIds = [
+      getResourceId(AI_GENERATED_MEDIA_RESOURCE_TYPE, mediaId),
+      getResourceId(MEDIA_READY_RESOURCE_TYPE, mediaId),
+      getResourceId(MEDIA_INDEX_METADATA_WRITEBACK_RESOURCE_TYPE, mediaId),
+    ]
+
+    return jobTaskCenter.taskViews.value.find(
+      (taskView) =>
+        candidateRootIds.includes(taskView.rootResourceId) && taskView.actions.canCancel,
+    )
+  }
+  function ensureTimelineItemResolved(timelineItemId: string) {
+    const timelineItem = unifiedTimelineModule.getTimelineItem(timelineItemId)
+    if (!timelineItem) {
+      return Promise.resolve(null)
+    }
+
+    if (timelineItem.isPlaceholder && timelineItem.task?.kind === 'asr-subtitles') {
+      return ensureASRSubtitles(timelineItem.id)
+    }
+
+    if (timelineItem.timelineStatus === 'loading') {
+      return ensureTimelineItemReady(timelineItem.id)
+    }
+
+    return Promise.resolve(null)
+  }
+  unifiedProjectModule.setMediaReadyEnsurer(ensureMediaReady)
+  unifiedProjectModule.setAIGeneratedMediaEnsurer(ensureAIGeneratedMedia)
+  unifiedProjectModule.setMediaIndexingEnsurer(ensureMediaIndexing)
+  unifiedProjectModule.setEffectTemplateReadyEnsurer(ensureEffectTemplateReady)
+  unifiedProjectModule.setTimelineItemResolvedEnsurer(ensureTimelineItemResolved)
+  unifiedDirectoryModule.setMediaReadyEnsurer(ensureMediaReady)
+
   // 创建历史记录操作模块
   const historyOperations = useHistoryOperations(
     unifiedHistoryModule,
@@ -113,18 +373,7 @@ export const useUnifiedStore = defineStore('unified', () => {
     unifiedConfigModule,
     unifiedTrackModule,
     unifiedSelectionModule,
-  )
-
-  // 创建视频编辑执行系统
-  const { executeUserScript, list_medias, list_timelineitems } = useEditSDK(
-    unifiedHistoryModule,
-    unifiedTimelineModule,
-    unifiedMediaModule,
-    unifiedConfigModule,
-    unifiedTrackModule,
-    unifiedSelectionModule,
-    unifiedViewportModule,
-    unifiedPlaybackModule,
+    ensureTimelineItemResolved,
   )
 
   // 创建统一拖拽管理器（已自动注册所有处理器）
@@ -144,41 +393,65 @@ export const useUnifiedStore = defineStore('unified', () => {
     // 时间轴项目历史记录方法
     addTimelineItemWithHistory: historyOperations.addTimelineItemWithHistory,
     removeTimelineItemWithHistory: historyOperations.removeTimelineItemWithHistory,
+    startASRRequestWithHistory: historyOperations.startASRRequestWithHistory,
     moveTimelineItemWithHistory: historyOperations.moveTimelineItemWithHistory,
-    updateTimelineItemTransformWithHistory:
-      historyOperations.updateTimelineItemTransformWithHistory,
+    updatePlaybackRateWithHistory: historyOperations.updatePlaybackRateWithHistory,
+    updateTransitionConfigWithHistory: historyOperations.updateTransitionConfigWithHistory,
+    updateFilterConfigWithHistory: historyOperations.updateFilterConfigWithHistory,
+    commitFilterConfigWithHistory: historyOperations.commitFilterConfigWithHistory,
+    removeFilterEffectWithHistory: historyOperations.removeFilterEffectWithHistory,
     splitTimelineItemAtTimeWithHistory: historyOperations.splitTimelineItemAtTimeWithHistory,
     duplicateTimelineItemWithHistory: historyOperations.duplicateTimelineItemWithHistory,
     resizeTimelineItemWithHistory: historyOperations.resizeTimelineItemWithHistory,
+    trimTimelineItemWithHistory: historyOperations.trimTimelineItemWithHistory,
     // 轨道历史记录方法
     addTrackWithHistory: historyOperations.addTrackWithHistory,
     removeTrackWithHistory: historyOperations.removeTrackWithHistory,
     renameTrackWithHistory: historyOperations.renameTrackWithHistory,
+    moveTrackWithHistory: historyOperations.moveTrackWithHistory,
     autoArrangeTrackWithHistory: historyOperations.autoArrangeTrackWithHistory,
     toggleTrackVisibilityWithHistory: historyOperations.toggleTrackVisibilityWithHistory,
     toggleTrackMuteWithHistory: historyOperations.toggleTrackMuteWithHistory,
-    updateTextContentWithHistory: historyOperations.updateTextContentWithHistory,
-    updateTextStyleWithHistory: historyOperations.updateTextStyleWithHistory,
-    selectTimelineItemsWithHistory: historyOperations.selectTimelineItemsWithHistory,
-    // 关键帧历史记录方法
-    createKeyframeWithHistory: historyOperations.createKeyframeWithHistory,
-    deleteKeyframeWithHistory: historyOperations.deleteKeyframeWithHistory,
-    updatePropertyWithHistory: historyOperations.updatePropertyWithHistory,
+    selectTimelineSelectionsWithHistory: historyOperations.selectTimelineSelectionsWithHistory,
+    applyChangePlanWithHistory: historyOperations.applyChangePlanWithHistory,
     clearAllKeyframesWithHistory: historyOperations.clearAllKeyframesWithHistory,
-    toggleKeyframeWithHistory: historyOperations.toggleKeyframeWithHistory,
 
     // ==================== 统一媒体模块状态和方法 ====================
 
     // 媒体项目状态
     mediaItems: unifiedMediaModule.mediaItems,
+    jobRuntime,
+    jobTaskViews: jobTaskCenter.taskViews,
+    cancelJobTask: jobTaskCenter.cancelTask,
+    findMediaProcessingTaskView,
+    ensureMediaReady,
+    ensureAIGeneratedMedia,
+    ensureMediaIndexing,
+    ensureTimelineItemReady,
+    ensureASRSubtitles,
+    ensureTimelineItemResolved,
 
     // 媒体项目管理方法
     addMediaItem: unifiedMediaModule.addMediaItem,
     removeMediaItem: unifiedMediaModule.removeMediaItem,
     getMediaItem: unifiedMediaModule.getMediaItem,
-    getMediaItemBySourceId: unifiedMediaModule.getMediaItemBySourceId,
+    getMediaAsset: unifiedMediaModule.getMediaAsset,
+    addAsset: unifiedMediaModule.addAsset,
+    removeAsset: unifiedMediaModule.removeAsset,
+    getAsset: unifiedMediaModule.getAsset,
+    getAllAssets: unifiedMediaModule.getAllAssets,
+    updateAssetName: unifiedMediaModule.updateAssetName,
+    createTransitionTemplatePlaceholder:
+      unifiedMediaModule.createTransitionTemplatePlaceholder,
+    createFilterTemplatePlaceholder:
+      unifiedMediaModule.createFilterTemplatePlaceholder,
+    startTemplateProcessing: ensureEffectTemplateReady,
+    retryTemplateProcessing: retryEffectTemplateReady,
+    cancelTemplateProcessing: cancelEffectTemplateReady,
+    ensureEffectTemplateReady,
     updateMediaItemName: unifiedMediaModule.updateMediaItemName,
     updateMediaItem: unifiedMediaModule.updateMediaItem,
+    updateMediaItemMetadata: unifiedMediaModule.updateMediaItemMetadata,
     getAllMediaItems: unifiedMediaModule.getAllMediaItems,
 
     // 分辨率管理方法
@@ -188,12 +461,9 @@ export const useUnifiedStore = defineStore('unified', () => {
     // 异步等待方法
     waitForMediaItemReady: unifiedMediaModule.waitForMediaItemReady,
 
-    // 数据源处理方法
-    startMediaProcessing: unifiedMediaModule.startMediaProcessing,
-    cancelMediaProcessing: unifiedMediaModule.cancelMediaProcessing,
-
     // 便捷查询方法
     getReadyMediaItems: unifiedMediaModule.getReadyMediaItems,
+    getReadyEffectTemplateAssets: unifiedMediaModule.getReadyEffectTemplateAssets,
     getProcessingMediaItems: unifiedMediaModule.getProcessingMediaItems,
     getErrorMediaItems: unifiedMediaModule.getErrorMediaItems,
     getMediaItemsBySourceType: unifiedMediaModule.getMediaItemsBySourceType,
@@ -213,6 +483,7 @@ export const useUnifiedStore = defineStore('unified', () => {
     addTrack: unifiedTrackModule.addTrack,
     removeTrack: unifiedTrackModule.removeTrack,
     renameTrack: unifiedTrackModule.renameTrack,
+    moveTrack: unifiedTrackModule.moveTrack,
     getTrack: unifiedTrackModule.getTrack,
     setTrackHeight: unifiedTrackModule.setTrackHeight,
     toggleTrackVisibility: unifiedTrackModule.toggleTrackVisibility,
@@ -234,7 +505,14 @@ export const useUnifiedStore = defineStore('unified', () => {
     getTimelineItem: unifiedTimelineModule.getTimelineItem,
     getReadyTimelineItem: unifiedTimelineModule.getReadyTimelineItem,
     updateTimelineItemPosition: unifiedTimelineModule.updateTimelineItemPosition,
-    updateTimelineItemTransform: unifiedTimelineModule.updateTimelineItemTransform,
+    setTimelineItemTimeRangeForCmd: unifiedTimelineModule.setTimelineItemTimeRangeForCmd,
+    setTimelineItemTransitionConfigForCmd:
+      unifiedTimelineModule.setTimelineItemTransitionConfigForCmd,
+    setTimelineItemFilterConfigForCmd:
+      unifiedTimelineModule.setTimelineItemFilterConfigForCmd,
+    refreshTransitionItems: unifiedTimelineModule.refreshTransitionItems,
+    getTransitionOverlay: unifiedTimelineModule.getTransitionOverlay,
+    getTransitionOverlaysByTrack: unifiedTimelineModule.getTransitionOverlaysByTrack,
 
     // ==================== 统一项目模块状态和方法 ====================
 
@@ -301,9 +579,11 @@ export const useUnifiedStore = defineStore('unified', () => {
     // 配置状态
     videoResolution: unifiedConfigModule.videoResolution,
     timelineDurationFrames: unifiedConfigModule.timelineDurationFrames,
+    timelineEdgeEditMode: unifiedConfigModule.timelineEdgeEditMode,
 
     // 配置管理方法
     setVideoResolution: unifiedConfigModule.setVideoResolution,
+    setTimelineEdgeEditMode: unifiedConfigModule.setTimelineEdgeEditMode,
     resetConfigToDefaults: unifiedConfigModule.resetToDefaults,
     restoreFromProjectSettings: unifiedConfigModule.restoreFromProjectSettings,
 
@@ -324,6 +604,8 @@ export const useUnifiedStore = defineStore('unified', () => {
     updateMediaBunnyTimelineDuration: unifiedMediaBunnyModule.updateTimelineDuration,
 
     // MediaBunny截帧功能
+    captureTimelineFrame: unifiedMediaBunnyModule.captureTimelineFrame,
+    captureTimelineFrames: unifiedMediaBunnyModule.captureTimelineFrames,
     captureCanvasFrame: unifiedMediaBunnyModule.captureCanvasFrame,
 
     // MediaBunny工具方法
@@ -401,39 +683,37 @@ export const useUnifiedStore = defineStore('unified', () => {
     executeBatchCommand: unifiedHistoryModule.executeBatchCommand,
 
     // ==================== 统一选择模块状态和方法 ====================
-    selectedMediaItemIds: unifiedSelectionModule.selectedMediaItemIds,
-    selectedMediaItemId: unifiedSelectionModule.selectedMediaItemId,
-    hasMediaSelection: unifiedSelectionModule.hasMediaSelection,
-    isMediaMultiSelectMode: unifiedSelectionModule.isMediaMultiSelectMode,
-    selectMediaItems: unifiedSelectionModule.selectMediaItems,
-    isMediaItemSelected: unifiedSelectionModule.isMediaItemSelected,
-    clearMediaSelection: unifiedSelectionModule.clearMediaSelection,
+    selectedLibraryAssetIds: unifiedSelectionModule.selectedLibraryAssetIds,
+    selectedLibraryAssetId: unifiedSelectionModule.selectedLibraryAssetId,
+    hasLibraryAssetSelection: unifiedSelectionModule.hasLibraryAssetSelection,
+    isLibraryAssetMultiSelectMode: unifiedSelectionModule.isLibraryAssetMultiSelectMode,
+    selectLibraryAssets: unifiedSelectionModule.selectLibraryAssets,
+    selectLibraryAsset: unifiedSelectionModule.selectLibraryAsset,
+    isLibraryAssetSelected: unifiedSelectionModule.isLibraryAssetSelected,
+    clearLibraryAssetSelection: unifiedSelectionModule.clearLibraryAssetSelection,
 
     // 选择状态
-    selectedTimelineItemId: unifiedSelectionModule.selectedTimelineItemId,
-    selectedTimelineItemIds: unifiedSelectionModule.selectedTimelineItemIds,
-    isMultiSelectMode: unifiedSelectionModule.isMultiSelectMode,
+    selectedTimelineSelectionId: unifiedSelectionModule.selectedTimelineSelectionId,
+    selectedTimelineSelectionIds: unifiedSelectionModule.selectedTimelineSelectionIds,
+    isTimelineSelectionMultiSelectMode:
+      unifiedSelectionModule.isTimelineSelectionMultiSelectMode,
     hasSelection: unifiedSelectionModule.hasSelection,
+    selectedClipTimelineItemId: unifiedSelectionModule.selectedClipTimelineItemId,
+    selectedClipTimelineItemIds: unifiedSelectionModule.selectedClipTimelineItemIds,
+    selectedTransitionSourceItemId: unifiedSelectionModule.selectedTransitionSourceItemId,
+    selectedTransitionSourceItemIds: unifiedSelectionModule.selectedTransitionSourceItemIds,
 
     // 统一选择API
-    selectTimelineItems: unifiedSelectionModule.selectTimelineItems,
-
-    // 兼容性选择方法
-    selectTimelineItem: unifiedSelectionModule.selectTimelineItem,
+    selectTimelineSelections: unifiedSelectionModule.selectTimelineSelections,
+    selectTimelineSelection: unifiedSelectionModule.selectTimelineSelection,
     clearTimelineSelection: unifiedSelectionModule.clearTimelineSelection,
     clearAllSelections: unifiedSelectionModule.clearAllSelections,
-    toggleTimelineItemSelection: unifiedSelectionModule.toggleTimelineItemSelection,
-    isTimelineItemSelected: unifiedSelectionModule.isTimelineItemSelected,
-    getSelectedTimelineItem: unifiedSelectionModule.getSelectedTimelineItem,
+    isTimelineSelectionSelected: unifiedSelectionModule.isTimelineSelectionSelected,
+    clearSelectionsForTimelineItem: unifiedSelectionModule.clearSelectionsForTimelineItem,
+    getSelectedClipTimelineItem: unifiedSelectionModule.getSelectedClipTimelineItem,
+    getSelectedTransitionOverlay: unifiedSelectionModule.getSelectedTransitionOverlay,
     getSelectionSummary: unifiedSelectionModule.getSelectionSummary,
     resetSelectionToDefaults: unifiedSelectionModule.resetToDefaults,
-
-    // 多选兼容性方法
-    addToMultiSelection: unifiedSelectionModule.addToMultiSelection,
-    removeFromMultiSelection: unifiedSelectionModule.removeFromMultiSelection,
-    toggleMultiSelection: unifiedSelectionModule.toggleMultiSelection,
-    clearMultiSelection: unifiedSelectionModule.clearMultiSelection,
-    isInMultiSelection: unifiedSelectionModule.isInMultiSelection,
 
     // ==================== 坐标转换方法 ====================
     frameToPixel: (frames: number, timelineWidth: number) =>
@@ -504,6 +784,7 @@ export const useUnifiedStore = defineStore('unified', () => {
     getCurrentUser: unifiedUserModule.getCurrentUser,
     getAccessToken: unifiedUserModule.getAccessToken,
     checkLoginStatus: unifiedUserModule.checkLoginStatus,
+    refreshBalance: unifiedUserModule.refreshBalance,
 
     // 激活码功能
     useActivationCode: unifiedUserModule.useActivationCode,
@@ -552,12 +833,14 @@ export const useUnifiedStore = defineStore('unified', () => {
     createCharacterDirectory: unifiedDirectoryModule.createCharacterDirectory, // 🆕 新增创建角色文件夹方法
     renameDirectory: unifiedDirectoryModule.renameDirectory,
     deleteDirectory: unifiedDirectoryModule.deleteDirectory, // 🆕 新增删除文件夹方法
+    deleteAssetItem: unifiedDirectoryModule.deleteAssetItem,
     deleteMediaItem: unifiedDirectoryModule.deleteMediaItem, // 🆕 新增删除媒体项方法
+    findAllDirectoriesByAssetId: unifiedDirectoryModule.findAllDirectoriesByAssetId,
     getDirectory: unifiedDirectoryModule.getDirectory,
     getCharacterDirectory: unifiedDirectoryModule.getCharacterDirectory, // 🆕 新增获取角色文件夹方法
     isCharacterDirectory: unifiedDirectoryModule.isCharacterDirectory, // 🆕 新增类型守卫方法
-    addMediaToDirectory: unifiedDirectoryModule.addMediaToDirectory,
-    removeMediaFromDirectory: unifiedDirectoryModule.removeMediaFromDirectory,
+    addAssetToDirectory: unifiedDirectoryModule.addAssetToDirectory,
+    removeAssetFromDirectory: unifiedDirectoryModule.removeAssetFromDirectory,
     getDirectoryContent: unifiedDirectoryModule.getDirectoryContent,
     getBreadcrumb: unifiedDirectoryModule.getBreadcrumb,
     openTab: unifiedDirectoryModule.openTab,
@@ -614,24 +897,14 @@ export const useUnifiedStore = defineStore('unified', () => {
     // AI 面板状态
     isChatPanelVisible: unifiedUIModule.isChatPanelVisible,
     aiPanelActiveTab: unifiedUIModule.aiPanelActiveTab,
-
-    // 角色编辑器状态
-    characterEditorState: unifiedUIModule.characterEditorState,
-
-    // 角色编辑器计算属性
-    curCharacterDir: unifiedUIModule.curCharacterDir,
-    canShowCharacterEditor: unifiedUIModule.canShowCharacterEditor,
+    librarySection: unifiedUIModule.librarySection,
+    effectTemplateCategorySelection: unifiedUIModule.effectTemplateCategorySelection,
+    activePropertyTab: unifiedUIModule.activePropertyTab,
 
     // AI 面板状态管理方法
     setChatPanelVisible: unifiedUIModule.setChatPanelVisible,
-
-    // 角色编辑器方法
-    openCharacterEditor: unifiedUIModule.openCharacterEditor,
-    closeCharacterEditor: unifiedUIModule.closeCharacterEditor,
-
-    // ==================== 执行系统集成 ====================
-    executeUserScript,
-    list_medias,
-    list_timelineitems,
+    setLibrarySection: unifiedUIModule.setLibrarySection,
+    setEffectTemplateCategory: unifiedUIModule.setEffectTemplateCategory,
+    setActivePropertyTab: unifiedUIModule.setActivePropertyTab,
   }
 })

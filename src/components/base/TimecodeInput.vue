@@ -127,28 +127,44 @@ ${t('properties.errors.currentInput')}: ${timecodeValue}`
   display: flex;
   align-items: center;
   flex: 1;
+  min-width: 0;
 }
 
 .timecode-input {
+  box-sizing: border-box;
   width: 100%;
+  min-height: 24px;
   padding: var(--spacing-xs) var(--spacing-sm);
-  border: 1px solid var(--color-border-secondary);
+  border: 1px solid var(--color-bg-hover);
   border-radius: var(--border-radius-small);
   background: var(--color-bg-secondary);
   color: var(--color-text-primary);
-  font-size: 14px;
-  font-family: monospace;
-  transition: border-color 0.2s ease;
+  caret-color: var(--color-text-primary);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: var(--font-size-base);
+  font-variant-numeric: tabular-nums;
+  line-height: 1.25;
+  transition-property: background-color, border-color, box-shadow, transform;
+  transition-duration: var(--transition-fast);
+  transition-timing-function: ease-out;
+}
+
+.timecode-input:hover {
+  background: var(--color-bg-hover);
 }
 
 .timecode-input:focus {
   outline: none;
-  border-color: var(--color-border-focus);
-  background: var(--color-bg-primary);
+  border-color: transparent;
+  background: var(--color-bg-hover);
+  box-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.45),
+    0 4px 10px rgba(0, 0, 0, 0.35);
+  transform: translateY(-1px);
 }
 
 .timecode-input::placeholder {
   color: var(--color-text-hint);
-  font-style: italic;
+  font-variant-numeric: tabular-nums;
 }
 </style>

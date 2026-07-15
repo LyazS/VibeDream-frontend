@@ -17,8 +17,8 @@ const CACHE_KEY_PREFIX = 'ai_config_cache.'
  */
 function getCurrentProjectId(): string {
   try {
-    const store = useUnifiedStore()
-    const projectId = store.projectId
+    const unifiedStore = useUnifiedStore()
+    const projectId = unifiedStore.projectId
     if (projectId) {
       return projectId
     }

@@ -110,11 +110,13 @@ const handleChange = (event: Event) => {
   display: flex;
   align-items: center;
   flex: 1;
+  min-width: 0;
 }
 
 /* 滑块基础样式 */
 .slider {
   flex: 1;
+  min-width: 0;
   height: 4px;
   background: var(--color-bg-quaternary);
   border-radius: 2px;

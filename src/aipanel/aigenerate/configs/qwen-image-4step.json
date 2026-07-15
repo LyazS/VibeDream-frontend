@@ -10,7 +10,7 @@
   },
   "contentType": "image",
   "aiTaskType": "bizyair_generate_media",
-  "cost": 0.02,
+  "cost": "0.02",
   "aiConfig": {
     "prompt": {
       "type": "string",

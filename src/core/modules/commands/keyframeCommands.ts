@@ -6,11 +6,7 @@
 
 // 从拆分的模块中重新导出所有命令
 export {
-  CreateKeyframeCommand,
-  DeleteKeyframeCommand,
-  UpdatePropertyCommand,
   ClearAllKeyframesCommand,
-  ToggleKeyframeCommand,
   type KeyframeSnapshot,
   type TimelineModule,
   type PlaybackControls,

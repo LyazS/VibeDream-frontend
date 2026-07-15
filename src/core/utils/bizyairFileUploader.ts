@@ -4,13 +4,15 @@
  * 支持代理模式和直接模式
  */
 
-import { exportMediaItem, exportTimelineItem } from './projectExporter'
+import { exportMediaItem, exportTimelineItem } from './mediaExporter'
 import { fetchClient } from '@/utils/fetchClient'
 import type { FileData } from '@/core/datasource/providers/ai-generation/types'
 import type { UnifiedMediaItemData } from '@/core/mediaitem/types'
-import type { UnifiedTimelineItemData } from '@/core/timelineitem'
+import type { UnifiedTimelineItemData } from '@/core/timelineitem/model/timelineItem'
 import type { MediaType } from '@/core/mediaitem'
+import type { ExportMediaItemOptions } from './mediaExporter'
 import { cloneDeep } from 'lodash'
+import { useUnifiedStore } from '@/core/unifiedStore'
 
 // ==================== 类型定义 ====================
 
@@ -72,6 +74,12 @@ interface UploadResult {
   url?: string
   object_key?: string
   error?: string
+}
+
+export interface UploadFileExportOptions {
+  outputWidth?: ExportMediaItemOptions['outputWidth']
+  outputHeight?: ExportMediaItemOptions['outputHeight']
+  frameRate?: ExportMediaItemOptions['frameRate']
 }
 
 // ==================== 策略接口 ====================
@@ -306,15 +314,21 @@ export class BizyairFileUploader {
    */
   private static async exportFileDataToBlob(
     fileData: FileData,
-    getMediaItem: (id: string) => UnifiedMediaItemData | undefined,
+    getMediaItem: (id: string | null) => UnifiedMediaItemData | undefined,
     getTimelineItem: (id: string) => UnifiedTimelineItemData<MediaType> | undefined,
+    exportOptions?: UploadFileExportOptions,
   ): Promise<Blob> {
     if (fileData.source === 'media-item') {
       const mediaItem = getMediaItem(fileData.mediaItemId!)
       if (!mediaItem) {
         throw new Error(`找不到媒体项: ${fileData.mediaItemId}`)
       }
-      return await exportMediaItem({ mediaItem })
+      return await exportMediaItem({
+        mediaItem,
+        outputWidth: exportOptions?.outputWidth,
+        outputHeight: exportOptions?.outputHeight,
+        frameRate: exportOptions?.frameRate,
+      })
     } else {
       const timelineItem = getTimelineItem(fileData.timelineItemId!)
       if (!timelineItem) {
@@ -323,7 +337,42 @@ export class BizyairFileUploader {
       return await exportTimelineItem({
         timelineItem,
         getMediaItem,
+        outputWidth: exportOptions?.outputWidth,
+        outputHeight: exportOptions?.outputHeight,
+        frameRate: exportOptions?.frameRate,
       })
+    }
+  }
+
+  /**
+   * 上传已准备好的 Blob
+   */
+  private static async uploadPreparedBlob(
+    blob: Blob,
+    fileName: string,
+    onProgress?: (stage: string, progress: number) => void,
+  ): Promise<UploadResult> {
+    const unifiedStore = useUnifiedStore()
+    const userApiKey = unifiedStore.getBizyAirApiKey()
+    const strategy = this.createStrategy(userApiKey)
+
+    onProgress?.('获取凭证', 20)
+    const credentials = await strategy.getUploadToken(fileName, userApiKey)
+
+    onProgress?.('上传中', 30)
+    await OSSUploader.uploadToOSS(blob, credentials, (p) => {
+      onProgress?.('上传中', 30 + Math.round(p * 0.5))
+    })
+
+    onProgress?.('提交资源', 80)
+    const url = await strategy.commitResource(fileName, credentials.object_key, userApiKey)
+
+    onProgress?.('完成', 100)
+
+    return {
+      success: true,
+      url,
+      object_key: credentials.object_key,
     }
   }
 
@@ -332,44 +381,39 @@ export class BizyairFileUploader {
    */
   static async uploadFile(
     fileData: FileData,
-    getMediaItem: (id: string) => UnifiedMediaItemData | undefined,
+    getMediaItem: (id: string | null) => UnifiedMediaItemData | undefined,
     getTimelineItem: (id: string) => UnifiedTimelineItemData<MediaType> | undefined,
+    onProgress?: (stage: string, progress: number) => void,
+    exportOptions?: UploadFileExportOptions,
+  ): Promise<UploadResult> {
+    try {
+      // 1. 导出文件
+      onProgress?.('导出文件', 0)
+      const blob = await this.exportFileDataToBlob(
+        fileData,
+        getMediaItem,
+        getTimelineItem,
+        exportOptions,
+      )
+
+      // 2. 复用通用上传流程
+      return await this.uploadPreparedBlob(blob, fileData.name, onProgress)
+    } catch (error) {
+      console.error('文件上传失败:', error)
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : '上传失败',
+      }
+    }
+  }
+
+  static async uploadBlob(
+    blob: Blob,
+    fileName: string,
     onProgress?: (stage: string, progress: number) => void,
   ): Promise<UploadResult> {
     try {
-      // 1. 获取用户 API Key（每次调用时从 unifiedStore 获取最新值）
-      const { useUnifiedStore } = await import('@/core/unifiedStore')
-      const unifiedStore = useUnifiedStore()
-      const userApiKey = unifiedStore.getBizyAirApiKey()
-      
-      // 2. 选择策略
-      const strategy = this.createStrategy(userApiKey)
-      
-      // 3. 导出文件
-      onProgress?.('导出文件', 0)
-      const blob = await this.exportFileDataToBlob(fileData, getMediaItem, getTimelineItem)
-
-      // 4. 获取上传凭证（传入 API Key）
-      onProgress?.('获取凭证', 20)
-      const credentials = await strategy.getUploadToken(fileData.name, userApiKey)
-
-      // 5. 上传到 OSS（共享逻辑）
-      onProgress?.('上传中', 30)
-      await OSSUploader.uploadToOSS(blob, credentials, (p) => {
-        onProgress?.('上传中', 30 + Math.round(p * 0.5))
-      })
-
-      // 6. 提交资源（传入 API Key）
-      onProgress?.('提交资源', 80)
-      const url = await strategy.commitResource(fileData.name, credentials.object_key, userApiKey)
-
-      onProgress?.('完成', 100)
-
-      return {
-        success: true,
-        url,
-        object_key: credentials.object_key,
-      }
+      return await this.uploadPreparedBlob(blob, fileName, onProgress)
     } catch (error) {
       console.error('文件上传失败:', error)
       return {
@@ -384,7 +428,7 @@ export class BizyairFileUploader {
    */
   static async uploadFiles(
     files: FileData[],
-    getMediaItem: (id: string) => UnifiedMediaItemData | undefined,
+    getMediaItem: (id: string | null) => UnifiedMediaItemData | undefined,
     getTimelineItem: (id: string) => UnifiedTimelineItemData<MediaType> | undefined,
     onProgress?: (fileIndex: number, stage: string, progress: number) => void,
   ): Promise<Map<number, UploadResult>> {
@@ -409,7 +453,7 @@ export class BizyairFileUploader {
    */
   static async uploadFileWithRetry(
     fileData: FileData,
-    getMediaItem: (id: string) => UnifiedMediaItemData | undefined,
+    getMediaItem: (id: string | null) => UnifiedMediaItemData | undefined,
     getTimelineItem: (id: string) => UnifiedTimelineItemData<MediaType> | undefined,
     maxRetries: number = 3,
     onProgress?: (stage: string, progress: number) => void,
@@ -445,7 +489,7 @@ export class BizyairFileUploader {
    */
   static async processConfigUploads(
     config: Record<string, any>,
-    getMediaItem: (id: string) => UnifiedMediaItemData | undefined,
+    getMediaItem: (id: string | null) => UnifiedMediaItemData | undefined,
     getTimelineItem: (id: string) => UnifiedTimelineItemData<MediaType> | undefined,
     onProgress?: (fileIndex: number, stage: string, progress: number) => void,
     onSuccess?: () => void,

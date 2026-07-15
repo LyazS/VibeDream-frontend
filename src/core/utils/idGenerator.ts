@@ -7,11 +7,11 @@ import { nanoid } from 'nanoid'
 
 /**
  * 生成唯一ID
- * 使用时间戳和随机字符串组合，确保唯一性
- * @returns 唯一ID字符串
+ * 使用时间戳和nanoid组合，确保唯一性
+ * @returns 唯一ID字符串（格式：timestamp_nanoid）
  */
 export function generateId(): string {
-  return Date.now().toString() + Math.random().toString(36).substring(2, 11)
+  return `${Date.now()}_${nanoid(12)}`
 }
 
 /**
@@ -53,23 +53,36 @@ export function generateUUID4(): string {
 
 /**
  * 生成轨道ID
- * 使用UUID4格式确保全局唯一性
- * @returns 轨道ID字符串
+ * 使用nanoid确保短小且唯一
+ * @returns 带 'track_' 前缀的12字符nanoid字符串
  */
 export function generateTrackId(): string {
-  return generateUUID4()
+  return `track_${nanoid(12)}`
 }
 
 /**
  * 生成带扩展名的媒体 ID
  * @param extension 文件扩展名（如 ".mp4"）
- * @returns 完整 ID（如 "V1StGXR8_Z5j.mp4"）
+ * @returns 完整 ID（如 "media_V1StGXR8_Z5j.mp4"）
  */
 export function generateMediaId(extension: string): string {
   const nanoId = nanoid(12) // 生成12字符的 nanoid
   // 确保扩展名以 . 开头
   const ext = extension.startsWith('.') ? extension : `.${extension}`
-  return `${nanoId}${ext}`
+  return `media_${nanoId}${ext}`
+}
+
+/**
+ * 生成通用资产 ID
+ */
+export function generateAssetId(prefix: 'asset' | 'effect', extension?: string): string {
+  const nanoId = nanoid(12)
+  if (!extension) {
+    return `${prefix}_${nanoId}`
+  }
+
+  const ext = extension.startsWith('.') ? extension : `.${extension}`
+  return `${prefix}_${nanoId}${ext}`
 }
 
 /**
@@ -115,11 +128,11 @@ export function parseMediaId(id: string): { nanoid: string; extension: string } 
 
 /**
  * 生成时间轴项目ID
- * 使用UUID4格式确保全局唯一性和标准格式
- * @returns UUID4格式的时间轴项目ID
+ * 使用nanoid确保短小且唯一
+ * @returns 带 'item_' 前缀的12字符nanoid字符串
  */
 export function generateTimelineItemId(): string {
-  return generateUUID4()
+  return `item_${nanoid(12)}`
 }
 
 /**
@@ -135,27 +148,27 @@ export function generateBatchCommandId(): string {
 /**
  * 生成目录ID
  * 使用nanoid确保短小且唯一
- * @returns 带 'dir_' 前缀的目录ID
+ * @returns 带 'dir_' 前缀的12字符nanoid字符串
  */
 export function generateDirectoryId(): string {
-  return `dir_${nanoid()}`
+  return `dir_${nanoid(12)}`
 }
 
 /**
  * 生成标签页ID
  * 使用nanoid确保短小且唯一
- * @returns 带 'tab_' 前缀的标签页ID
+ * @returns 带 'tab_' 前缀的12字符nanoid字符串
  */
 export function generateTabId(): string {
-  return `tab_${nanoid()}`
+  return `tab_${nanoid(12)}`
 }
 
 /**
- * 生成聊天消息ID
+ * 生成 Agent 消息 ID
  * 使用时间戳确保按时间排序
  * @param type 消息类型前缀
- * @returns 聊天消息ID字符串
+ * @returns Agent 消息 ID 字符串
  */
-export function generateChatMessageId(type: string): string {
+export function generateAgentMessageId(type: string): string {
   return `${type}-${Date.now()}`
 }

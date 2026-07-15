@@ -7,7 +7,7 @@
  * 3. 可见范围计算
  */
 
-import type { UnifiedTimelineItemData } from '@/core/timelineitem/type'
+import type { UnifiedTimelineItemData } from '@/core/timelineitem/model/timelineItem'
 import { secondsToFrames } from '@/core/utils/timeUtils'
 
 // ==================== 时长计算工具 ====================

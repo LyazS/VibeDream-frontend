@@ -29,6 +29,7 @@ export class AIGenerationPanelTargetHandler implements DropTargetHandler {
   canAccept(dragData: UnifiedDragData): boolean {
     // 只接受素材项目和时间轴项目
     return (
+      dragData.sourceType === DragSourceType.ASSET ||
       dragData.sourceType === DragSourceType.MEDIA_ITEM ||
       dragData.sourceType === DragSourceType.TIMELINE_ITEM
     )
@@ -53,12 +54,15 @@ export class AIGenerationPanelTargetHandler implements DropTargetHandler {
     // - 这是一个更优雅的用户体验设计
 
     // 检查文件类型兼容性
-    if (dragData.sourceType === DragSourceType.MEDIA_ITEM) {
+    if (dragData.sourceType === DragSourceType.ASSET || dragData.sourceType === DragSourceType.MEDIA_ITEM) {
       const mediaData = dragData as MediaItemDragData
+      if (mediaData.assetKind !== 'media' || !mediaData.mediaType) {
+        return false
+      }
       return this.isMediaTypeAccepted(mediaData.mediaType, acceptTypes)
     } else if (dragData.sourceType === DragSourceType.TIMELINE_ITEM) {
       const timelineData = dragData as TimelineItemDragData
-      const timelineItem = this.timelineModule.getTimelineItem(timelineData.itemId)
+      const timelineItem = this.timelineModule.getTimelineItem(timelineData.timelineItemId)
       if (!timelineItem) return false
       return this.isMediaTypeAccepted(timelineItem.mediaType, acceptTypes)
     }
@@ -85,7 +89,7 @@ export class AIGenerationPanelTargetHandler implements DropTargetHandler {
     // - 这是一个更优雅的用户体验设计
 
     try {
-      if (dragData.sourceType === DragSourceType.MEDIA_ITEM) {
+      if (dragData.sourceType === DragSourceType.ASSET || dragData.sourceType === DragSourceType.MEDIA_ITEM) {
         return await this.handleMediaItemDrop(dragData as MediaItemDragData, panelTargetInfo)
       } else if (dragData.sourceType === DragSourceType.TIMELINE_ITEM) {
         return await this.handleTimelineItemDrop(dragData as TimelineItemDragData, panelTargetInfo)
@@ -105,9 +109,13 @@ export class AIGenerationPanelTargetHandler implements DropTargetHandler {
     mediaData: MediaItemDragData,
     targetInfo: AIGenerationPanelDropTargetInfo,
   ): Promise<DropResult> {
-    const mediaItem = this.mediaModule.getMediaItem(mediaData.mediaItemId)
+    if (mediaData.assetKind !== 'media') {
+      return { success: false, error: '该资产不是可渲染媒体' }
+    }
+
+    const mediaItem = this.mediaModule.getMediaItem(mediaData.assetId)
     if (!mediaItem) {
-      console.error('找不到素材项目:', mediaData.mediaItemId)
+      console.error('找不到素材项目:', mediaData.assetId)
       return { success: false, error: '找不到素材项目' }
     }
 
@@ -152,9 +160,9 @@ export class AIGenerationPanelTargetHandler implements DropTargetHandler {
     timelineData: TimelineItemDragData,
     targetInfo: AIGenerationPanelDropTargetInfo,
   ): Promise<DropResult> {
-    const timelineItem = this.timelineModule.getTimelineItem(timelineData.itemId)
+    const timelineItem = this.timelineModule.getTimelineItem(timelineData.timelineItemId)
     if (!timelineItem) {
-      console.error('找不到时间轴项目:', timelineData.itemId)
+      console.error('找不到时间轴项目:', timelineData.timelineItemId)
       return { success: false, error: '找不到时间轴项目' }
     }
 

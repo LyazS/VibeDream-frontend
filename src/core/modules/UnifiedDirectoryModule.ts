@@ -30,6 +30,7 @@ import type { UnifiedMediaModule } from './UnifiedMediaModule'
 export function createUnifiedDirectoryModule(registry: ModuleRegistry) {
   // 通过注册中心获取依赖模块
   const mediaModule = registry.get<UnifiedMediaModule>(MODULE_NAMES.MEDIA)
+  let ensureMediaReadyForLazyLoad: ((mediaId: string) => Promise<unknown>) | null = null
 
   // ==================== 状态定义 ====================
 
@@ -54,8 +55,8 @@ export function createUnifiedDirectoryModule(registry: ModuleRegistry) {
   const viewMode = ref<ViewMode>('medium-icon')
 
   // 排序状态
-  const sortBy = ref<SortBy>('name')
-  const sortOrder = ref<SortOrder>('asc')
+  const sortBy = ref<SortBy>('date')
+  const sortOrder = ref<SortOrder>('desc')
 
   // ==================== 计算属性 ====================
 
@@ -70,12 +71,53 @@ export function createUnifiedDirectoryModule(registry: ModuleRegistry) {
     return directories.value.get(activeTab.value.dirId) || null
   })
 
-  // ==================== 核心方法 ====================
+  type DirectoryMutationErrorCode = 'invalid_name' | 'duplicate_name' | 'not_found'
+  type DirectoryMutationResult =
+    | { success: true; directory: VirtualDirectory }
+    | { success: false; error: string; code: DirectoryMutationErrorCode }
 
-  /**
-   * 创建新目录
-   */
-  function createDirectory(name: string, parentId: string | null = null): VirtualDirectory {
+  function normalizeDirectoryName(name: string): string {
+    return name.trim()
+  }
+
+  function getSiblingDirectories(parentId: string | null): VirtualDirectory[] {
+    return Array.from(directories.value.values()).filter((dir) => dir.parentId === parentId)
+  }
+
+  function validateDirectoryName(
+    name: string,
+    parentId: string | null,
+    excludeDirId?: string,
+  ): { ok: true; normalizedName: string } | { ok: false; error: string; code: DirectoryMutationErrorCode } {
+    const normalizedName = normalizeDirectoryName(name)
+
+    if (!normalizedName) {
+      return { ok: false, error: '目录名称不能为空', code: 'invalid_name' }
+    }
+
+    if (normalizedName === '.' || normalizedName === '..') {
+      return { ok: false, error: '目录名称不能为 . 或 ..', code: 'invalid_name' }
+    }
+
+    if (/[\/\\]/.test(normalizedName)) {
+      return { ok: false, error: '目录名称不能包含 / 或 \\', code: 'invalid_name' }
+    }
+
+    if (/[\u0000-\u001f\u007f]/.test(normalizedName)) {
+      return { ok: false, error: '目录名称不能包含控制字符', code: 'invalid_name' }
+    }
+
+    const duplicate = getSiblingDirectories(parentId).find(
+      (dir) => dir.id !== excludeDirId && dir.name === normalizedName,
+    )
+    if (duplicate) {
+      return { ok: false, error: `当前目录下已存在同名文件夹“${normalizedName}”`, code: 'duplicate_name' }
+    }
+
+    return { ok: true, normalizedName }
+  }
+
+  function createDirectoryRecord(name: string, parentId: string | null = null): VirtualDirectory {
     const newDir: VirtualDirectory = {
       type: DirectoryType.BASE,
       id: generateDirectoryId(),
@@ -83,12 +125,11 @@ export function createUnifiedDirectoryModule(registry: ModuleRegistry) {
       parentId,
       createdAt: new Date().toISOString(),
       childDirIds: [],
-      mediaItemIds: [],
+      assetIds: [],
     }
 
     directories.value.set(newDir.id, newDir)
 
-    // 如果有父目录，更新父目录的子目录列表
     if (parentId) {
       const parentDir = directories.value.get(parentId)
       if (parentDir) {
@@ -97,6 +138,37 @@ export function createUnifiedDirectoryModule(registry: ModuleRegistry) {
     }
 
     return newDir
+  }
+
+  // ==================== 核心方法 ====================
+
+  /**
+   * 注入媒体 ready 资源确保器。
+   *
+   * 目录模块只负责“用户看到了某个目录，需要启动这个目录里的懒加载媒体”；
+   * 具体媒体文件准备、解码、保存和状态汇聚由 JobRuntime 的 media-ready DAG 负责。
+   */
+  function setMediaReadyEnsurer(ensurer: (mediaId: string) => Promise<unknown>): void {
+    ensureMediaReadyForLazyLoad = ensurer
+  }
+
+  /**
+   * 创建新目录
+   */
+  function createDirectory(name: string, parentId: string | null = null): DirectoryMutationResult {
+    if (parentId && !directories.value.has(parentId)) {
+      return { success: false, error: '父目录不存在', code: 'not_found' }
+    }
+
+    const validation = validateDirectoryName(name, parentId)
+    if (!validation.ok) {
+      return { success: false, error: validation.error, code: validation.code }
+    }
+
+    return {
+      success: true,
+      directory: createDirectoryRecord(validation.normalizedName, parentId),
+    }
   }
 
   /**
@@ -109,14 +181,19 @@ export function createUnifiedDirectoryModule(registry: ModuleRegistry) {
     parentId: string | null = null,
     timestamps: { st: number; ed: number },
   ): CharacterDirectory {
+    const validation = validateDirectoryName(name, parentId)
+    if (!validation.ok) {
+      throw new Error(validation.error)
+    }
+
     const characterDir: CharacterDirectory = {
       type: DirectoryType.CHARACTER,
       id: generateDirectoryId(),
-      name,
+      name: validation.normalizedName,
       parentId,
       createdAt: new Date().toISOString(),
       childDirIds: [],
-      mediaItemIds: [],
+      assetIds: [],
       character: {
         remark,
         refVideo,
@@ -159,14 +236,23 @@ export function createUnifiedDirectoryModule(registry: ModuleRegistry) {
   /**
    * 重命名目录
    */
-  function renameDirectory(id: string, newName: string): boolean {
+  function renameDirectory(id: string, newName: string): DirectoryMutationResult {
     const dir = directories.value.get(id)
-    if (!dir) return false
+    if (!dir) {
+      return { success: false, error: '目录不存在', code: 'not_found' }
+    }
 
-    if (!newName.trim()) return false
+    if (dir.parentId === null) {
+      return { success: false, error: '不能重命名根目录', code: 'invalid_name' }
+    }
 
-    dir.name = newName.trim()
-    return true
+    const validation = validateDirectoryName(newName, dir.parentId, id)
+    if (!validation.ok) {
+      return { success: false, error: validation.error, code: validation.code }
+    }
+
+    dir.name = validation.normalizedName
+    return { success: true, directory: dir }
   }
 
   /**
@@ -182,26 +268,29 @@ export function createUnifiedDirectoryModule(registry: ModuleRegistry) {
    * @param dirId 目录ID
    * @param updateRefCount 是否更新引用计数，默认为true。剪切/拖拽移动时应设为false
    */
-  function addMediaToDirectory(
-    mediaId: string,
+  function addAssetToDirectory(
+    assetId: string,
     dirId: string,
     updateRefCount: boolean = true,
   ): boolean {
     const dir = directories.value.get(dirId)
     if (!dir) return false
 
-    if (!dir.mediaItemIds.includes(mediaId)) {
-      dir.mediaItemIds.push(mediaId)
+    const asset = mediaModule.getMediaAsset(assetId)
+    if (!asset) {
+      console.warn(`⚠️ [addAssetToDirectory] 普通素材目录只接受媒体资产，已跳过: ${assetId}`)
+      return false
+    }
+
+    if (!dir.assetIds.includes(assetId)) {
+      dir.assetIds.push(assetId)
 
       // 🆕 增加引用计数（仅在需要时）
       if (updateRefCount) {
-        const mediaItem = mediaModule.getMediaItem(mediaId)
-        if (mediaItem) {
-          mediaItem.runtime.refCount = (mediaItem.runtime.refCount || 0) + 1
-          console.log(
-            `📊 [addMediaToDirectory] 素材 ${mediaItem.name} 引用计数: ${mediaItem.runtime.refCount}`,
-          )
-        }
+        asset.runtime.refCount = (asset.runtime.refCount || 0) + 1
+        console.log(
+          `📊 [addAssetToDirectory] 素材 ${asset.name} 引用计数: ${asset.runtime.refCount}`,
+        )
       }
 
       return true
@@ -215,32 +304,30 @@ export function createUnifiedDirectoryModule(registry: ModuleRegistry) {
    * @param dirId 目录ID
    * @param updateRefCount 是否更新引用计数，默认为true。剪切/拖拽移动时应设为false
    */
-  function removeMediaFromDirectory(
-    mediaId: string,
+  function removeAssetFromDirectory(
+    assetId: string,
     dirId: string,
     updateRefCount: boolean = true,
   ): boolean {
     const dir = directories.value.get(dirId)
     if (!dir) return false
 
-    const index = dir.mediaItemIds.indexOf(mediaId)
+    const index = dir.assetIds.indexOf(assetId)
     if (index > -1) {
-      dir.mediaItemIds.splice(index, 1)
+      dir.assetIds.splice(index, 1)
 
       // 🆕 减少引用计数（仅在需要时）
       if (updateRefCount) {
-        const mediaItem = mediaModule.getMediaItem(mediaId)
-        if (mediaItem && mediaItem.runtime.refCount !== undefined) {
-          mediaItem.runtime.refCount--
+        const asset = mediaModule.getMediaAsset(assetId)
+        if (asset && asset.runtime.refCount !== undefined) {
+          asset.runtime.refCount--
 
           // 如果引用计数降为0，记录日志
-          if (mediaItem.runtime.refCount === 0) {
-            console.warn(
-              `⚠️ [removeMediaFromDirectory] 素材引用计数为0: ${mediaItem.name}，可以删除`,
-            )
+          if (asset.runtime.refCount === 0) {
+            console.warn(`⚠️ [removeAssetFromDirectory] 素材引用计数为0: ${asset.name}，可以删除`)
           } else {
             console.log(
-              `📊 [removeMediaFromDirectory] 素材 ${mediaItem.name} 引用计数: ${mediaItem.runtime.refCount}`,
+              `📊 [removeAssetFromDirectory] 素材 ${asset.name} 引用计数: ${asset.runtime.refCount}`,
             )
           }
         }
@@ -249,6 +336,21 @@ export function createUnifiedDirectoryModule(registry: ModuleRegistry) {
       return true
     }
     return false
+  }
+
+  /**
+   * 查找媒体项所在的所有目录ID
+   * @param mediaId 媒体项ID
+   * @returns 目录ID数组，如果未找到返回空数组
+   */
+  function findAllDirectoriesByAssetId(assetId: string): string[] {
+    const dirIds: string[] = []
+    for (const [dirId, dir] of directories.value) {
+      if (dir.assetIds.includes(assetId)) {
+        dirIds.push(dirId)
+      }
+    }
+    return dirIds
   }
 
   /**
@@ -269,10 +371,10 @@ export function createUnifiedDirectoryModule(registry: ModuleRegistry) {
     })
 
     // 添加媒体项
-    dir.mediaItemIds.forEach((mediaId) => {
+    dir.assetIds.forEach((mediaId) => {
       items.push({
         id: mediaId,
-        type: 'media',
+        type: 'asset',
       })
     })
 
@@ -344,40 +446,49 @@ export function createUnifiedDirectoryModule(registry: ModuleRegistry) {
   }
 
   /**
-   * 启动目录中 pending 状态的媒体
-   * 包括当前目录的媒体项和角色类型子文件夹中的媒体项
+   * 启动目录中 pending 状态的资产
+   * 包括当前目录的资产项和角色类型子文件夹中的资产项
    */
-  function startPendingMediaInDirectory(dirId: string): void {
+  function startPendingAssetsInDirectory(dirId: string): void {
     const dir = directories.value.get(dirId)
     if (!dir || !mediaModule) return
 
     let startedCount = 0
 
-    // 处理当前目录的媒体项
-    dir.mediaItemIds.forEach((mediaId) => {
-      const mediaItem = mediaModule.getMediaItem(mediaId)
-      if (mediaItem?.mediaStatus === 'pending') {
-        mediaModule.startMediaProcessing(mediaItem)
+    const startAssetIfNeeded = (assetId: string) => {
+      const mediaItem = mediaModule.getMediaItem(assetId)
+      if (mediaItem?.assetKind === 'media' && mediaItem.mediaStatus === 'pending') {
+        if (ensureMediaReadyForLazyLoad) {
+          void ensureMediaReadyForLazyLoad(mediaItem.id).catch((error) => {
+            console.error(
+              `❌ [DirectoryModule] 懒加载媒体失败，已跳过: ${mediaItem.name}`,
+              error,
+            )
+          })
+        } else {
+          console.warn(
+            `⚠️ [DirectoryModule] ensureMediaReady 未初始化，跳过懒加载媒体: ${mediaItem.name}`,
+          )
+        }
         startedCount++
+        return
       }
-    })
 
-    // 处理角色类型子文件夹中的媒体项
+    }
+
+    // 处理当前目录的资产项
+    dir.assetIds.forEach(startAssetIfNeeded)
+
+    // 处理角色类型子文件夹中的资产项
     dir.childDirIds.forEach((childDirId) => {
       const childDir = directories.value.get(childDirId)
       if (childDir && isCharacterDirectory(childDir)) {
-        childDir.mediaItemIds.forEach((mediaId) => {
-          const mediaItem = mediaModule.getMediaItem(mediaId)
-          if (mediaItem?.mediaStatus === 'pending') {
-            mediaModule.startMediaProcessing(mediaItem)
-            startedCount++
-          }
-        })
+        childDir.assetIds.forEach(startAssetIfNeeded)
       }
     })
 
     if (startedCount > 0) {
-      console.log(`🚀 [DirectoryModule] 启动了 ${startedCount} 个延迟加载的媒体`)
+      console.log(`🚀 [DirectoryModule] 启动了 ${startedCount} 个延迟加载的资产`)
     }
   }
 
@@ -392,8 +503,8 @@ export function createUnifiedDirectoryModule(registry: ModuleRegistry) {
 
     activeTab.value.dirId = dirId
 
-    // 启动该目录中 pending 状态的媒体
-    startPendingMediaInDirectory(dirId)
+    // 启动该目录中 pending 状态的资产
+    startPendingAssetsInDirectory(dirId)
 
     return true
   }
@@ -407,8 +518,8 @@ export function createUnifiedDirectoryModule(registry: ModuleRegistry) {
 
     activeTabId.value = tabId
 
-    // 启动目标目录中 pending 状态的媒体
-    startPendingMediaInDirectory(tab.dirId)
+    // 启动目标目录中 pending 状态的资产
+    startPendingAssetsInDirectory(tab.dirId)
 
     return true
   }
@@ -424,7 +535,7 @@ export function createUnifiedDirectoryModule(registry: ModuleRegistry) {
     }
 
     // 创建根目录
-    const rootDir = createDirectory('root', null)
+    const rootDir = createDirectoryRecord('root', null)
 
     // 打开根目录标签页
     openTab(rootDir.id)
@@ -500,28 +611,28 @@ export function createUnifiedDirectoryModule(registry: ModuleRegistry) {
 
   /**
    * 拖拽移动媒体项到目标文件夹
-   * @param mediaItemIds 媒体项ID列表
+   * @param assetIds 资产ID列表
    * @param sourceFolderId 源文件夹ID（可能为null）
    * @param targetFolderId 目标文件夹ID
    */
   async function dragMoveMediaItems(
-    mediaItemIds: string[],
+    assetIds: string[],
     sourceFolderId: string | null,
     targetFolderId: string,
   ): Promise<void> {
     // 从源文件夹移除（不更新引用计数，因为是移动操作）
     if (sourceFolderId) {
-      for (const mediaId of mediaItemIds) {
-        removeMediaFromDirectory(mediaId, sourceFolderId, false)
+      for (const assetId of assetIds) {
+        removeAssetFromDirectory(assetId, sourceFolderId, false)
       }
     }
 
     // 添加到目标文件夹（不更新引用计数，因为是移动操作）
-    for (const mediaId of mediaItemIds) {
-      addMediaToDirectory(mediaId, targetFolderId, false)
+    for (const assetId of assetIds) {
+      addAssetToDirectory(assetId, targetFolderId, false)
     }
 
-    console.log(`✅ 拖拽移动 ${mediaItemIds.length} 个媒体项到文件夹 ${targetFolderId}`)
+    console.log(`✅ 拖拽移动 ${assetIds.length} 个资产到文件夹 ${targetFolderId}`)
   }
 
   /**
@@ -672,11 +783,11 @@ export function createUnifiedDirectoryModule(registry: ModuleRegistry) {
       // 移动媒体项（不更新引用计数，因为是剪切移动操作）
       // 从原目录移除
       if (clipboardState.value.sourceDirId) {
-        removeMediaFromDirectory(item.id, clipboardState.value.sourceDirId, false)
+        removeAssetFromDirectory(item.id, clipboardState.value.sourceDirId, false)
       }
 
       // 添加到目标目录
-      addMediaToDirectory(item.id, targetDirId, false)
+      addAssetToDirectory(item.id, targetDirId, false)
     }
   }
 
@@ -692,7 +803,11 @@ export function createUnifiedDirectoryModule(registry: ModuleRegistry) {
     if (!sourceDir) throw new Error('源目录不存在')
 
     // 创建新目录
-    const newDir = createDirectory(newName, targetParentId)
+    const createResult = createDirectory(newName, targetParentId)
+    if (!createResult.success) {
+      throw new Error(createResult.error)
+    }
+    const newDir = createResult.directory
 
     // 复制子目录
     for (const childDirId of sourceDir.childDirIds) {
@@ -703,8 +818,8 @@ export function createUnifiedDirectoryModule(registry: ModuleRegistry) {
     }
 
     // 复制媒体项
-    for (const mediaId of sourceDir.mediaItemIds) {
-      await copyItem({ id: mediaId, type: 'media' }, newDir.id)
+    for (const mediaId of sourceDir.assetIds) {
+      await copyItem({ id: mediaId, type: 'asset' }, newDir.id)
     }
 
     return newDir.id
@@ -723,7 +838,7 @@ export function createUnifiedDirectoryModule(registry: ModuleRegistry) {
       // 复制媒体项（只复制引用）
       // 注意：这里需要访问 unifiedStore 的媒体数据
       // 暂时只复制引用到目标目录
-      addMediaToDirectory(item.id, targetDirId)
+      addAssetToDirectory(item.id, targetDirId)
     }
   }
 
@@ -921,7 +1036,7 @@ export function createUnifiedDirectoryModule(registry: ModuleRegistry) {
           dirsToDelete.push(...currentDir.childDirIds)
 
           // 收集媒体项
-          currentDir.mediaItemIds.forEach((mediaId) => allMediaIds.add(mediaId))
+          currentDir.assetIds.forEach((mediaId) => allMediaIds.add(mediaId))
         }
 
         index++
@@ -938,19 +1053,19 @@ export function createUnifiedDirectoryModule(registry: ModuleRegistry) {
       for (const currentDirId of dirsToDelete) {
         const currentDir = directories.value.get(currentDirId)
         if (currentDir) {
-          const mediaIds = [...currentDir.mediaItemIds]
+          const mediaIds = [...currentDir.assetIds]
           for (const mediaId of mediaIds) {
-            removeMediaFromDirectory(mediaId, currentDirId)
+            removeAssetFromDirectory(mediaId, currentDirId)
           }
         }
       }
 
       // 步骤3: 检查并删除引用计数为0的素材
       for (const mediaId of allMediaIds) {
-        const mediaItem = mediaModule.getMediaItem(mediaId)
-        if (mediaItem && mediaItem.runtime.refCount === 0) {
-          console.log(`🗑️ [deleteDirectory] 删除引用计数为0的素材: ${mediaItem.name}`)
-          await mediaModule.removeMediaItem(mediaId)
+        const asset = mediaModule.getMediaAsset(mediaId)
+        if (asset && asset.runtime.refCount === 0) {
+          console.log(`🗑️ [deleteDirectory] 删除引用计数为0的素材: ${asset.name}`)
+          await mediaModule.removeAsset(mediaId)
           deletedMediaIds.push(mediaId)
         }
       }
@@ -1006,7 +1121,7 @@ export function createUnifiedDirectoryModule(registry: ModuleRegistry) {
   /**
    * 删除媒体项（从指定目录移除，如果引用计数为0则删除文件）
    */
-  async function deleteMediaItem(
+  async function deleteAssetItem(
     mediaId: string,
     dirId: string,
   ): Promise<{
@@ -1019,50 +1134,54 @@ export function createUnifiedDirectoryModule(registry: ModuleRegistry) {
       return { success: false, deletedFile: false, error: '目录不存在' }
     }
 
-    const mediaItem = mediaModule.getMediaItem(mediaId)
+    const mediaItem = mediaModule.getMediaAsset(mediaId)
 
     try {
-      // 如果媒体项不存在，直接从目录移除该无效引用（不更新引用计数）
+      // 如果资产不存在，直接从目录移除该无效引用（不更新引用计数）
       if (!mediaItem) {
-        console.warn(`⚠️ [deleteMediaItem] 媒体项不存在，从目录移除无效引用: ${mediaId}`)
-        const removed = removeMediaFromDirectory(mediaId, dirId, false)
+        console.warn(`⚠️ [deleteAssetItem] 资产不存在，从目录移除无效引用: ${mediaId}`)
+        const removed = removeAssetFromDirectory(mediaId, dirId, false)
         if (removed) {
-          console.log(`✅ [deleteMediaItem] 已从目录移除无效引用: ${mediaId}`)
+          console.log(`✅ [deleteAssetItem] 已从目录移除无效引用: ${mediaId}`)
           return { success: true, deletedFile: false }
         }
-        return { success: false, deletedFile: false, error: '媒体项不在该目录中' }
+        return { success: false, deletedFile: false, error: '资产不在该目录中' }
       }
 
       // 步骤1: 从目录移除（会自动减少引用计数）
-      const removed = removeMediaFromDirectory(mediaId, dirId)
+      const removed = removeAssetFromDirectory(mediaId, dirId)
       if (!removed) {
-        return { success: false, deletedFile: false, error: '媒体项不在该目录中' }
+        return { success: false, deletedFile: false, error: '资产不在该目录中' }
       }
 
       // 步骤2: 检查引用计数，如果为0则删除素材文件
-      const updatedMediaItem = mediaModule.getMediaItem(mediaId)
+      const updatedMediaItem = mediaModule.getMediaAsset(mediaId)
       let deletedFile = false
 
       if (updatedMediaItem && updatedMediaItem.runtime.refCount === 0) {
-        console.log(`🗑️ [deleteMediaItem] 删除引用计数为0的素材: ${mediaItem.name}`)
-        await mediaModule.removeMediaItem(mediaId)
+        console.log(`🗑️ [deleteAssetItem] 删除引用计数为0的素材: ${mediaItem.name}`)
+        await mediaModule.removeAsset(mediaId)
         deletedFile = true
       }
 
-      console.log(`✅ [deleteMediaItem] 媒体项删除成功: ${mediaItem.name}`, {
+      console.log(`✅ [deleteAssetItem] 资产删除成功: ${mediaItem.name}`, {
         deletedFile,
         remainingRefCount: updatedMediaItem?.runtime.refCount || 0,
       })
 
       return { success: true, deletedFile }
     } catch (error) {
-      console.error(`❌ [deleteMediaItem] 删除媒体项失败: ${mediaItem?.name || mediaId}`, error)
+      console.error(`❌ [deleteAssetItem] 删除资产失败: ${mediaItem?.name || mediaId}`, error)
       return {
         success: false,
         deletedFile: false,
         error: error instanceof Error ? error.message : '未知错误',
       }
     }
+  }
+
+  async function deleteMediaItem(mediaId: string, dirId: string) {
+    return deleteAssetItem(mediaId, dirId)
   }
 
   // ==================== 返回接口 ====================
@@ -1084,8 +1203,9 @@ export function createUnifiedDirectoryModule(registry: ModuleRegistry) {
     getDirectory,
     getCharacterDirectory, // 🆕 新增获取角色文件夹方法
     isCharacterDirectory, // 🆕 新增类型守卫方法
-    addMediaToDirectory,
-    removeMediaFromDirectory,
+    setMediaReadyEnsurer,
+    addAssetToDirectory,
+    removeAssetFromDirectory,
     getDirectoryContent,
     getBreadcrumb,
     openTab,
@@ -1093,7 +1213,9 @@ export function createUnifiedDirectoryModule(registry: ModuleRegistry) {
     navigateToDir,
     switchTab,
     deleteDirectory, // 🆕 新增删除文件夹方法
+    deleteAssetItem,
     deleteMediaItem, // 🆕 新增删除媒体项方法
+    findAllDirectoriesByAssetId,
 
     // 初始化和管理方法
     initializeRootDirectory,

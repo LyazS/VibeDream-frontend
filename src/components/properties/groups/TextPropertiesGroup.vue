@@ -10,7 +10,7 @@
           :value="localText"
           @blur="updateTextContent"
           @keyup.ctrl.enter="updateTextContent"
-          :disabled="!canOperateTransforms"
+          :disabled="!canOperateVisualChannels"
           class="text-content-input"
           :placeholder="t('properties.placeholders.enterText')"
           rows="3"
@@ -24,7 +24,7 @@
           <select
             :value="localStyle.fontFamily"
             @change="handleFontFamilyChange"
-            :disabled="!canOperateTransforms"
+            :disabled="!canOperateVisualChannels"
             class="font-family-select"
           >
             <option value="Arial, sans-serif">{{ t('properties.fonts.fontFamilyArial') }}</option>
@@ -53,7 +53,7 @@
           <SliderInput
             :model-value="localStyle.fontSize"
             @input="updateFontSize"
-            :disabled="!canOperateTransforms"
+            :disabled="!canOperateVisualChannels"
             :min="12"
             :max="200"
             :step="1"
@@ -62,7 +62,7 @@
           <NumberInput
             :model-value="localStyle.fontSize"
             @change="updateFontSize"
-            :disabled="!canOperateTransforms"
+            :disabled="!canOperateVisualChannels"
             :min="12"
             :max="200"
             :step="1"
@@ -81,7 +81,7 @@
           <select
             :value="localStyle.fontWeight"
             @change="handleFontWeightChange"
-            :disabled="!canOperateTransforms"
+            :disabled="!canOperateVisualChannels"
             class="font-weight-select"
           >
             <option value="normal">{{ t('properties.effects.normal') }}</option>
@@ -91,7 +91,7 @@
           <select
             :value="localStyle.fontStyle"
             @change="handleFontStyleChange"
-            :disabled="!canOperateTransforms"
+            :disabled="!canOperateVisualChannels"
             class="font-style-select"
           >
             <option value="normal">{{ t('properties.fonts.fontStyleNormal') }}</option>
@@ -108,7 +108,7 @@
             type="color"
             :value="localStyle.color"
             @change="handleColorChange"
-            :disabled="!canOperateTransforms"
+            :disabled="!canOperateVisualChannels"
             class="color-picker"
           />
         </div>
@@ -123,14 +123,14 @@
             :value="localStyle.backgroundColor || '#000000'"
             @change="handleBackgroundColorChange"
             class="color-picker"
-            :disabled="!backgroundColorEnabled || !canOperateTransforms"
+            :disabled="!backgroundColorEnabled || !canOperateVisualChannels"
           />
           <label class="checkbox-wrapper">
             <input
               type="checkbox"
               :checked="backgroundColorEnabled"
               @change="toggleBackgroundColor"
-              :disabled="!canOperateTransforms"
+              :disabled="!canOperateVisualChannels"
               class="background-color-checkbox"
             />
           </label>
@@ -145,7 +145,7 @@
             v-for="align in textAlignOptions"
             :key="align.value"
             @click="updateTextAlign"
-            :disabled="!canOperateTransforms"
+            :disabled="!canOperateVisualChannels"
             class="align-btn"
             :class="{ active: localStyle.textAlign === align.value }"
             :title="
@@ -177,7 +177,7 @@
               type="checkbox"
               :checked="shadowEnabled"
               @change="toggleShadow"
-              :disabled="!canOperateTransforms"
+              :disabled="!canOperateVisualChannels"
               class="effect-checkbox"
             />
           </label>
@@ -188,7 +188,7 @@
                 type="color"
                 :value="shadowColor"
                 @change="handleShadowColorChange"
-                :disabled="!canOperateTransforms"
+                :disabled="!canOperateVisualChannels"
                 class="color-picker small"
               />
             </div>
@@ -197,7 +197,7 @@
               <SliderInput
                 :model-value="shadowBlur"
                 @input="updateShadowBlur"
-                :disabled="!canOperateTransforms"
+                :disabled="!canOperateVisualChannels"
                 :min="0"
                 :max="20"
                 :step="1"
@@ -206,7 +206,7 @@
               <NumberInput
                 :model-value="shadowBlur"
                 @change="updateShadowBlur"
-                :disabled="!canOperateTransforms"
+                :disabled="!canOperateVisualChannels"
                 :min="0"
                 :max="20"
                 :step="1"
@@ -221,7 +221,7 @@
               <SliderInput
                 :model-value="shadowOffsetX"
                 @input="updateShadowOffsetX"
-                :disabled="!canOperateTransforms"
+                :disabled="!canOperateVisualChannels"
                 :min="-20"
                 :max="20"
                 :step="1"
@@ -230,7 +230,7 @@
               <NumberInput
                 :model-value="shadowOffsetX"
                 @change="updateShadowOffsetX"
-                :disabled="!canOperateTransforms"
+                :disabled="!canOperateVisualChannels"
                 :min="-20"
                 :max="20"
                 :step="1"
@@ -245,7 +245,7 @@
               <SliderInput
                 :model-value="shadowOffsetY"
                 @input="updateShadowOffsetY"
-                :disabled="!canOperateTransforms"
+                :disabled="!canOperateVisualChannels"
                 :min="-20"
                 :max="20"
                 :step="1"
@@ -254,7 +254,7 @@
               <NumberInput
                 :model-value="shadowOffsetY"
                 @change="updateShadowOffsetY"
-                :disabled="!canOperateTransforms"
+                :disabled="!canOperateVisualChannels"
                 :min="-20"
                 :max="20"
                 :step="1"
@@ -277,7 +277,7 @@
               type="checkbox"
               :checked="strokeEnabled"
               @change="toggleStroke"
-              :disabled="!canOperateTransforms"
+              :disabled="!canOperateVisualChannels"
               class="effect-checkbox"
             />
           </label>
@@ -288,7 +288,7 @@
                 type="color"
                 :value="strokeColor"
                 @change="handleStrokeColorChange"
-                :disabled="!canOperateTransforms"
+                :disabled="!canOperateVisualChannels"
                 class="color-picker small"
               />
             </div>
@@ -297,7 +297,7 @@
               <SliderInput
                 :model-value="strokeWidth"
                 @input="updateStrokeWidth"
-                :disabled="!canOperateTransforms"
+                :disabled="!canOperateVisualChannels"
                 :min="0"
                 :max="10"
                 :step="0.5"
@@ -306,7 +306,7 @@
               <NumberInput
                 :model-value="strokeWidth"
                 @change="updateStrokeWidth"
-                :disabled="!canOperateTransforms"
+                :disabled="!canOperateVisualChannels"
                 :min="0"
                 :max="10"
                 :step="0.5"
@@ -329,7 +329,7 @@
               type="checkbox"
               :checked="glowEnabled"
               @change="toggleGlow"
-              :disabled="!canOperateTransforms"
+              :disabled="!canOperateVisualChannels"
               class="effect-checkbox"
             />
           </label>
@@ -340,7 +340,7 @@
                 type="color"
                 :value="glowColor"
                 @change="handleGlowColorChange"
-                :disabled="!canOperateTransforms"
+                :disabled="!canOperateVisualChannels"
                 class="color-picker small"
               />
             </div>
@@ -349,7 +349,7 @@
               <SliderInput
                 :model-value="glowBlur"
                 @input="updateGlowBlur"
-                :disabled="!canOperateTransforms"
+                :disabled="!canOperateVisualChannels"
                 :min="1"
                 :max="30"
                 :step="1"
@@ -358,7 +358,7 @@
               <NumberInput
                 :model-value="glowBlur"
                 @change="updateGlowBlur"
-                :disabled="!canOperateTransforms"
+                :disabled="!canOperateVisualChannels"
                 :min="1"
                 :max="30"
                 :step="1"
@@ -373,7 +373,7 @@
               <SliderInput
                 :model-value="glowSpread"
                 @input="updateGlowSpread"
-                :disabled="!canOperateTransforms"
+                :disabled="!canOperateVisualChannels"
                 :min="0"
                 :max="20"
                 :step="1"
@@ -382,7 +382,7 @@
               <NumberInput
                 :model-value="glowSpread"
                 @change="updateGlowSpread"
-                :disabled="!canOperateTransforms"
+                :disabled="!canOperateVisualChannels"
                 :min="0"
                 :max="20"
                 :step="1"
@@ -403,10 +403,11 @@
 import { computed } from 'vue'
 import { useAppI18n } from '@/core/composables/useI18n'
 import { useUnifiedStore } from '@/core/unifiedStore'
-import { isTextTimelineItem } from '@/core/timelineitem/queries'
-import { useUnifiedKeyframeTransformControls } from '@/core/composables'
-import type { UnifiedTimelineItemData } from '@/core/timelineitem/type'
-import type { TextStyleConfig } from '@/core/timelineitem/texttype'
+import { TimelineItemQueries, isTextTimelineItem } from '@/core/timelineitem/queries'
+import { useUnifiedKeyframeVisualControls } from '@/core/composables'
+import type { UnifiedTimelineItemData } from '@/core/timelineitem/model/timelineItem'
+import type { TextStyleConfig } from '@/core/timelineitem/model/textStyle'
+import { propertyMutationCommitter } from '@/core/property-system'
 import { IconComponents } from '@/constants/iconComponents'
 import NumberInput from '@/components/base/NumberInput.vue'
 import SliderInput from '@/components/base/SliderInput.vue'
@@ -420,16 +421,24 @@ const props = defineProps<Props>()
 const { t } = useAppI18n()
 const unifiedStore = useUnifiedStore()
 
-// 获取禁用状态（当播放头不在播放范围内时禁用）
-const { canOperateTransforms } = useUnifiedKeyframeTransformControls({
+// 获取可操作状态（当播放头不在播放范围内时禁用）
+const { canOperateVisualChannels } = useUnifiedKeyframeVisualControls({
   selectedTimelineItem: computed(() => props.selectedTimelineItem),
   currentFrame: computed(() => props.currentFrame),
 })
 
+function getCommitContext(item: UnifiedTimelineItemData<'text'>) {
+  return {
+    item,
+    frame: props.currentFrame,
+    applyChangePlan: unifiedStore.applyChangePlanWithHistory,
+  }
+}
+
 // 获取当前文本内容
 const localText = computed(() => {
   if (props.selectedTimelineItem && isTextTimelineItem(props.selectedTimelineItem)) {
-    return props.selectedTimelineItem.config.text
+    return TimelineItemQueries.getBaseTextConfig(props.selectedTimelineItem)?.content ?? ''
   }
   return ''
 })
@@ -437,7 +446,10 @@ const localText = computed(() => {
 // 获取当前文本样式
 const localStyle = computed<TextStyleConfig>(() => {
   if (props.selectedTimelineItem && isTextTimelineItem(props.selectedTimelineItem)) {
-    return { ...props.selectedTimelineItem.config.style }
+    const style = TimelineItemQueries.getBaseTextConfig(props.selectedTimelineItem)?.style
+    if (style) {
+      return { ...style }
+    }
   }
   return {
     fontSize: 48,
@@ -519,177 +531,414 @@ const updateTextContent = async (event: Event) => {
   }
 
   try {
-    await unifiedStore.updateTextContentWithHistory(props.selectedTimelineItem.id, textValue, {})
+    await propertyMutationCommitter.commitDirect(
+      getCommitContext(props.selectedTimelineItem),
+      'text.content',
+      textValue,
+    )
   } catch (error) {
     console.error('更新文本内容失败:', error)
     unifiedStore.messageError(t('properties.errors.textContentUpdateFailed'))
   }
 }
 
-// 更新文本样式
-const updateTextStyle = async (styleUpdates: Partial<TextStyleConfig> = {}) => {
-  if (!props.selectedTimelineItem || !isTextTimelineItem(props.selectedTimelineItem)) {
+// 字体相关处理
+const updateFontSize = (size: number) => {
+  const selectedTimelineItem = props.selectedTimelineItem
+  if (!selectedTimelineItem) {
     return
   }
 
-  try {
-    await unifiedStore.updateTextStyleWithHistory(props.selectedTimelineItem.id, styleUpdates)
-  } catch (error) {
-    console.error('更新文本样式失败:', error)
-    unifiedStore.messageError(t('properties.errors.textStyleUpdateFailed'))
-  }
-}
-
-// 字体相关处理
-const updateFontSize = (size: number) => {
-  updateTextStyle({ fontSize: Math.max(12, Math.min(200, size)) })
+  propertyMutationCommitter
+    .commitDirect(
+      getCommitContext(selectedTimelineItem),
+      'text.style.fontSize',
+      Math.max(12, Math.min(200, size)),
+    )
+    .catch((error) => {
+      console.error('更新文本字号失败:', error)
+      unifiedStore.messageError(t('properties.errors.textStyleUpdateFailed'))
+    })
 }
 
 const handleFontFamilyChange = (event: Event) => {
   const target = event.target as HTMLSelectElement
-  updateTextStyle({ fontFamily: target.value })
+  const selectedTimelineItem = props.selectedTimelineItem
+  if (!selectedTimelineItem) {
+    return
+  }
+
+  propertyMutationCommitter
+    .commitDirect(
+      getCommitContext(selectedTimelineItem),
+      'text.style.fontFamily',
+      target.value,
+    )
+    .catch((error) => {
+      console.error('更新文本字体失败:', error)
+      unifiedStore.messageError(t('properties.errors.textStyleUpdateFailed'))
+    })
 }
 
 const handleFontWeightChange = (event: Event) => {
   const target = event.target as HTMLSelectElement
-  updateTextStyle({ fontWeight: target.value })
+  const selectedTimelineItem = props.selectedTimelineItem
+  if (!selectedTimelineItem) {
+    return
+  }
+
+  propertyMutationCommitter
+    .commitDirect(
+      getCommitContext(selectedTimelineItem),
+      'text.style.fontWeight',
+      target.value,
+    )
+    .catch((error) => {
+      console.error('更新文本字重失败:', error)
+      unifiedStore.messageError(t('properties.errors.textStyleUpdateFailed'))
+    })
 }
 
 const handleFontStyleChange = (event: Event) => {
   const target = event.target as HTMLSelectElement
-  updateTextStyle({ fontStyle: target.value as 'normal' | 'italic' })
+  const selectedTimelineItem = props.selectedTimelineItem
+  if (!selectedTimelineItem) {
+    return
+  }
+
+  propertyMutationCommitter
+    .commitDirect(
+      getCommitContext(selectedTimelineItem),
+      'text.style.fontStyle',
+      target.value as 'normal' | 'italic',
+    )
+    .catch((error) => {
+      console.error('更新文本字体样式失败:', error)
+      unifiedStore.messageError(t('properties.errors.textStyleUpdateFailed'))
+    })
 }
 
 // 颜色相关处理
 const handleColorChange = (event: Event) => {
   const target = event.target as HTMLInputElement
-  updateTextStyle({ color: target.value })
+  const selectedTimelineItem = props.selectedTimelineItem
+  if (!selectedTimelineItem) {
+    return
+  }
+
+  propertyMutationCommitter
+    .commitDirect(
+      getCommitContext(selectedTimelineItem),
+      'text.style.color',
+      target.value,
+    )
+    .catch((error) => {
+      console.error('更新文字颜色失败:', error)
+      unifiedStore.messageError(t('properties.errors.textStyleUpdateFailed'))
+    })
 }
 
 const handleBackgroundColorChange = (event: Event) => {
   const target = event.target as HTMLInputElement
-  updateTextStyle({ backgroundColor: target.value })
+  const selectedTimelineItem = props.selectedTimelineItem
+  if (!selectedTimelineItem) {
+    return
+  }
+
+  propertyMutationCommitter
+    .commitDirect(
+      getCommitContext(selectedTimelineItem),
+      'text.style.backgroundColor',
+      target.value,
+    )
+    .catch((error) => {
+      console.error('更新文字背景色失败:', error)
+      unifiedStore.messageError(t('properties.errors.textStyleUpdateFailed'))
+    })
 }
 
 const toggleBackgroundColor = () => {
+  const selectedTimelineItem = props.selectedTimelineItem
+  if (!selectedTimelineItem) {
+    return
+  }
+
   const newEnabled = !backgroundColorEnabled.value
   if (newEnabled) {
-    updateTextStyle({ backgroundColor: localStyle.value.backgroundColor || '#000000' })
+    propertyMutationCommitter
+      .commitDirect(
+        getCommitContext(selectedTimelineItem),
+        'text.style.backgroundColor',
+        localStyle.value.backgroundColor || '#000000',
+      )
+      .catch((error) => {
+        console.error('开启文字背景色失败:', error)
+        unifiedStore.messageError(t('properties.errors.textStyleUpdateFailed'))
+      })
   } else {
-    updateTextStyle({ backgroundColor: undefined })
+    propertyMutationCommitter
+      .commitDirect(
+        getCommitContext(selectedTimelineItem),
+        'text.style.backgroundColor',
+        undefined,
+      )
+      .catch((error) => {
+        console.error('关闭文字背景色失败:', error)
+        unifiedStore.messageError(t('properties.errors.textStyleUpdateFailed'))
+      })
   }
 }
 
 // 文本对齐
 const updateTextAlign = (event: Event) => {
-  const align = (event.target as HTMLButtonElement).dataset.align as 'left' | 'center' | 'right'
-  if (align) {
-    updateTextStyle({ textAlign: align })
+  const align = (event.currentTarget as HTMLButtonElement | null)?.dataset.align as
+    | 'left'
+    | 'center'
+    | 'right'
+    | undefined
+  const selectedTimelineItem = props.selectedTimelineItem
+  if (!selectedTimelineItem || !align) {
+    return
   }
+
+  propertyMutationCommitter
+    .commitDirect(
+      getCommitContext(selectedTimelineItem),
+      'text.style.textAlign',
+      align,
+    )
+    .catch((error) => {
+      console.error('更新文本对齐失败:', error)
+      unifiedStore.messageError(t('properties.errors.textStyleUpdateFailed'))
+    })
 }
 
 // 阴影效果
 const toggleShadow = () => {
-  if (shadowEnabled.value) {
-    updateTextStyle({ textShadow: undefined })
-  } else {
-    updateTextStyle({ textShadow: '2px 2px 4px #000000' })
+  const selectedTimelineItem = props.selectedTimelineItem
+  if (!selectedTimelineItem) {
+    return
   }
+
+  propertyMutationCommitter
+    .commitDirect(
+      getCommitContext(selectedTimelineItem),
+      'text.style.textShadow',
+      shadowEnabled.value ? undefined : '2px 2px 4px #000000',
+    )
+    .catch((error) => {
+      console.error('切换文字阴影失败:', error)
+      unifiedStore.messageError(t('properties.errors.textStyleUpdateFailed'))
+    })
 }
 
 const updateShadowBlur = (blur: number) => {
   const clampedBlur = Math.max(0, Math.min(20, blur))
-  if (shadowEnabled.value) {
-    updateTextStyle({
-      textShadow: `${shadowOffsetX.value}px ${shadowOffsetY.value}px ${clampedBlur}px ${shadowColor.value}`,
-    })
+  const selectedTimelineItem = props.selectedTimelineItem
+  if (!selectedTimelineItem || !shadowEnabled.value) {
+    return
   }
+
+  propertyMutationCommitter
+    .commitDirect(
+      getCommitContext(selectedTimelineItem),
+      'text.style.textShadow',
+      `${shadowOffsetX.value}px ${shadowOffsetY.value}px ${clampedBlur}px ${shadowColor.value}`,
+    )
+    .catch((error) => {
+      console.error('更新阴影模糊失败:', error)
+      unifiedStore.messageError(t('properties.errors.textStyleUpdateFailed'))
+    })
 }
 
 const updateShadowOffsetX = (offsetX: number) => {
   const clampedOffsetX = Math.max(-20, Math.min(20, offsetX))
-  if (shadowEnabled.value) {
-    updateTextStyle({
-      textShadow: `${clampedOffsetX}px ${shadowOffsetY.value}px ${shadowBlur.value}px ${shadowColor.value}`,
-    })
+  const selectedTimelineItem = props.selectedTimelineItem
+  if (!selectedTimelineItem || !shadowEnabled.value) {
+    return
   }
+
+  propertyMutationCommitter
+    .commitDirect(
+      getCommitContext(selectedTimelineItem),
+      'text.style.textShadow',
+      `${clampedOffsetX}px ${shadowOffsetY.value}px ${shadowBlur.value}px ${shadowColor.value}`,
+    )
+    .catch((error) => {
+      console.error('更新阴影 X 偏移失败:', error)
+      unifiedStore.messageError(t('properties.errors.textStyleUpdateFailed'))
+    })
 }
 
 const updateShadowOffsetY = (offsetY: number) => {
   const clampedOffsetY = Math.max(-20, Math.min(20, offsetY))
-  if (shadowEnabled.value) {
-    updateTextStyle({
-      textShadow: `${shadowOffsetX.value}px ${clampedOffsetY}px ${shadowBlur.value}px ${shadowColor.value}`,
-    })
+  const selectedTimelineItem = props.selectedTimelineItem
+  if (!selectedTimelineItem || !shadowEnabled.value) {
+    return
   }
+
+  propertyMutationCommitter
+    .commitDirect(
+      getCommitContext(selectedTimelineItem),
+      'text.style.textShadow',
+      `${shadowOffsetX.value}px ${clampedOffsetY}px ${shadowBlur.value}px ${shadowColor.value}`,
+    )
+    .catch((error) => {
+      console.error('更新阴影 Y 偏移失败:', error)
+      unifiedStore.messageError(t('properties.errors.textStyleUpdateFailed'))
+    })
 }
 
 const handleShadowColorChange = (event: Event) => {
   const target = event.target as HTMLInputElement
-  if (shadowEnabled.value) {
-    updateTextStyle({
-      textShadow: `${shadowOffsetX.value}px ${shadowOffsetY.value}px ${shadowBlur.value}px ${target.value}`,
-    })
+  const selectedTimelineItem = props.selectedTimelineItem
+  if (!selectedTimelineItem || !shadowEnabled.value) {
+    return
   }
+
+  propertyMutationCommitter
+    .commitDirect(
+      getCommitContext(selectedTimelineItem),
+      'text.style.textShadow',
+      `${shadowOffsetX.value}px ${shadowOffsetY.value}px ${shadowBlur.value}px ${target.value}`,
+    )
+    .catch((error) => {
+      console.error('更新阴影颜色失败:', error)
+      unifiedStore.messageError(t('properties.errors.textStyleUpdateFailed'))
+    })
 }
 
 // 描边效果
 const toggleStroke = () => {
-  if (strokeEnabled.value) {
-    updateTextStyle({ textStroke: undefined })
-  } else {
-    updateTextStyle({ textStroke: { width: 1, color: '#000000' } })
+  const selectedTimelineItem = props.selectedTimelineItem
+  if (!selectedTimelineItem) {
+    return
   }
+
+  propertyMutationCommitter
+    .commitDirect(
+      getCommitContext(selectedTimelineItem),
+      'text.style.textStroke',
+      strokeEnabled.value ? undefined : { width: 1, color: '#000000' },
+    )
+    .catch((error) => {
+      console.error('切换文字描边失败:', error)
+      unifiedStore.messageError(t('properties.errors.textStyleUpdateFailed'))
+    })
 }
 
 const updateStrokeWidth = (width: number) => {
   const clampedWidth = Math.max(0, Math.min(10, width))
-  if (strokeEnabled.value) {
-    updateTextStyle({ textStroke: { width: clampedWidth, color: strokeColor.value } })
+  const selectedTimelineItem = props.selectedTimelineItem
+  if (!selectedTimelineItem || !strokeEnabled.value) {
+    return
   }
+
+  propertyMutationCommitter
+    .commitDirect(
+      getCommitContext(selectedTimelineItem),
+      'text.style.textStroke',
+      { width: clampedWidth, color: strokeColor.value },
+    )
+    .catch((error) => {
+      console.error('更新描边宽度失败:', error)
+      unifiedStore.messageError(t('properties.errors.textStyleUpdateFailed'))
+    })
 }
 
 const handleStrokeColorChange = (event: Event) => {
   const target = event.target as HTMLInputElement
-  if (strokeEnabled.value) {
-    updateTextStyle({ textStroke: { width: strokeWidth.value, color: target.value } })
+  const selectedTimelineItem = props.selectedTimelineItem
+  if (!selectedTimelineItem || !strokeEnabled.value) {
+    return
   }
+
+  propertyMutationCommitter
+    .commitDirect(
+      getCommitContext(selectedTimelineItem),
+      'text.style.textStroke',
+      { width: strokeWidth.value, color: target.value },
+    )
+    .catch((error) => {
+      console.error('更新描边颜色失败:', error)
+      unifiedStore.messageError(t('properties.errors.textStyleUpdateFailed'))
+    })
 }
 
 // 发光效果
 const toggleGlow = () => {
-  if (glowEnabled.value) {
-    updateTextStyle({ textGlow: undefined })
-  } else {
-    updateTextStyle({ textGlow: { color: '#ffffff', blur: 10, spread: 0 } })
+  const selectedTimelineItem = props.selectedTimelineItem
+  if (!selectedTimelineItem) {
+    return
   }
+
+  propertyMutationCommitter
+    .commitDirect(
+      getCommitContext(selectedTimelineItem),
+      'text.style.textGlow',
+      glowEnabled.value ? undefined : { color: '#ffffff', blur: 10, spread: 0 },
+    )
+    .catch((error) => {
+      console.error('切换文字发光失败:', error)
+      unifiedStore.messageError(t('properties.errors.textStyleUpdateFailed'))
+    })
 }
 
 const updateGlowBlur = (blur: number) => {
   const clampedBlur = Math.max(1, Math.min(30, blur))
-  if (glowEnabled.value) {
-    updateTextStyle({
-      textGlow: { color: glowColor.value, blur: clampedBlur, spread: glowSpread.value },
-    })
+  const selectedTimelineItem = props.selectedTimelineItem
+  if (!selectedTimelineItem || !glowEnabled.value) {
+    return
   }
+
+  propertyMutationCommitter
+    .commitDirect(
+      getCommitContext(selectedTimelineItem),
+      'text.style.textGlow',
+      { color: glowColor.value, blur: clampedBlur, spread: glowSpread.value },
+    )
+    .catch((error) => {
+      console.error('更新发光模糊失败:', error)
+      unifiedStore.messageError(t('properties.errors.textStyleUpdateFailed'))
+    })
 }
 
 const updateGlowSpread = (spread: number) => {
   const clampedSpread = Math.max(0, Math.min(20, spread))
-  if (glowEnabled.value) {
-    updateTextStyle({
-      textGlow: { color: glowColor.value, blur: glowBlur.value, spread: clampedSpread },
-    })
+  const selectedTimelineItem = props.selectedTimelineItem
+  if (!selectedTimelineItem || !glowEnabled.value) {
+    return
   }
+
+  propertyMutationCommitter
+    .commitDirect(
+      getCommitContext(selectedTimelineItem),
+      'text.style.textGlow',
+      { color: glowColor.value, blur: glowBlur.value, spread: clampedSpread },
+    )
+    .catch((error) => {
+      console.error('更新发光扩散失败:', error)
+      unifiedStore.messageError(t('properties.errors.textStyleUpdateFailed'))
+    })
 }
 
 const handleGlowColorChange = (event: Event) => {
   const target = event.target as HTMLInputElement
-  if (glowEnabled.value) {
-    updateTextStyle({
-      textGlow: { color: target.value, blur: glowBlur.value, spread: glowSpread.value },
-    })
+  const selectedTimelineItem = props.selectedTimelineItem
+  if (!selectedTimelineItem || !glowEnabled.value) {
+    return
   }
+
+  propertyMutationCommitter
+    .commitDirect(
+      getCommitContext(selectedTimelineItem),
+      'text.style.textGlow',
+      { color: target.value, blur: glowBlur.value, spread: glowSpread.value },
+    )
+    .catch((error) => {
+      console.error('更新发光颜色失败:', error)
+      unifiedStore.messageError(t('properties.errors.textStyleUpdateFailed'))
+    })
 }
 </script>
 
@@ -758,6 +1007,14 @@ const handleGlowColorChange = (event: Event) => {
   align-items: center;
   gap: var(--spacing-md);
   flex: 1;
+  min-width: 0;
+  container-type: inline-size;
+}
+
+@container (max-width: 148px) {
+  .font-size-controls :deep(.slider-container) {
+    display: none;
+  }
 }
 
 .font-style-controls {
@@ -891,6 +1148,16 @@ const handleGlowColorChange = (event: Event) => {
   display: flex;
   align-items: center;
   gap: var(--spacing-sm);
+  min-width: 0;
+  container-type: inline-size;
+}
+
+@container (max-width: 180px) {
+  .shadow-setting-row :deep(.slider-container),
+  .stroke-setting-row :deep(.slider-container),
+  .glow-setting-row :deep(.slider-container) {
+    display: none;
+  }
 }
 
 .setting-label {

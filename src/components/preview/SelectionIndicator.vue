@@ -73,37 +73,31 @@
 import { computed, ref, onMounted, onUnmounted, type CSSProperties } from 'vue'
 import { useUnifiedStore } from '@/core/unifiedStore'
 import { TimelineItemQueries } from '@/core/timelineitem/queries'
-import type { VisualProps } from '@/core/timelineitem/bunnytype'
+import type { VisualProps } from '@/core/timelineitem/model/render'
+import {
+  convertCanvasToDOM,
+  type RotateStartEventPayload,
+  type ScaleStartEventPayload,
+  type Size2D,
+  type TransformScaleHandlePosition,
+  type TransformScaleHandleType,
+} from '@/core/preview/transformOverlay'
 
 interface Props {
   selectedTimelineItemId: string | null
   isMultiSelectMode: boolean
-  canvasResolution: { width: number; height: number }
-  canvasDisplaySize: { width: number; height: number }
-  containerSize: { width: number; height: number }
+  canvasResolution: Size2D
+  canvasDisplaySize: Size2D
+  containerSize: Size2D
   currentFrame: number
-}
-
-interface ScaleStartEvent {
-  handleType: 'corner' | 'edge'
-  handlePosition: 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right' | 'top' | 'bottom' | 'left' | 'right'
-  isProportional: boolean
-  clientX: number
-  clientY: number
-}
-
-interface RotateStartEvent {
-  centerPoint: { x: number; y: number }
-  clientX: number
-  clientY: number
 }
 
 interface Emits {
   (e: 'dragStart', event: MouseEvent): void
   (e: 'dragMove', event: MouseEvent): void
   (e: 'dragEnd', event: MouseEvent): void
-  (e: 'scaleStart', event: ScaleStartEvent): void
-  (e: 'rotateStart', event: RotateStartEvent): void
+  (e: 'scaleStart', event: ScaleStartEventPayload): void
+  (e: 'rotateStart', event: RotateStartEventPayload): void
 }
 
 const props = defineProps<Props>()
@@ -116,12 +110,19 @@ const isScaling = ref(false)
 const isRotating = ref(false)
 const activeHandle = ref<string | null>(null)
 
-// 是否显示指示器 (单选时显示)
+// 是否显示指示器 (单选时显示，但音频类型不显示)
 const shouldShowIndicator = computed(() => {
-  return !props.isMultiSelectMode && !!props.selectedTimelineItemId
+  if (!props.selectedTimelineItemId) return false
+  if (props.isMultiSelectMode) return false
+  
+  // 音频类型不显示指示器
+  if (selectedItem.value && TimelineItemQueries.isAudioTimelineItem(selectedItem.value)) {
+    return false
+  }
+  
+  return true
 })
 
-// 获取选中的时间轴项目
 const selectedItem = computed(() => {
   if (!props.selectedTimelineItemId) return null
   return unifiedStore.getTimelineItem(props.selectedTimelineItemId)
@@ -131,17 +132,16 @@ const selectedItem = computed(() => {
 const visualConfig = computed<VisualProps | null>(() => {
   if (!selectedItem.value) return null
   if (!TimelineItemQueries.hasVisualProperties(selectedItem.value)) return null
-  return TimelineItemQueries.getRenderConfig(selectedItem.value)
+  return TimelineItemQueries.getResolvedRenderConfig(selectedItem.value).visual
 })
 
 // 是否等比缩放
 const isProportionalScale = computed(() => {
   if (!selectedItem.value) return false
   if (!TimelineItemQueries.hasVisualProperties(selectedItem.value)) return false
-  return selectedItem.value.config.proportionalScale ?? false
+  return TimelineItemQueries.getResolvedRenderConfig(selectedItem.value).visual.proportionalScale ?? false
 })
 
-// 计算指示器样式
 const indicatorStyle = computed((): CSSProperties => {
   if (!visualConfig.value) return {}
 
@@ -160,48 +160,6 @@ const indicatorStyle = computed((): CSSProperties => {
     transform: `rotate(${domPosition.rotation}rad)`,
   }
 })
-
-// 坐标转换: Canvas 中心坐标系 → DOM 左上角坐标系
-function convertCanvasToDOM(
-  config: VisualProps,
-  canvasResolution: { width: number; height: number },
-  canvasDisplaySize: { width: number; height: number },
-  containerSize: { width: number; height: number },
-) {
-  // 边界检查
-  if (canvasResolution.width === 0 || canvasResolution.height === 0) {
-    return { left: 0, top: 0, width: 0, height: 0, rotation: 0 }
-  }
-  if (config.width === 0 || config.height === 0) {
-    return { left: 0, top: 0, width: 0, height: 0, rotation: 0 }
-  }
-
-  // 计算缩放比例
-  const scaleX = canvasDisplaySize.width / canvasResolution.width
-  const scaleY = canvasDisplaySize.height / canvasResolution.height
-
-  // 转换位置（Canvas 内部坐标系）
-  const canvasX = (config.x + canvasResolution.width / 2) * scaleX
-  const canvasY = (config.y + canvasResolution.height / 2) * scaleY
-
-  // 计算 Canvas 在容器中的居中偏移
-  const offsetX = (containerSize.width - canvasDisplaySize.width) / 2
-  const offsetY = (containerSize.height - canvasDisplaySize.height) / 2
-
-  // 加上居中偏移
-  const domX = canvasX + offsetX
-  const domY = canvasY + offsetY
-
-  // 转换尺寸
-  const domWidth = config.width * scaleX
-  const domHeight = config.height * scaleY
-
-  // 计算左上角位置
-  const left = domX - domWidth / 2
-  const top = domY - domHeight / 2
-
-  return { left, top, width: domWidth, height: domHeight, rotation: config.rotation }
-}
 
 /**
  * 处理鼠标按下事件，开始拖拽
@@ -223,8 +181,8 @@ function handleMouseDown(event: MouseEvent) {
  */
 function handleScaleMouseDown(
   event: MouseEvent,
-  handleType: 'corner' | 'edge',
-  handlePosition: string
+  handleType: TransformScaleHandleType,
+  handlePosition: TransformScaleHandlePosition
 ) {
   event.preventDefault()
   event.stopPropagation()
@@ -241,7 +199,7 @@ function handleScaleMouseDown(
 
   emit('scaleStart', {
     handleType,
-    handlePosition: handlePosition as any,
+    handlePosition,
     isProportional: isProportionalScale.value,
     clientX: event.clientX,
     clientY: event.clientY,

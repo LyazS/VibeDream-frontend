@@ -51,6 +51,7 @@ export interface UnifiedMediaItemData {
   readonly id: string
   name: string
   createdAt: string
+  assetKind: 'media'
 
   // ==================== 状态信息 ====================
   mediaStatus: MediaStatus
@@ -67,7 +68,61 @@ export interface UnifiedMediaItemData {
 
   // ==================== 元数据（状态相关） ====================
   duration?: number // 媒体时长（帧数），可能在不同阶段获得：服务器提供、用户输入、解析等
+  metadata?: UnifiedMediaItemMetadata // AI 生成的元数据
 }
+
+/**
+ * 统一媒体项目元数据接口
+ */
+export interface UnifiedMediaItemMetadata {
+  /** 素材 AI 索引结果 */
+  indexing?: UnifiedMediaIndexMetadata
+}
+
+export type MediaIndexStatus =
+  | 'idle'
+  | 'pending'
+  | 'processing'
+  | 'completed'
+  | 'partial_failed'
+  | 'failed'
+
+export interface BaseUnifiedMediaIndexMetadata {
+  mediaKind: 'video' | 'image'
+  indexStatus: MediaIndexStatus
+  indexedAt?: string
+  lastIndexTaskId?: string
+}
+
+export interface UnifiedVideoIndexSegmentSummary {
+  segmentIndex: number
+  startTimecode: string
+  endTimecode: string
+  title?: string
+  summary?: string
+}
+
+export interface UnifiedImageIndexSummary {
+  title?: string
+  summary?: string
+}
+
+export interface UnifiedVideoMediaIndexMetadata extends BaseUnifiedMediaIndexMetadata {
+  mediaKind: 'video'
+  segmentCount?: number
+  failedSegmentCount?: number
+  summary?: UnifiedImageIndexSummary
+  segmentSummaries?: UnifiedVideoIndexSegmentSummary[]
+}
+
+export interface UnifiedImageMediaIndexMetadata extends BaseUnifiedMediaIndexMetadata {
+  mediaKind: 'image'
+  summary?: UnifiedImageIndexSummary
+}
+
+export type UnifiedMediaIndexMetadata =
+  | UnifiedVideoMediaIndexMetadata
+  | UnifiedImageMediaIndexMetadata
 
 // ==================== 专门的状态类型定义 ====================
 
@@ -186,6 +241,7 @@ export function createUnifiedMediaItemData(
     id,
     name,
     createdAt: new Date().toISOString(),
+    assetKind: 'media' as const,
     mediaStatus: 'pending' as MediaStatus,
     mediaType: 'unknown' as MediaType | 'unknown',
     source,

@@ -3,17 +3,33 @@ import {
   type UnifiedMediaItemData,
   type MediaStatus,
   type MediaType,
+  type UnifiedMediaItemMetadata,
   createUnifiedMediaItemData,
   MediaItemQueries,
   UnifiedMediaItemActions,
 } from '@/core'
-import type { UnifiedTimelineItemData } from '@/core/timelineitem/type'
+import type { UnifiedTimelineItemData } from '@/core/timelineitem/model/timelineItem'
 import type { ModuleRegistry } from '@/core/modules/ModuleRegistry'
 import { MODULE_NAMES } from '@/core/modules/ModuleRegistry'
 import type { UnifiedProjectModule } from '@/core/modules/UnifiedProjectModule'
 import type { UnifiedTimelineModule } from '@/core/modules/UnifiedTimelineModule'
+import type { UnifiedAutoSaveModule } from '@/core/modules/UnifiedAutoSaveModule'
 import { getDataSourceRegistry } from '@/core/datasource/registry'
+import { SourceOrigin } from '@/core/datasource/core/BaseDataSource'
+import type { PreparedMediaFile } from '@/core/datasource/core/BaseDataSourceProcessor'
 import { globalMetaFileManager } from '@/core/managers/media/globalMetaFileManager'
+import type {
+  EffectTemplateAssetData,
+  MediaLibraryAssetData,
+  UnifiedLibraryAssetData,
+} from '@/core/asset/types'
+import {
+  isEffectTemplateAsset,
+  isMediaAsset,
+} from '@/core/asset/types'
+import { EffectTemplateManager } from '@/core/effect-template/EffectTemplateManager'
+import { clearChannelKeyframes } from '@/core/utils/unifiedKeyframeUtils'
+import { TimelineItemQueries } from '@/core/timelineitem/queries'
 
 // ==================== 统一媒体项目调试工具 ====================
 
@@ -75,6 +91,12 @@ export function createUnifiedMediaModule(registry: ModuleRegistry) {
 
   // 统一媒体项目列表
   const mediaItems = ref<UnifiedMediaItemData[]>([])
+  const effectTemplateAssets = ref<EffectTemplateAssetData[]>([])
+  const preparedMediaFiles = new Map<string, PreparedMediaFile>()
+  const effectTemplateManager = new EffectTemplateManager(
+    registry,
+    (assetId) => effectTemplateAssets.value.find((item) => item.id === assetId),
+  )
 
   // ==================== 媒体项目管理方法 ====================
 
@@ -98,6 +120,23 @@ export function createUnifiedMediaModule(registry: ModuleRegistry) {
     )
   }
 
+  function addAsset(asset: UnifiedLibraryAssetData) {
+    if (isMediaAsset(asset)) {
+      addMediaItem(asset)
+      return
+    }
+
+    effectTemplateAssets.value.push(asset)
+    const autoSaveModule = registry.get<UnifiedAutoSaveModule>(MODULE_NAMES.AUTOSAVE)
+    autoSaveModule.setupMediaItemWatcher(asset)
+
+    // Project restore should only hydrate in-memory state and watchers.
+    // Initial meta persistence is reserved for user-created template assets.
+    if (asset.source.sourceOrigin === SourceOrigin.USER_CREATE) {
+      void globalMetaFileManager.saveMetaFile(asset)
+    }
+  }
+
   /**
    * 从素材库删除媒体项目
    * @param mediaItemId 媒体项目ID
@@ -109,23 +148,27 @@ export function createUnifiedMediaModule(registry: ModuleRegistry) {
     if (index > -1) {
       const mediaItem = mediaItems.value[index]
 
-      // 1. 清理相关的时间轴项目（先清理使用该素材的时间轴项目）
+      // 1. 🌟 清理 watcher
+      const autoSaveModule = registry.get<UnifiedAutoSaveModule>(MODULE_NAMES.AUTOSAVE)
+      autoSaveModule.cleanupMediaItemWatcher(mediaItemId)
+
+      // 2. 清理相关的时间轴项目（先清理使用该素材的时间轴项目）
       await cleanupRelatedTimelineItems(mediaItemId)
 
-      // 2. 清理 bunnyMedia
+      // 3. 清理 bunnyMedia
       if (mediaItem.runtime.bunny?.bunnyMedia) {
         await mediaItem.runtime.bunny.bunnyMedia.dispose()
         mediaItem.runtime.bunny.bunnyMedia = undefined
         console.log(`🧹 [UnifiedMediaModule] bunnyMedia已清理: ${mediaItem.name}`)
       }
 
-      // 3. 清理缩略图URL
+      // 4. 清理缩略图URL
       if (mediaItem.runtime.bunny?.thumbnailUrl) {
         URL.revokeObjectURL(mediaItem.runtime.bunny.thumbnailUrl)
         console.log(`🧹 [UnifiedMediaModule] bunny缩略图URL已清理: ${mediaItem.name}`)
       }
 
-      // 4. 删除硬盘文件（媒体文件 + Meta文件）
+      // 5. 删除硬盘文件（媒体文件 + Meta文件）
       try {
         const deleteResult = await globalMetaFileManager.deleteMediaFiles(mediaItemId)
 
@@ -142,7 +185,7 @@ export function createUnifiedMediaModule(registry: ModuleRegistry) {
         // 即使文件删除失败，也继续从内存中移除
       }
 
-      // 5. 从数组中移除
+      // 6. 从数组中移除
       mediaItems.value.splice(index, 1)
 
       printUnifiedDebugInfo(
@@ -156,25 +199,56 @@ export function createUnifiedMediaModule(registry: ModuleRegistry) {
     }
   }
 
-  /**
-   * 根据ID获取媒体项目
-   * @param mediaItemId 媒体项目ID
-   * @returns 媒体项目或undefined
-   */
-  function getMediaItem(mediaItemId: string): UnifiedMediaItemData | undefined {
-    return mediaItems.value.find((item: UnifiedMediaItemData) => item.id === mediaItemId)
+  async function removeAsset(assetId: string) {
+    const mediaItem = getMediaItem(assetId)
+    if (mediaItem) {
+      await removeMediaItem(assetId)
+      return
+    }
+
+    const index = effectTemplateAssets.value.findIndex((item) => item.id === assetId)
+    if (index === -1) {
+      return
+    }
+
+    const asset = effectTemplateAssets.value[index]
+    await effectTemplateManager.cleanupTemplateProcessing(assetId)
+    const autoSaveModule = registry.get<UnifiedAutoSaveModule>(MODULE_NAMES.AUTOSAVE)
+    autoSaveModule.cleanupMediaItemWatcher(assetId)
+    await cleanupRelatedEffectTemplateReferences(assetId)
+    await globalMetaFileManager.deleteAssetFiles(asset)
+    effectTemplateAssets.value.splice(index, 1)
   }
 
   /**
-   * 根据数据源ID查找对应的媒体项目
-   * @param sourceId 数据源ID
+   * 根据ID获取媒体项目
+   * @param mediaItemId 媒体项目ID（可以为null，此时返回undefined）
    * @returns 媒体项目或undefined
    */
-  function getMediaItemBySourceId(sourceId: string): UnifiedMediaItemData | undefined {
-    // 🌟 阶段二彻底重构：数据源不再有 id 字段
-    // 此方法已废弃，保留仅为向后兼容
-    console.warn('⚠️ getMediaItemBySourceId 已废弃，数据源不再有独立ID')
-    return undefined
+  function getMediaItem(mediaItemId: string | null): UnifiedMediaItemData | undefined {
+    if (mediaItemId === null) {
+      return undefined
+    }
+    return mediaItems.value.find((item: UnifiedMediaItemData) => item.id === mediaItemId)
+  }
+
+  function getMediaAsset(assetId: string | null): MediaLibraryAssetData | undefined {
+    return getMediaItem(assetId) as MediaLibraryAssetData | undefined
+  }
+
+  function getAsset(assetId: string | null): UnifiedLibraryAssetData | undefined {
+    if (assetId === null) {
+      return undefined
+    }
+
+    return (
+      getMediaItem(assetId) ??
+      effectTemplateAssets.value.find((item) => item.id === assetId)
+    )
+  }
+
+  function getAllAssets(): UnifiedLibraryAssetData[] {
+    return [...mediaItems.value, ...effectTemplateAssets.value]
   }
 
   /**
@@ -194,7 +268,16 @@ export function createUnifiedMediaModule(registry: ModuleRegistry) {
     const mediaItem = getMediaItem(mediaItemId)
     if (mediaItem) {
       UnifiedMediaItemActions.updateName(mediaItem, newName)
+      void globalMetaFileManager.saveMetaFile(mediaItem)
     }
+  }
+
+  function updateAssetName(assetId: string, newName: string) {
+    const asset = getAsset(assetId)
+    if (!asset) return
+
+    asset.name = newName.trim()
+    void globalMetaFileManager.saveMetaFile(asset)
   }
 
   /**
@@ -211,14 +294,40 @@ export function createUnifiedMediaModule(registry: ModuleRegistry) {
     }
   }
 
+  /**
+   * 更新媒体项的元数据
+   * @param mediaId 媒体项目ID
+   * @param metadata 元数据（部分更新）
+   */
+  function updateMediaItemMetadata(
+    mediaId: string,
+    metadata: Partial<UnifiedMediaItemMetadata>,
+  ) {
+    const mediaItem = getMediaItem(mediaId)
+    if (!mediaItem) return
+
+    // 初始化 metadata 对象（如果不存在）
+    if (!mediaItem.metadata) {
+      mediaItem.metadata = {}
+    }
+
+    // 合并元数据
+    mediaItem.metadata = {
+      ...mediaItem.metadata,
+      ...metadata,
+    }
+
+    console.log(`✅ [UnifiedMediaModule] 媒体项元数据已更新: ${mediaItem.name}`)
+  }
+
   // ==================== 分辨率管理方法 ====================
 
   /**
-   * 获取视频原始分辨率（从WebAV对象获取）
-   * @param mediaItemId 素材ID
+   * 获取视频原始分辨率
+   * @param mediaItemId 素材ID（可以为null，此时返回默认分辨率）
    * @returns 视频分辨率对象
    */
-  function getVideoOriginalResolution(mediaItemId: string): { width: number; height: number } {
+  function getVideoOriginalResolution(mediaItemId: string | null): { width: number; height: number } {
     const mediaItem = getMediaItem(mediaItemId)
     if (mediaItem && mediaItem.mediaType === 'video' && mediaItem.runtime.bunny) {
       const size = MediaItemQueries.getOriginalSize(mediaItem)
@@ -231,11 +340,11 @@ export function createUnifiedMediaModule(registry: ModuleRegistry) {
   }
 
   /**
-   * 获取图片原始分辨率（从WebAV对象获取）
-   * @param mediaItemId 素材ID
+   * 获取图片原始分辨率
+   * @param mediaItemId 素材ID（可以为null，此时返回默认分辨率）
    * @returns 图片分辨率对象
    */
-  function getImageOriginalResolution(mediaItemId: string): { width: number; height: number } {
+  function getImageOriginalResolution(mediaItemId: string | null): { width: number; height: number } {
     const mediaItem = getMediaItem(mediaItemId)
     if (mediaItem && mediaItem.mediaType === 'image' && mediaItem.runtime.bunny) {
       const size = MediaItemQueries.getOriginalSize(mediaItem)
@@ -291,77 +400,103 @@ export function createUnifiedMediaModule(registry: ModuleRegistry) {
   // 注意：handleSourceStatusChange方法已移除，现在由各个管理器直接处理媒体状态
 
   /**
-   * 开始媒体项目处理流程
-   * @param mediaItem 媒体项目
+   * Resource DAG 使用的 datasource 直接执行入口。
+   *
+   * 调度由 JobRuntime / DagScheduler 负责，这里只负责把请求分发到具体 datasource 执行器。
    */
-  function startMediaProcessing(mediaItem: UnifiedMediaItemData) {
-    console.log(`🚀 [UnifiedMediaModule] 开始处理媒体项目: ${mediaItem.name}`)
+  async function processMediaSourceDirectly(mediaItem: UnifiedMediaItemData): Promise<void> {
+    console.log(`🚀 [UnifiedMediaModule] DAG处理媒体项目: ${mediaItem.name}`)
 
-    // 直接使用数据源处理器注册中心（已在顶部静态导入）
+    const autoSaveModule = registry.get<UnifiedAutoSaveModule>(MODULE_NAMES.AUTOSAVE)
+    autoSaveModule.setupMediaItemWatcher(mediaItem)
+
     const dsRegistry = getDataSourceRegistry()
     const processor = dsRegistry.getProcessor(mediaItem.source.type)
 
-    if (processor) {
-      // ✅ 正确：通过任务队列处理，有并发控制和重试
-      processor.addTask(mediaItem)
-
-      console.log(`📋 [UnifiedMediaModule] 任务已加入队列`)
-
-      // 注意：任务队列会自动处理，不需要手动 then/catch
-      // 状态更新会通过 mediaItem 的响应式属性自动反映
-      // 如果需要监听任务完成，可以通过 watch mediaItem.mediaStatus
-    } else {
-      console.error(
-        `❌ [UnifiedMediaModule] 找不到对应的数据源处理器: ${mediaItem.source.type}`,
-      )
+    if (!processor) {
+      const error = new Error(`找不到对应的数据源处理器: ${mediaItem.source.type}`)
+      console.error(`❌ [UnifiedMediaModule] ${error.message}`)
       UnifiedMediaItemActions.transitionTo(mediaItem, 'error')
+      throw error
+    }
+
+    await processor.processTaskDirectly(mediaItem)
+  }
+
+  async function prepareMediaFileDirectly(mediaItem: UnifiedMediaItemData): Promise<void> {
+    console.log(`📁 [UnifiedMediaModule] DAG准备媒体文件: ${mediaItem.name}`)
+
+    const dsRegistry = getDataSourceRegistry()
+    const processor = dsRegistry.getProcessor(mediaItem.source.type)
+
+    if (!processor) {
+      const error = new Error(`找不到对应的数据源处理器: ${mediaItem.source.type}`)
+      console.error(`❌ [UnifiedMediaModule] ${error.message}`)
+      UnifiedMediaItemActions.transitionTo(mediaItem, 'error')
+      throw error
+    }
+
+    const preparedFile = await processor.prepareMediaFileForDag(mediaItem)
+    preparedMediaFiles.set(mediaItem.id, preparedFile)
+  }
+
+  function hasPreparedMediaFile(mediaId: string): boolean {
+    return preparedMediaFiles.has(mediaId)
+  }
+
+  async function decodePreparedMediaFileDirectly(mediaItem: UnifiedMediaItemData): Promise<void> {
+    console.log(`🎞️ [UnifiedMediaModule] DAG解码媒体文件: ${mediaItem.name}`)
+
+    const dsRegistry = getDataSourceRegistry()
+    const processor = dsRegistry.getProcessor(mediaItem.source.type)
+
+    if (!processor) {
+      const error = new Error(`找不到对应的数据源处理器: ${mediaItem.source.type}`)
+      console.error(`❌ [UnifiedMediaModule] ${error.message}`)
+      UnifiedMediaItemActions.transitionTo(mediaItem, 'error')
+      throw error
+    }
+
+    const preparedFile =
+      preparedMediaFiles.get(mediaItem.id) ?? (await processor.prepareMediaFileForDag(mediaItem))
+
+    try {
+      await processor.decodePreparedMediaFileForDag(mediaItem, preparedFile)
+    } finally {
+      preparedMediaFiles.delete(mediaItem.id)
     }
   }
 
-  /**
-   * 取消媒体处理任务
-   * @param mediaId 媒体项目ID
-   * @returns 是否成功取消
-   */
-  async function cancelMediaProcessing(mediaId: string): Promise<boolean> {
-    const mediaItem = getMediaItem(mediaId)
-    if (!mediaItem) {
-      console.warn(`⚠️ [UnifiedMediaModule] 媒体项目不存在: ${mediaId}`)
-      return false
-    }
+  function createTransitionTemplatePlaceholder(params: {
+    templateId: string
+    name: string
+    catalogVersion?: string
+  }): EffectTemplateAssetData {
+    return effectTemplateManager.createTransitionTemplatePlaceholder(params)
+  }
 
-    console.log(`🛑 [UnifiedMediaModule] 尝试取消媒体处理: ${mediaItem.name}`)
+  function createFilterTemplatePlaceholder(params: {
+    templateId: string
+    name: string
+    catalogVersion?: string
+  }): EffectTemplateAssetData {
+    return effectTemplateManager.createFilterTemplatePlaceholder(params)
+  }
 
-    try {
-      // 导入数据源处理器注册中心
-      const ds_registry = getDataSourceRegistry()
-      const processor = ds_registry.getProcessor(mediaItem.source.type)
+  async function startTemplateProcessing(assetId: string): Promise<void> {
+    await effectTemplateManager.startTemplateProcessing(assetId)
+  }
 
-      if (!processor) {
-        console.error(`❌ [UnifiedMediaModule] 找不到对应的数据源处理器: ${mediaItem.source.type}`)
-        return false
-      }
+  async function retryTemplateProcessing(assetId: string): Promise<void> {
+    await effectTemplateManager.retryTemplateProcessing(assetId)
+  }
 
-      // 🌟 直接使用 mediaId 作为 taskId（BaseDataSourceProcessor.addTask 已改为使用 mediaItem.id）
-      const success = await processor.cancelTask(mediaId)
+  async function cancelTemplateProcessing(assetId: string): Promise<boolean> {
+    return effectTemplateManager.cancelTemplateProcessing(assetId)
+  }
 
-      if (success) {
-        console.log(`✅ [UnifiedMediaModule] 任务取消成功: ${mediaItem.name}`)
-
-        // 保存项目配置（内容已变更）
-        const projectModule = registry.get<UnifiedProjectModule>(MODULE_NAMES.PROJECT)
-        if (projectModule) {
-          await projectModule.saveCurrentProject({ contentChanged: true })
-        }
-      } else {
-        console.warn(`⚠️ [UnifiedMediaModule] 任务取消失败: ${mediaItem.name}`)
-      }
-
-      return success
-    } catch (error) {
-      console.error(`❌ [UnifiedMediaModule] 取消任务时出错: ${mediaItem.name}`, error)
-      return false
-    }
+  function getReadyEffectTemplateAssets(): EffectTemplateAssetData[] {
+    return effectTemplateAssets.value.filter((item) => item.templateStatus === 'ready')
   }
 
   // ==================== 便捷查询方法 ====================
@@ -457,19 +592,68 @@ export function createUnifiedMediaModule(registry: ModuleRegistry) {
     }
   }
 
+  async function cleanupRelatedEffectTemplateReferences(assetId: string): Promise<void> {
+    try {
+      const timelineModule = registry.get<UnifiedTimelineModule>(MODULE_NAMES.TIMELINE)
+
+      if (!timelineModule) {
+        console.warn('⚠️ 时间轴模块未初始化，跳过效果模板引用清理')
+        return
+      }
+
+      const relatedTransitionItems = timelineModule.timelineItems.value.filter(
+        (item: UnifiedTimelineItemData) => TimelineItemQueries.getBaseTransition(item)?.effectPackageId === assetId,
+      )
+
+      for (const timelineItem of relatedTransitionItems) {
+        timelineModule.setTimelineItemTransitionConfigForCmd(timelineItem.id, undefined)
+      }
+
+      const relatedFilterItems = timelineModule.timelineItems.value.filter(
+        (item: UnifiedTimelineItemData) => item.exRenderConfig?.filter?.effectPackageId === assetId,
+      )
+
+      for (const timelineItem of relatedFilterItems) {
+        clearChannelKeyframes(timelineItem, 'filter.intensity')
+        timelineModule.setTimelineItemFilterConfigForCmd(timelineItem.id, undefined)
+      }
+
+      if (relatedTransitionItems.length > 0 || relatedFilterItems.length > 0) {
+        console.log(
+          `🧹 已清理效果素材引用: 转场 ${relatedTransitionItems.length} 个, 滤镜 ${relatedFilterItems.length} 个`,
+        )
+      }
+    } catch (error) {
+      console.error(`❌ 清理效果素材引用失败: ${assetId}`, error)
+    }
+  }
+
 
   return {
     // 状态
     mediaItems,
+    effectTemplateAssets,
 
     // 媒体项目管理方法
     addMediaItem,
     removeMediaItem,
     getMediaItem,
-    getMediaItemBySourceId,
+    getMediaAsset,
     updateMediaItemName,
     updateMediaItem,
+    updateMediaItemMetadata,
     getAllMediaItems,
+    addAsset,
+    removeAsset,
+    getAsset,
+    getAllAssets,
+    updateAssetName,
+    createTransitionTemplatePlaceholder,
+    createFilterTemplatePlaceholder,
+    startTemplateProcessing,
+    retryTemplateProcessing,
+    cancelTemplateProcessing,
+    getReadyEffectTemplateAssets,
 
     // 分辨率管理方法
     getVideoOriginalResolution,
@@ -479,8 +663,10 @@ export function createUnifiedMediaModule(registry: ModuleRegistry) {
     waitForMediaItemReady,
 
     // 数据源处理方法
-    startMediaProcessing,
-    cancelMediaProcessing,
+    processMediaSourceDirectly,
+    prepareMediaFileDirectly,
+    hasPreparedMediaFile,
+    decodePreparedMediaFileDirectly,
 
     // 便捷查询方法
     getReadyMediaItems,
@@ -492,6 +678,7 @@ export function createUnifiedMediaModule(registry: ModuleRegistry) {
 
     // 清理方法
     cleanupRelatedTimelineItems,
+    cleanupRelatedEffectTemplateReferences,
 
     // 工厂函数和查询函数
     createUnifiedMediaItemData,

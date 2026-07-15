@@ -1,5 +1,5 @@
 import type { BunnyClip } from '@/core/mediabunny/bunny-clip'
-import type { UnifiedTimelineItemData } from '@/core/timelineitem/type'
+import type { UnifiedTimelineItemData } from '@/core/timelineitem/model/timelineItem'
 
 /**
  * 峰值检测配置（基于 Prominence）

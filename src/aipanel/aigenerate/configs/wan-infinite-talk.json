@@ -1,0 +1,147 @@
+{
+  "id": "wan-infinite-talk",
+  "name": {
+    "en": "Wan Infinite Talk",
+    "zh": "Wan数字人对话"
+  },
+  "description": {
+    "en": "Wan Infinite Talk - AI digital human conversation generation",
+    "zh": "Wan数字人对话 - 根据图片、音频和文本生成数字人对话视频"
+  },
+  "contentType": "video",
+  "aiTaskType": "bizyair_generate_media",
+  "uploadServer": "bizyair",
+  "cost": "0.3",
+  "aiConfig": {
+    "ref_images": {
+      "type": "array",
+      "value": []
+    },
+    "ref_audios": {
+      "type": "array",
+      "value": []
+    },
+    "start_index": {
+      "type": "number",
+      "value": 0
+    },
+    "duration": {
+      "type": "number",
+      "value": 5
+    },
+    "text": {
+      "type": "string",
+      "value": "女孩在深情歌唱"
+    },
+    "loop_frames": {
+      "type": "number",
+      "value": 121
+    }
+  },
+  "uiConfig": [
+    {
+      "type": "file-input",
+      "label": {
+        "en": "Reference Image",
+        "zh": "参考图片"
+      },
+      "path": "aiConfig.ref_images",
+      "accept": [
+        "image"
+      ],
+      "maxFiles": 1,
+      "minFiles": 1,
+      "placeholder": {
+        "en": "Drag image here or from timeline",
+        "zh": "拖拽图片素材或时间轴片段到此处"
+      }
+    },
+    {
+      "type": "file-input",
+      "label": {
+        "en": "Audio File",
+        "zh": "音频文件"
+      },
+      "path": "aiConfig.ref_audios",
+      "accept": [
+        "audio"
+      ],
+      "maxFiles": 1,
+      "minFiles": 1,
+      "placeholder": {
+        "en": "Drag audio file here or from timeline",
+        "zh": "拖拽音频素材或时间轴片段到此处"
+      }
+    },
+    {
+      "type": "number-input",
+      "label": {
+        "en": "Start Time",
+        "zh": "起始时间"
+      },
+      "path": "aiConfig.start_index",
+      "min": 0,
+      "max": 9999,
+      "step": 0.1,
+      "precision": 1,
+      "showSlider": false,
+      "placeholder": {
+        "en": "Starting time in seconds (e.g., 0)",
+        "zh": "起始时间（秒，如 0）"
+      }
+    },
+    {
+      "type": "number-input",
+      "label": {
+        "en": "Duration",
+        "zh": "时长"
+      },
+      "path": "aiConfig.duration",
+      "min": 0.1,
+      "max": 9999,
+      "step": 0.1,
+      "precision": 1,
+      "showSlider": false,
+      "placeholder": {
+        "en": "Duration in seconds (e.g., 5)",
+        "zh": "时长（秒，如 5）"
+      }
+    },
+    {
+      "type": "textarea-input",
+      "label": {
+        "en": "Description",
+        "zh": "文本描述"
+      },
+      "path": "aiConfig.text",
+      "placeholder": {
+        "en": "Enter the description for the conversation...",
+        "zh": "输入对话描述..."
+      }
+    },
+    {
+      "type": "select-input",
+      "label": {
+        "en": "Loop Frames",
+        "zh": "单次循环帧数"
+      },
+      "path": "aiConfig.loop_frames",
+      "options": [
+        {
+          "label": {
+            "en": "81",
+            "zh": "81"
+          },
+          "value": 81
+        },
+        {
+          "label": {
+            "en": "121",
+            "zh": "121"
+          },
+          "value": 121
+        }
+      ]
+    }
+  ]
+}

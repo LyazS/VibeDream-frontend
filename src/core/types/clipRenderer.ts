@@ -6,8 +6,44 @@
  */
 
 import type { VNode, Component } from 'vue'
-import type { UnifiedTimelineItemData } from '@/core/timelineitem/type'
+import type { UnifiedTimelineItemData } from '@/core/timelineitem/model/timelineItem'
 import type { MediaType } from '@/core/mediaitem/types'
+import type { UnifiedTimeRange } from '@/core/types/timeRange'
+
+export interface ClipRenderFrame {
+  timeRange: UnifiedTimeRange
+  widthPixels: number
+  durationFrames: number
+  sourceDurationFrames: number
+  frameToLocalPixel(frame: number): number
+  relativeFrameToLocalPixel(relativeFrame: number): number
+  sourceFrameToLocalPixel(sourceFrame: number): number
+}
+
+export function createClipRenderFrame(
+  timeRange: UnifiedTimeRange,
+  widthPixels: number,
+): ClipRenderFrame {
+  const durationFrames = Math.max(1, timeRange.timelineEndTime - timeRange.timelineStartTime)
+  const sourceDurationFrames = Math.max(1, timeRange.clipEndTime - timeRange.clipStartTime)
+  const safeWidthPixels = Math.max(0, widthPixels)
+
+  return {
+    timeRange,
+    widthPixels: safeWidthPixels,
+    durationFrames,
+    sourceDurationFrames,
+    frameToLocalPixel(frame: number): number {
+      return ((frame - timeRange.timelineStartTime) / durationFrames) * safeWidthPixels
+    },
+    relativeFrameToLocalPixel(relativeFrame: number): number {
+      return (relativeFrame / durationFrames) * safeWidthPixels
+    },
+    sourceFrameToLocalPixel(sourceFrame: number): number {
+      return ((sourceFrame - timeRange.clipStartTime) / sourceDurationFrames) * safeWidthPixels
+    },
+  }
+}
 
 // ==================== 渲染器类型定义 ====================
 
@@ -76,6 +112,9 @@ interface TimelineItemProps<T extends MediaType = MediaType> {
     startFrames: number
     endFrames: number
   }
+
+  /** 当前渲染基准。拖动左边界时可传入 preview frame，避免内部内容被左边界带着平移。 */
+  renderFrame?: ClipRenderFrame
 }
 
 /**

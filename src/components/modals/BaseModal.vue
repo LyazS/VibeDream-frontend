@@ -86,12 +86,15 @@ const computedStyle = computed(() => {
 /* 容器样式 */
 .base-modal {
   background: var(--color-bg-secondary);
-  border: 1px solid var(--color-border-primary);
+  border: 1px solid transparent;
   border-radius: var(--border-radius-xlarge);
   overflow: hidden;
-  box-shadow: var(--shadow-lg);
+  box-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.45),
+    0 8px 20px rgba(0, 0, 0, 0.35);
   display: flex;
   flex-direction: column;
+  transform: translateY(-1px);
 }
 
 .base-modal-centered {

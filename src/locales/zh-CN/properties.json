@@ -1,9 +1,6 @@
 {
   "properties": {
     "basic": {
-      "basicInfo": "基本信息",
-      "name": "名称",
-      "resolution": "分辨率",
       "textContent": "文本内容",
       "fontFamily": "字体",
       "fontSize": "字体大小",
@@ -29,7 +26,96 @@
       "audioProperties": "音频属性"
     },
     "visual": {
-      "visualProperties": "视觉属性"
+      "visualProperties": "视觉属性",
+      "position": "位置",
+      "positionX": "X",
+      "positionY": "Y",
+      "size": "尺寸",
+      "width": "宽",
+      "height": "高",
+      "rotation": "旋转",
+      "rotationKnobLabel": "{label}：{value} 度",
+      "rotationKnobTooltip": "按住并拖动以调整旋转角度，双击复位",
+      "blendMode": "混合模式",
+      "blendIntensity": "混合强度",
+      "blendModes": {
+        "normal": "正常",
+        "color-dodge": "颜色减淡",
+        "linear-burn": "线性加深",
+        "hard-light": "强光",
+        "multiply": "正片叠底",
+        "color-burn": "颜色加深",
+        "overlay": "叠加",
+        "lighten": "变亮",
+        "darken": "变暗",
+        "soft-light": "柔光",
+        "screen": "滤色"
+      },
+      "alignHorizontal": "水平对齐",
+      "alignVertical": "垂直对齐",
+      "center": "居中",
+      "left": "左",
+      "right": "右",
+      "top": "顶部",
+      "middle": "中间",
+      "bottom": "底部",
+      "centerFor0": "中心为0",
+      "proportionalScale": "等比缩放",
+      "scalePresets": "缩放预设",
+      "fitToCanvas": "适应画布",
+      "fillCanvas": "填满画布"
+    },
+    "transition": {
+      "title": "转场",
+      "enabled": "启用转场",
+      "preset": "预设",
+      "durationFrames": "时长（帧）",
+      "status": "状态",
+      "targetClip": "目标片段：{name}",
+      "effectiveDuration": "生效时长：{frames} 帧",
+      "presets": {
+        "crossfade": "叠化"
+      },
+      "statuses": {
+        "bound": "已绑定到右侧片段",
+        "unbound": "右侧无接缝",
+        "invalidTarget": "右侧片段类型不支持或可用时长不足",
+        "invalidOverlap": "与相邻转场重叠",
+        "waitingEdge": "边界帧准备中"
+      }
+    },
+    "transitionSelection": {
+      "effectAsset": "效果素材",
+      "sourceClip": "源片段",
+      "placeholder": "这里先保留转场属性占位，后续会接入独立编辑能力。"
+    },
+    "filter": {
+      "title": "滤镜",
+      "dropHint": "拖拽滤镜素材到这里",
+      "intensity": "强度",
+      "ready": "已就绪"
+    },
+    "mask": {
+      "enabled": "启用",
+      "type": "类型",
+      "inverted": "反相",
+      "center": "中心点",
+      "outerRange": "羽化",
+      "decayRate": "强度",
+      "size": "宽高",
+      "widthShort": "W",
+      "heightShort": "H",
+      "cornerRadius": "圆角",
+      "length": "长度",
+      "types": {
+        "rectangle": "矩形",
+        "ellipse": "椭圆",
+        "linear": "线性",
+        "mirror": "镜面",
+        "rectangleUpper": "矩形",
+        "ellipseUpper": "椭圆",
+        "mirrorUpper": "镜面"
+      }
     },
     "text": {
       "textProperties": "文本属性"
@@ -73,42 +159,14 @@
       "addKeyframe": "添加关键帧",
       "deleteKeyframe": "删除关键帧",
       "toggleKeyframe": "切换关键帧",
+      "outOfClipRange": "播放头不在当前片段时间范围内，无法操作关键帧",
+      "createAnimation": "点击创建关键帧动画",
+      "deleteCurrent": "当前在关键帧位置，点击删除关键帧",
+      "createAtCurrent": "点击在当前位置创建关键帧",
+      "control": "关键帧控制",
       "goToPrevious": "向前",
       "goToNext": "向后",
       "debugKeyframes": "调试关键帧"
-    },
-    "transform": {
-      "transform": "变换",
-      "position": "位置",
-      "positionSize": "位置与大小",
-      "positionX": "X",
-      "positionY": "Y",
-      "scale": "缩放",
-      "scaleX": "缩放X",
-      "scaleY": "缩放Y",
-      "uniformScale": "统一缩放",
-      "rotation": "旋转",
-      "rotationAngle": "旋转角度",
-      "opacity": "透明度",
-      "transparency": "透明度",
-      "zIndex": "图层级别",
-      "layer": "图层",
-      "alignment": "对齐",
-      "alignHorizontal": "水平对齐",
-      "alignVertical": "垂直对齐",
-      "center": "居中",
-      "left": "左",
-      "right": "右",
-      "top": "顶部",
-      "middle": "中间",
-      "bottom": "底部",
-      "centerFor0": "中心为0",
-      "proportionalScale": "等比缩放",
-      "proportional": "等比",
-      "uniform": "统一",
-      "scalePresets": "缩放预设",
-      "fitToCanvas": "适应画布",
-      "fillCanvas": "填满画布"
     },
     "fonts": {
       "fontFamilyArial": "Arial",
@@ -122,7 +180,7 @@
       "fontStyleItalic": "斜体"
     },
     "timecodes": {
-      "timecodeFormat": "HH:MM:SS.FF",
+      "timecodeFormat": "HH:MM:SS+FF",
       "frameRate": "帧率"
     },
     "placeholders": {
@@ -142,7 +200,7 @@
       "textStyleUpdateFailed": "文本样式更新失败，请重试",
       "textUpdateSuccess": "文本内容更新成功",
       "textStyleSuccess": "文本样式更新成功",
-      "invalidTimecodeFormat": "请使用正确的时间码格式：HH:MM:SS.FF",
+      "invalidTimecodeFormat": "请使用正确的时间码格式：HH:MM:SS+FF",
       "formatError": "格式错误",
       "example": "示例",
       "timecodeExample": "00:01:30.15（1分30秒15帧）",
@@ -167,6 +225,15 @@
       "hint": "多选属性暂不支持",
       "unknownMedia": "未知媒体"
     },
+    "tabs": {
+      "basic": "基础",
+      "transition": "转场",
+      "mask": "蒙版",
+      "filter": "滤镜",
+      "animation": "动画",
+      "placeholderTitle": "{tab} 功能暂未开放",
+      "placeholderDescription": "{tab} 面板后续会接入，这里先保留占位。"
+    },
     "mediaItem": {
       "basicInfo": "基本信息",
       "name": "名称",
@@ -174,6 +241,11 @@
       "createdAt": "创建时间",
       "statusInfo": "状态信息",
       "techInfo": "技术信息",
+      "indexingInfo": "索引信息",
+      "indexStatus": "索引状态",
+      "indexedAt": "索引时间",
+      "segmentCount": "分片数量",
+      "failedSegmentCount": "失败分片",
       "duration": "时长",
       "resolution": "分辨率",
       "fileSize": "文件大小",
@@ -181,8 +253,7 @@
       "actions": "操作",
       "retry": "重试",
       "cancel": "取消",
-      "errorDetails": "错误详情",
-      "canCreateCharacter": "可创建真人角色"
+      "errorDetails": "错误详情"
     },
     "mediaTypes": {
       "video": "视频",

@@ -5,7 +5,7 @@
 
 import { ref } from 'vue'
 import { throttle } from 'lodash'
-import type { UnifiedTimelineItemData } from '@/core/timelineitem/type'
+import type { UnifiedTimelineItemData } from '@/core/timelineitem/model/timelineItem'
 import type {
   ThumbnailLayoutItem,
   ThumbnailBatchRequest,

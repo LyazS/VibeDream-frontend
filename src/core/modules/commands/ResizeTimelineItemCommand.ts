@@ -2,16 +2,14 @@ import { generateCommandId } from '@/core/utils/idGenerator'
 import { framesToTimecode } from '@/core/utils/timeUtils'
 import type { SimpleCommand } from '@/core/modules/commands/types'
 import { adjustKeyframesForDurationChange } from '@/core/utils/unifiedKeyframeUtils'
+import { hasAnimation } from '@/core/utils/unifiedKeyframeUtils'
 
 // 类型导入
-import type { UnifiedTimelineItemData } from '@/core/timelineitem/type'
+import type { UnifiedTimelineItemData } from '@/core/timelineitem/model/timelineItem'
 
 import type { UnifiedMediaItemData, MediaType } from '@/core/mediaitem/types'
 
 import type { UnifiedTimeRange } from '@/core/types/timeRange'
-
-import { TimelineItemQueries } from '@/core/timelineitem/queries'
-import { TimelineItemFactory } from '@/core/timelineitem'
 
 /**
  * 调整时间轴项目大小命令
@@ -34,9 +32,13 @@ export class ResizeTimelineItemCommand implements SimpleCommand {
     newTimeRange: UnifiedTimeRange, // 新的时间范围
     private timelineModule: {
       getTimelineItem: (id: string) => UnifiedTimelineItemData<MediaType> | undefined
+      setTimelineItemTimeRangeForCmd: (
+        id: string,
+        timeRange: Partial<UnifiedTimeRange>,
+      ) => void
     },
     private mediaModule: {
-      getMediaItem: (id: string) => UnifiedMediaItemData | undefined
+      getMediaItem: (id: string | null) => UnifiedMediaItemData | undefined
     },
   ) {
     this.id = generateCommandId()
@@ -60,7 +62,7 @@ export class ResizeTimelineItemCommand implements SimpleCommand {
       itemName = mediaItem?.name || '未知素材'
 
       // 检查是否有动画
-      this.hasAnimation = !!(timelineItem.animation && timelineItem.animation.keyframes.length > 0)
+      this.hasAnimation = hasAnimation(timelineItem)
     }
 
     const originalStartFrames = this.originalTimeRange.timelineStartTime
@@ -89,8 +91,8 @@ export class ResizeTimelineItemCommand implements SimpleCommand {
       throw new Error(`找不到时间轴项目: ${this.timelineItemId}`)
     }
 
-    // 同步timeRange到TimelineItem
-    TimelineItemFactory.setTimeRange(timelineItem, timeRange)
+    // 同步 timeRange 到 TimelineItem，并在模块内统一刷新转场绑定
+    this.timelineModule.setTimelineItemTimeRangeForCmd(this.timelineItemId, timeRange)
 
     // 如果时长有变化且有关键帧，调整关键帧位置
     if (this.hasAnimation && this.oldDurationFrames !== this.newDurationFrames) {
@@ -115,13 +117,14 @@ export class ResizeTimelineItemCommand implements SimpleCommand {
       )
     }
 
-    // 如果有动画，更新WebAV动画时长
+    // 如果有动画，更新动画时长
     if (this.hasAnimation) {
       // 动画时长更新已迁移到 Bunny 组件，无需手动更新
       console.log(
         `🎬 [ResizeTimelineItemCommand] Animation duration updated after clip resize (${isUndo ? 'undo' : 'execute'})`,
       )
     }
+
   }
 
   /**

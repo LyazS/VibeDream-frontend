@@ -2,15 +2,19 @@ import { useUnifiedStore } from '@/core/unifiedStore'
 import { MediaItemQueries } from '@/core/mediaitem'
 import { generateTimelineItemId } from '@/core/utils/idGenerator'
 import type { MediaType } from '@/core/mediaitem/types'
-import type { UnifiedTimelineItemData, TimelineItemStatus } from '@/core/timelineitem/type'
+import type { UnifiedTimelineItemData, TimelineItemStatus } from '@/core/timelineitem/model/timelineItem'
 import type {
   VideoMediaConfig,
   ImageMediaConfig,
   AudioMediaConfig,
-  TextMediaConfig,
-} from '@/core/timelineitem/type'
-import type { GetConfigs } from '@/core/timelineitem/bunnytype'
+} from '@/core/timelineitem/model/timelineItem'
+import { DEFAULT_BLEND_MODE } from '@/core/timelineitem/model/blendMode'
+import { TimelineItemQueries } from '@/core/timelineitem/queries'
+import { TimelineItemMutations } from '@/core/timelineitem/mutations'
 import { createTextTimelineItem } from '@/core/utils/textTimelineUtils'
+import { setupTimelineItemBunny } from '@/core/bunnyUtils/timelineItemSetup'
+import { buildClipSelectionId } from '@/core/types/timelineSelection'
+import { createDefaultTimelineExtraRenderConfig } from '@/core/timelineitem/model/timelineItem'
 
 /**
  * 时间轴项目操作模块
@@ -80,7 +84,11 @@ export function useTimelineItemOperations() {
       }
 
       // 创建增强的默认配置
-      const config = createDefaultTimelineItemConfig(storeMediaItem.mediaType, originalResolution)
+      const baseRenderConfig = createDefaultTimelineItemConfig(
+        storeMediaItem.mediaType,
+        originalResolution,
+      )
+      const exRenderConfig = createDefaultTimelineExtraRenderConfig()
 
       // 创建时间轴项目数据
       const timelineItemData: UnifiedTimelineItemData = {
@@ -94,10 +102,12 @@ export function useTimelineItemOperations() {
           clipStartTime: 0,
           clipEndTime: availableDuration,
         },
-        config: config,
+        baseRenderConfig,
+        exRenderConfig,
         animation: undefined, // 新创建的项目默认没有动画
         timelineStatus: timelineStatus, // 根据素材状态设置时间轴项目状态
         runtime: {
+          exRenderConfig: createDefaultTimelineExtraRenderConfig(),
           // ✅ 新创建的项目，未初始化，需要从 mediaItem 同步数据
           isInitialized: false,
         },
@@ -121,7 +131,7 @@ export function useTimelineItemOperations() {
   function createDefaultTimelineItemConfig(
     mediaType: Exclude<MediaType, 'text'>,
     originalResolution: { width: number; height: number } | null,
-  ): GetConfigs<Exclude<MediaType, 'text'>> {
+  ): VideoMediaConfig | ImageMediaConfig | AudioMediaConfig {
     // 根据媒体类型创建对应的默认配置
     switch (mediaType) {
       case 'video': {
@@ -129,18 +139,20 @@ export function useTimelineItemOperations() {
         const defaultHeight = originalResolution?.height || 1080
 
         return {
-          // 视觉属性
-          x: 0, // 居中位置（项目坐标系，中心原点）
-          y: 0, // 居中位置
-          width: defaultWidth,
-          height: defaultHeight,
-          rotation: 0,
-          opacity: 1,
-          // 等比缩放状态（默认开启）
-          proportionalScale: true,
-          // 音频属性
-          volume: 1,
-          isMuted: false,
+          visual: {
+            x: 0,
+            y: 0,
+            width: defaultWidth,
+            height: defaultHeight,
+            rotation: 0,
+            blendIntensity: 1,
+            blendMode: DEFAULT_BLEND_MODE,
+            proportionalScale: true,
+          },
+          audio: {
+            volume: 1,
+            isMuted: false,
+          },
         } as VideoMediaConfig
       }
 
@@ -149,24 +161,25 @@ export function useTimelineItemOperations() {
         const defaultHeight = originalResolution?.height || 1080
 
         return {
-          // 视觉属性
-          x: 0, // 居中位置（项目坐标系，中心原点）
-          y: 0, // 居中位置
-          width: defaultWidth,
-          height: defaultHeight,
-          rotation: 0,
-          opacity: 1,
-          // 等比缩放状态（默认开启）
-          proportionalScale: true,
+          visual: {
+            x: 0,
+            y: 0,
+            width: defaultWidth,
+            height: defaultHeight,
+            rotation: 0,
+            blendIntensity: 1,
+            blendMode: DEFAULT_BLEND_MODE,
+            proportionalScale: true,
+          },
         } as ImageMediaConfig
       }
 
       case 'audio':
         return {
-          // 音频属性
-          volume: 1,
-          isMuted: false,
-          gain: 0, // 默认增益为0dB
+          audio: {
+            volume: 1,
+            isMuted: false,
+          },
         } as AudioMediaConfig
 
       default:
@@ -271,23 +284,38 @@ export function useTimelineItemOperations() {
       // 创建文本时间轴项目（使用工具函数，对齐旧架构）
       const textItem = await createTextTimelineItem(
         '默认文本', // 默认文本内容
-        { fontSize: 48, color: '#ffffff' }, // 默认样式
+        { fontSize: 64, color: '#ffffff' }, // 默认样式
         timePosition, // 开始时间（帧数）
         trackId, // 轨道ID
         150, // 默认时长（5秒@30fps）
       )
+
+      // ✅ 为文本项目设置 bunny 对象（创建 textBitmap）
+      await setupTimelineItemBunny(textItem)
+
+      // ✅ 从 textBitmap 获取实际宽高并设置到 config
+      if (textItem.runtime.textBitmap) {
+        TimelineItemMutations.patchBaseVisualConfig(textItem, {
+          width: textItem.runtime.textBitmap.width,
+          height: textItem.runtime.textBitmap.height,
+        })
+      }
+
+      // 设置状态为 ready（文本项目不依赖外部媒体，可直接就绪）
+      textItem.timelineStatus = 'ready'
+      textItem.runtime.isInitialized = true
 
       // 添加到时间轴（带历史记录）
       await unifiedStore.addTimelineItemWithHistory(textItem)
 
       console.log('✅ [UnifiedTimeline] 文本项目创建成功:', {
         id: textItem.id,
-        text: textItem.config.text,
+        content: TimelineItemQueries.getBaseTextConfig(textItem)?.content,
         position: timePosition,
       })
 
       // 选中新创建的文本项目
-      unifiedStore.selectTimelineItem(textItem.id)
+      unifiedStore.selectTimelineSelection(buildClipSelectionId(textItem.id))
     } catch (error) {
       console.error('❌ [UnifiedTimeline] 创建文本项目失败:', error)
       unifiedStore.messageError(`创建文本项目失败：${(error as Error).message}`)

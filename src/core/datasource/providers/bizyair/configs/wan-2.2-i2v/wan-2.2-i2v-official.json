@@ -5,7 +5,7 @@
   "name": "wan-2.2-i2v-official",
   "description": "Wan 2.2 图生视频 - 官方模型+4步LoRA",
   "media_type": "video",
-  "cost": 0.5,
+  "cost": "0.5",
   "input_mapping": {
     "ref_images": {
       "type": "array",
@@ -49,7 +49,14 @@
       "validation": {
         "required": false,
         "description": "宽高比（如 16:9, 9:16, 1:1, 4:3, 3:4, 21:9）",
-        "option": ["16:9", "9:16", "1:1", "4:3", "3:4", "21:9"]
+        "option": [
+          "16:9",
+          "9:16",
+          "1:1",
+          "4:3",
+          "3:4",
+          "21:9"
+        ]
       },
       "skip_mapping": true
     },

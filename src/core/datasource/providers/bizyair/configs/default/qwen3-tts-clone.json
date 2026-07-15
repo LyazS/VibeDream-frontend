@@ -1,0 +1,45 @@
+{
+  "id": "qwen3-tts-clone",
+  "variant": "default",
+  "web_app_id": 45578,
+  "name": "qwen3-tts-clone",
+  "description": "Qwen3语音克隆 - 根据参考音频克隆声音并生成新的语音",
+  "media_type": "audio",
+  "cost": "0.2",
+  "input_mapping": {
+    "target_text": {
+      "mapping": "40:FB_Qwen3TTSVoiceClone.target_text",
+      "type": "string",
+      "validation": {
+        "required": true,
+        "minLength": 1,
+        "maxLength": 5000,
+        "description": "要生成的目标文本内容"
+      }
+    },
+    "ref_audio": {
+      "type": "array",
+      "items": [
+        {
+          "mapping": "24:LoadAudio.audio",
+          "type": "string",
+          "default": "",
+          "validation": {
+            "required": true,
+            "description": "参考音频文件URL"
+          }
+        }
+      ]
+    },
+    "ref_text": {
+      "mapping": "40:FB_Qwen3TTSVoiceClone.ref_text",
+      "type": "string",
+      "validation": {
+        "required": true,
+        "minLength": 1,
+        "maxLength": 1000,
+        "description": "参考音频对应的文本（必须与音频内容对应）"
+      }
+    }
+  }
+}

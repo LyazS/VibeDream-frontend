@@ -1,4 +1,5 @@
 import { TaskSubmitErrorCode } from '@/types/taskApi'
+import { formatMoneyForDisplay } from '@/utils/money'
 
 /**
  * 根据错误码和详细信息组装错误消息
@@ -11,9 +12,9 @@ export function buildTaskErrorMessage(
   switch (errorCode) {
     case TaskSubmitErrorCode.INSUFFICIENT_BALANCE:
       return t('media.error.insufficientBalance', {
-        current: errorDetails.current_balance || 0,
-        required: errorDetails.required_amount || 0,
-        shortage: errorDetails.shortage || 0,
+        current: formatMoneyForDisplay((errorDetails.current_balance as string | undefined) ?? '0'),
+        required: formatMoneyForDisplay((errorDetails.required_amount as string | undefined) ?? '0'),
+        shortage: formatMoneyForDisplay((errorDetails.shortage as string | undefined) ?? '0'),
       })
 
     case TaskSubmitErrorCode.INVALID_CONFIG:

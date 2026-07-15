@@ -1,45 +1,37 @@
-// 聊天API相关的类型定义
-import type { ChatMessageUser, ChatMessage } from '@/aipanel/agent/types'
+import type {
+  CancelRunRequest,
+  InteractionResultRequest,
+  SessionSnapshot,
+  StartRunRequest,
+  ToolResultRequest,
+} from '@/aipanel/agent/types'
 
-// API端点配置
 export const API_ENDPOINTS = {
-  createSession: '/api/chat/create-session',
-  sendMessage: '/api/chat/send-message',
-  getHistory: (sessionId: string) => `/api/chat/session/${sessionId}/history`,
-  deleteSession: (sessionId: string) => `/api/chat/session/${sessionId}`,
-  getAllSessions: '/api/chat/sessions',
-  healthCheck: '/health',
+  createSession: '/api/agent/sessions',
+  sessionSnapshot: (sessionId: string) => `/api/agent/sessions/${sessionId}`,
+  startRun: (sessionId: string) => `/api/agent/sessions/${sessionId}/runs`,
+  cancelRun: (sessionId: string, runId: string) =>
+    `/api/agent/sessions/${sessionId}/runs/${runId}/cancel`,
+  submitToolResult: (sessionId: string, runId: string) =>
+    `/api/agent/sessions/${sessionId}/runs/${runId}/tool-results`,
+  submitInteractionResult: (sessionId: string, runId: string) =>
+    `/api/agent/sessions/${sessionId}/runs/${runId}/interaction-results`,
 } as const
 
-// API响应类型定义
 export interface CreateSessionResponse {
   session_id: string
   created_at: string
 }
 
-export interface SendMessageRequest {
-  session_id: string
-  message: ChatMessageUser // 使用 ChatMessageUser 类型
-}
+export type SessionSnapshotResponse = SessionSnapshot
 
-// 后端现在直接返回 ChatMessageUser 和 ChatMessageAssistant 类型
-export interface SessionHistoryResponse {
-  session_id: string
-  messages: ChatMessage[] // 使用 ChatMessage 类型
-}
+export type StartRunPayload = StartRunRequest
 
-export interface SessionSummary {
-  session_id: string
-  created_at: string
-  updated_at: string
-  message_count: number
-  preview_text: string
-}
+export type SubmitToolResultPayload = ToolResultRequest
 
-export interface AllSessionsResponse {
-  sessions: SessionSummary[]
-  total_count: number
-}
+export type SubmitInteractionResultPayload = InteractionResultRequest
+
+export type CancelRunPayload = CancelRunRequest
 
 export interface ApiError {
   detail: string

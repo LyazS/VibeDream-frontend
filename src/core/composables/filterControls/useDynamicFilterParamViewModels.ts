@@ -1,0 +1,218 @@
+import { computed, type Ref } from 'vue'
+import type { FilterParamColorValue } from '@/core/filter/color'
+import type { ClipFilterConfig } from '@/core/filter/types'
+import {
+  getFilterParamKey,
+  isFilterParamPropertyId,
+  propertySchemaResolver,
+  type DynamicFilterParamPropertyId,
+} from '@/core/property-system/schema'
+import type { FilterChannelKey, FilterParamVec2Value, FilterTimelineItem } from './types'
+
+export type DynamicFilterParamViewModel =
+  | {
+      kind: 'float' | 'int'
+      propertyId: DynamicFilterParamPropertyId
+      parameterKey: string
+      channelKey: FilterChannelKey
+      label: string
+      value: number
+      min: number
+      max: number
+      step: number
+      precision: number
+    }
+  | {
+      kind: 'vec2' | 'ivec2'
+      propertyId: DynamicFilterParamPropertyId
+      parameterKey: string
+      channelKey: FilterChannelKey
+      label: string
+      value: FilterParamVec2Value
+      min: number
+      max: number
+      step: number
+      precision: number
+    }
+  | {
+      kind: 'color'
+      propertyId: DynamicFilterParamPropertyId
+      parameterKey: string
+      channelKey: FilterChannelKey
+      label: string
+      value: FilterParamColorValue
+    }
+  | {
+      kind: 'boolean'
+      propertyId: DynamicFilterParamPropertyId
+      parameterKey: string
+      label: string
+      value: boolean
+    }
+
+interface UseDynamicFilterParamViewModelsOptions {
+  selectedTimelineItem: Ref<FilterTimelineItem | null>
+  currentFrame: Ref<number>
+  filterConfig: Ref<ClipFilterConfig>
+  hasFilterEffect: Ref<boolean>
+}
+
+export function useDynamicFilterParamViewModels(options: UseDynamicFilterParamViewModelsOptions) {
+  const { selectedTimelineItem, currentFrame, filterConfig, hasFilterEffect } = options
+
+  return computed<DynamicFilterParamViewModel[]>(() => {
+    const item = selectedTimelineItem.value
+    if (!item || !hasFilterEffect.value) {
+      return []
+    }
+
+    return propertySchemaResolver
+      .listSchemas({
+        item,
+        frame: currentFrame.value,
+      })
+      .filter((schema) => isFilterParamPropertyId(schema.propertyId))
+      .map((schema) => {
+        if (!isFilterParamPropertyId(schema.propertyId)) {
+          throw new Error(`动态滤镜参数 propertyId 非法: ${schema.propertyId}`)
+        }
+
+        const parameterKey = getFilterParamKey(schema.propertyId)
+        const label = schema.label ?? schema.propertyId
+
+        const definition = filterConfig.value.packagePayload.parameterSchema[parameterKey]
+
+        if (
+          schema.valueKind === 'number' &&
+          (definition?.type === 'float' || definition?.type === 'int')
+        ) {
+          const integerLike = definition.type === 'int'
+          return {
+            kind: definition.type,
+            propertyId: schema.propertyId,
+            parameterKey,
+            channelKey: schema.propertyId,
+            label,
+            value: integerLike
+              ? Math.round(getNumberValue(filterConfig.value.params[parameterKey], parameterKey))
+              : getNumberValue(filterConfig.value.params[parameterKey], parameterKey),
+            ...getNumberRange(schema.propertyId, schema),
+            precision: integerLike ? 0 : 2,
+          }
+        }
+
+        if (
+          schema.valueKind === 'vec2' &&
+          (definition?.type === 'vec2' || definition?.type === 'ivec2')
+        ) {
+          const integerLike = definition.type === 'ivec2'
+          return {
+            kind: definition.type,
+            propertyId: schema.propertyId,
+            parameterKey,
+            channelKey: schema.propertyId,
+            label,
+            value: getVec2Value(filterConfig.value.params[parameterKey], parameterKey, integerLike),
+            ...getNumberRange(schema.propertyId, schema),
+            precision: integerLike ? 0 : 2,
+          }
+        }
+
+        if (schema.valueKind === 'boolean') {
+          return {
+            kind: 'boolean',
+            propertyId: schema.propertyId,
+            parameterKey,
+            label,
+            value: Boolean(filterConfig.value.params[parameterKey]),
+          }
+        }
+
+        if (schema.valueKind === 'color') {
+          return {
+            kind: 'color',
+            propertyId: schema.propertyId,
+            parameterKey,
+            channelKey: schema.propertyId,
+            label,
+            value: getColorValue(filterConfig.value.params[parameterKey], parameterKey),
+          }
+        }
+
+        throw new Error(`动态滤镜参数类型不支持: ${schema.propertyId}`)
+      })
+  })
+}
+
+function getNumberValue(value: unknown, parameterKey: string): number {
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return value
+  }
+  throw new Error(`滤镜参数不是有效数字: ${parameterKey}`)
+}
+
+function getVec2Value(
+  value: unknown,
+  parameterKey: string,
+  integerLike = false,
+): FilterParamVec2Value {
+  if (
+    typeof value === 'object' &&
+    value !== null &&
+    !Array.isArray(value) &&
+    typeof (value as Record<string, unknown>).x === 'number' &&
+    Number.isFinite((value as Record<string, unknown>).x) &&
+    typeof (value as Record<string, unknown>).y === 'number' &&
+    Number.isFinite((value as Record<string, unknown>).y)
+  ) {
+    return {
+      x: integerLike ? Math.round((value as FilterParamVec2Value).x) : (value as FilterParamVec2Value).x,
+      y: integerLike ? Math.round((value as FilterParamVec2Value).y) : (value as FilterParamVec2Value).y,
+    }
+  }
+  throw new Error(`滤镜参数不是有效二维向量: ${parameterKey}`)
+}
+
+function getColorValue(value: unknown, parameterKey: string): FilterParamColorValue {
+  if (
+    typeof value === 'object' &&
+    value !== null &&
+    !Array.isArray(value) &&
+    typeof (value as Record<string, unknown>).r === 'number' &&
+    Number.isFinite((value as Record<string, unknown>).r) &&
+    typeof (value as Record<string, unknown>).g === 'number' &&
+    Number.isFinite((value as Record<string, unknown>).g) &&
+    typeof (value as Record<string, unknown>).b === 'number' &&
+    Number.isFinite((value as Record<string, unknown>).b) &&
+    typeof (value as Record<string, unknown>).a === 'number' &&
+    Number.isFinite((value as Record<string, unknown>).a)
+  ) {
+    return {
+      r: (value as FilterParamColorValue).r,
+      g: (value as FilterParamColorValue).g,
+      b: (value as FilterParamColorValue).b,
+      a: (value as FilterParamColorValue).a,
+    }
+  }
+  throw new Error(`滤镜参数不是有效颜色: ${parameterKey}`)
+}
+
+function getNumberRange(
+  propertyId: DynamicFilterParamPropertyId,
+  schema: { min?: number; max?: number; step?: number },
+): { min: number; max: number; step: number } {
+  if (typeof schema.min !== 'number' || !Number.isFinite(schema.min)) {
+    throw new Error(`滤镜参数 schema 缺少有效 min: ${propertyId}`)
+  }
+  if (typeof schema.max !== 'number' || !Number.isFinite(schema.max)) {
+    throw new Error(`滤镜参数 schema 缺少有效 max: ${propertyId}`)
+  }
+  if (typeof schema.step !== 'number' || !Number.isFinite(schema.step)) {
+    throw new Error(`滤镜参数 schema 缺少有效 step: ${propertyId}`)
+  }
+  return {
+    min: schema.min,
+    max: schema.max,
+    step: schema.step,
+  }
+}

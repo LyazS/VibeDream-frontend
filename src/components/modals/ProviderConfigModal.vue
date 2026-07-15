@@ -14,20 +14,21 @@
         <div class="section-title">
           <img src="/logo-3rd/bizyair.webp" alt="BizyAir" class="provider-logo" />
         </div>
-        <input
-          v-model="unifiedStore.bizyairApiKey"
-          type="password"
-          :placeholder="t('user.bizyairApiKeyPlaceholder')"
-          class="apikey-input-full"
-          @blur="handleSaveBizyAirApiKey"
-        />
-        <div v-if="!hasApiKey" class="apikey-hint">
-          {{ t('user.bizyairApiKeyHint') }}
-        </div>
-        <div v-else class="apikey-status">
-          <component :is="IconComponents.CHECK" size="14px" />
-          {{ t('user.bizyairApiKeyConfigured') }}
-        </div>
+        <ModalFormField>
+          <input
+            v-model="unifiedStore.bizyairApiKey"
+            type="password"
+            :placeholder="t('user.bizyairApiKeyPlaceholder')"
+            @blur="handleSaveBizyAirApiKey"
+          />
+          <template #hint>
+            <span v-if="!hasApiKey">{{ t('user.bizyairApiKeyHint') }}</span>
+            <span v-else class="apikey-status">
+              <component :is="IconComponents.CHECK" size="14px" />
+              {{ t('user.bizyairApiKeyConfigured') }}
+            </span>
+          </template>
+        </ModalFormField>
       </div>
     </div>
   </UniversalModal>
@@ -35,6 +36,7 @@
 
 <script setup lang="ts">
 import UniversalModal from './UniversalModal.vue'
+import ModalFormField from '@/components/base/ModalFormField.vue'
 import { IconComponents } from '@/constants/iconComponents'
 import { useAppI18n } from '@/core/composables/useI18n'
 import { useUnifiedStore } from '@/core/unifiedStore'
@@ -107,40 +109,10 @@ function handleSaveBizyAirApiKey() {
   object-fit: contain;
 }
 
-.apikey-input-full {
-  width: 100%;
-  padding: var(--spacing-sm) var(--spacing-md);
-  border: 1px solid var(--color-border);
-  border-radius: var(--border-radius-small);
-  font-size: var(--font-size-sm);
-  background-color: var(--color-bg-primary);
-  color: var(--color-text-primary);
-  transition: border-color 0.2s ease;
-  box-sizing: border-box;
-}
-
-.apikey-input-full:focus {
-  outline: none;
-  border-color: var(--color-primary);
-  box-shadow: 0 0 0 2px var(--color-primary-light);
-}
-
-.apikey-input-full::placeholder {
-  color: var(--color-text-tertiary);
-}
-
-.apikey-hint {
-  margin-top: var(--spacing-sm);
-  color: var(--color-text-tertiary);
-  font-size: var(--font-size-xs);
-}
-
 .apikey-status {
-  margin-top: var(--spacing-sm);
-  display: flex;
+  display: inline-flex;
   align-items: center;
   gap: var(--spacing-xs);
   color: var(--color-success);
-  font-size: var(--font-size-xs);
 }
 </style>

@@ -8,7 +8,7 @@ import { generateCommandId } from '@/core/utils/idGenerator'
 import type { SimpleCommand } from '@/core/modules/commands/types'
 
 // ==================== 新架构类型导入 ====================
-import type { UnifiedTimelineItemData } from '@/core/timelineitem/type'
+import type { UnifiedTimelineItemData } from '@/core/timelineitem/model/timelineItem'
 
 import type { UnifiedMediaItemData, MediaType } from '@/core/mediaitem/types'
 
@@ -33,7 +33,7 @@ export class MoveTimelineItemCommand implements SimpleCommand {
       getTimelineItem: (id: string) => UnifiedTimelineItemData<MediaType> | undefined
     },
     private mediaModule: {
-      getMediaItem: (id: string) => UnifiedMediaItemData | undefined
+      getMediaItem: (id: string | null) => UnifiedMediaItemData | undefined
     },
   ) {
     this.id = generateCommandId()

@@ -11,6 +11,7 @@ import type { AIGenerateConfig } from '../types'
  * Vite 的 import.meta.glob 会自动匹配所有 .json 文件
  */
 const configModules = import.meta.glob('./*.json', { eager: true })
+type ConfigJsonModule = { default: AIGenerateConfig }
 
 /**
  * 配置集合
@@ -18,7 +19,7 @@ const configModules = import.meta.glob('./*.json', { eager: true })
  * 使用配置文件中的 id 作为键
  */
 export const collection: Record<string, AIGenerateConfig> = Object.values(configModules).reduce<Record<string, AIGenerateConfig>>((acc, module) => {
-  const config = (module as any).default as AIGenerateConfig
+  const config = (module as ConfigJsonModule).default
   acc[config.id] = config
   return acc
 }, {})

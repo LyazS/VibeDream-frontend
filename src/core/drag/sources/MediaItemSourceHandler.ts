@@ -5,7 +5,7 @@
 import type {
   DragSourceHandler,
   DragSourceType,
-  MediaItemDragParams,
+  AssetDragParams,
   MediaItemDragData,
   DragSourceParams,
   UnifiedDragData,
@@ -13,9 +13,28 @@ import type {
 import { DragSourceType as SourceType } from '@/core/types/drag'
 import type { UnifiedMediaModule } from '@/core/modules/UnifiedMediaModule'
 import type { UnifiedDirectoryModule } from '@/core/modules/UnifiedDirectoryModule'
+import { isMediaAsset, isEffectTemplateAsset } from '@/core/asset/types'
+import { isTransitionPackagePayload } from '@/core/effect-package/types'
+
+function resolvePackageVersion(asset: ReturnType<UnifiedMediaModule['getAsset']>): string | undefined {
+  if (!asset || !isEffectTemplateAsset(asset)) {
+    return undefined
+  }
+
+  const payload = asset.templatePayload as { version?: unknown } | null | undefined
+  return typeof payload?.version === 'string' ? payload.version : undefined
+}
+
+function resolveEffectTemplateDuration(asset: ReturnType<UnifiedMediaModule['getAsset']>): number | undefined {
+  if (!asset || !isEffectTemplateAsset(asset) || !isTransitionPackagePayload(asset.templatePayload)) {
+    return undefined
+  }
+
+  return asset.templatePayload.host.transition.defaultDurationFrames
+}
 
 export class MediaItemSourceHandler implements DragSourceHandler {
-  readonly sourceType: DragSourceType = SourceType.MEDIA_ITEM
+  readonly sourceType: DragSourceType = SourceType.ASSET
 
   constructor(
     private mediaModule: UnifiedMediaModule,
@@ -27,26 +46,37 @@ export class MediaItemSourceHandler implements DragSourceHandler {
     event: DragEvent,
     params: DragSourceParams,
   ): UnifiedDragData {
-    const mediaParams = params as MediaItemDragParams
+    const assetParams = params as AssetDragParams
+    const assetId = assetParams.assetId
+    const selectedAssetIds =
+      'selectedAssetIds' in assetParams
+        ? assetParams.selectedAssetIds
+        : undefined
 
-    // 从 mediaModule 获取素材信息
-    const mediaItem = this.mediaModule.getMediaItem(mediaParams.mediaItemId)
+    const asset = this.mediaModule.getAsset(assetId)
 
-    if (!mediaItem) {
-      throw new Error(`Media item not found: ${mediaParams.mediaItemId}`)
+    if (!asset) {
+      throw new Error(`Asset not found: ${assetId}`)
     }
 
     // 从 directoryModule 获取当前文件夹信息
     const sourceFolderId = this.directoryModule.currentDir.value?.id
 
     const dragData: MediaItemDragData = {
-      sourceType: SourceType.MEDIA_ITEM,
+      sourceType: SourceType.ASSET,
       timestamp: Date.now(),
-      mediaItemIds: mediaParams.selectedMediaItemIds || [mediaParams.mediaItemId],
-      mediaItemId: mediaParams.mediaItemId,
-      name: mediaItem.name,
-      duration: mediaItem.duration || 0,
-      mediaType: mediaItem.mediaType,
+      assetIds: selectedAssetIds || [assetId],
+      assetId,
+      name: asset.name,
+      assetKind: asset.assetKind,
+      duration: isMediaAsset(asset) ? asset.duration || 0 : resolveEffectTemplateDuration(asset),
+      mediaType: isMediaAsset(asset) ? asset.mediaType : undefined,
+      effectType: !isMediaAsset(asset) ? asset.effectType : undefined,
+      templatePayload: !isMediaAsset(asset) ? asset.templatePayload : undefined,
+      effectPackageId: isEffectTemplateAsset(asset) ? asset.id : undefined,
+      templateId: isEffectTemplateAsset(asset) ? asset.source.templateId : undefined,
+      packageVersion: resolvePackageVersion(asset),
+      catalogVersion: isEffectTemplateAsset(asset) ? asset.source.catalogVersion : undefined,
       sourceFolderId,
     }
 

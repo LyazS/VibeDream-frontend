@@ -5,7 +5,7 @@
   "name": "qwen-image-edit-2512-2image",
   "description": "将两个图片进行合成，根据提示词将图2的元素添加到图1中",
   "media_type": "image",
-  "cost": 0.05,
+  "cost": "0.05",
   "input_mapping": {
     "ref_images": {
       "type": "array",

@@ -21,7 +21,7 @@ export class BunnyMedia {
   private audioTrack: InputAudioTrack | null = null
   private videoSink: VideoSampleSink | null = null
   private audioSink: AudioBufferSink | null = null
-  private oriFile: File
+  private oriFile: File | null
 
   // 公开属性
   public readonly ready: Promise<void>
@@ -155,6 +155,9 @@ export class BunnyMedia {
    * @returns 原始文件对象
    */
   getOriFile(): File {
+    if (!this.oriFile) {
+      throw new Error('原始文件已释放')
+    }
     return this.oriFile
   }
 
@@ -170,7 +173,7 @@ export class BunnyMedia {
     this.input = null
 
     // 清理原始文件引用
-    this.oriFile = null as any
+    this.oriFile = null
 
     console.log('✅ BunnyMedia 资源清理完成')
   }

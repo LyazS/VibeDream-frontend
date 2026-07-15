@@ -5,7 +5,6 @@ import { i18n } from '@/locales'
 // 懒加载组件
 const ProjectManagement = () => import('@/components/views/ProjectManagement.vue')
 const VideoEditor = () => import('@/components/views/VideoEditor.vue')
-const ScriptTest = () => import('@/components/views/ScriptTest.vue')
 
 const routes: RouteRecordRaw[] = [
   {
@@ -24,15 +23,6 @@ const routes: RouteRecordRaw[] = [
     meta: {
       title: 'app.title',
       subtitle: 'editor.videoEditor',
-    },
-  },
-  {
-    path: '/script-test',
-    name: 'ScriptTest',
-    component: ScriptTest,
-    meta: {
-      title: 'app.title',
-      subtitle: 'Script Executor Test',
     },
   },
   {

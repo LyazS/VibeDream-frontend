@@ -13,6 +13,13 @@
       "deleteTooltip": "删除选中的片段",
       "overlapping": "⚠️ {count} 个重叠"
     },
+    "edgeEdit": {
+      "trim": "裁切",
+      "trimTooltip": "左右手柄执行 Trim/Extend：音视频保持当前倍速并同步素材入出点",
+      "resize": "伸缩",
+      "resizeTooltip": "左右手柄执行伸缩：只改变时间轴长度，不移动素材入出点",
+      "tooltip": "切换片段左右手柄的编辑模式"
+    },
     "snap": {
       "snap": "吸附",
       "enabledTooltip": "吸附功能已开启 - 片段会自动对齐到相邻片段边缘和时间轴起点",

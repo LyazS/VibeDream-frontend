@@ -24,14 +24,14 @@
       <div v-if="showHeader" class="modal-header">
         <slot name="header">
           <h3 v-if="title" class="modal-title">{{ title }}</h3>
-          <div v-if="showClose" class="modal-header-actions">
-            <slot name="closeIcon">
-              <button class="modal-close-btn" @click="handleClose">
-                <component :is="IconComponents.CLOSE" size="16px" />
-              </button>
-            </slot>
-          </div>
         </slot>
+        <div v-if="showClose" class="modal-header-actions">
+          <slot name="closeIcon">
+            <button class="modal-close-btn" @click="handleClose">
+              <component :is="IconComponents.CLOSE" size="16px" />
+            </button>
+          </slot>
+        </div>
       </div>
 
       <!-- 内容区域 -->
@@ -171,7 +171,7 @@ const handleConfirm = () => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: var(--spacing-xxl) var(--spacing-xxl) var(--spacing-xl);
+  padding: var(--spacing-xl) var(--spacing-xxl);
   border-bottom: 1px solid var(--color-border-primary);
   flex-shrink: 0;
 }
@@ -181,6 +181,7 @@ const handleConfirm = () => {
   color: var(--color-text-primary);
   font-size: 18px;
   font-weight: 600;
+  text-wrap: balance;
 }
 
 .modal-header-actions {
@@ -190,16 +191,25 @@ const handleConfirm = () => {
 }
 
 .modal-close-btn {
+  position: relative;
   background: none;
   border: none;
   color: var(--color-text-secondary);
   cursor: pointer;
   padding: var(--spacing-xs);
   border-radius: var(--border-radius-medium);
-  transition: all var(--transition-fast);
+  transition-property: background-color, color, transform;
+  transition-duration: var(--transition-fast);
+  transition-timing-function: ease-out;
   display: flex;
   align-items: center;
   justify-content: center;
+}
+
+.modal-close-btn::before {
+  position: absolute;
+  inset: -4px;
+  content: '';
 }
 
 .modal-close-btn:hover {
@@ -207,11 +217,16 @@ const handleConfirm = () => {
   color: var(--color-text-primary);
 }
 
+.modal-close-btn:active {
+  transform: scale(0.96);
+}
+
 /* 内容区域样式 */
 .modal-content {
   flex: 1;
   overflow-y: auto;
-  padding: var(--spacing-xxl);
+  padding: var(--spacing-lg) var(--spacing-xxl);
+  text-wrap: pretty;
 }
 
 .modal-body {
@@ -221,9 +236,8 @@ const handleConfirm = () => {
 /* 底部样式 */
 .modal-footer {
   flex-shrink: 0;
-  padding: var(--spacing-xl) var(--spacing-xxl);
+  padding: var(--spacing-lg) var(--spacing-xxl);
   border-top: 1px solid var(--color-border-primary);
-  background: var(--color-bg-tertiary);
 }
 
 .modal-actions {
@@ -235,7 +249,7 @@ const handleConfirm = () => {
 /* 响应式设计 */
 @media (max-width: 768px) {
   .modal-header {
-    padding: var(--spacing-lg) var(--spacing-lg) var(--spacing-md);
+    padding: var(--spacing-xl) var(--spacing-lg);
   }
 
   .modal-content {
@@ -243,7 +257,7 @@ const handleConfirm = () => {
   }
 
   .modal-footer {
-    padding: var(--spacing-md) var(--spacing-lg);
+    padding: var(--spacing-lg);
   }
 
   .modal-actions {

@@ -57,7 +57,7 @@ const MAX_CONSECUTIVE_ERRORS = 5
 /**
  * 默认任务超时时间（毫秒）
  */
-const DEFAULT_TASK_TIMEOUT = 600000 // 10 分钟
+const DEFAULT_TASK_TIMEOUT = 1800 * 1000 // 30 分钟
 
 // ==================== 自定义错误类 ====================
 
@@ -68,7 +68,7 @@ export class BizyAirAPIError extends Error {
   constructor(
     message: string,
     public statusCode?: number,
-    public errorCode?: string
+    public errorCode?: string,
   ) {
     super(message)
     this.name = 'BizyAirAPIError'
@@ -91,7 +91,7 @@ export class BizyAirAuthError extends BizyAirAPIError {
 export class BizyAirTaskError extends Error {
   constructor(
     public taskId: string,
-    message: string
+    message: string,
   ) {
     super(message)
     this.name = 'BizyAirTaskError'
@@ -137,7 +137,7 @@ export class BizyAirTimeoutError extends BizyAirAPIError {
  * @returns Promise
  */
 function delay(ms: number): Promise<void> {
-  return new Promise(resolve => setTimeout(resolve, ms))
+  return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
 /**
@@ -186,7 +186,7 @@ export class BizyAirAPIClient {
   static async submitAsyncTask(
     requestData: Record<string, any>,
     apiKey: string,
-    signal?: AbortSignal
+    signal?: AbortSignal,
   ): Promise<string> {
     const endpoint = `${BASE_URL}/create`
 
@@ -242,7 +242,7 @@ export class BizyAirAPIClient {
   static async getTaskStatus(
     requestId: string,
     apiKey: string,
-    signal?: AbortSignal
+    signal?: AbortSignal,
   ): Promise<BizyAirTaskDetail> {
     const url = `${BASE_URL}/detail?requestId=${encodeURIComponent(requestId)}`
 
@@ -297,7 +297,7 @@ export class BizyAirAPIClient {
   static async getTaskResults(
     requestId: string,
     apiKey: string,
-    signal?: AbortSignal
+    signal?: AbortSignal,
   ): Promise<{ url: string }> {
     const url = `${BASE_URL}/outputs?requestId=${encodeURIComponent(requestId)}`
 
@@ -363,7 +363,7 @@ export class BizyAirAPIClient {
     options?: {
       pollInterval?: number
       timeout?: number
-    }
+    },
   ): Promise<BizyAirTaskDetail> {
     const pollInterval = options?.pollInterval ?? DEFAULT_POLL_INTERVAL
     const timeout = options?.timeout ?? DEFAULT_TASK_TIMEOUT
@@ -379,10 +379,7 @@ export class BizyAirAPIClient {
       // 检查是否超时
       const elapsedTime = Date.now() - startTime
       if (elapsedTime > timeout) {
-        throw new BizyAirTaskError(
-          requestId,
-          `任务超时，已等待 ${Math.floor(timeout / 1000)} 秒`
-        )
+        throw new BizyAirTaskError(requestId, `任务超时，已等待 ${Math.floor(timeout / 1000)} 秒`)
       }
 
       try {
@@ -400,7 +397,7 @@ export class BizyAirAPIClient {
         switch (status) {
           case 'Queuing':
             progress = Math.min(50 + Math.floor((elapsedTime / timeout) * 10), 60)
-            const queueCount = (statusData as any).queueInfo?.queue_count ?? -1
+            const queueCount = statusData.queueInfo?.queue_count ?? -1
             message =
               queueCount >= 0
                 ? `任务排队中... (前面还有 ${queueCount} 个任务) bizyair任务ID: ${requestId}`
@@ -447,18 +444,15 @@ export class BizyAirAPIClient {
         if (consecutiveErrors >= MAX_CONSECUTIVE_ERRORS) {
           throw new BizyAirTaskError(
             requestId,
-            `连续 ${MAX_CONSECUTIVE_ERRORS} 次查询失败: ${error instanceof Error ? error.message : String(error)}`
+            `连续 ${MAX_CONSECUTIVE_ERRORS} 次查询失败: ${error instanceof Error ? error.message : String(error)}`,
           )
         }
 
-        console.warn(
-          `[BizyAir] 查询任务状态失败 (第 ${consecutiveErrors} 次):`,
-          error
-        )
+        console.warn(`[BizyAir] 查询任务状态失败 (第 ${consecutiveErrors} 次):`, error)
 
         onProgress?.(
           lastProgress,
-          `查询状态失败，正在重试... (${consecutiveErrors}/${MAX_CONSECUTIVE_ERRORS})`
+          `查询状态失败，正在重试... (${consecutiveErrors}/${MAX_CONSECUTIVE_ERRORS})`,
         )
       }
 
@@ -489,7 +483,7 @@ export class BizyAirAPIClient {
   static async cancelTask(
     requestId: string,
     apiKey: string,
-    signal?: AbortSignal
+    signal?: AbortSignal,
   ): Promise<boolean> {
     const url = `${BASE_URL}/cancel?requestId=${encodeURIComponent(requestId)}`
 
@@ -534,7 +528,7 @@ export class BizyAirAPIClient {
     fn: () => Promise<T>,
     maxRetries: number = DEFAULT_MAX_RETRIES,
     initialDelay: number = DEFAULT_INITIAL_DELAY,
-    maxDelay: number = DEFAULT_MAX_DELAY
+    maxDelay: number = DEFAULT_MAX_DELAY,
   ): Promise<T> {
     let lastError: Error | undefined
 
@@ -554,7 +548,7 @@ export class BizyAirAPIClient {
 
         console.warn(
           `[BizyAir] 请求失败 (第 ${attempt + 1}/${maxRetries + 1} 次)，${delayTime}ms 后重试:`,
-          lastError.message
+          lastError.message,
         )
 
         await delay(delayTime)
@@ -581,7 +575,7 @@ export class BizyAirAPIClient {
   private static async fetchWithAuth(
     endpoint: string,
     apiKey: string,
-    options: RequestInit = {}
+    options: RequestInit = {},
   ): Promise<Response> {
     const requestOptions: RequestInit = {
       ...options,
@@ -653,7 +647,7 @@ export class BizyAirAPIClient {
       default:
         throw new BizyAirAPIError(
           `API 错误: ${response.status} - ${errorText || '未知错误'}`,
-          response.status
+          response.status,
         )
     }
   }

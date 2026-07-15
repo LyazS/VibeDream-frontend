@@ -38,9 +38,14 @@
       },
       "clip": {
         "smartSceneDetection": "Scene Detection",
+        "speechRecognition": "Speech Recognition",
         "duplicateClip": "Duplicate Clip",
         "regenerateThumbnail": "Regenerate Thumbnail",
         "deleteClip": "Delete Clip"
+      },
+      "transition": {
+        "placeholder": "Transition Placeholder",
+        "selectSourceClip": "Select Source Clip"
       },
       "track": {
         "addText": "Add Text",
@@ -61,11 +66,34 @@
     "sceneDetection": {
       "title": "Smart Scene Detection",
       "tip": "Analyzing video content, please wait...",
+      "modelFallback": "AI model unavailable, using fast detection...",
+      "progress": {
+        "loadingModel": "Loading smart scene model...",
+        "checkingCache": "Checking local model cache...",
+        "loadingFromCache": "Loading local model cache...",
+        "downloadingModelPercent": "Downloading smart scene model {percent}%",
+        "downloadingModelSize": "Downloading smart scene model {size} MB",
+        "initializingModel": "Initializing smart scene model...",
+        "modelReady": "Smart scene model ready",
+        "detectingBoundaries": "Detecting shot boundaries with AI...",
+        "analyzingFrames": "Analyzing video frames {current}/{total}",
+        "finalizingBoundaries": "Finalizing shot boundaries..."
+      },
       "splitting": "Detection complete, splitting {count} scenes...",
       "success": "Successfully split into {count} scenes",
       "noScenes": "No obvious scene boundaries detected",
       "cancelled": "Scene detection cancelled",
       "error": "Scene detection failed: {message}"
+    },
+    "speechRecognition": {
+      "title": "Speech Recognition",
+      "extractingAudio": "Extracting audio...",
+      "uploading": "Uploading audio...",
+      "creatingTask": "Creating recognition task...",
+      "processing": "Processing speech recognition...",
+      "success": "Speech recognition completed",
+      "error": "Speech recognition failed: {message}",
+      "cancelled": "Speech recognition cancelled"
     }
   }
 }

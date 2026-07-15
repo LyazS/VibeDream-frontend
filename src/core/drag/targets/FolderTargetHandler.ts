@@ -24,6 +24,7 @@ export class FolderTargetHandler implements DropTargetHandler {
   canAccept(dragData: UnifiedDragData): boolean {
     // 接受素材项目和文件夹
     return (
+      dragData.sourceType === DragSourceType.ASSET ||
       dragData.sourceType === DragSourceType.MEDIA_ITEM ||
       dragData.sourceType === DragSourceType.FOLDER
     )
@@ -40,8 +41,13 @@ export class FolderTargetHandler implements DropTargetHandler {
     
     // 根据拖拽源类型设置不同的拖拽效果
     switch (dragData.sourceType) {
+      case DragSourceType.ASSET:
       case DragSourceType.MEDIA_ITEM: {
         const mediaData = dragData as MediaItemDragData
+        if (mediaData.assetKind !== 'media') {
+          return false
+        }
+
         // 检查是否拖拽到同一个文件夹
         if (mediaData.sourceFolderId === folderTargetInfo.targetId) {
           return false
@@ -72,7 +78,11 @@ export class FolderTargetHandler implements DropTargetHandler {
   ): Promise<DropResult> {
     // 根据拖拽源类型执行不同的操作
     switch (dragData.sourceType) {
+      case DragSourceType.ASSET:
       case DragSourceType.MEDIA_ITEM:
+        if ((dragData as MediaItemDragData).assetKind !== 'media') {
+          return { success: false }
+        }
         return this.handleMediaItemDrop(dragData as MediaItemDragData, targetInfo)
 
       case DragSourceType.FOLDER:
@@ -96,14 +106,14 @@ export class FolderTargetHandler implements DropTargetHandler {
     
     try {
       console.log(`📦 [FolderTargetHandler] 移动素材项到文件夹:`, {
-        mediaItemIds: dragData.mediaItemIds,
+        assetIds: dragData.assetIds,
         sourceFolderId: dragData.sourceFolderId,
         targetFolderId: folderTargetInfo.targetId,
       })
 
       // 使用 directoryModule 的拖拽移动方法
       await this.directoryModule.dragMoveMediaItems(
-        dragData.mediaItemIds,
+        dragData.assetIds,
         dragData.sourceFolderId || null,
         folderTargetInfo.targetId,
       )

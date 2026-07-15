@@ -1,3 +1,5 @@
+import type { MoneyString } from '@/utils/money'
+
 /**
  * BizyAir 数据源类型定义
  * 集中管理所有 BizyAir 相关的类型、接口和枚举
@@ -79,7 +81,7 @@ export interface BizyAirAppConfig {
   /** 媒体类型 */
   media_type: string
   /** 单次生成成本 */
-  cost: number
+  cost: MoneyString
   /** 输入映射 */
   input_mapping: Record<string, InputMappingItem | ArrayMappingItem | ArrayUrlMappingItem>
 }
@@ -107,6 +109,8 @@ export interface InputMappingItem {
     description?: string
     computed?: boolean
     option?: string[]
+    add_cost?: Record<string, MoneyString>
+    add_real_cost?: Record<string, MoneyString>
   }
   /** 是否跳过 API 映射（不发送到后端） */
   skip_mapping?: boolean
@@ -147,6 +151,8 @@ export interface ArrayUrlMappingItem {
     description?: string
     computed?: boolean
     option?: string[]
+    add_cost?: Record<string, MoneyString>
+    add_real_cost?: Record<string, MoneyString>
   }
   /** URL 分隔符（默认为换行符） */
   separator?: string
@@ -196,6 +202,10 @@ export interface BizyAirTaskDetail {
   request_id: string
   /** 任务状态 */
   status: BizyAirTaskStatus
+  /** 排队信息（可选） */
+  queueInfo?: {
+    queue_count?: number
+  }
   /** 进度信息（可选） */
   progress?: {
     /** 当前进度百分比 */

@@ -85,18 +85,20 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
 import UniversalModal from './UniversalModal.vue'
-import { useUnifiedStore } from '@/core/unifiedStore'
 import { useAppI18n } from '@/core/composables/useI18n'
+import {
+  createProjectCustomResolution,
+  listProjectResolutionPresets,
+  type ProjectResolutionValue,
+} from '@/core/utils/projectResolutionPresets'
+
+interface ModalResolutionValue extends ProjectResolutionValue {
+  name: string
+}
 
 const props = defineProps<{
   show: boolean
-  currentResolution: {
-    name: string
-    width: number
-    height: number
-    aspectRatio: string
-    category: string
-  }
+  currentResolution: ModalResolutionValue
 }>()
 
 const emit = defineEmits<{
@@ -108,119 +110,10 @@ const emit = defineEmits<{
 }>()
 
 const { t } = useAppI18n()
-const unifiedStore = useUnifiedStore()
-
-// 分辨率选项
-const resolutionOptions = computed(() => [
-  // 横屏 16:9
-  {
-    name: t('editor.resolution.4K'),
-    width: 3840,
-    height: 2160,
-    aspectRatio: '16:9',
-    category: t('editor.landscape'),
-  },
-  {
-    name: t('editor.resolution.1440p'),
-    width: 2560,
-    height: 1440,
-    aspectRatio: '16:9',
-    category: t('editor.landscape'),
-  },
-  {
-    name: t('editor.resolution.1080p'),
-    width: 1920,
-    height: 1080,
-    aspectRatio: '16:9',
-    category: t('editor.landscape'),
-  },
-  {
-    name: t('editor.resolution.720p'),
-    width: 1280,
-    height: 720,
-    aspectRatio: '16:9',
-    category: t('editor.landscape'),
-  },
-  {
-    name: t('editor.resolution.480p'),
-    width: 854,
-    height: 480,
-    aspectRatio: '16:9',
-    category: t('editor.landscape'),
-  },
-
-  // 竖屏 9:16
-  {
-    name: t('editor.resolution.4KPortrait'),
-    width: 2160,
-    height: 3840,
-    aspectRatio: '9:16',
-    category: t('editor.portrait'),
-  },
-  {
-    name: t('editor.resolution.1440pPortrait'),
-    width: 1440,
-    height: 2560,
-    aspectRatio: '9:16',
-    category: t('editor.portrait'),
-  },
-  {
-    name: t('editor.resolution.1080pPortrait'),
-    width: 1080,
-    height: 1920,
-    aspectRatio: '9:16',
-    category: t('editor.portrait'),
-  },
-  {
-    name: t('editor.resolution.720pPortrait'),
-    width: 720,
-    height: 1280,
-    aspectRatio: '9:16',
-    category: t('editor.portrait'),
-  },
-  {
-    name: t('editor.resolution.480pPortrait'),
-    width: 480,
-    height: 854,
-    aspectRatio: '9:16',
-    category: t('editor.portrait'),
-  },
-
-  // 正方形 1:1
-  {
-    name: t('editor.resolution.1080x1080'),
-    width: 1080,
-    height: 1080,
-    aspectRatio: '1:1',
-    category: t('editor.square'),
-  },
-  {
-    name: t('editor.resolution.720x720'),
-    width: 720,
-    height: 720,
-    aspectRatio: '1:1',
-    category: t('editor.square'),
-  },
-
-  // 超宽屏
-  {
-    name: t('editor.resolution.ultrawide21x9'),
-    width: 2560,
-    height: 1080,
-    aspectRatio: '21:9',
-    category: t('editor.ultrawide'),
-  },
-  {
-    name: t('editor.resolution.ultrawide32x9'),
-    width: 3840,
-    height: 1080,
-    aspectRatio: '32:9',
-    category: t('editor.ultrawide'),
-  },
-])
+const resolutionOptions = computed(() => listProjectResolutionPresets())
 
 // 临时选择的分辨率
-const tempSelectedResolution = ref({
+const tempSelectedResolution = ref<ModalResolutionValue>({
   name: '1080p',
   width: 1920,
   height: 1080,
@@ -233,23 +126,15 @@ const showCustomInput = ref(false)
 const customWidth = ref(1920)
 const customHeight = ref(1080)
 
-const customResolutionText = computed(() => {
-  const gcd = (a: number, b: number): number => (b === 0 ? a : gcd(b, a % b))
-  const divisor = gcd(customWidth.value, customHeight.value)
-  const ratioW = customWidth.value / divisor
-  const ratioH = customHeight.value / divisor
-  return `${ratioW}:${ratioH}`
-})
+const customResolutionText = computed(
+  () => createProjectCustomResolution(customWidth.value, customHeight.value).aspectRatio,
+)
 
 // 监听自定义分辨率输入变化，实时更新临时选择
 watch([customWidth, customHeight], () => {
   if (showCustomInput.value) {
     tempSelectedResolution.value = {
-      name: t('editor.custom'),
-      width: customWidth.value,
-      height: customHeight.value,
-      aspectRatio: customResolutionText.value,
-      category: t('editor.custom'),
+      ...createProjectCustomResolution(customWidth.value, customHeight.value),
     }
   }
 })
@@ -294,12 +179,7 @@ function confirmSelection() {
 
   if (showCustomInput.value) {
     // 使用自定义分辨率
-    selectedResolution = {
-      name: t('editor.custom'),
-      width: customWidth.value,
-      height: customHeight.value,
-      aspectRatio: customResolutionText.value,
-    }
+    selectedResolution = createProjectCustomResolution(customWidth.value, customHeight.value)
   } else {
     // 使用预设分辨率，转换为VideoResolution格式
     selectedResolution = {
@@ -341,11 +221,7 @@ function selectPresetResolution(resolution: {
 function selectCustomResolution() {
   showCustomInput.value = true
   tempSelectedResolution.value = {
-    name: t('editor.custom'),
-    width: customWidth.value,
-    height: customHeight.value,
-    aspectRatio: customResolutionText.value,
-    category: t('editor.custom'),
+    ...createProjectCustomResolution(customWidth.value, customHeight.value),
   }
 }
 
@@ -379,50 +255,55 @@ function getPreviewStyle(resolution: { width: number; height: number }) {
 .resolution-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-  gap: 16px;
+  gap: var(--spacing-xl);
   max-height: 400px;
   overflow-y: auto;
 }
 
 .resolution-option {
-  background-color: #333;
-  border: 2px solid #444;
-  border-radius: 8px;
-  padding: 12px;
+  background-color: var(--color-bg-tertiary);
+  border: 1px solid var(--color-border-light);
+  border-radius: var(--border-radius-xlarge);
+  padding: var(--spacing-lg);
   cursor: pointer;
-  transition: all 0.2s;
+  transition-property: background-color, border-color, box-shadow;
+  transition-duration: var(--transition-fast);
+  transition-timing-function: ease-out;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 8px;
+  gap: var(--spacing-md);
 }
 
 .resolution-option:hover {
-  border-color: #666;
-  background-color: #3a3a3a;
+  border-color: var(--color-border-hover);
+  background-color: var(--color-bg-hover);
 }
 
 .resolution-option.active {
-  border-color: #ff4444;
-  background-color: #4a2a2a;
+  border-color: var(--color-primary);
+  background-color: var(--color-accent-primary-alpha);
+  box-shadow: 0 0 0 1px var(--color-primary);
 }
 
 .resolution-preview {
-  background-color: #555;
-  border: 1px solid #666;
-  border-radius: 3px;
-  transition: all 0.2s;
+  background-color: var(--color-bg-active);
+  border: 1px solid var(--color-border-secondary);
+  border-radius: var(--border-radius-small);
+  transition-property: background-color, border-color;
+  transition-duration: var(--transition-fast);
+  transition-timing-function: ease-out;
   flex-shrink: 0;
 }
 
 .resolution-option:hover .resolution-preview {
-  background-color: #666;
-  border-color: #777;
+  background-color: var(--color-bg-quaternary);
+  border-color: var(--color-border-hover);
 }
 
 .resolution-option.active .resolution-preview {
-  background-color: #ff4444;
-  border-color: #ff6666;
+  background-color: var(--color-primary);
+  border-color: var(--color-primary-hover);
 }
 
 .resolution-info {
@@ -432,64 +313,72 @@ function getPreviewStyle(resolution: { width: number; height: number }) {
 
 .resolution-name {
   font-weight: bold;
-  color: white;
-  margin-bottom: 4px;
-  font-size: 13px;
+  color: var(--color-text-primary);
+  margin-bottom: var(--spacing-xs);
+  font-size: var(--font-size-md);
 }
 
 .resolution-size {
-  color: #ccc;
-  font-size: 11px;
-  margin-bottom: 2px;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+  margin-bottom: var(--spacing-xxs);
+  font-variant-numeric: tabular-nums;
 }
 
 .resolution-ratio {
-  color: #999;
-  font-size: 10px;
+  color: var(--color-text-hint);
+  font-size: var(--font-size-xs);
   font-family: monospace;
+  font-variant-numeric: tabular-nums;
 }
 
 /* 自定义分辨率输入（集成在选项内） */
 .custom-inputs {
   width: 100%;
-  margin-top: 4px;
+  margin-top: var(--spacing-xs);
 }
 
 .input-row {
   display: flex;
   align-items: center;
-  gap: 6px;
-  margin-bottom: 6px;
+  gap: var(--spacing-sm);
+  margin-bottom: var(--spacing-sm);
 }
 
 .custom-input {
   flex: 1;
-  padding: 4px 6px;
-  background-color: #444;
-  border: 1px solid #555;
-  border-radius: 3px;
-  color: white;
-  font-size: 11px;
+  padding: var(--spacing-xs) var(--spacing-sm);
+  background-color: var(--color-bg-secondary);
+  border: 1px solid var(--color-bg-hover);
+  border-radius: var(--border-radius-small);
+  color: var(--color-text-primary);
+  font-size: var(--font-size-sm);
   text-align: center;
   min-width: 0;
+  font-variant-numeric: tabular-nums;
+  transition-property: background-color, border-color, box-shadow;
+  transition-duration: var(--transition-fast);
+  transition-timing-function: ease-out;
 }
 
 .custom-input:focus {
   outline: none;
-  border-color: #ff4444;
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 2px var(--color-accent-primary-alpha);
 }
 
 .input-separator {
-  color: #ccc;
-  font-size: 12px;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-base);
   font-weight: bold;
 }
 
 .custom-ratio {
-  color: #999;
-  font-size: 10px;
+  color: var(--color-text-hint);
+  font-size: var(--font-size-xs);
   font-family: monospace;
   text-align: center;
+  font-variant-numeric: tabular-nums;
 }
 
 /* 滚动条样式已在全局样式中定义 */

@@ -5,3 +5,17 @@
 
 // 导出项目配置类型
 export type { UnifiedProjectConfig, UnifiedProjectTimeline } from './types'
+export type {
+  BaseLibraryAssetMetaFile,
+  EffectTemplateLibraryAssetMetaFile,
+  LibraryAssetMetaFile,
+  MediaLibraryAssetMetaFile,
+  MediaMetaFile,
+} from './metaTypes'
+export {
+  isEffectTemplateLibraryAssetMetaFile,
+  isEffectTemplateLibraryAssetMetaFileValue,
+  isMediaLibraryAssetMetaFile,
+  isMediaLibraryAssetMetaFileValue,
+  parseLibraryAssetMetaFile,
+} from './metaTypes'

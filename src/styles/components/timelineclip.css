@@ -105,6 +105,36 @@
   background: var(--clip-bg-media-type);
 }
 
+.unified-timeline-transition-overlay {
+  z-index: 30;
+  box-sizing: border-box;
+  border: 1px solid rgba(255, 255, 255, 0.7);
+  background:
+    linear-gradient(135deg, rgba(90, 109, 144, 0.72), rgba(74, 93, 128, 0.56));
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.1), var(--clip-shadow);
+  backdrop-filter: saturate(120%);
+  opacity: 0.82;
+}
+
+.unified-timeline-transition-overlay[data-transition-binding-state='invalid-overlap'],
+.unified-timeline-transition-overlay[data-transition-binding-state='invalid-target'],
+.unified-timeline-transition-overlay[data-transition-binding-state='unbound'] {
+  background:
+    linear-gradient(135deg, rgba(140, 86, 96, 0.78), rgba(92, 74, 82, 0.62));
+  box-shadow: 0 0 0 1px rgba(255, 160, 160, 0.16), var(--clip-shadow);
+}
+
+.unified-timeline-transition-overlay.selected,
+.unified-timeline-transition-overlay.selected[data-transition-binding-state='invalid-overlap'],
+.unified-timeline-transition-overlay.selected[data-transition-binding-state='invalid-target'],
+.unified-timeline-transition-overlay.selected[data-transition-binding-state='unbound'] {
+  z-index: 31;
+  opacity: 0.92;
+  background:
+    linear-gradient(135deg, rgba(170, 150, 104, 0.86), rgba(108, 98, 76, 0.68));
+  box-shadow: 0 0 0 1px rgba(255, 224, 138, 0.2), var(--clip-shadow);
+}
+
 /* 重叠状态 */
 .unified-timeline-clip.overlapping {
   background: linear-gradient(

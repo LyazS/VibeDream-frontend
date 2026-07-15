@@ -34,15 +34,22 @@
         <div class="status-right">
           <!-- 左侧按钮组 -->
           <div class="button-group-left">
+            <ActiveTaskIndicator />
+
             <LanguageSelector />
+
+            <HoverButton @click="showOriginalUniversalModal = true" title="展示原始 UniversalModal">
+              UniversalModal
+            </HoverButton>
 
             <HoverButton
               @click="showProviderConfigDialog = true"
               :title="t('app.apiConfigCenter')"
             >
               <template #icon>
-                <component :is="IconComponents.SETTINGS" size="16px" />
+                <img src="/logo-3rd/logo-bizyair-only.webp" alt="BizyAir" style="width: 16px; height: 16px;" />
               </template>
+              <span v-if="!hasBizyAirKey" class="bizyair-key-text">Key</span>
             </HoverButton>
 
             <HoverButton
@@ -117,6 +124,9 @@
     :show="showProviderConfigDialog"
     @close="showProviderConfigDialog = false"
   />
+
+  <!-- 原始通用弹窗预览 -->
+  <UniversalModal v-model:show="showOriginalUniversalModal" />
 </template>
 
 <script setup lang="ts">
@@ -131,6 +141,8 @@ import LoginModal from '@/components/modals/LoginModal.vue'
 import UserInfoModal from '@/components/modals/UserInfoModal.vue'
 import ExportSettingsModal from '@/components/modals/ExportSettingsModal.vue'
 import ProviderConfigModal from '@/components/modals/ProviderConfigModal.vue'
+import UniversalModal from '@/components/modals/UniversalModal.vue'
+import ActiveTaskIndicator from '@/components/task-center/ActiveTaskIndicator.vue'
 import { useAppI18n } from '@/core/composables/useI18n'
 import type { Quality } from 'mediabunny'
 
@@ -148,8 +160,10 @@ const showLoginDialog = ref(false)
 const showUserInfoDialog = ref(false)
 const showExportDialog = ref(false)
 const showProviderConfigDialog = ref(false)
+const showOriginalUniversalModal = ref(false)
 const currentUser = computed(() => unifiedStore.getCurrentUser())
 const isUserLogin = computed(() => unifiedStore.isLoggedIn)
+const hasBizyAirKey = computed(() => unifiedStore.hasBizyAirApiKey())
 
 // 导出取消函数引用
 let cancelExport: (() => void) | null = null
@@ -208,6 +222,7 @@ function exportProject() {
 
 async function handleExportWithSettings(settings: {
   title: string
+  exportType: 'video' | 'audio'
   videoQuality: Quality
   audioQuality: Quality
   frameRate: number
@@ -237,12 +252,14 @@ async function handleExportWithSettings(settings: {
     // 使用可取消的导出函数
     cancelExport = exportProjectWithCancel(
       {
+        exportType: settings.exportType,
         videoWidth: unifiedStore.videoResolution.width,
         videoHeight: unifiedStore.videoResolution.height,
         projectName: settings.title,
         timelineItems: unifiedStore.timelineItems,
         tracks: unifiedStore.tracks,
         getMediaItem: (id: string) => unifiedStore.getMediaItem(id),
+        getAsset: (id: string | null) => unifiedStore.getAsset(id),
         videoQuality: settings.videoQuality,
         audioQuality: settings.audioQuality,
         frameRate: settings.frameRate,
@@ -443,5 +460,12 @@ defineExpose({
   font-size: var(--font-size-sm);
   color: var(--color-text-secondary);
   margin-left: var(--spacing-xs);
+}
+
+.bizyair-key-text {
+  font-size: var(--font-size-xs);
+  color: #ff4444;
+  font-weight: 600;
+  margin-left: 2px;
 }
 </style>

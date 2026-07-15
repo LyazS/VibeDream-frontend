@@ -11,7 +11,7 @@
   "contentType": "image",
   "aiTaskType": "bizyair_generate_media",
   "uploadServer": "bizyair",
-  "cost": 0.05,
+  "cost": "0.05",
   "aiConfig": {
     "ref_images": {
       "type": "array",
@@ -46,7 +46,9 @@
         "zh": "图片"
       },
       "path": "aiConfig.ref_images",
-      "accept": ["image"],
+      "accept": [
+        "image"
+      ],
       "maxFiles": 3,
       "minFiles": 1,
       "placeholder": {

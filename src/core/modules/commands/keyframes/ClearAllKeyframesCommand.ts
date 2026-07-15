@@ -13,7 +13,12 @@ import {
   applyKeyframeSnapshot,
 } from './shared'
 import { generateCommandId } from '@/core/utils/idGenerator'
-import { clearAllKeyframes, relativeFrameToAbsoluteFrame } from '@/core/utils/unifiedKeyframeUtils'
+import {
+  clearAllKeyframes,
+  clearChannelKeyframes,
+  getAllKeyframeFrames,
+} from '@/core/utils/unifiedKeyframeUtils'
+import type { AnimationChannelKey } from '@/core/timelineitem/model/render'
 
 export class ClearAllKeyframesCommand implements SimpleCommand {
   public readonly id: string
@@ -24,6 +29,7 @@ export class ClearAllKeyframesCommand implements SimpleCommand {
 
   constructor(
     private timelineItemId: string,
+    private channel: AnimationChannelKey | undefined,
     private timelineModule: TimelineModule,
     private playbackControls?: PlaybackControls,
   ) {
@@ -49,7 +55,11 @@ export class ClearAllKeyframesCommand implements SimpleCommand {
 
     try {
       // 清除所有关键帧
-      clearAllKeyframes(item)
+      if (this.channel) {
+        clearChannelKeyframes(item, this.channel)
+      } else {
+        clearAllKeyframes(item)
+      }
 
       // 动画更新已迁移到 Bunny 组件，无需手动更新
 
@@ -83,16 +93,9 @@ export class ClearAllKeyframesCommand implements SimpleCommand {
       await applyKeyframeSnapshot(item, this.beforeSnapshot)
 
       // 撤销清除关键帧操作时，跳转到第一个关键帧位置（seekTo会自动触发渲染更新）
-      if (this.playbackControls && this.beforeSnapshot.animationConfig?.keyframes?.length) {
-        const firstKeyframe = this.beforeSnapshot.animationConfig.keyframes[0]
-        if (firstKeyframe && item.timeRange) {
-          // 使用缓存的帧位置转换为绝对帧数
-          const absoluteFrame = relativeFrameToAbsoluteFrame(
-            firstKeyframe.cachedFrame,
-            item.timeRange,
-          )
-          this.playbackControls.seekTo(absoluteFrame)
-        }
+      const firstFrame = getAllKeyframeFrames(item, this.channel)[0]
+      if (this.playbackControls && firstFrame !== undefined) {
+        this.playbackControls.seekTo(firstFrame)
       }
 
       console.log('↩️ 清除所有关键帧命令撤销成功:', {

@@ -1,8 +1,10 @@
 import { fileSystemService } from '@/core/managers/filesystem/fileSystemService'
-import type { MediaMetaFile } from '@/core/project/metaTypes'
-import type { UnifiedMediaItemData, MediaType, MediaStatus } from '@/core/mediaitem/types'
+import { parseLibraryAssetMetaFile, type MediaMetaFile } from '@/core/project/metaTypes'
+import type { UnifiedMediaItemData, MediaStatus } from '@/core/mediaitem/types'
 import { getMediaPath, getMetaPath } from '@/core/utils/mediaPathUtils'
 import { extractSourceData } from '@/core/datasource/core/DataSourceTypes'
+import type { UnifiedLibraryAssetData } from '@/core/asset/types'
+import { extractEffectTemplateSourceData, isMediaAsset } from '@/core/asset/types'
 
 /**
  * 媒体保存结果接口
@@ -137,27 +139,43 @@ class GlobalMetaFileManager {
    * @param mediaItem 媒体项目数据
    * @returns 是否成功
    */
-  async saveMetaFile(mediaItem: UnifiedMediaItemData): Promise<boolean> {
+  async saveMetaFile(asset: UnifiedLibraryAssetData): Promise<boolean> {
     try {
-      console.log(`💾 [globalMetaFileManager] 保存 Meta 文件: ${mediaItem.id}`)
+      console.log(`💾 [globalMetaFileManager] 保存 Meta 文件: ${asset.id}`)
 
       // 定义终态列表
-      const terminalStatuses: MediaStatus[] = ['ready', 'error', 'cancelled', 'missing']
+      const terminalStatuses: MediaStatus[] = ['error', 'cancelled', 'missing']
 
-      // 1. 提取持久化数据
-      const metaData: MediaMetaFile = {
-        version: '1.0.0',
-        id: mediaItem.id,
-        name: mediaItem.name,
-        createdAt: mediaItem.createdAt,
-        mediaType: mediaItem.mediaType,
-        source: extractSourceData(mediaItem.source),
-        duration: mediaItem.duration,
-        // 🌟 只在终态时保存 mediaStatus
-        ...(terminalStatuses.includes(mediaItem.mediaStatus) && {
-          mediaStatus: mediaItem.mediaStatus as 'ready' | 'error' | 'cancelled' | 'missing',
-        }),
-      }
+      const metaData: MediaMetaFile = isMediaAsset(asset)
+        ? {
+            version: '1.0.0',
+            id: asset.id,
+            name: asset.name,
+            createdAt: asset.createdAt,
+            assetKind: 'media',
+            mediaType: asset.mediaType,
+            source: extractSourceData(asset.source),
+            duration: asset.duration,
+            ...(terminalStatuses.includes(asset.mediaStatus) && {
+              mediaStatus: asset.mediaStatus as 'error' | 'cancelled' | 'missing',
+            }),
+            ...(asset.metadata && {
+              metadata: JSON.parse(JSON.stringify(asset.metadata)),
+            }),
+          }
+        : {
+            version: '1.0.0',
+            id: asset.id,
+            name: asset.name,
+            createdAt: asset.createdAt,
+            assetKind: 'effect-template',
+            source: extractEffectTemplateSourceData(asset.source),
+            effectType: asset.effectType,
+            templateStatus: asset.templateStatus,
+            ...(asset.templatePayload && {
+              templatePayload: JSON.parse(JSON.stringify(asset.templatePayload)),
+            }),
+          }
 
       // 2. 检查工作空间权限
       const permissionResult = await fileSystemService.checkPermission()
@@ -171,13 +189,13 @@ class GlobalMetaFileManager {
       }
 
       // 4. 写入 meta 文件
-      const metaPath = fileSystemService.paths.getMetaPath(this.projectId, mediaItem.id)
+      const metaPath = fileSystemService.paths.getMetaPath(this.projectId, asset.id)
       await fileSystemService.writeFile(metaPath, JSON.stringify(metaData, null, 2))
 
-      console.log(`✅ [globalMetaFileManager] Meta 文件保存成功: ${mediaItem.id}.meta`)
+      console.log(`✅ [globalMetaFileManager] Meta 文件保存成功: ${asset.id}.meta`)
       return true
     } catch (error) {
-      console.error(`❌ [globalMetaFileManager] Meta 文件保存失败: ${mediaItem.id}`, error)
+      console.error(`❌ [globalMetaFileManager] Meta 文件保存失败: ${asset.id}`, error)
       return false
     }
   }
@@ -191,7 +209,7 @@ class GlobalMetaFileManager {
     try {
       const metaPath = fileSystemService.paths.getMetaPath(this.projectId, id)
       const content = await fileSystemService.readFile(metaPath)
-      return JSON.parse(content) as MediaMetaFile
+      return parseLibraryAssetMetaFile(JSON.parse(content) as unknown)
     } catch (error) {
       console.error(`❌ [globalMetaFileManager] 读取 Meta 文件失败: ${id}`, error)
       return null
@@ -213,7 +231,7 @@ class GlobalMetaFileManager {
         if (entry.kind === 'file' && entry.name.endsWith('.meta')) {
           try {
             const content = await fileSystemService.readFile(entry.path)
-            const metaData = JSON.parse(content) as MediaMetaFile
+            const metaData = parseLibraryAssetMetaFile(JSON.parse(content) as unknown)
             metaFiles.push(metaData)
           } catch (error) {
             console.warn(`⚠️ [globalMetaFileManager] 解析 Meta 文件失败: ${entry.name}`, error)
@@ -344,6 +362,45 @@ class GlobalMetaFileManager {
       }
     } catch (error) {
       console.error(`❌ [globalMetaFileManager] 删除媒体文件失败: ${id}`, error)
+      return {
+        success: false,
+        deletedMedia: false,
+        deletedMeta: false,
+        error: error instanceof Error ? error.message : String(error),
+      }
+    }
+  }
+
+  async deleteAssetFiles(asset: UnifiedLibraryAssetData): Promise<{
+    success: boolean
+    deletedMedia: boolean
+    deletedMeta: boolean
+    error?: string
+  }> {
+    if (isMediaAsset(asset)) {
+      return this.deleteMediaFiles(asset.id)
+    }
+
+    try {
+      const packageDirPath = fileSystemService.paths.getMediaPath(this.projectId, asset.id)
+      const packageDirExists = await fileSystemService.directoryExists(packageDirPath)
+      if (packageDirExists) {
+        await fileSystemService.deleteDirectory(packageDirPath, true)
+      }
+
+      const metaPath = fileSystemService.paths.getMetaPath(this.projectId, asset.id)
+      const metaExists = await fileSystemService.fileExists(metaPath)
+      if (metaExists) {
+        await fileSystemService.deleteFile(metaPath)
+      }
+
+      return {
+        success: packageDirExists || metaExists,
+        deletedMedia: packageDirExists,
+        deletedMeta: metaExists,
+      }
+    } catch (error) {
+      console.error(`❌ [globalMetaFileManager] 删除资产 Meta 文件失败: ${asset.id}.meta`, error)
       return {
         success: false,
         deletedMedia: false,

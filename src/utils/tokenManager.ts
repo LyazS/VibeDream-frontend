@@ -10,6 +10,7 @@ import type {
 // 调试标记
 const DEBUG_TOKEN = true
 const debugPrefix = '[TOKEN]'
+const TEMP_FOCUS_DEBUG_PREFIX = '[LC_TEMP_FOCUS_DEBUG][TOKEN]'
 
 /**
  * 令牌管理器
@@ -352,12 +353,24 @@ export class TokenManager {
       if (event.key === this.AUTH_EVENT_KEY) {
         try {
           const authEvent = JSON.parse(event.newValue || '{}') as AuthEvent
+          console.warn(`${TEMP_FOCUS_DEBUG_PREFIX} 收到 storage 认证事件:`, {
+            type: authEvent.type,
+            eventTimestamp: authEvent.timestamp,
+            lastEventTimestamp: this.getLastEventTimestamp(),
+            documentVisibility: typeof document !== 'undefined' ? document.visibilityState : 'unknown',
+            hasFocus: typeof document !== 'undefined' ? document.hasFocus() : false,
+            timestamp: new Date().toISOString(),
+          })
 
           switch (authEvent.type) {
             case 'logout':
               this.clearTokens()
               // 如果不在当前标签页触发的登出，则刷新页面
               if (authEvent.timestamp !== this.getLastEventTimestamp()) {
+                console.warn(`${TEMP_FOCUS_DEBUG_PREFIX} storage logout 将触发 window.location.reload()`, {
+                  eventTimestamp: authEvent.timestamp,
+                  lastEventTimestamp: this.getLastEventTimestamp(),
+                })
                 window.location.reload()
               }
               break

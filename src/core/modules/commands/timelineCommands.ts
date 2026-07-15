@@ -14,17 +14,22 @@
 // 导出所有命令类
 export { AddTimelineItemCommand } from './AddTimelineItemCommand' // ok
 export { RemoveTimelineItemCommand } from './RemoveTimelineItemCommand' // ok
+export { RemoveASRRequestCommand } from './RemoveASRRequestCommand'
+export { StartASRRequestCommand } from './StartASRRequestCommand'
 export { MoveTimelineItemCommand } from './MoveTimelineItemCommand' // ok
-export { UpdateTransformCommand } from './UpdateTransformCommand' // -
 export { SplitTimelineItemCommand } from './SplitTimelineItemCommand' // ok
 export { AddTrackCommand } from './AddTrackCommand' // ok
+export { MoveTrackCommand } from './MoveTrackCommand' // ok
 export { RenameTrackCommand } from './RenameTrackCommand' // ok
 export { RemoveTrackCommand } from './RemoveTrackCommand' // ok
 export { ToggleTrackVisibilityCommand } from './ToggleTrackVisibilityCommand' // ok
 export { ToggleTrackMuteCommand } from './ToggleTrackMuteCommand' // ok
 export { ResizeTimelineItemCommand } from './ResizeTimelineItemCommand' // ok
-export { SelectTimelineItemsCommand } from './SelectTimelineItemsCommand' // ok
-export { UpdateTextCommand } from './UpdateTextCommand' // ok
+export { TrimTimelineItemCommand } from './TrimTimelineItemCommand'
+export type { TrimTimelineItemSide } from './TrimTimelineItemCommand'
+export { SelectTimelineSelectionsCommand } from './SelectTimelineItemsCommand' // ok
+export { UpdateTransitionConfigCommand } from './UpdateTransitionOutCommand'
+export { UpdateFilterConfigCommand } from './UpdateFilterEffectCommand'
 
 // 导出类型定义
 export type { SimpleCommand } from './types'

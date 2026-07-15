@@ -1,8 +1,8 @@
 <template>
   <div class="properties-panel">
-    <n-scrollbar>
-      <!-- 媒体多选状态 -->
-      <div v-if="mediaMultiSelectInfo" class="media-multi-select-state">
+    <!-- 媒体多选状态 -->
+    <n-scrollbar v-if="mediaMultiSelectInfo" class="properties-scroll-area">
+      <div class="media-multi-select-state">
         <component :is="IconComponents.CHECKBOX_MULTIPLE" size="32px" />
         <p>{{ t('properties.multiSelect.title', { count: mediaMultiSelectInfo.count }) }}</p>
         <p class="hint">{{ t('properties.multiSelect.hint') }}</p>
@@ -14,49 +14,103 @@
               {{ item?.name || t('properties.multiSelect.unknownMedia') }}
             </span>
             <span class="item-type">{{
-              t('properties.mediaTypes.' + (item?.mediaType || 'unknown'))
+              item ? getLibraryAssetTypeLabel(item) : t('properties.mediaTypes.unknown')
             }}</span>
           </div>
         </div>
       </div>
+    </n-scrollbar>
 
-      <!-- 媒体单选状态 -->
-      <div v-else-if="selectedMediaItem" class="media-properties-content">
+    <!-- 媒体单选状态 -->
+    <n-scrollbar v-else-if="selectedMediaItem" class="properties-scroll-area">
+      <div class="media-properties-content">
         <MediaItemProperties :media-item="selectedMediaItem" />
       </div>
+    </n-scrollbar>
 
-      <!-- 时间轴多选状态 -->
-      <div v-else-if="multiSelectInfo" class="multi-select-state">
+    <!-- 时间轴多选状态 -->
+    <n-scrollbar v-else-if="multiSelectInfo" class="properties-scroll-area">
+      <div class="multi-select-state">
         <component :is="IconComponents.CHECKBOX_MULTIPLE" size="32px" />
         <p>{{ t('properties.multiSelect.title', { count: multiSelectInfo.count }) }}</p>
         <p class="hint">{{ t('properties.multiSelect.hint') }}</p>
 
         <!-- 选中项目列表 -->
         <div class="selected-items-list">
-          <div v-for="item in multiSelectInfo.items" :key="item?.id" class="selected-item">
-            <span class="item-name">
-              {{ item ? getItemDisplayName(item) : t('properties.multiSelect.unknownMedia') }}
-            </span>
-            <span class="item-type">{{
-              t('properties.mediaTypes.' + (item?.mediaType || 'unknown'))
-            }}</span>
+          <div v-for="item in multiSelectInfo.items" :key="item.id" class="selected-item">
+            <span class="item-name">{{ item.label }}</span>
+            <span class="item-type">{{ item.typeLabel }}</span>
           </div>
         </div>
       </div>
+    </n-scrollbar>
 
-      <!-- 时间轴单选状态 -->
-      <div v-else-if="selectedTimelineItem" class="properties-content">
-        <!-- 只在ready状态时显示完整属性面板 -->
-        <template v-if="selectedTimelineItem.timelineStatus === 'ready'">
-          <!-- 统一属性组件 - 根据媒体类型自动组合不同的属性组 -->
-          <UnifiedClipProperties
-            :selected-timeline-item="selectedTimelineItem"
-            :current-frame="currentFrame"
+    <n-scrollbar
+      v-else-if="selectedTransitionOverlay && selectedTransitionTimelineItem"
+      class="properties-scroll-area"
+    >
+      <div class="properties-content">
+        <TransitionPropertiesGroup :selected-timeline-item="selectedTransitionTimelineItem" />
+      </div>
+    </n-scrollbar>
+
+    <!-- 时间轴单选状态 -->
+    <template v-else-if="selectedTimelineItem">
+      <!-- 只在ready状态时显示完整属性面板 -->
+      <template v-if="selectedTimelineItem.timelineStatus === 'ready'">
+        <n-tabs v-model:value="activePropertyTab" type="line" animated class="property-tabs">
+          <n-tab
+            v-for="tab in propertyTabs"
+            :key="tab.key"
+            :name="tab.key"
+            :tab="t(tab.labelKey)"
           />
-        </template>
+        </n-tabs>
 
-        <!-- 非ready状态时显示加载状态或简化属性 -->
-        <div v-else class="loading-properties">
+        <n-scrollbar class="properties-scroll-area">
+          <div class="properties-content properties-content--tabbed">
+            <!-- 基础属性 -->
+            <UnifiedClipProperties
+              v-if="activePropertyTab === 'basic'"
+              :selected-timeline-item="selectedTimelineItem"
+              :current-frame="currentFrame"
+            />
+
+            <MaskPropertiesGroup
+              v-else-if="
+                activePropertyTab === 'mask' &&
+                selectedTimelineItem &&
+                hasVisualProperties(selectedTimelineItem)
+              "
+              :selected-timeline-item="selectedTimelineItem"
+              :current-frame="currentFrame"
+            />
+
+            <FilterPropertiesGroup
+              v-else-if="
+                activePropertyTab === 'filter' &&
+                selectedTimelineItem &&
+                supportsClipFilter(selectedTimelineItem)
+              "
+              :selected-timeline-item="selectedTimelineItem"
+              :current-frame="currentFrame"
+            />
+
+            <!-- 预留标签占位 -->
+            <div v-else class="tab-placeholder-state">
+              <component :is="IconComponents.CHECKBOX_BLANK" size="32px" />
+              <p>{{ t('properties.tabs.placeholderTitle', { tab: t(activeTabLabelKey) }) }}</p>
+              <p class="hint">
+                {{ t('properties.tabs.placeholderDescription', { tab: t(activeTabLabelKey) }) }}
+              </p>
+            </div>
+          </div>
+        </n-scrollbar>
+      </template>
+
+      <!-- 非ready状态时显示加载状态或简化属性 -->
+      <n-scrollbar v-else class="properties-scroll-area">
+        <div class="loading-properties">
           <div class="loading-icon">
             <component :is="IconComponents.LOADING" size="20px" />
           </div>
@@ -69,10 +123,12 @@
             }}
           </p>
         </div>
-      </div>
+      </n-scrollbar>
+    </template>
 
-      <!-- 无选择状态 -->
-      <div v-else class="empty-state">
+    <!-- 无选择状态 -->
+    <n-scrollbar v-else class="properties-scroll-area">
+      <div class="empty-state">
         <component :is="IconComponents.CHECKBOX_BLANK" size="32px" />
         <p>{{ t('properties.singleSelect.emptyHint') }}</p>
         <p class="hint">{{ t('properties.singleSelect.emptyHintDetail') }}</p>
@@ -82,67 +138,149 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, watch } from 'vue'
+import { effectTemplateRegistry } from '@/core/effect-template/EffectTemplateRegistry'
+import { TimelineItemQueries } from '@/core/timelineitem/queries'
 import { useUnifiedStore } from '@/core/unifiedStore'
 import { useAppI18n } from '@/core/composables/useI18n'
-import { NScrollbar } from 'naive-ui'
-import type { UnifiedTimelineItemData } from '@/core/timelineitem/type'
+import { NScrollbar, NTab, NTabs } from 'naive-ui'
+import type { UnifiedTimelineItemData } from '@/core/timelineitem/model/timelineItem'
 import { getStatusText } from '@/core/timelineitem/queries'
-import { isPlayheadInTimelineItem } from '@/core/utils/timelineSearchUtils'
+import { hasVisualProperties } from '@/core/timelineitem/queries'
+import { supportsClipTransitionOut } from '@/core/timelineitem/queries'
+import { supportsClipFilter } from '@/core/timelineitem/queries'
 import { IconComponents } from '@/constants/iconComponents'
+import type { PropertyTabKey } from '@/core/modules/UnifiedUIModule'
 
 import UnifiedClipProperties from '@/components/properties/unified/UnifiedClipProperties.vue'
 import MediaItemProperties from '@/components/properties/MediaItemProperties.vue'
+import MaskPropertiesGroup from '@/components/properties/groups/MaskPropertiesGroup.vue'
+import TransitionPropertiesGroup from '@/components/properties/groups/TransitionPropertiesGroup.vue'
+import FilterPropertiesGroup from '@/components/properties/groups/FilterPropertiesGroup.vue'
+import { parseTimelineSelectionId } from '@/core/types/timelineSelection'
+import type { UnifiedMediaItemData } from '@/core/mediaitem/types'
 
 const unifiedStore = useUnifiedStore()
 const { t } = useAppI18n()
 
+const basePropertyTabs = [
+  { key: 'basic', labelKey: 'properties.tabs.basic' },
+  { key: 'mask', labelKey: 'properties.tabs.mask' },
+  { key: 'filter', labelKey: 'properties.tabs.filter' },
+  { key: 'animation', labelKey: 'properties.tabs.animation' },
+] as const
+
+const activePropertyTab = computed<PropertyTabKey>({
+  get: () => unifiedStore.activePropertyTab,
+  set: (tab) => unifiedStore.setActivePropertyTab(tab),
+})
+
+const propertyTabs = computed(() => {
+  if (!selectedTimelineItem.value) {
+    return basePropertyTabs
+  }
+
+  return basePropertyTabs.filter((tab) => {
+    if (tab.key === 'mask') {
+      return hasVisualProperties(selectedTimelineItem.value!)
+    }
+    if (tab.key === 'filter') {
+      return supportsClipFilter(selectedTimelineItem.value!)
+    }
+    return true
+  })
+})
+
 // 选中的时间轴项目
 const selectedTimelineItem = computed(() => {
-  // 多选模式时返回null，显示占位内容
-  if (unifiedStore.isMultiSelectMode) return null
+  if (unifiedStore.isTimelineSelectionMultiSelectMode) return null
+  if (!unifiedStore.selectedClipTimelineItemId) return null
+  return unifiedStore.getTimelineItem(unifiedStore.selectedClipTimelineItemId) || null
+})
 
-  // 单选模式时返回选中项
-  const selectedIds = unifiedStore.selectedTimelineItemIds
-  if (selectedIds.size === 0) return null
+const selectedTransitionOverlay = computed(() => {
+  if (unifiedStore.isTimelineSelectionMultiSelectMode) return null
+  return unifiedStore.getSelectedTransitionOverlay()
+})
 
-  const firstSelectedId = Array.from(selectedIds)[0]
-  return unifiedStore.getTimelineItem(firstSelectedId) || null
+const selectedTransitionTimelineItem = computed(() => {
+  if (!selectedTransitionOverlay.value) return null
+  const item = unifiedStore.getTimelineItem(selectedTransitionOverlay.value.sourceItemId) || null
+  return item && supportsClipTransitionOut(item) ? item : null
 })
 
 // 选中的媒体项目
-const selectedMediaItem = computed(() => {
-  // 多选模式时返回null，显示占位内容
-  if (unifiedStore.isMediaMultiSelectMode) return null
+const selectedLibraryAsset = computed<UnifiedMediaItemData | null>(() => {
+  if (unifiedStore.isLibraryAssetMultiSelectMode) return null
 
-  // 单选模式时返回选中项
-  const selectedId = unifiedStore.selectedMediaItemId
+  const selectedId = unifiedStore.selectedLibraryAssetId
   if (!selectedId) return null
 
   return unifiedStore.getMediaItem(selectedId) || null
 })
 
+const selectedMediaItem = computed(() => {
+  return selectedLibraryAsset.value
+})
+
 // 当前播放帧数
 const currentFrame = computed(() => unifiedStore.currentFrame)
 
+const activeTabLabelKey = computed(() => {
+  return (
+    propertyTabs.value.find((tab) => tab.key === activePropertyTab.value)?.labelKey ??
+    'properties.tabs.basic'
+  )
+})
+
 // 多选状态信息
 const multiSelectInfo = computed(() => {
-  if (!unifiedStore.isMultiSelectMode) return null
+  if (!unifiedStore.isTimelineSelectionMultiSelectMode) return null
 
-  const selectedIds = unifiedStore.selectedTimelineItemIds
+  const selectedIds = unifiedStore.selectedTimelineSelectionIds
   return {
     count: selectedIds.size,
-    items: Array.from(selectedIds)
-      .map((id) => unifiedStore.getTimelineItem(id))
-      .filter(Boolean),
+    items: Array.from(selectedIds).map((selectionId) => {
+      const parsed = parseTimelineSelectionId(selectionId)
+      if (!parsed) {
+        return {
+          id: selectionId,
+          label: t('properties.multiSelect.unknownMedia'),
+          typeLabel: t('properties.mediaTypes.unknown'),
+        }
+      }
+
+      if (parsed.kind === 'transition') {
+        const overlay = unifiedStore.getTransitionOverlay(parsed.sourceId)
+        const sourceItem = overlay ? unifiedStore.getTimelineItem(overlay.sourceItemId) : null
+        const transitionConfig = TimelineItemQueries.getBaseTransition(sourceItem)
+        const assetName = transitionConfig?.effectPackageId
+          ? effectTemplateRegistry.getPackageState(transitionConfig.effectPackageId)?.meta?.name.zh
+          : ''
+        return {
+          id: selectionId,
+          label: overlay
+            ? `${t('properties.transition.title')}: ${assetName || '未命名'}`
+            : t('properties.transition.title'),
+          typeLabel: t('properties.transition.title'),
+        }
+      }
+
+      const item = unifiedStore.getTimelineItem(parsed.sourceId)
+      return {
+        id: selectionId,
+        label: item ? getItemDisplayName(item) : t('properties.multiSelect.unknownMedia'),
+        typeLabel: t('properties.mediaTypes.' + (item?.mediaType || 'unknown')),
+      }
+    }),
   }
 })
 
 // 媒体多选状态信息
 const mediaMultiSelectInfo = computed(() => {
-  if (!unifiedStore.isMediaMultiSelectMode) return null
+  if (!unifiedStore.isLibraryAssetMultiSelectMode) return null
 
-  const selectedIds = unifiedStore.selectedMediaItemIds
+  const selectedIds = unifiedStore.selectedLibraryAssetIds
   return {
     count: selectedIds.size,
     items: Array.from(selectedIds)
@@ -152,18 +290,41 @@ const mediaMultiSelectInfo = computed(() => {
 })
 
 // 获取项目显示名称
-const getItemDisplayName = (item: any) => {
+const getItemDisplayName = (item: UnifiedTimelineItemData) => {
   if (!item) return '未知素材'
 
   if (item.mediaType === 'text') {
     // 文本项目显示文本内容
-    const text = item.config?.text || '空文本'
+    const text = TimelineItemQueries.getBaseTextConfig(item)?.content || '空文本'
     return text.length > 15 ? text.substring(0, 15) + '...' : text
   } else {
     // 其他类型显示素材名称
     return unifiedStore.getMediaItem(item.mediaItemId)?.name || '未知素材'
   }
 }
+
+function getLibraryAssetTypeLabel(asset: UnifiedMediaItemData): string {
+  return t('properties.mediaTypes.' + (asset.mediaType || 'unknown'))
+}
+
+function formatDate(value: string): string {
+  if (!value) return '-'
+
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return value
+
+  return date.toLocaleString()
+}
+
+watch(
+  propertyTabs,
+  (tabs) => {
+    if (!tabs.some((tab) => tab.key === activePropertyTab.value)) {
+      unifiedStore.setActivePropertyTab('basic')
+    }
+  },
+  { immediate: true },
+)
 </script>
 
 <style scoped>
@@ -177,10 +338,47 @@ const getItemDisplayName = (item: any) => {
   overflow: hidden;
 }
 
+.properties-scroll-area {
+  flex: 1;
+  min-height: 0;
+}
+
 /* 属性面板特定样式 - 通用属性样式已迁移到 styles/components/panels.css 和 styles/components/inputs.css */
+
+.property-tabs {
+  padding: 0 var(--spacing-lg);
+  flex-shrink: 0;
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+
+.property-tabs:deep(.n-tabs-nav) {
+  padding: 0;
+}
+
+.property-tabs:deep(.n-tabs-tab) {
+  min-height: 34px;
+  padding: 0 var(--spacing-sm);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  transition-property: color, opacity;
+  transition-duration: var(--transition-fast);
+  transition-timing-function: ease-out;
+}
+
+.property-tabs:deep(.n-tabs-tab-wrapper:not(:last-child)) {
+  margin-right: var(--spacing-xs);
+}
+
+.property-tabs:deep(.n-tabs-bar) {
+  height: 2px;
+}
 
 .properties-content {
   padding: var(--spacing-md) var(--spacing-lg);
+}
+
+.properties-content--tabbed {
+  min-height: 100%;
 }
 
 /* 媒体属性内容 */
@@ -188,16 +386,46 @@ const getItemDisplayName = (item: any) => {
   padding: 0;
 }
 
+.properties-section + .properties-section {
+  margin-top: var(--spacing-lg);
+}
+
+.section-title {
+  margin: 0 0 var(--spacing-sm);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-primary);
+}
+
+.info-row {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--spacing-md);
+  padding: var(--spacing-xs) 0;
+}
+
+.info-label {
+  color: var(--color-text-secondary);
+  flex-shrink: 0;
+}
+
+.info-value {
+  color: var(--color-text-primary);
+  text-align: right;
+  word-break: break-word;
+}
+
 /* 多选状态样式 */
 .multi-select-state {
   display: flex;
   flex-direction: column;
   align-items: center;
+  justify-content: center;
   text-align: center;
   color: var(--color-text-secondary);
   padding: var(--spacing-lg);
-  height: 100%;
-  overflow: hidden;
+  min-height: 100%;
+  box-sizing: border-box;
 }
 
 .multi-select-state svg {
@@ -210,6 +438,11 @@ const getItemDisplayName = (item: any) => {
   font-size: var(--font-size-base);
 }
 
+.multi-select-state > p:first-of-type {
+  font-variant-numeric: tabular-nums;
+  text-wrap: balance;
+}
+
 .multi-select-state .hint {
   font-size: var(--font-size-sm);
   color: var(--color-text-hint);
@@ -218,19 +451,19 @@ const getItemDisplayName = (item: any) => {
 .selected-items-list {
   margin-top: var(--spacing-lg);
   width: 100%;
-  flex: 1;
-  overflow-y: auto;
-  min-height: 0;
+  max-width: 360px;
 }
 
 .selected-item {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  min-height: 32px;
   padding: var(--spacing-xs) var(--spacing-sm);
   margin-bottom: var(--spacing-xs);
-  background: var(--color-bg-quaternary);
-  border-radius: var(--border-radius-small);
+  background: rgba(255, 255, 255, 0.055);
+  border-radius: var(--border-radius-medium);
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.055);
   font-size: var(--font-size-sm);
 }
 
@@ -247,6 +480,7 @@ const getItemDisplayName = (item: any) => {
   color: var(--color-text-hint);
   font-size: var(--font-size-xs);
   flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
 }
 
 /* 加载状态样式 */
@@ -255,6 +489,8 @@ const getItemDisplayName = (item: any) => {
   flex-direction: column;
   align-items: center;
   justify-content: center;
+  min-height: 100%;
+  box-sizing: border-box;
   padding: var(--spacing-lg);
   text-align: center;
   color: var(--color-text-secondary);
@@ -277,6 +513,56 @@ const getItemDisplayName = (item: any) => {
 .loading-status {
   font-size: var(--font-size-sm);
   color: var(--color-text-hint);
+}
+
+.empty-state,
+.media-multi-select-state,
+.tab-placeholder-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  color: var(--color-text-secondary);
+  padding: var(--spacing-lg);
+  min-height: 100%;
+  box-sizing: border-box;
+}
+
+.empty-state svg,
+.media-multi-select-state svg,
+.tab-placeholder-state svg {
+  margin-bottom: var(--spacing-md);
+}
+
+.empty-state p,
+.media-multi-select-state p,
+.tab-placeholder-state p {
+  margin: var(--spacing-xs) 0;
+  font-size: var(--font-size-base);
+  text-wrap: balance;
+}
+
+.empty-state .hint,
+.media-multi-select-state .hint,
+.tab-placeholder-state .hint {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-hint);
+  text-wrap: pretty;
+}
+
+.media-multi-select-state > p:first-of-type {
+  font-variant-numeric: tabular-nums;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .property-tabs:deep(.n-tabs-tab) {
+    transition-duration: 0ms;
+  }
+
+  .loading-icon {
+    animation: none;
+  }
 }
 
 @keyframes spin {

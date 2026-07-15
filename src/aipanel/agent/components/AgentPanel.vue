@@ -1,20 +1,18 @@
 <template>
   <template v-if="!showHistory">
-    <!-- 聊天面板 -->
-    <ChatMessageList />
-    <ChatInput />
+    <MessageList />
+    <AgentInput />
   </template>
   <template v-else>
-    <!-- 历史记录面板 -->
-    <ChatHistoryPanel @close="emit('update:showHistory', false)" />
+    <SessionHistoryPanel @close="emit('update:showHistory', false)" />
   </template>
 </template>
 
 <script setup lang="ts">
 import { ref } from 'vue'
-import ChatMessageList from './ChatMessageList.vue'
-import ChatInput from './ChatInput.vue'
-import ChatHistoryPanel from './ChatHistoryPanel.vue'
+import MessageList from './MessageList.vue'
+import AgentInput from './AgentInput.vue'
+import SessionHistoryPanel from './SessionHistoryPanel.vue'
 
 // 定义 props
 defineProps<{

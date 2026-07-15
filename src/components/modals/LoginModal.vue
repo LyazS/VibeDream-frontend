@@ -12,12 +12,13 @@
     <template #header>
       <div class="login-header">
         <img src="/icon/favicon.svg" alt="Logo" class="login-logo" />
-        <h3 class="login-title">{{ isRegisterMode ? t('user.registerTitle') : t('user.loginTitle') }}</h3>
+        <h3 class="login-title">
+          {{ isRegisterMode ? t('user.registerTitle') : t('user.loginTitle') }}
+        </h3>
       </div>
     </template>
     <form @submit.prevent="handleSubmit" class="login-form">
-      <div class="form-group">
-        <label for="username">{{ t('user.username') }}</label>
+      <ModalFormField :label="t('user.username')" input-id="username">
         <input
           id="username"
           v-model="formData.username"
@@ -26,10 +27,9 @@
           :placeholder="t('user.usernamePlaceholder')"
           :disabled="isLoading"
         />
-      </div>
+      </ModalFormField>
 
-      <div class="form-group">
-        <label for="password">{{ t('user.password') }}</label>
+      <ModalFormField :label="t('user.password')" input-id="password">
         <input
           id="password"
           v-model="formData.password"
@@ -38,19 +38,22 @@
           :placeholder="t('user.passwordPlaceholder')"
           :disabled="isLoading"
         />
-      </div>
+      </ModalFormField>
 
-      <div class="form-group" v-if="isRegisterMode">
-        <label for="confirmPassword">{{ t('user.confirmPassword') }}</label>
+      <ModalFormField
+        v-if="isRegisterMode"
+        :label="t('user.confirmPassword')"
+        input-id="confirm-password"
+      >
         <input
-          id="confirmPassword"
+          id="confirm-password"
           v-model="formData.confirmPassword"
           type="password"
           required
           :placeholder="t('user.confirmPasswordPlaceholder')"
           :disabled="isLoading"
         />
-      </div>
+      </ModalFormField>
 
       <div class="error-message" v-if="errorMessage">
         {{ errorMessage }}
@@ -78,6 +81,7 @@
 <script setup lang="ts">
 import { ref, reactive } from 'vue'
 import UniversalModal from './UniversalModal.vue'
+import ModalFormField from '@/components/base/ModalFormField.vue'
 import { useUnifiedStore } from '@/core/unifiedStore'
 import { useAppI18n } from '@/core/composables/useI18n'
 import type { User } from '@/core/modules/UnifiedUserModule'
@@ -205,37 +209,12 @@ async function handleSubmit() {
 /* 这里只需要定义内容区域特有的样式 */
 .login-form {
   padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-md);
 }
 
-.form-group {
-  margin-bottom: var(--spacing-md);
-}
-
-.form-group label {
-  display: block;
-  margin-bottom: var(--spacing-xs);
-  color: var(--color-text-primary);
-  font-size: var(--font-size-sm);
-  font-weight: 500;
-}
-
-.form-group input {
-  width: 100%;
-  padding: var(--spacing-sm);
-  border: 1px solid var(--color-border);
-  border-radius: var(--border-radius-small);
-  background-color: rgba(0, 0, 0, 0.15);
-  color: var(--color-text-primary);
-  font-size: var(--font-size-sm);
-  transition: border-color 0.2s ease;
-}
-
-.form-group input:focus {
-  outline: none;
-  border-color: var(--color-primary);
-}
-
-.form-group input:disabled {
+.login-form input:disabled {
   opacity: 0.6;
   cursor: not-allowed;
 }
@@ -243,7 +222,6 @@ async function handleSubmit() {
 .error-message {
   color: var(--color-error);
   font-size: var(--font-size-xs);
-  margin-bottom: var(--spacing-md);
   padding: var(--spacing-xs) var(--spacing-sm);
   background-color: rgba(255, 68, 68, 0.1);
   border-radius: var(--border-radius-small);

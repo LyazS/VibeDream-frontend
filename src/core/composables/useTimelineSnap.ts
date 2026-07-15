@@ -10,6 +10,7 @@
 
 import { ref, type Ref } from 'vue'
 import { useUnifiedStore } from '@/core/unifiedStore'
+import type { SnapPoint } from '@/types/snap'
 
 /**
  * 吸附位置输入参数
@@ -27,7 +28,7 @@ export interface SnapPositionInput {
 export interface SnapPositionResult {
   frame: number // 最终帧位置（已应用吸附）
   snapped: boolean // 是否发生了吸附
-  snapPoint?: any // 吸附点信息
+  snapPoint?: SnapPoint // 吸附点信息
   distance?: number // 吸附距离（帧数）
   snappedPart?: 'start' | 'end' // 吸附部位（头部还是尾部）
 }
@@ -38,7 +39,7 @@ export interface SnapPositionResult {
 export interface SnapResultState {
   snapped: boolean
   frame: number
-  snapPoint?: any
+  snapPoint?: SnapPoint
   distance?: number
 }
 
@@ -81,11 +82,11 @@ export function useTimelineSnap() {
     const frameThreshold = pixelThreshold / pixelsPerFrame
 
     // 4. 计算头部吸附
-    let startSnapPoint: any = null
+    let startSnapPoint: SnapPoint | null = null
     let startDistance = Infinity
 
     for (const target of snapTargets) {
-      const distance = Math.abs(originalStartFrame - (target as any).frame)
+      const distance = Math.abs(originalStartFrame - target.frame)
       if (distance < startDistance && distance <= frameThreshold) {
         startDistance = distance
         startSnapPoint = target
@@ -93,14 +94,14 @@ export function useTimelineSnap() {
     }
 
     // 5. 如果有片段时长，计算尾部吸附
-    let endSnapPoint: any = null
+    let endSnapPoint: SnapPoint | null = null
     let endDistance = Infinity
 
     if (input.clipDuration !== undefined && input.clipDuration > 0) {
       const originalEndFrame = originalStartFrame + input.clipDuration
 
       for (const target of snapTargets) {
-        const distance = Math.abs(originalEndFrame - (target as any).frame)
+        const distance = Math.abs(originalEndFrame - target.frame)
         if (distance < endDistance && distance <= frameThreshold) {
           endDistance = distance
           endSnapPoint = target
@@ -113,7 +114,7 @@ export function useTimelineSnap() {
       // 两个位置都有吸附，选择距离更近的
       if (startDistance <= endDistance) {
         return {
-          frame: (startSnapPoint as any).frame,
+          frame: startSnapPoint.frame,
           snapped: true,
           snapPoint: startSnapPoint,
           distance: startDistance,
@@ -122,7 +123,7 @@ export function useTimelineSnap() {
       } else {
         // 尾部吸附，需要调整开始位置
         return {
-          frame: (endSnapPoint as any).frame - input.clipDuration!,
+          frame: endSnapPoint.frame - input.clipDuration!,
           snapped: true,
           snapPoint: endSnapPoint,
           distance: endDistance,
@@ -132,7 +133,7 @@ export function useTimelineSnap() {
     } else if (startSnapPoint) {
       // 只有头部吸附
       return {
-        frame: (startSnapPoint as any).frame,
+        frame: startSnapPoint.frame,
         snapped: true,
         snapPoint: startSnapPoint,
         distance: startDistance,
@@ -141,7 +142,7 @@ export function useTimelineSnap() {
     } else if (endSnapPoint) {
       // 只有尾部吸附
       return {
-        frame: (endSnapPoint as any).frame - input.clipDuration!,
+        frame: endSnapPoint.frame - input.clipDuration!,
         snapped: true,
         snapPoint: endSnapPoint,
         distance: endDistance,

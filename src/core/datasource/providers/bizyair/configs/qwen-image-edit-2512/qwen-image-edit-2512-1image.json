@@ -5,7 +5,7 @@
   "name": "qwen-image-edit-2512-1image",
   "description": "对单张图片进行编辑，根据提示词修改图片内容",
   "media_type": "image",
-  "cost": 0.05,
+  "cost": "0.05",
   "input_mapping": {
     "ref_images": {
       "type": "array",

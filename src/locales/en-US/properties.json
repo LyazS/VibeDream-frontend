@@ -1,9 +1,6 @@
 {
   "properties": {
     "basic": {
-      "basicInfo": "Basic Information",
-      "name": "Name",
-      "resolution": "Resolution",
       "textContent": "Text Content",
       "fontFamily": "Font",
       "fontSize": "Font Size",
@@ -29,7 +26,96 @@
       "audioProperties": "Audio Properties"
     },
     "visual": {
-      "visualProperties": "Visual Properties"
+      "visualProperties": "Visual Properties",
+      "position": "Position",
+      "positionX": "X",
+      "positionY": "Y",
+      "size": "Size",
+      "width": "W",
+      "height": "H",
+      "rotation": "Rotation",
+      "rotationKnobLabel": "{label}: {value} degrees",
+      "rotationKnobTooltip": "Hold and drag to adjust rotation. Double-click to reset.",
+      "blendMode": "Blend Mode",
+      "blendIntensity": "Blend Intensity",
+      "blendModes": {
+        "normal": "Normal",
+        "color-dodge": "Color Dodge",
+        "linear-burn": "Linear Burn",
+        "hard-light": "Hard Light",
+        "multiply": "Multiply",
+        "color-burn": "Color Burn",
+        "overlay": "Overlay",
+        "lighten": "Lighten",
+        "darken": "Darken",
+        "soft-light": "Soft Light",
+        "screen": "Screen"
+      },
+      "alignHorizontal": "Horizontal Align",
+      "alignVertical": "Vertical Align",
+      "center": "Center",
+      "left": "Left",
+      "right": "Right",
+      "top": "Top",
+      "middle": "Middle",
+      "bottom": "Bottom",
+      "centerFor0": "Center is 0",
+      "proportionalScale": "Proportional Scale",
+      "scalePresets": "Scale Presets",
+      "fitToCanvas": "Fit to Canvas",
+      "fillCanvas": "Fill Canvas"
+    },
+    "transition": {
+      "title": "Transition",
+      "enabled": "Enable Transition",
+      "preset": "Preset",
+      "durationFrames": "Duration (Frames)",
+      "status": "Status",
+      "targetClip": "Target Clip: {name}",
+      "effectiveDuration": "Effective Duration: {frames} frames",
+      "presets": {
+        "crossfade": "Crossfade"
+      },
+      "statuses": {
+        "bound": "Bound to the clip on the right",
+        "unbound": "No seam on the right",
+        "invalidTarget": "Right clip type is unsupported or too short",
+        "invalidOverlap": "Overlaps with a neighboring transition",
+        "waitingEdge": "Preparing edge frames"
+      }
+    },
+    "transitionSelection": {
+      "effectAsset": "Effect Asset",
+      "sourceClip": "Source Clip",
+      "placeholder": "This panel is reserved for transition properties. Editing controls will be added later."
+    },
+    "filter": {
+      "title": "Filter",
+      "dropHint": "Drag a filter asset here",
+      "intensity": "Intensity",
+      "ready": "Ready"
+    },
+    "mask": {
+      "enabled": "Enabled",
+      "type": "Type",
+      "inverted": "Inverted",
+      "center": "Center",
+      "outerRange": "Feather",
+      "decayRate": "Strength",
+      "size": "Size",
+      "widthShort": "W",
+      "heightShort": "H",
+      "cornerRadius": "Corner",
+      "length": "Length",
+      "types": {
+        "rectangle": "Rectangle",
+        "ellipse": "Ellipse",
+        "linear": "Linear",
+        "mirror": "Mirror",
+        "rectangleUpper": "RECTANGLE",
+        "ellipseUpper": "ELLIPSE",
+        "mirrorUpper": "MIRROR"
+      }
     },
     "text": {
       "textProperties": "Text Properties"
@@ -73,42 +159,14 @@
       "addKeyframe": "Add Keyframe",
       "deleteKeyframe": "Delete Keyframe",
       "toggleKeyframe": "Toggle Keyframe",
+      "outOfClipRange": "The playhead is outside the current clip range, so keyframes cannot be edited",
+      "createAnimation": "Click to create keyframe animation",
+      "deleteCurrent": "You are on a keyframe. Click to delete it",
+      "createAtCurrent": "Click to create a keyframe at the current position",
+      "control": "Keyframe Control",
       "goToPrevious": "Previous",
       "goToNext": "Next",
       "debugKeyframes": "Debug Keyframes"
-    },
-    "transform": {
-      "transform": "Transform",
-      "position": "Position",
-      "positionSize": "Position & Size",
-      "positionX": "X",
-      "positionY": "Y",
-      "scale": "Scale",
-      "scaleX": "Scale X",
-      "scaleY": "Scale Y",
-      "uniformScale": "Uniform Scale",
-      "rotation": "Rotation",
-      "rotationAngle": "Rotation Angle",
-      "opacity": "Opacity",
-      "transparency": "Transparency",
-      "zIndex": "Layer Level",
-      "layer": "Layer",
-      "alignment": "Alignment",
-      "alignHorizontal": "Horizontal Align",
-      "alignVertical": "Vertical Align",
-      "center": "Center",
-      "left": "Left",
-      "right": "Right",
-      "top": "Top",
-      "middle": "Middle",
-      "bottom": "Bottom",
-      "centerFor0": "Center is 0",
-      "proportionalScale": "Proportional Scale",
-      "proportional": "Proportional",
-      "uniform": "Uniform",
-      "scalePresets": "Scale Presets",
-      "fitToCanvas": "Fit to Canvas",
-      "fillCanvas": "Fill Canvas"
     },
     "fonts": {
       "fontFamilyArial": "Arial",
@@ -122,7 +180,7 @@
       "fontStyleItalic": "Italic"
     },
     "timecodes": {
-      "timecodeFormat": "HH:MM:SS.FF",
+      "timecodeFormat": "HH:MM:SS+FF",
       "frameRate": "fps"
     },
     "placeholders": {
@@ -142,7 +200,7 @@
       "textStyleUpdateFailed": "Text style update failed, please try again",
       "textUpdateSuccess": "Text content update successful",
       "textStyleSuccess": "Text style update successful",
-      "invalidTimecodeFormat": "Please use correct timecode format: HH:MM:SS.FF",
+      "invalidTimecodeFormat": "Please use correct timecode format: HH:MM:SS+FF",
       "formatError": "Format error",
       "example": "Example",
       "timecodeExample": "00:01:30.15 (1 minute 30 seconds 15 frames)",
@@ -167,6 +225,15 @@
       "hint": "Properties for multiple selection are not supported yet",
       "unknownMedia": "Unknown Media"
     },
+    "tabs": {
+      "basic": "Basic",
+      "transition": "Transition",
+      "mask": "Mask",
+      "filter": "Filter",
+      "animation": "Animation",
+      "placeholderTitle": "{tab} is not available yet",
+      "placeholderDescription": "The {tab} panel will be added later. This is a placeholder for now."
+    },
     "mediaItem": {
       "basicInfo": "Basic Information",
       "name": "Name",
@@ -174,6 +241,11 @@
       "createdAt": "Created At",
       "statusInfo": "Status Information",
       "techInfo": "Technical Information",
+      "indexingInfo": "Indexing Information",
+      "indexStatus": "Index Status",
+      "indexedAt": "Indexed At",
+      "segmentCount": "Segment Count",
+      "failedSegmentCount": "Failed Segments",
       "duration": "Duration",
       "resolution": "Resolution",
       "fileSize": "File Size",
@@ -181,8 +253,7 @@
       "actions": "Actions",
       "retry": "Retry",
       "cancel": "Cancel",
-      "errorDetails": "Error Details",
-      "canCreateCharacter": "Can Create Real Person Character"
+      "errorDetails": "Error Details"
     },
     "mediaTypes": {
       "video": "Video",

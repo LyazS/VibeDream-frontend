@@ -13,6 +13,13 @@
       "deleteTooltip": "Delete selected clip",
       "overlapping": "{count} overlaps"
     },
+    "edgeEdit": {
+      "trim": "Trim",
+      "trimTooltip": "Clip handles trim/extend while preserving playback rate for audio/video",
+      "resize": "Resize",
+      "resizeTooltip": "Clip handles resize timeline duration without moving source in/out points",
+      "tooltip": "Switch clip edge handle edit mode"
+    },
     "snap": {
       "snap": "Snap",
       "enabledTooltip": "Snap enabled - Clips will automatically align to adjacent clip edges and timeline start",

@@ -11,12 +11,18 @@
  */
 
 import type { MediaType, UnifiedMediaItemData } from '@/core/mediaitem/types'
-import type { UnifiedTimelineItemData } from '@/core/timelineitem/type'
-import type { TransitionOptions } from './types'
+import type { UnifiedTimelineItemData } from '@/core/timelineitem/model/timelineItem'
 import { MediaItemQueries } from '@/core/mediaitem'
-import { TimelineItemFactory, TimelineItemQueries } from '@/core/timelineitem'
+import { TimelineItemFactory } from '@/core/timelineitem/runtime/factory'
+import { TimelineItemQueries } from '@/core/timelineitem/queries'
+import { TimelineItemMutations } from '@/core/timelineitem/mutations'
 import { useUnifiedStore } from '@/core/unifiedStore'
 import { setupTimelineItemBunny } from '@/core/bunnyUtils/timelineItemSetup'
+
+export interface TransitionOptions {
+  commandId?: string
+  description?: string
+}
 /**
  * 时间轴项目状态转换器（不支持文本类型）
  */
@@ -31,8 +37,8 @@ export class TimelineItemTransitioner {
    */
   async transitionToReady(options: TransitionOptions): Promise<void> {
     const { commandId, description } = options
-    const store = useUnifiedStore()
-    const timelineItem = store.getTimelineItem(this.timelineItemId)
+    const unifiedStore = useUnifiedStore()
+    const timelineItem = unifiedStore.getTimelineItem(this.timelineItemId)
 
     if (!timelineItem) {
       console.log(
@@ -81,6 +87,7 @@ export class TimelineItemTransitioner {
 
     // ✅ 完成初始化后，标记为已初始化
     timelineItem.runtime.isInitialized = true
+    unifiedStore.refreshTransitionItems()
 
     console.log(`🎉 [TimelineItemTransitioner] 时间轴项目状态转换完成: ${this.timelineItemId}`)
   }
@@ -112,12 +119,10 @@ export class TimelineItemTransitioner {
       (TimelineItemQueries.isVideoTimelineItem(timelineItem) ||
         TimelineItemQueries.isImageTimelineItem(timelineItem))
     ) {
-      // 保留现有的配置，只更新尺寸相关字段
-      const currentConfig = timelineItem.config
-
-      // 更新宽度和高度
-      currentConfig.width = originalSize.width
-      currentConfig.height = originalSize.height
+      TimelineItemMutations.patchBaseVisualConfig(timelineItem, {
+        width: originalSize.width,
+        height: originalSize.height,
+      })
     } else if (!originalSize) {
       console.warn(`⚠️ [TimelineItemTransitioner] 无法获取媒体原始尺寸: ${this.mediaItem.id}`)
     }

@@ -1,10 +1,10 @@
+import type { MoneyString } from '@/utils/money'
+
 // 用户类型定义
 export interface User {
   username: string
   email?: string
-  balance: number
-  total_recharged: number
-  total_consumed: number
+  balance: MoneyString
   is_active: boolean
   is_superuser: boolean
   created_at: string
@@ -85,6 +85,7 @@ export interface RequestConfig extends RequestInit {
   headers?: Record<string, string>
   isRetry?: boolean // 标记是否为重试请求
   responseType?: 'json' | 'text' | 'blob' | 'auto' // 响应数据解析方式，默认为 'auto'
+  params?: Record<string, string | number | boolean | null | undefined>
 }
 
 // API响应接口

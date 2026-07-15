@@ -4,7 +4,7 @@
  */
 
 import type { UnifiedTrackData } from '@/core/track'
-import type { UnifiedTimelineItemData } from '@/core/timelineitem'
+import type { UnifiedTimelineItemData } from '@/core/timelineitem/model/timelineItem'
 
 /**
  * 项目内容数据（从UnifiedProjectConfig中拆分出来）

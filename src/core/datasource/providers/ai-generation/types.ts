@@ -1,3 +1,5 @@
+import type { MoneyString } from '@/utils/money'
+
 /**
  * AI生成数据源类型定义
  * 集中管理所有AI生成相关的类型、接口和枚举
@@ -24,9 +26,7 @@ export enum AITaskType {
   TEXT_TO_IMAGE = 'text_to_image',
   REMOTE_IMAGE = 'remote_image',
   BIZYAIR_GENERATE_MEDIA = 'bizyair_generate_media',
-  BLTCY_SORA2 = 'bltcy_sora2', // BLTCY Sora2 视频生成（支持 T2V 和 I2V）
   RUNNINGHUB_GENERATE_MEDIA = 'runninghub_generate_media', // RunningHub 媒体生成
-  BLTCY_CHARACTER = 'bltcy_character', // BLTCY 角色创建
 }
 
 /**
@@ -81,10 +81,6 @@ export interface MediaGenerationRequest {
 export interface TaskResultData {
   /** 生成的媒体文件 URL */
   url: string
-  /** BLTCY 任务ID（可选） */
-  bltcy_task_id?: string
-  /** Sora2 角色用户名（可选） */
-  sora2_username?: string
 }
 
 /**
@@ -165,7 +161,7 @@ export type TaskStreamEvent =
   | ErrorEvent
   | HeartbeatEvent
 
-// ==================== 处理器相关类型 ====================
+// ==================== 执行阶段相关类型 ====================
 
 /**
  * 媒体类型信息接口
@@ -222,6 +218,7 @@ export interface NumberInputConfig extends BaseUIConfig {
   max: number
   step: number
   precision: number
+  showSlider?: boolean // 是否显示滑块，默认为 true
 }
 
 /**
@@ -242,7 +239,7 @@ export interface SelectInputConfig extends BaseUIConfig {
   options: Array<{
     label: I18nText
     value: string | number
-    add_cost?: number // 可选的额外成本字段
+    add_cost?: MoneyString // 可选的额外成本字段
   }>
 }
 
@@ -349,7 +346,7 @@ export type UIConfig = NumberInputConfig | TextareaInputConfig | SelectInputConf
 /**
  * 上传服务器类型
  */
-export type UploadServerType = 'bizyair' | 'bltcy' | 'runninghub' | 'runninghubstd'
+export type UploadServerType = 'bizyair' | 'runninghub' | 'runninghubstd'
 
 /**
  * AI 生成配置结构
@@ -362,7 +359,7 @@ export interface AIGenerateConfig {
   aiTaskType: AITaskType
   uploadServer?: UploadServerType // 上传服务器类型，默认为 'default'
   subAiTaskType?: string // 子任务类型（可选），用于区分同一服务提供商的不同API类型
-  cost: number // 生成成本
+  cost: MoneyString // 生成成本
   aiConfig: AIConfigWithWrapper // 使用包装器结构
   uiConfig: UIConfig[]
 }

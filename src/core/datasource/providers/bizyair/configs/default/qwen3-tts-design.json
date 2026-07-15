@@ -1,0 +1,44 @@
+{
+  "id": "qwen3-tts-design",
+  "variant": "default",
+  "web_app_id": 45577,
+  "name": "qwen3-tts-design",
+  "description": "Qwen3语音设计 - 支持角色定制的AI文本转语音生成",
+  "media_type": "audio",
+  "cost": "0.1",
+  "input_mapping": {
+    "text": {
+      "mapping": "38:FB_Qwen3TTSVoiceDesign.text",
+      "type": "string",
+      "validation": {
+        "required": true,
+        "minLength": 1,
+        "maxLength": 5000,
+        "description": "需要转换为语音的文本内容"
+      }
+    },
+    "instruct": {
+      "mapping": "38:FB_Qwen3TTSVoiceDesign.instruct",
+      "type": "string",
+      "default": "",
+      "validation": {
+        "required": true,
+        "maxLength": 10000,
+        "description": "角色语音设定（姓名、音色、背景、外貌、性格等）"
+      }
+    },
+    "language": {
+      "mapping": "38:FB_Qwen3TTSVoiceDesign.language",
+      "type": "string",
+      "default": "Chinese",
+      "validation": {
+        "required": false,
+        "enum": [
+          "Chinese",
+          "English"
+        ],
+        "description": "语言选择"
+      }
+    }
+  }
+}

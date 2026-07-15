@@ -1,9 +1,5 @@
 import type { MediaType } from '@/core'
-import type {
-  UnifiedTimelineItemData,
-  VideoMediaConfig,
-  AudioMediaConfig,
-} from '@/core/timelineitem'
+import type { UnifiedTimelineItemData, VideoMediaConfig, AudioMediaConfig } from '@/core/timelineitem/model/timelineItem'
 import type { UnifiedTimeRange } from '@/core/types/timeRange'
 import type { UnifiedTrackType, UnifiedTrackData } from '@/core/track/TrackTypes'
 import type {
@@ -17,8 +13,11 @@ import type {
 import {
   AddTimelineItemCommand,
   RemoveTimelineItemCommand,
+  RemoveASRRequestCommand,
+  StartASRRequestCommand,
   MoveTimelineItemCommand,
-  UpdateTransformCommand,
+  UpdateTransitionConfigCommand,
+  UpdateFilterConfigCommand,
   SplitTimelineItemCommand,
   ResizeTimelineItemCommand,
   AddTrackCommand,
@@ -26,35 +25,37 @@ import {
   RenameTrackCommand,
   ToggleTrackVisibilityCommand,
   ToggleTrackMuteCommand,
-  SelectTimelineItemsCommand,
+  SelectTimelineSelectionsCommand,
+  TrimTimelineItemCommand,
 } from '@/core/modules/commands/timelineCommands'
+import { ApplyChangePlanCommand } from '@/core/modules/commands/ApplyChangePlanCommand'
 import { BatchAutoArrangeTrackCommand } from '@/core/modules/commands/batchCommands'
-import { TimelineItemQueries } from '@/core/timelineitem/'
-import { duplicateTimelineItem } from '@/core/timelineitem/factory'
-import { UpdateTextCommand } from '@/core/modules/commands/UpdateTextCommand'
-import type { TextStyleConfig } from '@/core/timelineitem/texttype'
+import { MoveTrackCommand } from '@/core/modules/commands/MoveTrackCommand'
+import { TimelineItemQueries } from '@/core/timelineitem/queries'
+import { duplicateTimelineItem } from '@/core/timelineitem/runtime/factory'
 import {
-  CreateKeyframeCommand,
-  DeleteKeyframeCommand,
-  UpdatePropertyCommand,
   ClearAllKeyframesCommand,
-  ToggleKeyframeCommand,
   type TimelineModule as KeyframeTimelineModule,
   type PlaybackControls,
 } from '@/core/modules/commands/keyframeCommands'
+import type { ClipTransitionOutConfig } from '@/core/transition/types'
+import type { TimelineSelectionId } from '@/core/types/timelineSelection'
+import {
+  areClipTransitionOutConfigsEqual,
+  normalizeClipTransitionOutConfig,
+} from '@/core/timelineitem/features/transition'
+import type { ClipFilterConfig } from '@/core/filter/types'
+import {
+  areClipFilterConfigsEqual,
+  normalizeClipFilterConfig,
+} from '@/core/timelineitem/features/filter'
+import { RENDERER_FPS } from '@/core/mediabunny/constant'
+import type { ChangePlan } from '@/core/property-system'
+import type { AnimationChannelKey } from '@/core/timelineitem/model/render'
+import type { TrimTimelineItemSide } from '@/core/modules/commands/timelineCommands'
 
-// 变换属性类型定义
-interface TransformProperties {
-  x?: number
-  y?: number
-  width?: number
-  height?: number
-  rotation?: number
-  opacity?: number
-  duration?: number // 时长（帧数）
-  playbackRate?: number // 倍速
-  volume?: number // 音量（0-1之间）
-  isMuted?: boolean // 静音状态
+interface PlaybackRateUpdate {
+  playbackRate: number
 }
 
 /**
@@ -68,87 +69,33 @@ export function useHistoryOperations(
   unifiedConfigModule: UnifiedConfigModule,
   unifiedTrackModule: UnifiedTrackModule,
   unifiedSelectionModule: UnifiedSelectionModule,
+  ensureTimelineItemResolved: (timelineItemId: string) => Promise<unknown>,
 ) {
   // ==================== 辅助函数 ====================
 
-  /**
-   * 检查变换属性是否有实际变化
-   */
-  function checkTransformChanges(
-    oldTransform: TransformProperties,
-    newTransform: TransformProperties,
+  function hasPlaybackRateChanges(
+    oldValue: PlaybackRateUpdate,
+    newValue: PlaybackRateUpdate,
   ): boolean {
-    // 检查位置变化
-    if (
-      (newTransform.x !== undefined && oldTransform.x !== undefined) ||
-      (newTransform.y !== undefined && oldTransform.y !== undefined)
-    ) {
-      const xChanged =
-        newTransform.x !== undefined &&
-        oldTransform.x !== undefined &&
-        Math.abs(oldTransform.x - newTransform.x) > 0.1
-      const yChanged =
-        newTransform.y !== undefined &&
-        oldTransform.y !== undefined &&
-        Math.abs(oldTransform.y - newTransform.y) > 0.1
-      if (xChanged || yChanged) return true
+    return Math.abs(oldValue.playbackRate - newValue.playbackRate) >= 0.01
+  }
+
+  function getEditableTimelineItemOrWarn(
+    timelineItemId: string,
+    action: string,
+  ): UnifiedTimelineItemData<MediaType> | null {
+    const timelineItem = unifiedTimelineModule.getTimelineItem(timelineItemId)
+    if (!timelineItem) {
+      console.warn(`⚠️ 时间轴项目不存在，无法${action}: ${timelineItemId}`)
+      return null
     }
 
-    // 检查大小变化
-    if (
-      (newTransform.width !== undefined && oldTransform.width !== undefined) ||
-      (newTransform.height !== undefined && oldTransform.height !== undefined)
-    ) {
-      const widthChanged =
-        newTransform.width !== undefined &&
-        oldTransform.width !== undefined &&
-        Math.abs(oldTransform.width - newTransform.width) > 0.1
-      const heightChanged =
-        newTransform.height !== undefined &&
-        oldTransform.height !== undefined &&
-        Math.abs(oldTransform.height - newTransform.height) > 0.1
-      if (widthChanged || heightChanged) return true
+    if (TimelineItemQueries.isLoading(timelineItem)) {
+      console.warn(`⚠️ loading 状态的时间轴项目不允许${action}: ${timelineItemId}`)
+      return null
     }
 
-    // 检查旋转变化
-    if (newTransform.rotation !== undefined && oldTransform.rotation !== undefined) {
-      const rotationChanged = Math.abs(oldTransform.rotation - newTransform.rotation) > 0.001 // 约0.06度
-      if (rotationChanged) return true
-    }
-
-    // 检查透明度变化
-    if (newTransform.opacity !== undefined && oldTransform.opacity !== undefined) {
-      const opacityChanged = Math.abs(oldTransform.opacity - newTransform.opacity) > 0.001
-      if (opacityChanged) return true
-    }
-
-
-    // 检查时长变化
-    if (newTransform.duration !== undefined && oldTransform.duration !== undefined) {
-      const durationChanged = Math.abs(oldTransform.duration - newTransform.duration) > 0
-      if (durationChanged) return true
-    }
-
-    // 检查倍速变化
-    if (newTransform.playbackRate !== undefined && oldTransform.playbackRate !== undefined) {
-      const playbackRateChanged =
-        Math.abs(oldTransform.playbackRate - newTransform.playbackRate) >= 0.01 // 0.01倍速误差容忍
-      if (playbackRateChanged) return true
-    }
-
-    // 检查音量变化
-    if (newTransform.volume !== undefined && oldTransform.volume !== undefined) {
-      const volumeChanged = Math.abs(oldTransform.volume - newTransform.volume) >= 0.01 // 0.01音量误差容忍
-      if (volumeChanged) return true
-    }
-
-    // 检查静音状态变化
-    if (newTransform.isMuted !== undefined && oldTransform.isMuted !== undefined) {
-      const muteChanged = oldTransform.isMuted !== newTransform.isMuted
-      if (muteChanged) return true
-    }
-
-    return false
+    return timelineItem
   }
 
   // ==================== 时间轴项目历史记录方法 ====================
@@ -163,7 +110,7 @@ export function useHistoryOperations(
       timelineItem,
       unifiedTimelineModule,
       unifiedMediaModule,
-      unifiedConfigModule,
+      ensureTimelineItemResolved,
     )
     await unifiedHistoryModule.executeCommand(command)
   }
@@ -173,13 +120,42 @@ export function useHistoryOperations(
    * @param timelineItemId 要删除的时间轴项目ID
    */
   async function removeTimelineItemWithHistory(timelineItemId: string) {
+    const timelineItem = unifiedTimelineModule.getTimelineItem(timelineItemId)
+    const asrRequestId = getASRRequestIdFromTimelineItem(timelineItem)
+
+    if (asrRequestId) {
+      const command = new RemoveASRRequestCommand(
+        asrRequestId,
+        unifiedTimelineModule,
+        unifiedMediaModule,
+        ensureTimelineItemResolved,
+        () => unifiedTimelineModule.timelineItems.value,
+      )
+      await unifiedHistoryModule.executeCommand(command)
+      return
+    }
+
     const command = new RemoveTimelineItemCommand(
       timelineItemId,
       unifiedTimelineModule,
       unifiedMediaModule,
-      unifiedConfigModule,
+      ensureTimelineItemResolved,
     )
     await unifiedHistoryModule.executeCommand(command)
+  }
+
+  function getASRRequestIdFromTimelineItem(
+    timelineItem: UnifiedTimelineItemData<MediaType> | undefined,
+  ): string | null {
+    if (!timelineItem) {
+      return null
+    }
+
+    if (timelineItem.isPlaceholder && timelineItem.task?.kind === 'asr-subtitles') {
+      return timelineItem.task.requestId
+    }
+
+    return null
   }
 
   /**
@@ -193,16 +169,14 @@ export function useHistoryOperations(
     newPositionFrames: number,
     newTrackId?: string,
   ) {
-    // 获取要移动的时间轴项目
-    const timelineItem = unifiedTimelineModule.getTimelineItem(timelineItemId)
+    const timelineItem = getEditableTimelineItemOrWarn(timelineItemId, '移动')
     if (!timelineItem) {
-      console.warn(`⚠️ 时间轴项目不存在，无法移动: ${timelineItemId}`)
       return
     }
 
     // 获取当前位置和轨道
     const oldPositionFrames = timelineItem.timeRange.timelineStartTime // 帧数
-    const oldTrackId = timelineItem.trackId || 'default-track' // 提供默认值
+    const oldTrackId = timelineItem.trackId
     const finalNewTrackId = newTrackId !== undefined ? newTrackId : oldTrackId
 
     // 检查是否有实际变化
@@ -226,100 +200,203 @@ export function useHistoryOperations(
     await unifiedHistoryModule.executeCommand(command)
   }
 
-  /**
-   * 带历史记录的更新变换属性方法（增强版）
-   * @param timelineItemId 要更新的时间轴项目ID
-   * @param newTransform 新的变换属性
-   */
-  async function updateTimelineItemTransformWithHistory(
+  async function updatePlaybackRateWithHistory(
     timelineItemId: string,
-    newTransform: TransformProperties,
+    newPlaybackRate: number,
   ) {
-    // 获取要更新的时间轴项目
-    const timelineItem = unifiedTimelineModule.getTimelineItem(timelineItemId)
+    const timelineItem = getEditableTimelineItemOrWarn(timelineItemId, '更新播放速度')
     if (!timelineItem) {
-      console.warn(`⚠️ 时间轴项目不存在，无法更新变换属性: ${timelineItemId}`)
       return
     }
 
-    // 获取当前的变换属性（类型安全版本）
-    const oldTransform: TransformProperties = {}
-
-    // 检查是否具有视觉属性
-    if (TimelineItemQueries.hasVisualProperties(timelineItem)) {
-      const config = timelineItem.config as VideoMediaConfig
-      if (newTransform.x !== undefined) {
-        oldTransform.x = config.x
-      }
-      if (newTransform.y !== undefined) {
-        oldTransform.y = config.y
-      }
-      if (newTransform.width !== undefined) {
-        oldTransform.width = config.width
-      }
-      if (newTransform.height !== undefined) {
-        oldTransform.height = config.height
-      }
-      if (newTransform.rotation !== undefined) {
-        oldTransform.rotation = config.rotation
-      }
-      if (newTransform.opacity !== undefined) {
-        oldTransform.opacity = config.opacity
-      }
-    }
-
-
-    if (newTransform.duration !== undefined) {
-      // 计算当前时长（帧数）
+    const oldValue: PlaybackRateUpdate = { playbackRate: 1 }
+    if (
+      TimelineItemQueries.isVideoTimelineItem(timelineItem) ||
+      TimelineItemQueries.isAudioTimelineItem(timelineItem)
+    ) {
       const timeRange = timelineItem.timeRange
-      const currentDurationFrames = timeRange.timelineEndTime - timeRange.timelineStartTime
-      oldTransform.duration = currentDurationFrames
-    }
-
-    if (newTransform.playbackRate !== undefined) {
-      // 获取当前倍速（对视频和音频有效）
-      oldTransform.playbackRate = 1
-      if (
-        TimelineItemQueries.isVideoTimelineItem(timelineItem) ||
-        TimelineItemQueries.isAudioTimelineItem(timelineItem)
-      ) {
-        // 使用 timeRange 计算 playbackRate
-        // playbackRate = (clipEndTime - clipStartTime) / (timelineEndTime - timelineStartTime)
-        const timeRange = timelineItem.timeRange
-        const clipDuration = timeRange.clipEndTime - timeRange.clipStartTime
-        const timelineDuration = timeRange.timelineEndTime - timeRange.timelineStartTime
-        if (timelineDuration > 0) {
-          oldTransform.playbackRate = clipDuration / timelineDuration
-        }
+      const clipDuration = timeRange.clipEndTime - timeRange.clipStartTime
+      const timelineDuration = timeRange.timelineEndTime - timeRange.timelineStartTime
+      if (timelineDuration > 0) {
+        oldValue.playbackRate = clipDuration / timelineDuration
       }
     }
 
-    // 检查是否具有音频属性
-    if (TimelineItemQueries.hasAudioProperties(timelineItem)) {
-      const config = timelineItem.config as AudioMediaConfig
-      if (newTransform.volume !== undefined) {
-        oldTransform.volume = config.volume ?? 1
-      }
-      if (newTransform.isMuted !== undefined) {
-        oldTransform.isMuted = config.isMuted ?? false
-      }
-    }
-
-    // 检查是否有实际变化
-    const hasChanges = checkTransformChanges(oldTransform, newTransform)
-    if (!hasChanges) {
-      console.log('⚠️ 变换属性没有变化，跳过更新操作')
+    const newValue: PlaybackRateUpdate = { playbackRate: newPlaybackRate }
+    if (!hasPlaybackRateChanges(oldValue, newValue)) {
+      console.log('⚠️ 播放速度没有变化，跳过更新操作')
       return
     }
 
-    const command = new UpdateTransformCommand(
+    const timeRange = timelineItem.timeRange
+    const clipDurationFrames = timeRange.clipEndTime - timeRange.clipStartTime
+    const targetPlaybackRate = Math.max(0.1, Math.min(100, newPlaybackRate))
+    const newTimelineDurationFrames = Math.max(1, Math.round(clipDurationFrames / targetPlaybackRate))
+    const newTimeRange: UnifiedTimeRange = {
+      timelineStartTime: timeRange.timelineStartTime,
+      timelineEndTime: timeRange.timelineStartTime + newTimelineDurationFrames,
+      clipStartTime: timeRange.clipStartTime,
+      clipEndTime: timeRange.clipEndTime,
+    }
+
+    const command = new ResizeTimelineItemCommand(
       timelineItemId,
-      oldTransform,
-      newTransform,
+      timeRange,
+      newTimeRange,
       unifiedTimelineModule,
       unifiedMediaModule,
     )
     await unifiedHistoryModule.executeCommand(command)
+  }
+
+  async function updateTransitionConfigWithHistory(
+    timelineItemId: string,
+    nextTransitionConfig?: ClipTransitionOutConfig,
+  ) {
+    const timelineItem = getEditableTimelineItemOrWarn(timelineItemId, '更新转场')
+    if (!timelineItem) {
+      return
+    }
+
+    const currentTransitionOut = TimelineItemQueries.getBaseTransition(timelineItem)
+      ? normalizeClipTransitionOutConfig(TimelineItemQueries.getBaseTransition(timelineItem))
+      : undefined
+    const normalizedNextTransitionConfig = nextTransitionConfig
+      ? normalizeClipTransitionOutConfig(nextTransitionConfig)
+      : undefined
+
+    const hasSameValue = areClipTransitionOutConfigsEqual(
+      currentTransitionOut,
+      normalizedNextTransitionConfig,
+    )
+
+    if (hasSameValue) {
+      return
+    }
+
+    const command = new UpdateTransitionConfigCommand(
+      timelineItemId,
+      currentTransitionOut,
+      normalizedNextTransitionConfig,
+      unifiedTimelineModule,
+    )
+    await unifiedHistoryModule.executeCommand(command)
+  }
+
+  async function updateFilterConfigWithHistory(
+    timelineItemId: string,
+    nextFilterConfig?: ClipFilterConfig,
+  ) {
+    const timelineItem = getEditableTimelineItemOrWarn(timelineItemId, '更新滤镜')
+    if (!timelineItem) {
+      return
+    }
+
+    const currentFilterConfig = timelineItem.exRenderConfig?.filter
+      ? normalizeClipFilterConfig(timelineItem.exRenderConfig.filter)
+      : undefined
+    const normalizedNextFilterConfig = nextFilterConfig
+      ? normalizeClipFilterConfig(nextFilterConfig)
+      : undefined
+
+    const hasSameValue = areClipFilterConfigsEqual(
+      currentFilterConfig,
+      normalizedNextFilterConfig,
+    )
+
+    if (hasSameValue) {
+      return
+    }
+
+    await commitFilterConfigWithHistory(
+      timelineItemId,
+      currentFilterConfig,
+      normalizedNextFilterConfig,
+    )
+  }
+
+  async function commitFilterConfigWithHistory(
+    timelineItemId: string,
+    previousFilterConfig?: ClipFilterConfig,
+    nextFilterConfig?: ClipFilterConfig,
+  ) {
+    const timelineItem = getEditableTimelineItemOrWarn(timelineItemId, '提交滤镜')
+    if (!timelineItem) {
+      return
+    }
+
+    const normalizedPreviousFilterConfig = previousFilterConfig
+      ? normalizeClipFilterConfig(previousFilterConfig)
+      : undefined
+    const normalizedNextFilterConfig = nextFilterConfig
+      ? normalizeClipFilterConfig(nextFilterConfig)
+      : undefined
+
+    const hasSameValue = areClipFilterConfigsEqual(
+      normalizedPreviousFilterConfig,
+      normalizedNextFilterConfig,
+    )
+
+    if (hasSameValue) {
+      return
+    }
+
+    const command = new UpdateFilterConfigCommand(
+      timelineItemId,
+      normalizedPreviousFilterConfig,
+      normalizedNextFilterConfig,
+      unifiedTimelineModule,
+      unifiedMediaModule,
+    )
+    await unifiedHistoryModule.executeCommand(command)
+  }
+
+  async function removeFilterEffectWithHistory(timelineItemId: string) {
+    const timelineItem = getEditableTimelineItemOrWarn(timelineItemId, '移除滤镜')
+    if (!timelineItem) {
+      return
+    }
+
+    const currentFilterEffect = timelineItem.exRenderConfig?.filter
+      ? normalizeClipFilterConfig(timelineItem.exRenderConfig.filter)
+      : undefined
+    const filterIntensityTrack = (timelineItem.animation?.groups as
+      | Record<string, { keyframes?: unknown[] }>
+      | undefined)?.['filter.intensity']
+    const hasFilterIntensityKeyframes = Boolean(
+      filterIntensityTrack?.keyframes?.length,
+    )
+
+    if (!currentFilterEffect && !hasFilterIntensityKeyframes) {
+      return
+    }
+
+    const batch = unifiedHistoryModule.startBatch('移除片段滤镜')
+
+    if (currentFilterEffect) {
+      batch.addCommand(new UpdateFilterConfigCommand(
+        timelineItemId,
+        currentFilterEffect,
+        undefined,
+        unifiedTimelineModule,
+        unifiedMediaModule,
+      ))
+    }
+
+    if (hasFilterIntensityKeyframes) {
+      batch.addCommand(new ClearAllKeyframesCommand(
+        timelineItemId,
+        'filter.intensity',
+        unifiedTimelineModule,
+        {
+          seekTo: (nextFrame: number) => {
+            console.log('🔍 滤镜关键帧清除播放头控制:', nextFrame)
+          },
+        },
+      ))
+    }
+
+    await unifiedHistoryModule.executeBatchCommand(batch.build())
   }
 
   /**
@@ -331,10 +408,8 @@ export function useHistoryOperations(
     timelineItemId: string,
     splitTimeFrames: number[],
   ) {
-    // 获取要分割的时间轴项目
-    const timelineItem = unifiedTimelineModule.getTimelineItem(timelineItemId)
+    const timelineItem = getEditableTimelineItemOrWarn(timelineItemId, '分割')
     if (!timelineItem) {
-      console.warn(`⚠️ 时间轴项目不存在，无法分割: ${timelineItemId}`)
       return
     }
 
@@ -344,6 +419,7 @@ export function useHistoryOperations(
       splitTimeFrames,
       unifiedTimelineModule,
       unifiedMediaModule,
+      ensureTimelineItemResolved,
     )
     await unifiedHistoryModule.executeCommand(command)
   }
@@ -359,10 +435,8 @@ export function useHistoryOperations(
     newPositionFrames?: number,
     newTrackId?: string,
   ) {
-    // 获取要复制的时间轴项目
-    const timelineItem = unifiedTimelineModule.getTimelineItem(timelineItemId)
+    const timelineItem = getEditableTimelineItemOrWarn(timelineItemId, '复制')
     if (!timelineItem) {
-      console.warn(`⚠️ 时间轴项目不存在，无法复制: ${timelineItemId}`)
       return
     }
 
@@ -374,7 +448,7 @@ export function useHistoryOperations(
     // 使用 TimelineItemFactory 复制项目
     const duplicatedItem = duplicateTimelineItem(
       timelineItem,
-      newTrackId || timelineItem.trackId || 'default-track',
+      newTrackId || timelineItem.trackId,
       timeOffset,
     )
 
@@ -383,7 +457,7 @@ export function useHistoryOperations(
       duplicatedItem,
       unifiedTimelineModule,
       unifiedMediaModule,
-      unifiedConfigModule,
+      ensureTimelineItemResolved,
     )
     await unifiedHistoryModule.executeCommand(command)
   }
@@ -404,9 +478,8 @@ export function useHistoryOperations(
       })
 
       // 获取当前项目
-      const currentItem = unifiedTimelineModule.getTimelineItem(timelineItemId)
+      const currentItem = getEditableTimelineItemOrWarn(timelineItemId, '调整时间范围')
       if (!currentItem) {
-        console.error('❌ [UnifiedStore] 时间轴项目不存在:', timelineItemId)
         return false
       }
 
@@ -439,6 +512,42 @@ export function useHistoryOperations(
     }
   }
 
+  async function trimTimelineItemWithHistory(
+    timelineItemId: string,
+    side: TrimTimelineItemSide,
+    targetBoundaryFrame: number,
+  ): Promise<boolean> {
+    try {
+      const currentItem = getEditableTimelineItemOrWarn(timelineItemId, 'Trim 时间范围')
+      if (!currentItem) {
+        return false
+      }
+
+      const currentBoundary =
+        side === 'start'
+          ? currentItem.timeRange.timelineStartTime
+          : currentItem.timeRange.timelineEndTime
+      if (currentBoundary === targetBoundaryFrame) {
+        return true
+      }
+
+      const command = new TrimTimelineItemCommand(
+        timelineItemId,
+        currentItem,
+        side,
+        targetBoundaryFrame,
+        unifiedTimelineModule,
+        unifiedMediaModule,
+      )
+
+      await unifiedHistoryModule.executeCommand(command)
+      return true
+    } catch (error) {
+      console.error('❌ [UnifiedStore] Trim 时间轴项目时发生错误:', error)
+      return false
+    }
+  }
+
   /**
    * 带历史记录的添加轨道方法
    * @param type 轨道类型
@@ -446,6 +555,26 @@ export function useHistoryOperations(
    */
   async function addTrackWithHistory(type: UnifiedTrackType = 'video', position?: number) {
     const command = new AddTrackCommand(type, position, unifiedTrackModule)
+    await unifiedHistoryModule.executeCommand(command)
+  }
+
+  async function startASRRequestWithHistory(
+    sourceTimelineItem: UnifiedTimelineItemData<MediaType>,
+    estimatedDurationSeconds: number,
+    requestId: string,
+    remoteTaskId: string,
+  ) {
+    const durationFrames = Math.max(1, Math.round(estimatedDurationSeconds * RENDERER_FPS))
+    const command = new StartASRRequestCommand(
+      sourceTimelineItem,
+      durationFrames,
+      requestId,
+      remoteTaskId,
+      unifiedTimelineModule,
+      unifiedTrackModule,
+      unifiedMediaModule,
+      ensureTimelineItemResolved,
+    )
     await unifiedHistoryModule.executeCommand(command)
   }
 
@@ -466,6 +595,7 @@ export function useHistoryOperations(
       unifiedTrackModule,
       unifiedTimelineModule,
       unifiedMediaModule,
+      ensureTimelineItemResolved,
     )
     await unifiedHistoryModule.executeCommand(command)
   }
@@ -536,125 +666,26 @@ export function useHistoryOperations(
   }
 
   /**
-   * 带历史记录的更新文本内容方法
-   * @param timelineItemId 要更新的时间轴项目ID
-   * @param newText 新的文本内容
-   * @param newStyle 新的文本样式（可选）
+   * 带历史记录的移动轨道方法
+   * @param trackId 要移动的轨道ID
+   * @param newPosition 新位置索引
    */
-  async function updateTextContentWithHistory(
-    timelineItemId: string,
-    newText: string,
-    newStyle: Partial<TextStyleConfig> = {},
-  ) {
-    // 验证文本项目存在
-    const timelineItem = unifiedTimelineModule.getTimelineItem(timelineItemId)
-    if (!timelineItem || !TimelineItemQueries.isTextTimelineItem(timelineItem)) {
-      console.warn(`⚠️ 文本项目不存在或类型错误: ${timelineItemId}`)
+  async function moveTrackWithHistory(trackId: string, newPosition: number) {
+    // 获取当前轨道位置
+    const currentPosition = unifiedTrackModule.trackIndexMap.value.get(trackId)
+    if (currentPosition === undefined) {
+      console.warn(`⚠️ 轨道位置未知，无法移动: ${trackId}`)
       return
     }
 
-    // 检查文本内容是否有实际变化
-    if (timelineItem.config.text === newText.trim() && Object.keys(newStyle).length === 0) {
-      console.log('⚠️ 文本内容没有变化，跳过更新操作')
+    // 检查位置是否真的改变了
+    if (currentPosition === newPosition) {
+      console.log('ℹ️ 轨道位置未改变，跳过移动')
       return
     }
 
-    try {
-      console.log('🔄 [useHistoryOperations] 更新文本内容:', {
-        timelineItemId,
-        newText: newText.substring(0, 20) + (newText.length > 20 ? '...' : ''),
-        hasStyleUpdate: Object.keys(newStyle).length > 0,
-      })
-
-      // 创建更新文本命令
-      const command = new UpdateTextCommand(
-        timelineItemId,
-        newText.trim(),
-        newStyle,
-        {
-          getTimelineItem: (id: string) =>
-            unifiedTimelineModule.getTimelineItem(id) as
-              | UnifiedTimelineItemData<'text'>
-              | undefined,
-        },
-        unifiedConfigModule,
-      )
-
-      // 执行命令（带历史记录）
-      await unifiedHistoryModule.executeCommand(command)
-
-      console.log('✅ [useHistoryOperations] 文本内容更新成功')
-    } catch (error) {
-      console.error('❌ [useHistoryOperations] 更新文本内容失败:', error)
-      throw error
-    }
-  }
-
-  /**
-   * 带历史记录的更新文本样式方法
-   * @param timelineItemId 要更新的时间轴项目ID
-   * @param newStyle 新的文本样式
-   */
-  async function updateTextStyleWithHistory(
-    timelineItemId: string,
-    newStyle: Partial<TextStyleConfig>,
-  ) {
-    // 验证文本项目存在
-    const timelineItem = unifiedTimelineModule.getTimelineItem(timelineItemId)
-    if (!timelineItem || !TimelineItemQueries.isTextTimelineItem(timelineItem)) {
-      console.warn(`⚠️ 文本项目不存在或类型错误: ${timelineItemId}`)
-      return
-    }
-
-    // 获取当前样式进行对比
-    const currentStyle = timelineItem.config.style
-    if (!currentStyle) {
-      console.warn(`⚠️ 文本项目样式数据不存在: ${timelineItemId}`)
-      return
-    }
-
-    // 检查样式是否有实际变化
-    const hasChanges = Object.keys(newStyle).some((key) => {
-      const styleKey = key as keyof TextStyleConfig
-      return newStyle[styleKey] !== currentStyle[styleKey]
-    })
-
-    if (!hasChanges) {
-      console.log('⚠️ 文本样式没有变化，跳过更新操作')
-      return
-    }
-
-    try {
-      console.log('🔄 [useHistoryOperations] 更新文本样式:', {
-        timelineItemId,
-        styleChanges: Object.keys(newStyle),
-        currentText:
-          timelineItem.config.text.substring(0, 20) +
-          (timelineItem.config.text.length > 20 ? '...' : ''),
-      })
-
-      // 创建更新文本命令（保持文本内容不变，只更新样式）
-      const command = new UpdateTextCommand(
-        timelineItemId,
-        timelineItem.config.text, // 保持文本内容不变
-        newStyle,
-        {
-          getTimelineItem: (id: string) =>
-            unifiedTimelineModule.getTimelineItem(id) as
-              | UnifiedTimelineItemData<'text'>
-              | undefined,
-        },
-        unifiedConfigModule,
-      )
-
-      // 执行命令（带历史记录）
-      await unifiedHistoryModule.executeCommand(command)
-
-      console.log('✅ [useHistoryOperations] 文本样式更新成功')
-    } catch (error) {
-      console.error('❌ [useHistoryOperations] 更新文本样式失败:', error)
-      throw error
-    }
+    const command = new MoveTrackCommand(trackId, currentPosition, newPosition, unifiedTrackModule)
+    await unifiedHistoryModule.executeCommand(command)
   }
 
   /**
@@ -663,12 +694,11 @@ export function useHistoryOperations(
    * @param mode 操作模式：'replace'替换选择，'toggle'切换选择状态
    * @param selectionModule 选择模块实例，提供选择状态和方法
    */
-  async function selectTimelineItemsWithHistory(
-    itemIds: string[],
+  async function selectTimelineSelectionsWithHistory(
+    itemIds: TimelineSelectionId[],
     mode: 'replace' | 'toggle' = 'replace',
   ) {
-    // 检查是否有实际的选择变化
-    const currentSelection = new Set(unifiedSelectionModule.selectedTimelineItemIds.value)
+    const currentSelection = new Set(unifiedSelectionModule.selectedTimelineSelectionIds.value)
     const newSelection = calculateNewSelection(itemIds, mode, currentSelection)
 
     // 如果选择状态没有变化，不创建历史记录
@@ -686,7 +716,7 @@ export function useHistoryOperations(
       })
 
       // 创建选择命令
-      const command = new SelectTimelineItemsCommand(
+      const command = new SelectTimelineSelectionsCommand(
         itemIds,
         mode,
         unifiedSelectionModule,
@@ -708,10 +738,10 @@ export function useHistoryOperations(
    * 计算新的选择状态
    */
   function calculateNewSelection(
-    itemIds: string[],
+    itemIds: TimelineSelectionId[],
     mode: 'replace' | 'toggle',
-    currentSelection: Set<string>,
-  ): Set<string> {
+    currentSelection: Set<TimelineSelectionId>,
+  ): Set<TimelineSelectionId> {
     const newSelection = new Set(currentSelection)
 
     if (mode === 'replace') {
@@ -741,100 +771,28 @@ export function useHistoryOperations(
     return true
   }
 
-  /**
-   * 带历史记录的创建关键帧方法
-   * @param timelineItemId 时间轴项目ID
-   * @param frame 帧数
-   */
-  async function createKeyframeWithHistory(timelineItemId: string, frame: number) {
-    try {
-      console.log('🎬 [useHistoryOperations] 创建关键帧:', { timelineItemId, frame })
-
-      // 创建关键帧命令
-      const command = new CreateKeyframeCommand(timelineItemId, frame, unifiedTimelineModule, {
-        seekTo: (frame: number) => {
-          // 播放头控制应该由调用方提供，这里简化为不控制播放头
-          console.log('🔍 关键帧操作播放头控制:', frame)
-        },
-      })
-
-      // 执行命令（带历史记录）
-      await unifiedHistoryModule.executeCommand(command)
-
-      console.log('✅ [useHistoryOperations] 关键帧创建成功')
-    } catch (error) {
-      console.error('❌ [useHistoryOperations] 关键帧创建失败:', error)
-      throw error
+  async function applyChangePlanWithHistory(plan: ChangePlan) {
+    const targetItemIds = new Set(plan.operations.map((operation) => operation.timelineItemId))
+    for (const timelineItemId of targetItemIds) {
+      if (!getEditableTimelineItemOrWarn(timelineItemId, '应用属性修改计划')) {
+        return
+      }
     }
-  }
 
-  /**
-   * 带历史记录的删除关键帧方法
-   * @param timelineItemId 时间轴项目ID
-   * @param frame 帧数
-   */
-  async function deleteKeyframeWithHistory(timelineItemId: string, frame: number) {
     try {
-      console.log('🎬 [useHistoryOperations] 删除关键帧:', { timelineItemId, frame })
-
-      // 创建删除关键帧命令
-      const command = new DeleteKeyframeCommand(timelineItemId, frame, unifiedTimelineModule, {
-        seekTo: (frame: number) => {
-          console.log('🔍 关键帧操作播放头控制:', frame)
-        },
-      })
-
-      // 执行命令（带历史记录）
-      await unifiedHistoryModule.executeCommand(command)
-
-      console.log('✅ [useHistoryOperations] 关键帧删除成功')
-    } catch (error) {
-      console.error('❌ [useHistoryOperations] 关键帧删除失败:', error)
-      throw error
-    }
-  }
-
-  /**
-   * 带历史记录的更新关键帧属性方法
-   * @param timelineItemId 时间轴项目ID
-   * @param frame 帧数
-   * @param property 属性名
-   * @param value 新值
-   */
-  async function updatePropertyWithHistory(
-    timelineItemId: string,
-    frame: number,
-    property: string,
-    value: any,
-  ) {
-    try {
-      console.log('🎬 [useHistoryOperations] 更新关键帧属性:', {
-        timelineItemId,
-        frame,
-        property,
-        value,
-      })
-
-      // 创建更新属性命令
-      const command = new UpdatePropertyCommand(
-        timelineItemId,
-        frame,
-        property,
-        value,
+      const command = new ApplyChangePlanCommand(
+        plan,
         unifiedTimelineModule,
         {
-          seekTo: (frame: number) => {
-            console.log('🔍 关键帧操作播放头控制:', frame)
+          seekTo: (nextFrame: number) => {
+            console.log('🔍 属性修改计划播放头控制:', nextFrame)
           },
         },
       )
 
-      // 执行命令（带历史记录）
       await unifiedHistoryModule.executeCommand(command)
-
-      console.log('✅ [useHistoryOperations] 关键帧属性更新成功')
     } catch (error) {
-      console.error('❌ [useHistoryOperations] 关键帧属性更新失败:', error)
+      console.error('❌ [useHistoryOperations] 属性修改计划执行失败:', error)
       throw error
     }
   }
@@ -843,12 +801,19 @@ export function useHistoryOperations(
    * 带历史记录的清除所有关键帧方法
    * @param timelineItemId 时间轴项目ID
    */
-  async function clearAllKeyframesWithHistory(timelineItemId: string) {
+  async function clearAllKeyframesWithHistory(
+    timelineItemId: string,
+    channel?: AnimationChannelKey,
+  ) {
+    if (!getEditableTimelineItemOrWarn(timelineItemId, '清除关键帧')) {
+      return
+    }
+
     try {
       console.log('🎬 [useHistoryOperations] 清除所有关键帧:', { timelineItemId })
 
       // 创建清除所有关键帧命令
-      const command = new ClearAllKeyframesCommand(timelineItemId, unifiedTimelineModule, {
+      const command = new ClearAllKeyframesCommand(timelineItemId, channel, unifiedTimelineModule, {
         seekTo: (frame: number) => {
           console.log('🔍 关键帧操作播放头控制:', frame)
         },
@@ -864,53 +829,29 @@ export function useHistoryOperations(
     }
   }
 
-  /**
-   * 带历史记录的切换关键帧方法
-   * @param timelineItemId 时间轴项目ID
-   * @param frame 帧数
-   */
-  async function toggleKeyframeWithHistory(timelineItemId: string, frame: number) {
-    try {
-      console.log('🎬 [useHistoryOperations] 切换关键帧:', { timelineItemId, frame })
-
-      // 创建切换关键帧命令
-      const command = new ToggleKeyframeCommand(timelineItemId, frame, unifiedTimelineModule, {
-        seekTo: (frame: number) => {
-          console.log('🔍 关键帧操作播放头控制:', frame)
-        },
-      })
-
-      // 执行命令（带历史记录）
-      await unifiedHistoryModule.executeCommand(command)
-
-      console.log('✅ [useHistoryOperations] 关键帧切换成功')
-    } catch (error) {
-      console.error('❌ [useHistoryOperations] 关键帧切换失败:', error)
-      throw error
-    }
-  }
-
   return {
     addTimelineItemWithHistory,
     removeTimelineItemWithHistory,
+    startASRRequestWithHistory,
     moveTimelineItemWithHistory,
-    updateTimelineItemTransformWithHistory,
+    updatePlaybackRateWithHistory,
+    updateTransitionConfigWithHistory,
+    updateFilterConfigWithHistory,
+    commitFilterConfigWithHistory,
+    removeFilterEffectWithHistory,
     splitTimelineItemAtTimeWithHistory,
     duplicateTimelineItemWithHistory,
     resizeTimelineItemWithHistory,
+    trimTimelineItemWithHistory,
     addTrackWithHistory,
     removeTrackWithHistory,
     renameTrackWithHistory,
     autoArrangeTrackWithHistory,
     toggleTrackVisibilityWithHistory,
     toggleTrackMuteWithHistory,
-    updateTextContentWithHistory,
-    updateTextStyleWithHistory,
-    selectTimelineItemsWithHistory,
-    createKeyframeWithHistory,
-    deleteKeyframeWithHistory,
-    updatePropertyWithHistory,
+    moveTrackWithHistory,
+    selectTimelineSelectionsWithHistory,
     clearAllKeyframesWithHistory,
-    toggleKeyframeWithHistory,
+    applyChangePlanWithHistory,
   }
 }

@@ -1,6 +1,7 @@
 import { useUnifiedStore } from '@/core/unifiedStore'
 import type { Ref } from 'vue'
 import { useTimelineWheelHandler, TimelineWheelSource } from './useTimelineWheelHandler'
+import { buildClipSelectionId } from '@/core/types/timelineSelection'
 
 /**
  * 时间轴事件处理模块
@@ -54,6 +55,7 @@ export function useTimelineEventHandlers(
    * 处理片段选中事件
    */
   async function handleSelectClip(event: MouseEvent, clipId: string) {
+    const selectionId = buildClipSelectionId(clipId)
     console.log(
       '🎯 [UnifiedTimeline] 选中clip:',
       clipId,
@@ -61,11 +63,9 @@ export function useTimelineEventHandlers(
       event.ctrlKey || event.metaKey,
     )
     if (event.ctrlKey || event.metaKey) {
-      // Ctrl/Cmd+点击：切换选择状态（多选模式）
-      unifiedStore.selectTimelineItems([clipId], 'toggle')
+      unifiedStore.selectTimelineSelections([selectionId], 'toggle')
     } else {
-      // 普通点击：替换选择（单选模式）
-      unifiedStore.selectTimelineItems([clipId], 'replace')
+      unifiedStore.selectTimelineSelections([selectionId], 'replace')
     }
   }
 
@@ -97,8 +97,9 @@ export function useTimelineEventHandlers(
     unifiedStore.pause()
 
     // 确保项目被选中（如果还没有选中的话）
-    if (!unifiedStore.isTimelineItemSelected(itemId)) {
-      unifiedStore.selectTimelineItems([itemId], 'replace')
+    const selectionId = buildClipSelectionId(itemId)
+    if (!unifiedStore.isTimelineSelectionSelected(selectionId)) {
+      unifiedStore.selectTimelineSelections([selectionId], 'replace')
     }
   }
 
@@ -122,8 +123,8 @@ export function useTimelineEventHandlers(
 
     // 按 Delete 键删除选中的项目
     if (event.key === 'Delete') {
-      const selectedItems = unifiedStore.selectedTimelineItemIds
-      if (selectedItems.size > 0) {
+      const selectedItems = unifiedStore.selectedClipTimelineItemIds
+      if (selectedItems.length > 0) {
         for (const itemId of selectedItems) {
           await handleTimelineItemRemove(itemId)
         }

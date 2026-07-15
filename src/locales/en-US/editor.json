@@ -23,7 +23,6 @@
     "savingStatus": "Saving...",
     "setVideoResolution": "Set Video Resolution",
     "toggleChatPanel": "Toggle AI Assistant Panel",
-    "initializingWebAV": "Initializing WebAV Engine...",
     "selectVideoResolution": "Select Video Resolution",
     "custom": "Custom",
     "cancel": "Cancel",
@@ -39,6 +38,11 @@
     "exportSettings": "Export Settings",
     "videoTitle": "Video Title",
     "videoTitlePlaceholder": "Enter video title",
+    "exportType": "Export Type",
+    "exportTypeVideo": "Video (MP4)",
+    "exportTypeAudio": "Audio (MP3)",
+    "exportTypeVideoHint": "Export as video file with video and audio",
+    "exportTypeAudioHint": "Export audio only, without video",
     "videoQuality": "Video Quality",
     "audioQuality": "Audio Quality",
     "frameRate": "Frame Rate",
@@ -93,6 +97,23 @@
     },
     "preview": {
       "downloadCurrentFrame": "Download Current Frame"
+    },
+    "taskCenter": {
+      "indicatorTitle": "Current Tasks",
+      "currentTasks": "Current Tasks",
+      "titles": {
+        "mediaReady": "Preparing Media",
+        "mediaIndexing": "Indexing Media",
+        "timelineItemReady": "Preparing Timeline Media",
+        "aiGeneratedMedia": "Generating AI Media",
+        "asrSubtitles": "Transcribing Subtitles",
+        "effectTemplateReady": "Downloading Effect Template"
+      },
+      "statuses": {
+        "idle": "Waiting to start",
+        "queued": "Queued",
+        "running": "In progress"
+      }
     }
   }
 }

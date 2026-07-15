@@ -9,8 +9,6 @@
  * 4. 使用统一的状态管理系统（3状态：ready|loading|error）
  * 5. 保持与原有命令相同的API接口，便于迁移
  */
-import type { Ref } from 'vue'
-import type { VideoResolution } from '@/core/types'
 import { BaseBatchCommand } from '@/core/modules/UnifiedHistoryModule'
 import type { SimpleCommand } from '@/core/modules/commands/types'
 import {
@@ -19,7 +17,7 @@ import {
 } from '@/core/modules/commands/timelineCommands'
 
 // ==================== 新架构类型导入 ====================
-import type { UnifiedTimelineItemData } from '@/core/timelineitem/type'
+import type { UnifiedTimelineItemData } from '@/core/timelineitem/model/timelineItem'
 import type { UnifiedMediaItemData, MediaType } from '@/core/mediaitem/types'
 import type { UnifiedTrackData } from '@/core/track/TrackTypes'
 
@@ -36,11 +34,9 @@ export class BatchDeleteCommand extends BaseBatchCommand {
       removeTimelineItem: (id: string) => Promise<void>
     },
     private mediaModule: {
-      getMediaItem: (id: string) => UnifiedMediaItemData | undefined
+      getMediaItem: (id: string | null) => UnifiedMediaItemData | undefined
     },
-    private configModule: {
-      videoResolution: Ref<VideoResolution>
-    },
+    private ensureTimelineItemResolved: (timelineItemId: string) => Promise<unknown>,
   ) {
     super(`批量删除 ${timelineItemIds.length} 个时间轴项目`)
     this.buildDeleteCommands()
@@ -55,7 +51,7 @@ export class BatchDeleteCommand extends BaseBatchCommand {
         itemId,
         this.timelineModule,
         this.mediaModule,
-        this.configModule,
+        this.ensureTimelineItemResolved,
       )
       this.addCommand(deleteCommand)
     }
@@ -77,7 +73,7 @@ export class BatchAutoArrangeTrackCommand extends BaseBatchCommand {
       updateTimelineItemPosition: (id: string, positionFrames: number, trackId?: string) => void
     },
     private mediaModule: {
-      getMediaItem: (id: string) => UnifiedMediaItemData | undefined
+      getMediaItem: (id: string | null) => UnifiedMediaItemData | undefined
     },
     private trackModule: {
       getTrack: (trackId: string) => UnifiedTrackData | undefined
@@ -161,5 +157,19 @@ export class BatchUpdatePropertiesCommand extends BaseBatchCommand {
     updateCommands.forEach((command) => this.addCommand(command))
 
     console.log(`📋 准备批量修改 ${this.subCommands.length} 个属性`)
+  }
+}
+
+/**
+ * 批量蒙版属性修改命令
+ * 将多个蒙版属性修改操作组合为一个批量操作
+ */
+export class BatchUpdateMaskCommand extends BaseBatchCommand {
+  constructor(targetItemIds: string[], updateCommands: SimpleCommand[]) {
+    super(`批量修改 ${targetItemIds.length} 个项目的蒙版属性`)
+
+    updateCommands.forEach((command) => this.addCommand(command))
+
+    console.log(`📋 准备批量修改 ${this.subCommands.length} 个蒙版属性`)
   }
 }

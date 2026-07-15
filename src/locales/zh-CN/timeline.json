@@ -38,9 +38,14 @@
       },
       "clip": {
         "smartSceneDetection": "智能分镜头",
+        "speechRecognition": "语音识别",
         "duplicateClip": "复制片段",
         "regenerateThumbnail": "重新生成缩略图",
         "deleteClip": "删除片段"
+      },
+      "transition": {
+        "placeholder": "转场占位",
+        "selectSourceClip": "选中源片段"
       },
       "track": {
         "addText": "添加文本",
@@ -61,11 +66,34 @@
     "sceneDetection": {
       "title": "智能分镜头检测",
       "tip": "正在分析视频内容，请耐心等待...",
+      "modelFallback": "AI 模型不可用，已使用快速检测...",
+      "progress": {
+        "loadingModel": "加载智能分镜模型...",
+        "checkingCache": "检查本地模型缓存...",
+        "loadingFromCache": "加载本地模型缓存...",
+        "downloadingModelPercent": "下载智能分镜模型 {percent}%",
+        "downloadingModelSize": "下载智能分镜模型 {size} MB",
+        "initializingModel": "初始化智能分镜模型...",
+        "modelReady": "智能分镜模型就绪",
+        "detectingBoundaries": "AI 识别镜头边界...",
+        "analyzingFrames": "分析视频帧 {current}/{total}",
+        "finalizingBoundaries": "整理镜头边界..."
+      },
       "splitting": "检测完成，正在分割 {count} 个场景...",
       "success": "成功分割为 {count} 个场景",
       "noScenes": "未检测到明显的场景边界",
       "cancelled": "场景检测已取消",
       "error": "场景检测失败: {message}"
+    },
+    "speechRecognition": {
+      "title": "语音识别",
+      "extractingAudio": "正在提取音频...",
+      "uploading": "正在上传音频...",
+      "creatingTask": "正在创建识别任务...",
+      "processing": "正在识别语音...",
+      "success": "语音识别任务已提交",
+      "error": "语音识别失败: {message}",
+      "cancelled": "语音识别已取消"
     }
   }
 }

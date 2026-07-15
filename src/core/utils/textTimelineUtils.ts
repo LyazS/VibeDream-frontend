@@ -1,10 +1,12 @@
 import { reactive } from 'vue'
 import { generateTimelineItemId } from '@/core/utils/idGenerator'
-import type { UnifiedTimelineItemData } from '@/core/timelineitem/type'
-import type { TextMediaConfig } from '@/core/timelineitem/type'
-import type { TextStyleConfig } from '@/core/timelineitem/texttype'
+import type { UnifiedTimelineItemData } from '@/core/timelineitem/model/timelineItem'
+import type { TextMediaConfig } from '@/core/timelineitem/model/timelineItem'
+import type { TextStyleConfig } from '@/core/timelineitem/model/textStyle'
 import type { UnifiedTimeRange } from '@/core/types/timeRange'
-import { DEFAULT_TEXT_STYLE } from '@/core/timelineitem/texttype'
+import { DEFAULT_TEXT_STYLE } from '@/core/timelineitem/model/textStyle'
+import { DEFAULT_BLEND_MODE } from '@/core/timelineitem/model/blendMode'
+import { createDefaultTimelineExtraRenderConfig } from '@/core/timelineitem/model/timelineItem'
 
 /**
  * 统一架构下的文本时间轴工具函数
@@ -61,34 +63,39 @@ export async function createTextTimelineItem(
   }
 
   // 5. 创建文本媒体配置（适配新架构）
-  const textConfig: TextMediaConfig = {
-    // 文本特有属性
-    text,
-    style: completeStyle,
-    // 视觉属性（继承自 VisualMediaProps）
-    x: 0,
-    y: 0,
-    width: 0, // 等待后续更新
-    height: 0, // 等待后续更新
-    rotation: 0,
-    opacity: 1,
-    // 等比缩放状态（默认开启）
-    proportionalScale: true,
+  const baseRenderConfig: TextMediaConfig = {
+    visual: {
+      x: 0,
+      y: 0,
+      width: 0,
+      height: 0,
+      rotation: 0,
+      blendIntensity: 1,
+      blendMode: DEFAULT_BLEND_MODE,
+      proportionalScale: true,
+    },
+    text: {
+      content: text,
+      style: completeStyle,
+    },
   }
 
   // 6. 创建统一时间轴项目（使用新架构，不包含sprite）
   const timelineItem: UnifiedTimelineItemData<'text'> = reactive({
     id: customId || generateTimelineItemId(),
-    mediaItemId: '', // 文本项目不需要媒体库项目，使用空字符串
+    mediaItemId: null, // 文本项目不需要媒体库项目，使用 null 表示无关联
     trackId,
     mediaType: 'text',
     timeRange,
-    config: textConfig,
+    baseRenderConfig,
+    exRenderConfig: createDefaultTimelineExtraRenderConfig(),
     animation: undefined, // 新创建的文本项目默认没有动画
-    timelineStatus: 'loading', // 文本项目创建后即为就绪状态
+    timelineStatus: 'ready', // 文本项目创建后即为就绪状态
     runtime: {
       // ✅ 文本项目不依赖外部媒体，直接完成初始化
+      exRenderConfig: createDefaultTimelineExtraRenderConfig(),
       isInitialized: true,
+      textBitmapVersion: 0,
     },
   })
 

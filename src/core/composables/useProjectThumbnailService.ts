@@ -1,6 +1,6 @@
 import { ref } from 'vue'
 import type { UnifiedMediaItemData } from '@/core/mediaitem'
-import type { UnifiedTimelineItemData } from '@/core/timelineitem'
+import type { UnifiedTimelineItemData } from '@/core/timelineitem/model/timelineItem'
 import { fileSystemService } from '@/core/managers/filesystem/fileSystemService'
 import { generateThumbnailForUnifiedMediaItemBunny } from '@/core/bunnyUtils/thumbGenerator'
 import { MediaItemQueries } from '@/core/mediaitem'
@@ -35,7 +35,7 @@ export function useProjectThumbnailService() {
   const findThumbnailSource = (
     timelineItems: UnifiedTimelineItemData[],
     mediaModule: {
-      getMediaItem: (id: string) => UnifiedMediaItemData | undefined
+      getMediaItem: (id: string | null) => UnifiedMediaItemData | undefined
     },
   ): UnifiedTimelineItemData | null => {
     // 按时间位置排序，取第一个视频或图像项目
@@ -143,7 +143,7 @@ export function useProjectThumbnailService() {
     projectId: string,
     timelineItems: UnifiedTimelineItemData[],
     mediaModule: {
-      getMediaItem: (id: string) => UnifiedMediaItemData | undefined
+      getMediaItem: (id: string | null) => UnifiedMediaItemData | undefined
     },
   ): Promise<string | null> => {
     if (isGenerating.value) {

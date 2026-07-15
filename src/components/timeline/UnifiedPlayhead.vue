@@ -211,10 +211,10 @@ onUnmounted(() => {
   position: absolute;
   top: 0;
   bottom: 0;
-  width: 2px;
+  width: 1px;
   background-color: white; /* 白色竖线 */
   z-index: 20; /* 确保在所有内容之上，但在clip tooltip之下 */
-  margin-left: -1px; /* 居中对齐 */
+  margin-left: -0.5px; /* 居中对齐 */
   filter: drop-shadow(0 0 2px rgba(0, 0, 0, 0.5));
 }
 </style>

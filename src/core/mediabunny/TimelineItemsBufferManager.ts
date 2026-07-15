@@ -5,9 +5,14 @@
  * 使用双缓冲机制避免更新与使用冲突
  */
 
-import type { UnifiedTimelineItemData } from '@/core/timelineitem/type'
+import type { UnifiedTimelineItemData } from '@/core/timelineitem/model/timelineItem'
 import type { MediaType } from '@/core/mediaitem/types'
 import { TimelineItemQueries } from '@/core/timelineitem/queries'
+
+export interface BackBufferUpdateResult {
+  bufferedItems: UnifiedTimelineItemData<MediaType>[]
+  newlyPreparedItems: UnifiedTimelineItemData<MediaType>[]
+}
 
 /**
  * 缓冲区数据结构
@@ -19,7 +24,7 @@ interface TimelineItemsBuffer {
   /** 缓冲的时间窗口起始帧 */
   startFrame: number
   
-  /** 缓冲的时间窗口结束帧 */
+  /** 缓冲的时间窗口结束帧（右开） */
   endFrame: number
   
   /** 缓冲创建时间戳（用于调试） */
@@ -102,16 +107,19 @@ export class TimelineItemsBufferManager {
   async updateBackBuffer(
     allItems: UnifiedTimelineItemData<MediaType>[],
     currentFrame: number,
-  ): Promise<void> {
+  ): Promise<BackBufferUpdateResult> {
     if (this.state.isUpdating) {
-      return
+      return {
+        bufferedItems: [],
+        newlyPreparedItems: [],
+      }
     }
     
     this.state.isUpdating = true
     this.state.backBufferReady = false
     
     try {
-      // 计算时间窗口
+      // 计算时间窗口，语义为 [startFrame, endFrame)
       const startFrame = currentFrame
       const endFrame = currentFrame + this.state.bufferWindowFrames
       
@@ -123,7 +131,7 @@ export class TimelineItemsBufferManager {
       )
       
       // ✨ 预准备解码器：为新进入缓冲的 clips 调用 prepare()
-      await this.prepareClipsInBuffer(bufferedItems)
+      const newlyPreparedItems = await this.prepareClipsInBuffer(bufferedItems)
       
       // 创建新的后台缓冲
       this.state.backBuffer = {
@@ -139,10 +147,18 @@ export class TimelineItemsBufferManager {
       this.state.lastUpdateFrame = currentFrame
       
       // console.log(`🔄 后台缓冲更新完成: ${bufferedItems.length}/${allItems.length} items, 窗口 [${startFrame}, ${endFrame}]`)
+      return {
+        bufferedItems,
+        newlyPreparedItems,
+      }
     } catch (error) {
       console.error('❌ 后台缓冲更新失败:', error)
       this.state.backBuffer = null
       this.state.backBufferReady = false
+      return {
+        bufferedItems: [],
+        newlyPreparedItems: [],
+      }
     } finally {
       this.state.isUpdating = false
     }
@@ -154,8 +170,9 @@ export class TimelineItemsBufferManager {
    */
   private async prepareClipsInBuffer(
     items: UnifiedTimelineItemData<MediaType>[],
-  ): Promise<void> {
+  ): Promise<UnifiedTimelineItemData<MediaType>[]> {
     const preparePromises: Promise<void>[] = []
+    const newlyPreparedItems: UnifiedTimelineItemData<MediaType>[] = []
     
     for (const item of items) {
       // 只处理视频和音频类型的 items
@@ -179,6 +196,7 @@ export class TimelineItemsBufferManager {
       // 异步调用 prepare() 并添加到 readyClips
       const prepareTask = bunnyClip.prepare().then(() => {
         this.state.readyClips.add(item.id)
+        newlyPreparedItems.push(item)
         console.log(`✅ Clip 解码器已准备: ${item.id}`)
       }).catch((error) => {
         console.error(`❌ Clip 解码器准备失败: ${item.id}`, error)
@@ -193,6 +211,8 @@ export class TimelineItemsBufferManager {
       await Promise.all(preparePromises)
       console.log(`✅ 所有 clip 解码器准备完成`)
     }
+
+    return newlyPreparedItems
   }
   
   /**
@@ -231,7 +251,7 @@ export class TimelineItemsBufferManager {
       // 验证当前帧是否在缓冲窗口内
       if (
         currentFrame >= this.state.frontBuffer.startFrame &&
-        currentFrame <= this.state.frontBuffer.endFrame
+        currentFrame < this.state.frontBuffer.endFrame
       ) {
         return this.state.frontBuffer.items
       }
@@ -240,6 +260,29 @@ export class TimelineItemsBufferManager {
     // 3. 缓冲无效或不在窗口内，降级为全量遍历
     // console.warn(`⚠️ 缓冲无效，使用全量遍历 (frame: ${currentFrame})`)
     return allItems
+  }
+
+  getBufferedItemIds(currentFrame: number): Set<string> {
+    const bufferedItemIds = new Set<string>()
+
+    if (
+      this.state.frontBuffer &&
+      this.state.frontBuffer.isValid &&
+      currentFrame >= this.state.frontBuffer.startFrame &&
+      currentFrame < this.state.frontBuffer.endFrame
+    ) {
+      for (const item of this.state.frontBuffer.items) {
+        bufferedItemIds.add(item.id)
+      }
+    }
+
+    if (this.state.backBufferReady && this.state.backBuffer?.isValid) {
+      for (const item of this.state.backBuffer.items) {
+        bufferedItemIds.add(item.id)
+      }
+    }
+
+    return bufferedItemIds
   }
   
   /**
@@ -266,12 +309,12 @@ export class TimelineItemsBufferManager {
     endFrame: number,
   ): UnifiedTimelineItemData<MediaType>[] {
     return allItems.filter((item) => {
-      // item 的时间范围：[timelineStartTime, timelineEndTime]
+      // item 的时间范围：[timelineStartTime, timelineEndTime)
       const itemStart = item.timeRange.timelineStartTime
       const itemEnd = item.timeRange.timelineEndTime
       
-      // 检查是否有重叠：item 结束 >= 窗口开始 && item 开始 <= 窗口结束
-      return itemEnd >= startFrame && itemStart <= endFrame
+      // 检查是否有重叠：item 结束 > 窗口开始 && item 开始 < 窗口结束
+      return itemEnd > startFrame && itemStart < endFrame
     })
   }
   

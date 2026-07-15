@@ -7,16 +7,16 @@
       ref="waveformCanvas"
       :height="DEFAULT_TRACK_HEIGHTS.audio - 2 * DEFAULT_TRACK_PADDING"
       class="waveform-canvas"
-      :style="{ left: canvasLeft + 'px' }"
+      :style="{ left: canvasDisplayLeft + 'px' }"
       @dragstart.stop.prevent="handleInnerDrag"
     />
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, ref, watch, onMounted, onUnmounted } from 'vue'
+import { computed, nextTick, ref, watch, onMounted, onUnmounted } from 'vue'
 import { throttle } from 'lodash'
-import type { ContentTemplateProps } from '@/core/types/clipRenderer'
+import type { ClipRenderFrame, ContentTemplateProps } from '@/core/types/clipRenderer'
 import { useUnifiedStore } from '@/core/unifiedStore'
 import { calculateClipWidthPixels } from '@/core/utils/thumbnailLayout'
 import { DEFAULT_TRACK_HEIGHTS, DEFAULT_TRACK_PADDING } from '@/constants/TrackConstants'
@@ -31,6 +31,9 @@ const unifiedStore = useUnifiedStore()
 
 const waveformCanvas = ref<HTMLCanvasElement>()
 const canvasLeft = ref(0)
+const lastLiveRenderFrame = ref<ClipRenderFrame | null>(props.renderFrame ?? null)
+const latchedDisplayRenderFrame = ref<ClipRenderFrame | null>(null)
+const renderGeneration = ref(0)
 
 // LOD选择器和渲染器实例
 const lodSelector = new AudioWaveformLODSelector()
@@ -41,8 +44,9 @@ const currentLODVersion = ref(0)
 
 // 采样波形计算属性
 const sampleWaveform = computed(() => {
-  const clipTLStartFrame = props.data.timeRange.timelineStartTime
-  const clipTLEndFrame = props.data.timeRange.timelineEndTime
+  const timeRange = props.data.timeRange
+  const clipTLStartFrame = timeRange.timelineStartTime
+  const clipTLEndFrame = timeRange.timelineEndTime
   const clipTLDurationFrames = clipTLEndFrame - clipTLStartFrame
 
   // 计算clip的像素宽度
@@ -69,6 +73,16 @@ const sampleWaveform = computed(() => {
     viewportTLEndFrame,
     clipWidthPixels: Math.floor(clipWidthPixels),
   }
+})
+
+const canvasDisplayLeft = computed(() => {
+  const renderFrame = props.renderFrame ?? latchedDisplayRenderFrame.value
+  const sample = sampleWaveform.value
+  if (!renderFrame || !sample) {
+    return canvasLeft.value
+  }
+
+  return Math.floor(renderFrame.frameToLocalPixel(sample.viewportTLStartFrame))
 })
 
 // 核心渲染逻辑 - 使用LOD系统（带版本号机制）
@@ -146,9 +160,12 @@ function renderWaveformInComponent() {
   }
 
   // ⚠️ 关键：计算视口可见范围的宽度和偏移
-  const tlDurationFrames = props.data.timeRange.timelineEndTime - props.data.timeRange.timelineStartTime
-  const sampleStartX = ((viewportTLStartFrame - props.data.timeRange.timelineStartTime) / tlDurationFrames) * clipWidthPixels
-  const sampleEndX = ((viewportTLEndFrame - props.data.timeRange.timelineStartTime) / tlDurationFrames) * clipWidthPixels
+  const sourceTimeRange = props.data.timeRange
+  const tlDurationFrames = sourceTimeRange.timelineEndTime - sourceTimeRange.timelineStartTime
+  const sampleStartX =
+    ((viewportTLStartFrame - sourceTimeRange.timelineStartTime) / tlDurationFrames) * clipWidthPixels
+  const sampleEndX =
+    ((viewportTLEndFrame - sourceTimeRange.timelineStartTime) / tlDurationFrames) * clipWidthPixels
   const sampleWidth = sampleEndX - sampleStartX
 
   // 更新canvas位置和宽度（只渲染可见部分）
@@ -156,11 +173,11 @@ function renderWaveformInComponent() {
   waveformCanvas.value.width = Math.floor(sampleWidth)
 
   // 计算时间范围（对应到clip内的时间）
-  const clipDurationFrames = props.data.timeRange.clipEndTime - props.data.timeRange.clipStartTime
-  const startFrameInClip = props.data.timeRange.clipStartTime +
-    Math.round(((viewportTLStartFrame - props.data.timeRange.timelineStartTime) / tlDurationFrames) * clipDurationFrames)
-  const endFrameInClip = props.data.timeRange.clipStartTime +
-    Math.round(((viewportTLEndFrame - props.data.timeRange.timelineStartTime) / tlDurationFrames) * clipDurationFrames)
+  const clipDurationFrames = sourceTimeRange.clipEndTime - sourceTimeRange.clipStartTime
+  const startFrameInClip = sourceTimeRange.clipStartTime +
+    Math.round(((viewportTLStartFrame - sourceTimeRange.timelineStartTime) / tlDurationFrames) * clipDurationFrames)
+  const endFrameInClip = sourceTimeRange.clipStartTime +
+    Math.round(((viewportTLEndFrame - sourceTimeRange.timelineStartTime) / tlDurationFrames) * clipDurationFrames)
   
   const startTime = framesToSeconds(startFrameInClip)
   const endTime = framesToSeconds(endFrameInClip)
@@ -195,6 +212,46 @@ const throttledRenderWaveform = throttle(renderWaveformInComponent, 333, {
   leading: false,
   trailing: true,
 })
+
+function waitForLatchedWaveformPaint(): Promise<void> {
+  return new Promise((resolve) => {
+    // Keep the latched frame through one committed paint before returning to the real clip frame.
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => resolve())
+    })
+  })
+}
+
+watch(
+  () => props.renderFrame,
+  async (next, prev) => {
+    if (next) {
+      renderGeneration.value += 1
+      lastLiveRenderFrame.value = next
+      latchedDisplayRenderFrame.value = null
+      return
+    }
+
+    const frameToLatch = prev ?? lastLiveRenderFrame.value
+    if (!frameToLatch) {
+      return
+    }
+
+    const generation = ++renderGeneration.value
+    latchedDisplayRenderFrame.value = frameToLatch
+    throttledRenderWaveform.cancel()
+    await nextTick()
+    renderWaveformInComponent()
+    await waitForLatchedWaveformPaint()
+
+    if (generation !== renderGeneration.value) {
+      return
+    }
+
+    latchedDisplayRenderFrame.value = null
+    lastLiveRenderFrame.value = null
+  },
+)
 
 // 监听sampleWaveform变化（主要触发条件）
 watch(
@@ -231,6 +288,7 @@ watch(
 
 // 组件卸载时清理
 onUnmounted(() => {
+  renderGeneration.value += 1
   throttledRenderWaveform.cancel()
 })
 

@@ -39,6 +39,11 @@
     "loading": "Loading...",
     "retry": "Retry",
     "seconds": "s",
-    "minutes": "m"
+    "minutes": "m",
+    "trackDrag": {
+      "dragToTop": "Drag to top",
+      "dragToBottom": "Drag to bottom",
+      "dragHandle": "Drag to reorder track"
+    }
   }
 }

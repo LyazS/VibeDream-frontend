@@ -12,6 +12,7 @@ import type {
   RegisterResponse,
   TokenStorage,
 } from '@/utils/types'
+import { formatMoneyForDisplay } from '@/utils/money'
 
 // 重新导出类型以供其他模块使用
 export type {
@@ -25,6 +26,15 @@ export type {
 // 调试标记
 const DEBUG_USER = true
 const debugPrefix = '[TOKEN]'
+
+type UserModuleError = Error & {
+  status?: number
+  data?: {
+    detail?: string
+  }
+}
+
+type BalanceInfo = Pick<User, 'balance'>
 
 // LocalStorage 键名常量
 const BIZYAIR_API_KEY_STORAGE_KEY = 'bizyair_api_key'
@@ -56,6 +66,7 @@ export function createUnifiedUserModule(registry: ModuleRegistry) {
 
   // BizyAir API Key（响应式状态，初始化时从 localStorage 加载）
   const bizyairApiKey = ref<string>(getBizyAirApiKey())
+  let refreshBalancePromise: Promise<void> | null = null
 
   // ==================== 计算属性 ====================
 
@@ -77,6 +88,13 @@ export function createUnifiedUserModule(registry: ModuleRegistry) {
   function saveUserData(user: User): void {
     localStorage.setItem('current_user', JSON.stringify(user))
     currentUser.value = user
+  }
+
+  function toUserModuleError(error: unknown): UserModuleError {
+    if (error instanceof Error) {
+      return error as UserModuleError
+    }
+    return new Error(String(error))
   }
 
   /**
@@ -114,10 +132,14 @@ export function createUnifiedUserModule(registry: ModuleRegistry) {
           console.log(`${debugPrefix} 后端用户数据更新成功:`, response.data.username)
         }
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const userError = toUserModuleError(error)
       // 后端请求失败，但继续使用localStorage的数据
-      console.warn(`${debugPrefix} 后端用户信息获取失败，继续使用localStorage数据:`, error.message)
-      if (error.status === 401) {
+      console.warn(
+        `${debugPrefix} 后端用户信息获取失败，继续使用localStorage数据:`,
+        userError.message,
+      )
+      if (userError.status === 401) {
         // 如果是认证错误，清除令牌
         tokenManager.clearTokens()
         clearUserData()
@@ -131,6 +153,40 @@ export function createUnifiedUserModule(registry: ModuleRegistry) {
   function clearUserData(): void {
     localStorage.removeItem('current_user')
     currentUser.value = null
+  }
+
+  /** Refresh only the balance shown in the shared user state. */
+  async function refreshBalance(): Promise<void> {
+    if (!currentUser.value) {
+      return
+    }
+    if (refreshBalancePromise) {
+      return refreshBalancePromise
+    }
+
+    const userAtRequest = currentUser.value
+    const balanceAtRequest = userAtRequest.balance
+    refreshBalancePromise = (async () => {
+      try {
+        const response = await fetchClient.get<BalanceInfo>('/api/balance')
+        if (response.status !== 200 || currentUser.value !== userAtRequest) {
+          return
+        }
+
+        // Do not overwrite a newer balance update that happened while this request was in flight.
+        if (currentUser.value.balance !== balanceAtRequest) {
+          return
+        }
+        saveUserData({ ...currentUser.value, balance: response.data.balance })
+      } catch (error: unknown) {
+        const userError = toUserModuleError(error)
+        console.warn(`${debugPrefix} 余额刷新失败，继续使用当前余额:`, userError.message)
+      } finally {
+        refreshBalancePromise = null
+      }
+    })()
+
+    return refreshBalancePromise
   }
 
   // ==================== 用户认证方法 ====================
@@ -183,9 +239,10 @@ export function createUnifiedUserModule(registry: ModuleRegistry) {
       }
 
       return response.data
-    } catch (error: any) {
-      console.error(`${debugPrefix} 登录失败:`, error)
-      const errorMessage = error.message || t('user.loginFailed')
+    } catch (error: unknown) {
+      const userError = toUserModuleError(error)
+      console.error(`${debugPrefix} 登录失败:`, userError)
+      const errorMessage = userError.message || t('user.loginFailed')
       useNaiveUIModule.messageError(errorMessage)
       throw new Error(errorMessage)
     } finally {
@@ -242,9 +299,10 @@ export function createUnifiedUserModule(registry: ModuleRegistry) {
       }
 
       return response.data
-    } catch (error: any) {
-      console.error(`${debugPrefix} 注册失败:`, error)
-      const errorMessage = error.message || t('user.registerFailed')
+    } catch (error: unknown) {
+      const userError = toUserModuleError(error)
+      console.error(`${debugPrefix} 注册失败:`, userError)
+      const errorMessage = userError.message || t('user.registerFailed')
       useNaiveUIModule.messageError(errorMessage)
       throw new Error(errorMessage)
     } finally {
@@ -323,7 +381,11 @@ export function createUnifiedUserModule(registry: ModuleRegistry) {
     try {
       isUsingActivationCode.value = true
 
-      const response = await fetchClient.post('/api/activation-code/use', {
+      const response = await fetchClient.post<{
+        amount: string
+        current_balance: string
+        detail?: string
+      }>('/api/activation-code/use', {
         code: code.trim(),
       })
 
@@ -331,15 +393,14 @@ export function createUnifiedUserModule(registry: ModuleRegistry) {
         // 显示成功通知
         useNaiveUIModule.messageSuccess(
           t('user.activationCodeSuccess', {
-            amount: response.data.amount,
-            balance: response.data.current_balance,
+            amount: formatMoneyForDisplay(response.data.amount),
+            balance: formatMoneyForDisplay(response.data.current_balance),
           }),
         )
 
         // 更新用户余额信息
         if (currentUser.value) {
           currentUser.value.balance = response.data.current_balance
-          currentUser.value.total_recharged += response.data.amount
           saveUserData(currentUser.value)
         }
 
@@ -354,19 +415,20 @@ export function createUnifiedUserModule(registry: ModuleRegistry) {
         const errorMessage = response.data?.detail || t('user.activationCodeError')
         throw new Error(errorMessage)
       }
-    } catch (error: any) {
-      console.error(`${debugPrefix} 激活码使用失败:`, error)
+    } catch (error: unknown) {
+      const userError = toUserModuleError(error)
+      console.error(`${debugPrefix} 激活码使用失败:`, userError)
 
       // 统一错误通知处理
-      if (error.status === 400 || error.status === 422) {
-        useNaiveUIModule.messageError(error.data?.detail || t('user.activationCodeInvalid'))
-      } else if (error.status === 401) {
+      if (userError.status === 400 || userError.status === 422) {
+        useNaiveUIModule.messageError(userError.data?.detail || t('user.activationCodeInvalid'))
+      } else if (userError.status === 401) {
         useNaiveUIModule.messageError(t('user.activationCodeUnauthorized'))
       } else {
-        useNaiveUIModule.messageError(error.message || t('user.activationCodeError'))
+        useNaiveUIModule.messageError(userError.message || t('user.activationCodeError'))
       }
 
-      throw new Error(error.message || t('user.activationCodeError'))
+      throw new Error(userError.message || t('user.activationCodeError'))
     } finally {
       isUsingActivationCode.value = false
     }
@@ -383,7 +445,10 @@ export function createUnifiedUserModule(registry: ModuleRegistry) {
     const trimmedKey = apiKey.trim()
     localStorage.setItem(BIZYAIR_API_KEY_STORAGE_KEY, trimmedKey)
     if (DEBUG_USER) {
-      console.log(`${debugPrefix} BizyAir API Key 已保存到 localStorage:`, trimmedKey.substring(0, 8) + '...')
+      console.log(
+        `${debugPrefix} BizyAir API Key 已保存到 localStorage:`,
+        trimmedKey.substring(0, 8) + '...',
+      )
     }
   }
 
@@ -457,6 +522,7 @@ export function createUnifiedUserModule(registry: ModuleRegistry) {
     getCurrentUser,
     getAccessToken,
     checkLoginStatus,
+    refreshBalance,
 
     // 激活码功能
     useActivationCode,

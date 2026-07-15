@@ -27,7 +27,7 @@
 
     <div v-if="timelineItems.length > 0" class="toolbar-section">
       <HoverButton
-        v-if="unifiedStore.selectedTimelineItemId"
+        v-if="unifiedStore.selectedClipTimelineItemId"
         :disabled="isSplitButtonDisabled"
         @click="splitSelectedClip"
         :title="t('toolbar.clip.splitTooltip')"
@@ -38,9 +38,9 @@
         {{ t('toolbar.clip.split') }}
       </HoverButton>
       <HoverButton
-        v-if="unifiedStore.selectedTimelineItemId"
-        @click="deleteSelectedClip"
-        :title="t('toolbar.clip.deleteTooltip')"
+        v-if="deletableSelectionId"
+        @click="deleteSelectedSelection"
+        :title="deleteButtonTooltip"
       >
         <template #icon>
           <component :is="IconComponents.DELETE" size="14px" color="#ef4444" />
@@ -65,6 +65,17 @@
           slider-class="zoom-slider"
         />
       </div>
+
+      <!-- 边界编辑模式切换 -->
+      <HoverButton
+        @click="toggleEdgeEditMode"
+        :title="edgeEditModeTooltip"
+      >
+        <template #icon>
+          <component :is="edgeEditModeIcon" size="14px" />
+        </template>
+        {{ edgeEditModeLabel }}
+      </HoverButton>
 
       <!-- 吸附开关按钮 -->
       <HoverButton
@@ -143,11 +154,35 @@ function handleZoomChange(sliderValue: number) {
 // 吸附功能状态
 const snapEnabled = computed(() => unifiedStore.snapConfig.enabled)
 
+const edgeEditModeLabel = computed(() =>
+  unifiedStore.timelineEdgeEditMode === 'trim'
+    ? t('toolbar.edgeEdit.trim')
+    : t('toolbar.edgeEdit.resize'),
+)
+
+const edgeEditModeTooltip = computed(() =>
+  unifiedStore.timelineEdgeEditMode === 'trim'
+    ? t('toolbar.edgeEdit.trimTooltip')
+    : t('toolbar.edgeEdit.resizeTooltip'),
+)
+
+const edgeEditModeIcon = computed(() =>
+  unifiedStore.timelineEdgeEditMode === 'trim'
+    ? IconComponents.TRIM
+    : IconComponents.RESIZE_WIDTH,
+)
+
 // 切换吸附功能
 function toggleSnap() {
   unifiedStore.updateSnapConfig({ enabled: !snapEnabled.value })
   console.log(
     `🧲 ${t('toolbar.feedback.snapToggled', { status: snapEnabled.value ? '已关闭' : '已开启' })}`,
+  )
+}
+
+function toggleEdgeEditMode() {
+  unifiedStore.setTimelineEdgeEditMode(
+    unifiedStore.timelineEdgeEditMode === 'trim' ? 'resize' : 'trim',
   )
 }
 
@@ -159,8 +194,8 @@ const overlappingCount = computed(() => {
 
 // 检查选中的项目是否支持裁剪（视频和音频支持，图片和文本不支持）
 const selectedItemSupportsSplit = computed(() => {
-  if (!unifiedStore.selectedTimelineItemId) return false
-  const item = unifiedStore.getTimelineItem(unifiedStore.selectedTimelineItemId)
+  if (!unifiedStore.selectedClipTimelineItemId) return false
+  const item = unifiedStore.getTimelineItem(unifiedStore.selectedClipTimelineItemId)
   if (!item) return false
 
   // 视频和音频支持裁剪，图片和文本不支持
@@ -169,8 +204,8 @@ const selectedItemSupportsSplit = computed(() => {
 
 // 检查选中的项目是否处于ready状态
 const isSelectedItemReady = computed(() => {
-  if (!unifiedStore.selectedTimelineItemId) return false
-  const item = unifiedStore.getTimelineItem(unifiedStore.selectedTimelineItemId)
+  if (!unifiedStore.selectedClipTimelineItemId) return false
+  const item = unifiedStore.getTimelineItem(unifiedStore.selectedClipTimelineItemId)
   if (!item) return false
 
   const mediaItem = unifiedStore.getMediaItem(item.mediaItemId)
@@ -185,34 +220,52 @@ const isSplitButtonDisabled = computed(() => {
   return !selectedItemSupportsSplit.value || !isSelectedItemReady.value
 })
 
+const selectedTransitionSourceItemId = computed(() => unifiedStore.selectedTransitionSourceItemId)
+
+const deletableSelectionId = computed(() => {
+  return unifiedStore.selectedClipTimelineItemId || selectedTransitionSourceItemId.value || null
+})
+
+const deleteButtonTooltip = computed(() => {
+  return selectedTransitionSourceItemId.value
+    ? t('toolbar.clip.deleteTooltip')
+    : t('toolbar.clip.deleteTooltip')
+})
+
 async function splitSelectedClip() {
-  if (unifiedStore.selectedTimelineItemId) {
-    const item = unifiedStore.getTimelineItem(unifiedStore.selectedTimelineItemId)
+  if (unifiedStore.selectedClipTimelineItemId) {
+    const item = unifiedStore.getTimelineItem(unifiedStore.selectedClipTimelineItemId)
     const mediaItem = item ? unifiedStore.getMediaItem(item.mediaItemId) : null
     console.log(
-      `🔪 开始裁剪时间轴项目: ${mediaItem?.name || '未知'} (ID: ${unifiedStore.selectedTimelineItemId})`,
+      `🔪 开始裁剪时间轴项目: ${mediaItem?.name || '未知'} (ID: ${unifiedStore.selectedClipTimelineItemId})`,
     )
     console.log(
       `📍 裁剪时间位置: ${unifiedStore.currentFrame}帧 (${unifiedStore.formattedCurrentTime})`,
     )
 
     // 使用带历史记录的分割方法（传入帧数数组）
-    await unifiedStore.splitTimelineItemAtTimeWithHistory(unifiedStore.selectedTimelineItemId, [
+    await unifiedStore.splitTimelineItemAtTimeWithHistory(unifiedStore.selectedClipTimelineItemId, [
       unifiedStore.currentFrame,
     ])
     console.log('✅ 时间轴项目分割成功')
   }
 }
 
-async function deleteSelectedClip() {
-  if (unifiedStore.selectedTimelineItemId) {
-    const item = unifiedStore.getTimelineItem(unifiedStore.selectedTimelineItemId)
+async function deleteSelectedSelection() {
+  if (selectedTransitionSourceItemId.value) {
+    await unifiedStore.updateTransitionConfigWithHistory(selectedTransitionSourceItemId.value, undefined)
+    console.log('✅ 转场删除成功')
+    return
+  }
+
+  if (unifiedStore.selectedClipTimelineItemId) {
+    const item = unifiedStore.getTimelineItem(unifiedStore.selectedClipTimelineItemId)
     const mediaItem = item ? unifiedStore.getMediaItem(item.mediaItemId) : null
     console.log(
-      `🗑️ 删除时间轴项目: ${mediaItem?.name || '未知'} (ID: ${unifiedStore.selectedTimelineItemId})`,
+      `🗑️ 删除时间轴项目: ${mediaItem?.name || '未知'} (ID: ${unifiedStore.selectedClipTimelineItemId})`,
     )
 
-    await unifiedStore.removeTimelineItemWithHistory(unifiedStore.selectedTimelineItemId)
+    await unifiedStore.removeTimelineItemWithHistory(unifiedStore.selectedClipTimelineItemId)
     console.log('✅ 时间轴项目删除成功')
   }
 }
@@ -352,9 +405,9 @@ function debugTimeline() {
           }
         }
 
-        // 显示配置信息（如果有的话）
-        if (item.config && Object.keys(item.config).length > 0) {
-          console.log('配置信息:', item.config)
+        // 显示基础渲染配置信息（如果有的话）
+        if (item.baseRenderConfig && Object.keys(item.baseRenderConfig).length > 0) {
+          console.log('基础渲染配置:', item.baseRenderConfig)
         }
 
         console.groupEnd()
@@ -391,7 +444,7 @@ function debugTimeline() {
   console.group('🎞️ 完整时间轴项目列表 (' + timelineItems.value.length + ' 个)')
   timelineItems.value.forEach((item, index) => {
     const mediaItem = unifiedStore.getMediaItem(item.mediaItemId)
-    const track = unifiedStore.getTrack(item.trackId || '')
+    const track = unifiedStore.getTrack(item.trackId)
     const timeRange = item.timeRange
     const duration = timeRange.timelineEndTime - timeRange.timelineStartTime
 
@@ -409,9 +462,9 @@ function debugTimeline() {
     console.log('时间轴结束 (秒):', framesToSeconds(timeRange.timelineEndTime))
     console.log('持续时长 (秒):', framesToSeconds(duration))
 
-    // 显示配置信息
-    if (item.config && Object.keys(item.config).length > 0) {
-      console.log('配置信息:', item.config)
+    // 显示基础渲染配置信息
+    if (item.baseRenderConfig && Object.keys(item.baseRenderConfig).length > 0) {
+      console.log('基础渲染配置:', item.baseRenderConfig)
     }
 
     console.groupEnd()
@@ -437,9 +490,8 @@ function debugHistory() {
 
 <style scoped>
 .clip-management-toolbar {
-  background-color: #333;
+  background-color: var(--color-bg-secondary);
   padding: 6px 12px;
-  border-bottom: 1px solid #444;
   display: flex;
   align-items: center;
   gap: 12px;

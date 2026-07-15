@@ -3,13 +3,17 @@
  * 适配新架构的统一类型系统
  */
 
-import type { UnifiedTimelineItemData } from '@/core/timelineitem/type'
-import type { GetAnimation } from '@/core/timelineitem/bunnytype'
-import type { GetConfigs } from '@/core/timelineitem/bunnytype'
+import type { UnifiedTimelineItemData } from '@/core/timelineitem/model/timelineItem'
+import type { AnimateKeyframe, GetAnimation } from '@/core/timelineitem/model/render'
+import type { TimelineBaseRenderConfig } from '@/core/timelineitem/model/timelineItem'
 import type { MediaType } from '@/core/mediaitem'
+import { createDefaultTimelineExtraRenderConfig } from '@/core/timelineitem/model/timelineItem'
 import { isPlayheadInTimelineItem as checkPlayheadInTimelineItem } from '@/core/utils/timelineSearchUtils'
 import { cloneDeep } from 'lodash'
 import { useUnifiedStore } from '@/core/unifiedStore'
+import { isTextTimelineItem } from '@/core/timelineitem/queries'
+import { TimelineItemQueries } from '@/core/timelineitem/queries'
+import { rebuildTextRuntime } from '@/core/timelineitem/runtime/textRuntime'
 
 // ==================== 关键帧数据快照接口 ====================
 
@@ -21,7 +25,9 @@ export interface KeyframeSnapshot {
   /** 动画配置的完整快照 */
   animationConfig: GetAnimation<MediaType> | undefined
   /** 时间轴项目的属性快照 */
-  itemProperties: GetConfigs<MediaType>
+  itemProperties: TimelineBaseRenderConfig<MediaType>
+  /** 扩展渲染配置快照 */
+  exRenderConfig: UnifiedTimelineItemData['exRenderConfig']
 }
 
 // ==================== 通用接口定义 ====================
@@ -48,36 +54,64 @@ export interface PlaybackControls {
 export function createSnapshot(item: UnifiedTimelineItemData): KeyframeSnapshot {
   return {
     animationConfig: item.animation ? cloneDeep(item.animation) : undefined,
-    itemProperties: cloneDeep(item.config),
+    itemProperties: cloneDeep(TimelineItemQueries.getBaseRenderConfig(item)),
+    exRenderConfig: cloneDeep(item.exRenderConfig),
   }
 }
 
 /**
  * 通用的状态快照应用函数
- * 适配新架构的数据流向：UI → WebAV → TimelineItem
+ * 适配新架构的数据流向：UI → TimelineItem
  * 基于旧架构的完整实现进行改进
  */
 export async function applyKeyframeSnapshot(
   item: UnifiedTimelineItemData,
   snapshot: KeyframeSnapshot,
 ): Promise<void> {
-  // 1. 恢复动画配置（关键帧数据）
   if (snapshot.animationConfig) {
-    // 类型安全的动画配置恢复
-    ;(item as any).animation = {
-      keyframes: snapshot.animationConfig.keyframes.map((kf) => ({
-        position: kf.position,
-        cachedFrame: kf.cachedFrame,
-        properties: { ...kf.properties },
-      })),
-    }
+    item.animation = {
+      groups: Object.fromEntries(
+        Object.entries(snapshot.animationConfig.groups || {}).map(([groupId, track]) => [
+          groupId,
+          {
+            groupId,
+            strategyKey: track.groupId,
+            keyframes: track.keyframes.map((kf: AnimateKeyframe<MediaType>) => {
+              const value = { ...kf.value }
+              return {
+                position: kf.position,
+                frame: kf.frame,
+                cachedFrame: kf.cachedFrame,
+                value,
+                properties: value,
+                easing: kf.easing,
+              }
+            }),
+          },
+        ]),
+      ),
+    } as GetAnimation<MediaType>
   } else {
-    ;(item as any).animation = undefined
+    item.animation = undefined
   }
 
-  // 2. 直接恢复属性值到 item.config
   if (snapshot.itemProperties) {
-    Object.assign(item.config, snapshot.itemProperties)
+    item.baseRenderConfig = cloneDeep(snapshot.itemProperties) as never
+  }
+
+  item.exRenderConfig = snapshot.exRenderConfig
+    ? cloneDeep(snapshot.exRenderConfig)
+    : createDefaultTimelineExtraRenderConfig()
+  item.runtime.exRenderConfig = snapshot.exRenderConfig
+    ? cloneDeep(snapshot.exRenderConfig)
+    : createDefaultTimelineExtraRenderConfig()
+
+  if (isTextTimelineItem(item)) {
+    const textConfig = TimelineItemQueries.getBaseTextConfig(item)
+    await rebuildTextRuntime(item, {
+      content: textConfig?.content,
+      stylePatch: textConfig?.style,
+    })
   }
 }
 
@@ -92,10 +126,10 @@ export function isPlayheadInTimelineItem(item: UnifiedTimelineItemData, frame: n
  * 显示用户警告
  */
 export function showUserWarning(title: string, message: string): void {
-  const store = useUnifiedStore()
+  const unifiedStore = useUnifiedStore()
   // 假设新架构有类似的警告方法
-  if (typeof store.messageWarning === 'function') {
-    store.messageWarning(`${title}：${message}`)
+  if (typeof unifiedStore.messageWarning === 'function') {
+    unifiedStore.messageWarning(`${title}：${message}`)
   } else {
     console.warn(`${title}: ${message}`)
   }

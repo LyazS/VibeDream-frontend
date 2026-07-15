@@ -9,7 +9,7 @@
       <span class="select-value" :class="{ 'is-placeholder': !selectedOption }">
         {{ displayValue }}
       </span>
-      <span class="select-arrow" :class="{ 'is-open': isOpen }">▼</span>
+      <RiArrowDownSLine class="select-arrow" :class="{ 'is-open': isOpen }" aria-hidden="true" />
     </div>
 
     <!-- 下拉菜单 -->
@@ -63,6 +63,7 @@
 <script setup lang="ts">
 import { ref, computed, watch, nextTick, onMounted, onBeforeUnmount } from 'vue'
 import { NScrollbar } from 'naive-ui'
+import { RiArrowDownSLine } from '@remixicon/vue'
 
 interface Props {
   /** 当前选中的值 */
@@ -311,26 +312,32 @@ onBeforeUnmount(() => {
 
 /* 选择框触发器 */
 .select-trigger {
+  box-sizing: border-box;
   display: flex;
   align-items: center;
   justify-content: space-between;
   padding: var(--spacing-xs) var(--spacing-sm);
-  background: var(--color-bg-quaternary);
-  border: 1px solid var(--color-border-secondary);
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-bg-hover);
   border-radius: var(--border-radius-small);
   cursor: pointer;
-  transition: all var(--transition-fast);
-  min-height: 32px;
+  min-height: 24px;
+  transition-property: background-color, border-color, box-shadow, transform;
+  transition-duration: var(--transition-fast);
+  transition-timing-function: ease-out;
 }
 
 .select-trigger:hover:not(.is-disabled) {
-  border-color: var(--color-border-hover);
-  background: var(--color-bg-tertiary);
+  background: var(--color-bg-hover);
 }
 
 .select-trigger.is-open {
-  border-color: var(--color-accent-secondary);
-  background: var(--color-bg-tertiary);
+  border-color: transparent;
+  background: var(--color-bg-hover);
+  box-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.45),
+    0 4px 10px rgba(0, 0, 0, 0.35);
+  transform: translateY(-1px);
 }
 
 .select-trigger.is-disabled {
@@ -355,8 +362,11 @@ onBeforeUnmount(() => {
 .select-arrow {
   margin-left: var(--spacing-xs);
   color: var(--color-text-secondary);
-  font-size: 10px;
-  transition: transform var(--transition-fast);
+  width: 14px;
+  height: 14px;
+  transition-property: color, transform;
+  transition-duration: var(--transition-fast);
+  transition-timing-function: ease-out;
   flex-shrink: 0;
 }
 
@@ -371,9 +381,11 @@ onBeforeUnmount(() => {
   left: 0;
   right: 0;
   background: var(--color-bg-secondary);
-  border: 1px solid var(--color-border-secondary);
+  border: 1px solid var(--color-bg-hover);
   border-radius: var(--border-radius-small);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  box-shadow:
+    0 2px 4px rgba(0, 0, 0, 0.35),
+    0 8px 18px rgba(0, 0, 0, 0.4);
   overflow: hidden;
   z-index: 1000;
 }
@@ -381,24 +393,29 @@ onBeforeUnmount(() => {
 /* 搜索输入框容器 */
 .search-input-wrapper {
   padding: var(--spacing-xs);
-  border-bottom: 1px solid var(--color-border-secondary);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
 }
 
 /* 搜索输入框 */
 .search-input {
+  box-sizing: border-box;
   width: 100%;
+  min-height: 24px;
   padding: var(--spacing-xs) var(--spacing-sm);
-  background: var(--color-bg-quaternary);
-  border: 1px solid var(--color-border-secondary);
+  background: var(--color-bg-tertiary);
+  border: 1px solid var(--color-bg-hover);
   border-radius: var(--border-radius-small);
   color: var(--color-text-primary);
   font-size: var(--font-size-sm);
   outline: none;
-  transition: border-color var(--transition-fast);
+  transition-property: background-color, border-color;
+  transition-duration: var(--transition-fast);
+  transition-timing-function: ease-out;
 }
 
 .search-input:focus {
-  border-color: var(--color-accent-secondary);
+  border-color: transparent;
+  background: var(--color-bg-hover);
 }
 
 .search-input::placeholder {
@@ -412,27 +429,32 @@ onBeforeUnmount(() => {
 
 /* 选项项 */
 .option-item {
+  margin: var(--spacing-xxs) var(--spacing-xs);
   padding: var(--spacing-xs) var(--spacing-sm);
+  border-radius: var(--border-radius-small);
   cursor: pointer;
   color: var(--color-text-primary);
   font-size: var(--font-size-sm);
-  transition: background-color var(--transition-fast);
+  transition-property: background-color, color;
+  transition-duration: var(--transition-fast);
+  transition-timing-function: ease-out;
 }
 
 .option-item:hover,
 .option-item.is-highlighted {
-  background: var(--color-bg-quaternary);
+  background: var(--color-bg-hover);
 }
 
 .option-item.is-selected {
   background: var(--color-bg-active);
   color: var(--color-accent-secondary);
   font-weight: 500;
+  box-shadow: inset 2px 0 0 var(--color-accent-secondary);
 }
 
 /* 无结果提示 */
 .no-results {
-  padding: var(--spacing-md);
+  padding: var(--spacing-lg);
   text-align: center;
   color: var(--color-text-hint);
   font-size: var(--font-size-sm);
@@ -441,7 +463,9 @@ onBeforeUnmount(() => {
 /* 下拉动画 */
 .dropdown-enter-active,
 .dropdown-leave-active {
-  transition: all var(--transition-fast);
+  transition-property: opacity, transform;
+  transition-duration: var(--transition-fast);
+  transition-timing-function: ease-out;
   transform-origin: top;
 }
 

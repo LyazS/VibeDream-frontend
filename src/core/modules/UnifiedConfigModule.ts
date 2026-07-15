@@ -2,6 +2,8 @@ import { ref, type Ref } from 'vue'
 import type { VideoResolution } from '@/core/types'
 import type { UnifiedProjectConfig } from '@/core/project'
 
+export type TimelineEdgeEditMode = 'trim' | 'resize'
+
 /**
  * 项目配置管理模块
  * 负责管理项目级别的配置和设置
@@ -28,6 +30,7 @@ export function createUnifiedConfigModule() {
 
   // 时间轴基础时长（帧数）
   const timelineDurationFrames = ref(1800) // 默认1800帧（60秒@30fps），确保有足够的刻度线空间
+  const timelineEdgeEditMode = ref<TimelineEdgeEditMode>('trim')
 
   // ==================== 配置管理方法 ====================
 
@@ -38,6 +41,10 @@ export function createUnifiedConfigModule() {
   function setVideoResolution(resolution: VideoResolution) {
     videoResolution.value = resolution
     console.log('🎬 视频分辨率已设置为:', resolution)
+  }
+
+  function setTimelineEdgeEditMode(mode: TimelineEdgeEditMode) {
+    timelineEdgeEditMode.value = mode
   }
 
   /**
@@ -69,6 +76,7 @@ export function createUnifiedConfigModule() {
       aspectRatio: '16:9',
     }
     timelineDurationFrames.value = 1800 // 60秒@30fps
+    timelineEdgeEditMode.value = 'trim'
 
     console.log('🔄 配置已重置为默认值')
   }
@@ -88,9 +96,11 @@ export function createUnifiedConfigModule() {
     // 状态
     videoResolution,
     timelineDurationFrames,
+    timelineEdgeEditMode,
 
     // 方法
     setVideoResolution,
+    setTimelineEdgeEditMode,
     resetToDefaults,
     restoreFromProjectSettings,
   }

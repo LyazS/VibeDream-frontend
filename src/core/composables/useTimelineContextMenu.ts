@@ -9,11 +9,19 @@ import {
   getTrackTypeLabel,
 } from '@/constants/iconComponents'
 import type { UnifiedTrackType, UnifiedTrackData } from '@/core/track/TrackTypes'
-import type { UnifiedTimelineItemData } from '@/core/timelineitem/type'
+import type { UnifiedTimelineItemData } from '@/core/timelineitem/model/timelineItem'
 import { LayoutConstants } from '@/constants/LayoutConstants'
 import { detectScene } from '@/core/utils/scene-detector'
 import { detectSceneAdv } from '@/core/utils/scene-detector-adv'
 import { detectSceneContent } from '@/core/utils/scene-detector-content'
+import { detectSceneTransNetV2 } from '@/core/utils/scene-detector-transnetv2'
+import type { TransNetV2ProgressEvent } from '@/core/utils/transnetv2/types'
+import { exportTimelineItem } from '@/core/utils/mediaExporter'
+import { BizyairFileUploader } from '@/core/utils/bizyairFileUploader'
+import { submitASRTask } from '@/core/jobs'
+import type { FileData } from '@/core/datasource/providers/ai-generation/types'
+import { RENDERER_FPS } from '@/core/mediabunny/constant'
+import { buildClipSelectionId } from '@/core/types/timelineSelection'
 
 /**
  * 菜单项类型定义
@@ -55,9 +63,10 @@ export function useTimelineContextMenu(
 
   // 右键菜单相关
   const showContextMenu = ref(false)
-  const contextMenuType = ref<'clip' | 'track' | 'empty'>('empty')
+  const contextMenuType = ref<'clip' | 'transition' | 'track' | 'empty'>('empty')
   const contextMenuTarget = ref<{
     clipId?: string
+    transitionSourceItemId?: string
     trackId?: string
     element?: HTMLElement
   }>({})
@@ -74,6 +83,8 @@ export function useTimelineContextMenu(
     switch (contextMenuType.value) {
       case 'clip':
         return getClipMenuItems()
+      case 'transition':
+        return getTransitionMenuItems()
       case 'track':
         return getTrackMenuItems()
       case 'empty':
@@ -132,6 +143,18 @@ export function useTimelineContextMenu(
         menuItems.push({ type: 'separator' } as MenuItem)
       }
 
+      // 语音识别 - 仅视频和音频类型支持
+      if (timelineItem.mediaType === 'video' || timelineItem.mediaType === 'audio') {
+        menuItems.push({
+          label: t('timeline.contextMenu.clip.speechRecognition'),
+          icon: IconComponents.MUSIC,
+          onClick: () => startSpeechRecognition(),
+        })
+
+        // 分隔符
+        menuItems.push({ type: 'separator' } as MenuItem)
+      }
+
       // 复制片段 - 所有类型都支持
       menuItems.push({
         label: t('timeline.contextMenu.clip.duplicateClip'),
@@ -151,6 +174,29 @@ export function useTimelineContextMenu(
     })
 
     return menuItems
+  }
+
+  function getTransitionMenuItems(): MenuItem[] {
+    const sourceItemId = contextMenuTarget.value.transitionSourceItemId
+    if (!sourceItemId) return []
+
+    return [
+      {
+        label: t('timeline.contextMenu.transition.placeholder'),
+        icon: IconComponents.LAYOUT,
+        onClick: () => {
+          showContextMenu.value = false
+        },
+      },
+      {
+        label: t('timeline.contextMenu.transition.selectSourceClip'),
+        icon: IconComponents.CHECKBOX_BLANK,
+        onClick: () => {
+          unifiedStore.selectTimelineSelection(buildClipSelectionId(sourceItemId))
+          showContextMenu.value = false
+        },
+      },
+    ]
   }
 
   /**
@@ -271,6 +317,20 @@ export function useTimelineContextMenu(
     // 判断右键点击的目标类型
     const target = event.target as HTMLElement
 
+    const transitionElement = target.closest('[data-transition-source-id]') as HTMLElement
+    if (transitionElement) {
+      const sourceItemId = transitionElement.getAttribute('data-transition-source-id')
+      if (sourceItemId) {
+        contextMenuType.value = 'transition'
+        contextMenuTarget.value = {
+          transitionSourceItemId: sourceItemId,
+          element: transitionElement,
+        }
+        showContextMenu.value = true
+        return
+      }
+    }
+
     // 查找最近的片段元素
     const clipElement = target.closest('[data-timeline-item-id]') as HTMLElement
     if (clipElement) {
@@ -339,6 +399,15 @@ export function useTimelineContextMenu(
     showContextMenu.value = true
   }
 
+  function handleTransitionContextMenu(event: MouseEvent, sourceItemId: string) {
+    event.preventDefault()
+    contextMenuOptions.value.x = event.clientX
+    contextMenuOptions.value.y = event.clientY
+    contextMenuType.value = 'transition'
+    contextMenuTarget.value = { transitionSourceItemId: sourceItemId }
+    showContextMenu.value = true
+  }
+
   /**
    * 删除片段
    */
@@ -394,31 +463,103 @@ export function useTimelineContextMenu(
       onCancel: () => {
         abortController.abort()
         console.log('⚠️ 用户取消场景检测')
-      }
+      },
     })
 
     try {
-      // 调用 detectSceneAdv，传入进度回调和取消信号
-      const boundaries = await detectSceneAdv(timelineItem, {
-        peakDetection: {
-          minProminence: 0.03,
-          minHeight: 0.08,
-          minDistance: 15,
-        },
-        maxSize: 600,
-        signal: abortController.signal,
-        onProgress: (current, total, message) => {
-          // 计算进度百分比
-          const progress = total > 0 ? (current / total) * 100 : 0
-          
-          // 更新 loading 状态
-          loading.update({
-            progress: Math.min(100, Math.round(progress)),
-            details: message
-          })
-        },
-        enableChart: false,
-      })
+      const updateDetectionProgress = (current: number, total: number, message: string) => {
+        const progress = total > 0 ? (current / total) * 100 : 0
+
+        loading.update({
+          progress: Math.min(100, Math.round(progress)),
+          details: message,
+        })
+      }
+
+      const updateTransNetV2Progress = (event: TransNetV2ProgressEvent) => {
+        let message: string
+
+        switch (event.stage) {
+          case 'loading-model':
+            message = t('timeline.sceneDetection.progress.loadingModel')
+            break
+          case 'checking-cache':
+            message = t('timeline.sceneDetection.progress.checkingCache')
+            break
+          case 'loading-from-cache':
+            message = t('timeline.sceneDetection.progress.loadingFromCache')
+            break
+          case 'downloading-model':
+            message =
+              typeof event.totalBytes === 'number' && event.totalBytes > 0
+                ? t('timeline.sceneDetection.progress.downloadingModelPercent', {
+                    percent: Math.round((event.progress ?? 0) * 100),
+                  })
+                : t('timeline.sceneDetection.progress.downloadingModelSize', {
+                    size: ((event.loadedBytes ?? 0) / 1024 / 1024).toFixed(1),
+                  })
+            break
+          case 'initializing-model':
+            message = t('timeline.sceneDetection.progress.initializingModel')
+            break
+          case 'model-ready':
+            message = t('timeline.sceneDetection.progress.modelReady')
+            break
+          case 'detecting-boundaries':
+            message = t('timeline.sceneDetection.progress.detectingBoundaries')
+            break
+          case 'analyzing-frames':
+            message = t('timeline.sceneDetection.progress.analyzingFrames', {
+              current: event.frameCurrent ?? 0,
+              total: event.frameTotal ?? 0,
+            })
+            break
+          case 'finalizing-boundaries':
+            message = t('timeline.sceneDetection.progress.finalizingBoundaries')
+            break
+        }
+
+        updateDetectionProgress(event.current, event.total, message)
+      }
+
+      let boundaries: bigint[]
+
+      try {
+        const mediaItem = unifiedStore.getMediaItem(timelineItem.mediaItemId)
+        const oriFile = mediaItem?.runtime?.bunny?.bunnyMedia?.getOriFile()
+        if (!oriFile) {
+          throw new Error('无法获取原始文件')
+        }
+
+        boundaries = await detectSceneTransNetV2(timelineItem, oriFile, {
+          threshold: 0.5,
+          minShotFrames: 15,
+          signal: abortController.signal,
+          onProgress: updateTransNetV2Progress,
+        })
+      } catch (error) {
+        if (error instanceof Error && error.name === 'AbortError') {
+          throw error
+        }
+
+        console.warn('⚠️ TransNetV2 智能分镜不可用，回退到快速检测:', error)
+        loading.update({
+          progress: 0,
+          details: t('timeline.sceneDetection.modelFallback'),
+        })
+
+        boundaries = await detectSceneAdv(timelineItem, {
+          peakDetection: {
+            minProminence: 0.03,
+            minHeight: 0.08,
+            minDistance: 15,
+          },
+          maxSize: 600,
+          signal: abortController.signal,
+          onProgress: updateDetectionProgress,
+          enableChart: false,
+        })
+      }
 
       // 检查是否被取消
       if (abortController.signal.aborted) {
@@ -430,18 +571,18 @@ export function useTimelineContextMenu(
       // 处理检测结果
       if (boundaries.length > 0) {
         console.log('✅ 检测完成，共发现', boundaries.length, '个分割点')
-        
+
         loading.update({
           progress: 100,
-          details: t('timeline.sceneDetection.splitting', { count: boundaries.length })
+          details: t('timeline.sceneDetection.splitting', { count: boundaries.length }),
         })
 
         const splitPoints = boundaries.map((frame) => Number(frame))
         await unifiedStore.splitTimelineItemAtTimeWithHistory(clipId, splitPoints)
-        
+
         loading.close()
         unifiedStore.messageSuccess(
-          t('timeline.sceneDetection.success', { count: boundaries.length })
+          t('timeline.sceneDetection.success', { count: boundaries.length }),
         )
         console.log('✅ 时间轴项目分割成功')
       } else {
@@ -451,7 +592,7 @@ export function useTimelineContextMenu(
       }
     } catch (error) {
       loading.close()
-      
+
       // 区分取消和错误
       if (error instanceof Error && error.name === 'AbortError') {
         unifiedStore.messageInfo(t('timeline.sceneDetection.cancelled'))
@@ -459,10 +600,133 @@ export function useTimelineContextMenu(
         console.error('❌ 智能分镜头检测失败:', error)
         unifiedStore.messageError(
           t('timeline.sceneDetection.error', {
-            message: error instanceof Error ? error.message : String(error)
-          })
+            message: error instanceof Error ? error.message : String(error),
+          }),
         )
       }
+    }
+
+    showContextMenu.value = false
+  }
+
+  /**
+   * 查找或创建可用的text轨道
+   * @param startTime 开始时间（帧）
+   * @param endTime 结束时间（帧）
+   * @param sourceTrackId 源音视频所在轨道ID
+   * @returns 可用的轨道ID
+   */
+  /**
+   * 开始语音识别
+   * 流程：提取音频 -> 上传到bizyair -> 提交ASR任务 -> 创建占位符item -> 启动 ASRSubtitles DAG
+   */
+  async function startSpeechRecognition() {
+    const clipId = contextMenuTarget.value.clipId
+    if (!clipId) return
+
+    const timelineItem = unifiedStore.getTimelineItem(clipId)
+    if (!timelineItem) return
+
+    const existingPlaceholder = unifiedStore.timelineItems.find((item) => {
+      return (
+        item.isPlaceholder &&
+        item.task?.kind === 'asr-subtitles' &&
+        item.task.sourceTimelineItemId === clipId
+      )
+    })
+    if (existingPlaceholder) {
+      unifiedStore.messageError('该片段已有进行中的字幕识别任务')
+      showContextMenu.value = false
+      return
+    }
+
+    console.log('🎬 [ASR] 开始语音识别, clipId:', clipId)
+
+    // 创建 loading 实例
+    const loading = unifiedStore.createLoading({
+      title: t('timeline.speechRecognition.title'),
+      showProgress: true,
+      showDetails: true,
+      showCancel: false,
+    })
+
+    try {
+      // 1. 提取音频
+      loading.update({ progress: 10, details: t('timeline.speechRecognition.extractingAudio') })
+      console.log('📦 [ASR] 正在提取音频...')
+
+      const audioBlob = await exportTimelineItem({
+        timelineItem,
+        getMediaItem: unifiedStore.getMediaItem,
+        exportType: 'audio',
+      })
+      console.log('✅ [ASR] 音频提取完成, size:', audioBlob.size)
+
+      // 2. 上传到 Bizyair
+      loading.update({ progress: 30, details: t('timeline.speechRecognition.uploading') })
+      console.log('⬆️ [ASR] 正在上传音频到Bizyair...')
+
+      // 构造 FileData 对象
+      const fileData: FileData = {
+        __type__: 'FileData',
+        name: `asr_${clipId}.mp3`,
+        mediaType: 'audio',
+        timelineItemId: clipId,
+        source: 'timeline-item',
+      }
+
+      const uploadResult = await BizyairFileUploader.uploadFile(
+        fileData,
+        unifiedStore.getMediaItem,
+        unifiedStore.getTimelineItem,
+      )
+
+      if (!uploadResult.success) {
+        throw new Error(uploadResult.error || '上传失败')
+      }
+      console.log('✅ [ASR] 上传完成, url:', uploadResult.url)
+
+      // 3. 提交 ASR 任务到后端
+      loading.update({ progress: 50, details: t('timeline.speechRecognition.creatingTask') })
+      console.log('🚀 [ASR] 提交ASR任务到后端...')
+
+      const estimatedDuration =
+        (timelineItem.timeRange.clipEndTime - timelineItem.timeRange.clipStartTime) / RENDERER_FPS // 使用RENDERER_FPS常量
+
+      const submitResult = await submitASRTask({
+        audio_url: uploadResult.url!,
+        audio_format: 'mp3',
+        estimated_duration: estimatedDuration,
+      })
+
+      if (!submitResult.success || !submitResult.task_id) {
+        throw new Error(submitResult.error_message || '提交任务失败')
+      }
+      console.log('✅ [ASR] 任务提交成功, taskId:', submitResult.task_id)
+
+      const requestId = crypto.randomUUID()
+      loading.update({ progress: 60, details: '创建 ASR 请求投影...' })
+      await unifiedStore.startASRRequestWithHistory(
+        timelineItem,
+        estimatedDuration,
+        requestId,
+        submitResult.task_id,
+      )
+      loading.update({ progress: 80, details: t('timeline.speechRecognition.processing') })
+
+      loading.update({ progress: 100, details: t('timeline.speechRecognition.processing') })
+      console.log('✅ [ASR] ASR流程启动完成')
+
+      loading.close()
+      unifiedStore.messageSuccess(t('timeline.speechRecognition.success'))
+    } catch (error) {
+      loading.close()
+      console.error('❌ [ASR] 语音识别失败:', error)
+      unifiedStore.messageError(
+        t('timeline.speechRecognition.error', {
+          message: error instanceof Error ? error.message : String(error),
+        }),
+      )
     }
 
     showContextMenu.value = false
@@ -540,6 +804,7 @@ export function useTimelineContextMenu(
     // 方法
     handleContextMenu,
     handleTimelineItemContextMenu,
+    handleTransitionContextMenu,
     removeClip,
     duplicateClip,
     renameTrack,

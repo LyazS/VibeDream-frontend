@@ -1,7 +1,7 @@
 /**
  * 添加轨道命令
  * 支持添加轨道的撤销/重做操作
- * 采用简单的添加/删除逻辑，不涉及WebAV对象重建
+ * 采用简单的添加/删除逻辑
  */
 
 import { generateCommandId } from '@/core/utils/idGenerator'
@@ -15,7 +15,7 @@ import { i18n } from '@/locales'
 /**
  * 添加轨道命令
  * 支持添加轨道的撤销/重做操作
- * 采用简单的添加/删除逻辑，不涉及WebAV对象重建
+ * 采用简单的添加/删除逻辑
  */
 export class AddTrackCommand implements SimpleCommand {
   public readonly id: string

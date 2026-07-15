@@ -1,11 +1,11 @@
 /**
  * UnifiedMediaBunnyModule - MediaBunny 渲染系统模块
  *
- * 完全替代 WebAV 的渲染系统，使用 MediaBunny 实现自定义渲染循环
+ * 使用 MediaBunny 实现自定义渲染循环
  *
  * 核心特点：
- * - 完全替代 WebAV 渲染
- * - 自实现渲染循环（不依赖 WebAV 的 AVCanvas）
+ * - 自定义渲染系统
+ * - 自实现渲染循环
  * - Canvas 由 Vue 组件管理，通过 setCanvas() 传入
  * - 使用 runtime.bunnyClip (视频/音频)、runtime.textBitmap (文本)、runtime.bunny.imageClip (图片)
  * - 暂不支持导出功能（未来可扩展）
@@ -29,17 +29,23 @@ import type { UnifiedMediaModule } from './UnifiedMediaModule'
 import type { UnifiedPlaybackModule } from './UnifiedPlaybackModule'
 import type { UnifiedConfigModule } from './UnifiedConfigModule'
 import type { UnifiedTrackModule } from './UnifiedTrackModule'
-import type { UnifiedTimelineItemData } from '@/core/timelineitem/type'
+import type { UnifiedSelectionModule } from './UnifiedSelectionModule'
+import type { UnifiedTimelineItemData } from '@/core/timelineitem/model/timelineItem'
 import type { MediaType } from '@/core/mediaitem/types'
 import type { WrappedAudioBuffer } from 'mediabunny'
 import { applyAnimationToConfig } from '@/core/utils/animationInterpolation'
 import { TimelineItemQueries } from '@/core/timelineitem/queries'
 import {
-  renderToCanvas,
   type FrameData,
-  type RenderContext,
-} from '@/core/bunnyUtils/canvasRenderer'
+} from '@/core/webgl2/types'
 import { TimelineItemsBufferManager } from '@/core/mediabunny/TimelineItemsBufferManager'
+import { TimelineWebGLRenderer } from '@/core/webgl2/renderer/TimelineWebGLRenderer'
+import { TransitionEdgeFrameResolver } from '@/core/webgl2/transition/TransitionEdgeFrameResolver'
+import {
+  downloadBlob,
+  type CaptureTimelineFrameOptions,
+  TimelineFrameCaptureSession,
+} from '@/core/utils/timelineFrameCapture'
 
 if (!(await canEncodeAudio('mp3'))) {
   registerMp3Encoder()
@@ -53,7 +59,9 @@ export function createUnifiedMediaBunnyModule(
   const playbackModule = registry.get<UnifiedPlaybackModule>(MODULE_NAMES.PLAYBACK)
   const timelineModule = registry.get<UnifiedTimelineModule>(MODULE_NAMES.TIMELINE)
   const mediaModule = registry.get<UnifiedMediaModule>(MODULE_NAMES.MEDIA)
+  const configModule = registry.get<UnifiedConfigModule>(MODULE_NAMES.CONFIG)
   const trackModule = registry.get<UnifiedTrackModule>(MODULE_NAMES.TRACK)
+  const selectionModule = registry.get<UnifiedSelectionModule>(MODULE_NAMES.SELECTION)
 
   // ==================== 状态定义 ====================
 
@@ -63,7 +71,8 @@ export function createUnifiedMediaBunnyModule(
 
   // Canvas 相关（由外部传入）
   let mCanvas: HTMLCanvasElement | null = null
-  let mCtx: CanvasRenderingContext2D | null = null
+  let mWebGLRenderer: TimelineWebGLRenderer | null = null
+  let mTransitionEdgeFrameResolver: TransitionEdgeFrameResolver | null = null
 
   // 渲染循环相关
   let mRenderLoopCleanup: (() => void) | null = null
@@ -106,11 +115,17 @@ export function createUnifiedMediaBunnyModule(
 
       // 设置 Canvas 引用
       mCanvas = canvasElement
-      mCtx = mCanvas.getContext('2d')
-
-      if (!mCtx) {
-        throw new Error('无法获取 Canvas 2D 上下文')
-      }
+      mWebGLRenderer = new TimelineWebGLRenderer({
+        canvas: mCanvas,
+        getTrack: (trackId: string) => trackModule.getTrack(trackId),
+        getMediaItem: (mediaItemId: string) => mediaModule.getMediaItem(mediaItemId),
+        getAsset: (assetId: string | null) => mediaModule.getAsset(assetId),
+        trackIndexMap: () => trackModule.trackIndexMap.value,
+        getSelectedTimelineItemId: () => selectionModule.selectedClipTimelineItemId.value,
+      })
+      mTransitionEdgeFrameResolver = new TransitionEdgeFrameResolver((mediaItemId: string) =>
+        mediaModule.getMediaItem(mediaItemId),
+      )
 
       console.log('✅ Canvas 元素已设置', {
         width: mCanvas.width,
@@ -153,8 +168,8 @@ export function createUnifiedMediaBunnyModule(
     stopAllAudioNodes()
 
     // 清空 Canvas（如果存在）
-    if (mCanvas && mCtx) {
-      mCtx.clearRect(0, 0, mCanvas.width, mCanvas.height)
+    if (mCanvas && mWebGLRenderer) {
+      mWebGLRenderer.clear()
     }
 
     // 关闭 AudioContext
@@ -176,8 +191,10 @@ export function createUnifiedMediaBunnyModule(
     }
 
     // 清理引用（不删除 canvas 元素，由 Vue 组件管理）
+    mWebGLRenderer?.dispose()
+    mWebGLRenderer = null
+    mTransitionEdgeFrameResolver = null
     mCanvas = null
-    mCtx = null
     mGainNode = null
 
     // 清理状态
@@ -208,7 +225,7 @@ export function createUnifiedMediaBunnyModule(
       // 播放的情况下，会基于真实时间单调增长获取当前播放时间（秒）
       // 暂停的情况下，会使用mPlaybackTimeAtStart作为基准，即seek的时候只需要更新mPlaybackTimeAtStart就行了
       // 然后再来计算当前播放帧数
-      let currentTime = Math.floor(getCurrentPlaybackTime() * RENDERER_FPS)
+      const currentTime = Math.floor(getCurrentPlaybackTime() * RENDERER_FPS)
 
       // 检查是否播放结束
       if (playbackModule.isPlaying.value && currentTime >= mTimelineDuration) {
@@ -256,6 +273,99 @@ export function createUnifiedMediaBunnyModule(
     return mAudioContext.currentTime - mAudioContextStartTime + mPlaybackTimeAtStart
   }
 
+  function removeCurrentVideoFrame(itemId: string): void {
+    const oldFrame = mBunnyCurFrameMap.get(itemId)
+    oldFrame?.videoSample.close()
+    mBunnyCurFrameMap.delete(itemId)
+  }
+
+  function storeCurrentVideoFrame(
+    itemId: string,
+    frameNumber: number,
+    clockwiseRotation: number,
+    videoSample: FrameData['videoSample'],
+  ): void {
+    removeCurrentVideoFrame(itemId)
+    mBunnyCurFrameMap.set(itemId, {
+      frameNumber,
+      clockwiseRotation,
+      videoSample,
+    })
+  }
+
+  async function warmPreparedClipStartFrames(
+    items: UnifiedTimelineItemData<MediaType>[],
+    currentFrame: number,
+  ): Promise<void> {
+    const warmTasks: Promise<void>[] = []
+
+    for (const item of items) {
+      // 这里只为视频首帧做预热落图；音频仍走正常播放时钟调度。
+      if (!TimelineItemQueries.isVideoTimelineItem(item)) {
+        continue
+      }
+
+      // 只预热未来 clip。当前或过去的 clip 继续走常规 updateClipFrame，
+      // 避免和正在推进的解码状态互相覆盖。
+      if (item.timeRange.timelineStartTime <= currentFrame) {
+        continue
+      }
+
+      const bunnyClip = item.runtime.bunnyClip
+      if (!bunnyClip) {
+        continue
+      }
+
+      const warmTask = bunnyClip
+        .tickN(BigInt(item.timeRange.timelineStartTime), false, true)
+        .then(({ video, state }) => {
+          if (state !== 'success' || !video) {
+            return
+          }
+
+          // prepare() 只是把首帧留在 BunnyClip 内部 ready 状态；
+          // 这里显式取出 timelineStart 对应的视频帧，提前放进渲染 map，
+          // 这样播放头真正走到 clip 首帧时，render 不会先看到一个空洞。
+          storeCurrentVideoFrame(
+            item.id,
+            item.timeRange.timelineStartTime,
+            bunnyClip.clockwiseRotation,
+            video,
+          )
+        })
+        .catch((error) => {
+          console.error(`❌ 预热 clip 首帧失败: ${item.id}`, error)
+        })
+
+      warmTasks.push(warmTask)
+    }
+
+    if (warmTasks.length > 0) {
+      await Promise.all(warmTasks)
+    }
+  }
+
+  function cleanupBufferedPlaybackFrames(currentFrame: number): void {
+    if (!mBufferManager) {
+      return
+    }
+
+    // 预热首帧可能会让 future clip 在进入可见区前就占住一个 VideoSample，
+    // 播放窗口滑走后需要主动清掉，避免 map 里长期残留旧帧。
+    const bufferedItemIds = mBufferManager.getBufferedItemIds(currentFrame)
+    if (bufferedItemIds.size === 0) {
+      return
+    }
+
+    for (const [itemId] of mBunnyCurFrameMap) {
+      if (bufferedItemIds.has(itemId)) {
+        continue
+      }
+
+      removeCurrentVideoFrame(itemId)
+    }
+  }
+
   /**
    * 更新单个 clip 的帧数据
    * 异步调用 bunnyClip.tickN() 更新 bunnyCurFrameMap 和处理音频
@@ -268,6 +378,9 @@ export function createUnifiedMediaBunnyModule(
     currentTime: number,
     shouldPlayAudio: boolean,
     volume: number,
+    // sampleFrame 允许预览层在不改变播放头位置的前提下，采样相邻帧。
+    // 当前主要用于“选中 clip 且停在 timelineEndTime”时回退显示尾帧。
+    sampleFrame: number = currentTime,
   ): Promise<void> {
     const bunnyClip = item.runtime.bunnyClip
     if (!bunnyClip) return
@@ -284,7 +397,7 @@ export function createUnifiedMediaBunnyModule(
     // 未解码完就再次执行 tickN 会返回 ‘skip’
     // 这是第二层频率限制
     const { audio, video, state } = await bunnyClip.tickN(
-      BigInt(currentTime),
+      BigInt(sampleFrame),
       shouldPlayAudio, //根据轨道和项目静音状态决定是否请求音频
       true, //总是请求视频帧
     )
@@ -293,13 +406,7 @@ export function createUnifiedMediaBunnyModule(
     } else if (state === 'success') {
       // 更新 bunnyCurFrameMap
       if (video) {
-        const oldFrame = mBunnyCurFrameMap.get(item.id)
-        oldFrame?.videoSample.close()
-        mBunnyCurFrameMap.set(item.id, {
-          frameNumber: currentTime,
-          clockwiseRotation: bunnyClip.clockwiseRotation,
-          videoSample: video,
-        })
+        storeCurrentVideoFrame(item.id, currentTime, bunnyClip.clockwiseRotation, video)
       }
 
       // 调度音频（只在需要播放音频时）
@@ -308,9 +415,7 @@ export function createUnifiedMediaBunnyModule(
       }
     } else {
       // 清理无效帧
-      const oldFrame = mBunnyCurFrameMap.get(item.id)
-      oldFrame?.videoSample.close()
-      mBunnyCurFrameMap.delete(item.id)
+      removeCurrentVideoFrame(item.id)
     }
   }
 
@@ -340,12 +445,33 @@ export function createUnifiedMediaBunnyModule(
       mBufferManager &&
       mBufferManager.shouldUpdateBuffer(currentTime)
     ) {
-      // 异步更新后台缓冲，不阻塞当前渲染
-      void mBufferManager.updateBackBuffer(timelineItems, currentTime)
+      // 异步更新后台缓冲，不阻塞当前渲染。
+      // 这里先预热 render chain 和转场边界帧，减少进入播放窗口后的首次准备成本。
+      void mBufferManager.updateBackBuffer(timelineItems, currentTime).then(
+        ({ bufferedItems, newlyPreparedItems }) => {
+          mWebGLRenderer?.prepareRenderChains(bufferedItems)
+          void mTransitionEdgeFrameResolver?.prepareItems(bufferedItems)
+          void warmPreparedClipStartFrames(newlyPreparedItems, currentTime)
+        },
+      )
     }
 
+    if (playbackModule.isPlaying.value) {
+      cleanupBufferedPlaybackFrames(currentTime)
+    }
+
+    const selectedTimelineItemId = selectionModule.selectedClipTimelineItemId.value
+
     for (const item of itemsToProcess) {
-      // 应用动画插值到 config
+      const shouldPreviewSelectedBoundaryFrame =
+        selectedTimelineItemId === item.id &&
+        TimelineItemQueries.hasVisualProperties(item) &&
+        currentTime === item.timeRange.timelineEndTime
+      const boundarySampleFrame = shouldPreviewSelectedBoundaryFrame
+        ? Math.max(item.timeRange.timelineStartTime, item.timeRange.timelineEndTime - 1)
+        : currentTime
+
+      // 属性动画允许在选中 clip 的尾部边界帧操作，视频采样仍取最后一个可解码帧。
       applyAnimationToConfig(item, currentTime)
 
       // 处理视频/音频
@@ -353,20 +479,34 @@ export function createUnifiedMediaBunnyModule(
         TimelineItemQueries.isVideoTimelineItem(item) ||
         TimelineItemQueries.isAudioTimelineItem(item)
       ) {
-        const track = trackModule.getTrack(item.trackId || '')
+        // future item 如果继续走常规 tickN(currentTime)，会得到 outofrange，
+        // 从而把刚才预热写入的首帧立刻删掉，所以播放态下要先跳过。
+        if (playbackModule.isPlaying.value && currentTime < item.timeRange.timelineStartTime) {
+          continue
+        }
+
+        const track = trackModule.getTrack(item.trackId)
         const isTrackMuted = track?.isMuted ?? false
 
         // ✅ 使用辅助函数获取渲染配置（包含动画插值后的音量）
-        const config = TimelineItemQueries.getRenderConfig(item)
-        const isItemMuted = config.isMuted ?? false
-        const itemVolume = config.volume ?? 1.0
-        const shouldPlayAudio = playAudio && !isTrackMuted && !isItemMuted
+        const config = TimelineItemQueries.getResolvedRenderConfig(item)
+        const isItemMuted = config.audio.isMuted ?? false
+        const itemVolume = config.audio.volume ?? 1.0
+        const shouldRenderSelectedVideoBoundaryFrame =
+          shouldPreviewSelectedBoundaryFrame &&
+          TimelineItemQueries.isVideoTimelineItem(item)
+        const shouldPlayAudioForItem =
+          !shouldRenderSelectedVideoBoundaryFrame &&
+          playAudio &&
+          !isTrackMuted &&
+          !isItemMuted
+        const sampleFrame = shouldRenderSelectedVideoBoundaryFrame ? boundarySampleFrame : currentTime
 
         // 更新 clip 帧数据（不等待完成，使用 void）
         // 这里不等待，因此会后台执行，飞快地跳过这里，导致整个 updateClips 都会快速执行一遍
         // 按照 workerTimer 频率来执行，可能会在解码慢跟不上的时候多次重复执行
         // 因此内部也需要一些策略来限制频率
-        void updateClipFrame(item, currentTime, shouldPlayAudio, itemVolume)
+        void updateClipFrame(item, currentTime, shouldPlayAudioForItem, itemVolume, sampleFrame)
       }
     }
 
@@ -385,20 +525,12 @@ export function createUnifiedMediaBunnyModule(
     timelineItems: UnifiedTimelineItemData<MediaType>[],
     currentTimeN: number,
   ): void {
-    if (!mCanvas || !mCtx) return
-
-    // 构建渲染上下文
-    const renderContext: RenderContext = {
-      canvas: mCanvas,
-      ctx: mCtx,
-      bunnyCurFrameMap: mBunnyCurFrameMap,
-      getTrack: (trackId: string) => trackModule.getTrack(trackId),
-      getMediaItem: (mediaItemId: string) => mediaModule.getMediaItem(mediaItemId),
-      trackIndexMap: trackModule.trackIndexMap.value,
-    }
-
-    // 调用独立的渲染函数
-    renderToCanvas(renderContext, timelineItems, currentTimeN)
+    // 上游仍然沿用 MediaBunny 的解码与时间推进；这里只把“最终如何画到 canvas”
+    // 切换为 WebGL2 RenderChain 后端。
+    // 这里保留一次直接准备路径，覆盖暂停、seek、首帧渲染和缓冲未命中时的即时渲染。
+    if (!mCanvas || !mWebGLRenderer) return
+    void mTransitionEdgeFrameResolver?.prepareItems(timelineItems)
+    mWebGLRenderer.render(timelineItems, currentTimeN, mBunnyCurFrameMap)
   }
 
   // ==================== 音频系统 ====================
@@ -567,7 +699,7 @@ export function createUnifiedMediaBunnyModule(
    * @returns 是否可用
    */
   function isMediaBunnyAvailable(): boolean {
-    return !!(mCanvas && mCtx && isMediaBunnyReady.value && !mediaBunnyError.value)
+    return !!(mCanvas && mWebGLRenderer && isMediaBunnyReady.value && !mediaBunnyError.value)
   }
 
   /**
@@ -579,47 +711,65 @@ export function createUnifiedMediaBunnyModule(
 
   // ==================== 截帧功能 ====================
 
+  function createFrameCaptureSession(): TimelineFrameCaptureSession {
+    return new TimelineFrameCaptureSession({
+      videoWidth: configModule.videoResolution.value.width,
+      videoHeight: configModule.videoResolution.value.height,
+      timelineItems: [...timelineModule.timelineItems.value],
+      tracks: trackModule.tracks.value.map((track) => ({
+        id: track.id,
+        isVisible: track.isVisible,
+        isMuted: track.isMuted,
+      })),
+      getMediaItem: (mediaItemId: string) => mediaModule.getMediaItem(mediaItemId),
+      getAsset: (assetId: string | null) => mediaModule.getAsset(assetId),
+    })
+  }
+
   /**
-   * 截取当前画布画面并下载
+   * 使用独立离屏渲染会话截取指定时间轴帧。
+   * 不会修改当前预览画布、播放状态或播放头位置。
+   */
+  async function captureTimelineFrame(
+    frameNumber: number,
+    options: CaptureTimelineFrameOptions = {},
+  ): Promise<Blob> {
+    const session = createFrameCaptureSession()
+
+    try {
+      return await session.captureFrame(frameNumber, options)
+    } finally {
+      await session.dispose()
+    }
+  }
+
+  async function captureTimelineFrames(
+    frameNumbers: number[],
+    options: CaptureTimelineFrameOptions = {},
+  ): Promise<Blob[]> {
+    const session = createFrameCaptureSession()
+
+    try {
+      return await session.captureFrames(frameNumbers, options)
+    } finally {
+      await session.dispose()
+    }
+  }
+
+  /**
+   * 截取当前播放头对应的合成画面并下载
    * @param filename 下载文件名（可选，默认为 'screenshot-时间戳.png'）
    * @returns Promise<Blob> 返回截取的 Blob 对象
    */
   async function captureCanvasFrame(filename?: string): Promise<Blob> {
-    if (!mCanvas || !mCtx) {
-      throw new Error('Canvas 未初始化，无法截帧')
-    }
-
     try {
-      // 将 Canvas 内容转换为 Blob
-      const blob = await new Promise<Blob>((resolve, reject) => {
-        mCanvas!.toBlob(
-          (blob) => {
-            if (blob) {
-              resolve(blob)
-            } else {
-              reject(new Error('Canvas 转换为 Blob 失败'))
-            }
-          },
-          'image/png',
-          1.0, // 最高质量
-        )
-      })
+      const blob = await captureTimelineFrame(playbackModule.currentFrame.value)
 
-      // 生成文件名
       const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5)
       const defaultFilename = `screenshot-${timestamp}.png`
       const finalFilename = filename || defaultFilename
 
-      // 创建下载链接并触发下载
-      const url = URL.createObjectURL(blob)
-      const link = document.createElement('a')
-      link.href = url
-      link.download = finalFilename
-      document.body.appendChild(link)
-      link.click()
-      document.body.removeChild(link)
-      URL.revokeObjectURL(url)
-
+      downloadBlob(blob, finalFilename)
       console.log(`📸 画布截帧成功: ${finalFilename}`)
       return blob
     } catch (error) {
@@ -648,6 +798,8 @@ export function createUnifiedMediaBunnyModule(
     updateTimelineDuration,
 
     // 截帧功能
+    captureTimelineFrame,
+    captureTimelineFrames,
     captureCanvasFrame,
 
     // 工具方法

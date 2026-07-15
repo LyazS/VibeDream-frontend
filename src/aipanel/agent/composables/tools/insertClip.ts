@@ -1,0 +1,104 @@
+import { framesToTimecode } from '@/core/utils/timeUtils'
+import type { ToolDefinition } from '../core/toolTypes'
+import { buildToolError, buildToolSuccess } from './utils/result'
+import {
+  buildTimelineItemFromMedia,
+  createTimelineCommandHelpers,
+  ensureMediaReadyForInsert,
+  executeSingleCommand,
+  findTrackConflict,
+  parseRequiredTimecode,
+} from './timelineEditShared'
+
+export async function executeInsertClip(args: Record<string, any>) {
+  const { mediaId, trackId, start, clipStart, clipEnd } = args
+
+  if (typeof mediaId !== 'string' || !mediaId) {
+    return buildToolError('insert_clip', 'invalid_arguments', 'mediaId 是必填字符串。')
+  }
+
+  if (typeof trackId !== 'string' || !trackId) {
+    return buildToolError('insert_clip', 'invalid_arguments', 'trackId 是必填字符串。')
+  }
+
+  const startParsed = parseRequiredTimecode('insert_clip', start, 'start')
+  if (!startParsed.ok) {
+    return startParsed.error
+  }
+
+  const clipStartParsed =
+    clipStart === undefined
+      ? undefined
+      : parseRequiredTimecode('insert_clip', clipStart, 'clipStart')
+  if (clipStartParsed && !clipStartParsed.ok) {
+    return clipStartParsed.error
+  }
+
+  const clipEndParsed =
+    clipEnd === undefined
+      ? undefined
+      : parseRequiredTimecode('insert_clip', clipEnd, 'clipEnd')
+  if (clipEndParsed && !clipEndParsed.ok) {
+    return clipEndParsed.error
+  }
+
+  try {
+    const { store, createAddTimelineItemCommand } = createTimelineCommandHelpers()
+    const mediaItem = store.getMediaItem(mediaId)
+
+    if (!mediaItem) {
+      return buildToolError(
+        'insert_clip',
+        'media_not_found',
+        `未找到素材 ${mediaId}。请先使用 list_media 或 search_media 确认素材 ID。`,
+        { mediaId },
+      )
+    }
+
+    const readyMediaItem = await ensureMediaReadyForInsert(mediaId)
+
+    const nextItem = buildTimelineItemFromMedia({
+      mediaItem: readyMediaItem,
+      trackId,
+      timelineStartTime: startParsed.frames,
+      clipStart: clipStartParsed?.frames,
+      clipEnd: clipEndParsed?.frames,
+    })
+
+    const conflict = findTrackConflict({
+      trackId,
+      start: nextItem.timeRange.timelineStartTime,
+      end: nextItem.timeRange.timelineEndTime,
+    })
+
+    await executeSingleCommand(createAddTimelineItemCommand(nextItem))
+
+    return buildToolSuccess(
+      'insert_clip',
+      {
+        clipId: nextItem.id,
+        mediaId,
+        trackId,
+        start: startParsed.timecode,
+        end: framesToTimecode(nextItem.timeRange.timelineEndTime),
+        ...(conflict
+          ? {
+              warning: `已执行，但与同轨片段发生重叠：${conflict.id}`,
+              overlapClipIds: [conflict.id],
+            }
+          : {}),
+      },
+    )
+  } catch (error: any) {
+    return buildToolError(
+      'insert_clip',
+      'internal_error',
+      error instanceof Error ? error.message : String(error),
+    )
+  }
+}
+
+export const insertClipTool: ToolDefinition = {
+  name: 'insert_clip',
+  execute: executeInsertClip,
+} as ToolDefinition

@@ -5,7 +5,7 @@ import type { UnifiedTrackData } from '@/core/track/TrackTypes'
 /**
  * 重命名轨道命令
  * 支持重命名轨道的撤销/重做操作
- * 采用简单的名称修改逻辑，不涉及WebAV对象重建
+ * 采用简单的名称修改逻辑
  */
 export class RenameTrackCommand implements SimpleCommand {
   public readonly id: string

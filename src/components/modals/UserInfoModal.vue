@@ -8,60 +8,56 @@
     :show-cancel="false"
   >
     <div class="user-info-content">
-      <div class="user-avatar">
-        <component :is="IconComponents.USER" size="48px" />
-      </div>
-
-      <div class="user-details">
-        <div class="detail-item">
-          <span class="label">{{ t('user.username') }}：</span>
-          <span class="value">{{ user.username }}</span>
+      <div class="user-profile-summary">
+        <div class="user-avatar">
+          <component :is="IconComponents.USER" size="48px" />
         </div>
 
-        <div v-if="user.email" class="detail-item">
-          <span class="label">{{ t('user.email') }}：</span>
-          <span class="value">{{ user.email }}</span>
-        </div>
+        <div class="user-details">
+          <div class="detail-item">
+            <span class="label">{{ t('user.username') }}：</span>
+            <span class="value">{{ user.username }}</span>
+          </div>
 
-        <div class="detail-item">
-          <span class="label">{{ t('user.balance') }}：</span>
-          <span class="value">{{ user.balance.toFixed(2) }}</span>
-        </div>
+          <div v-if="user.email" class="detail-item">
+            <span class="label">{{ t('user.email') }}：</span>
+            <span class="value">{{ user.email }}</span>
+          </div>
 
-        <!-- <div class="detail-item">
-          <span class="label">{{ t('user.totalRecharged') }}：</span>
-          <span class="value">{{ user.total_recharged.toFixed(2) }}</span>
-        </div>
+          <div class="detail-item">
+            <span class="label">{{ t('user.balance') }}：</span>
+            <span class="value">{{ formatMoneyForDisplay(user.balance) }}</span>
+          </div>
 
-        <div class="detail-item">
-          <span class="label">{{ t('user.totalConsumed') }}：</span>
-          <span class="value">{{ user.total_consumed.toFixed(2) }}</span>
-        </div> -->
+          <div v-if="user.last_login_at" class="detail-item">
+            <span class="label">{{ t('user.lastLogin') }}：</span>
+            <span class="value">{{ formatDate(user.last_login_at) }}</span>
+          </div>
 
-        <div v-if="user.last_login_at" class="detail-item">
-          <span class="label">{{ t('user.lastLogin') }}：</span>
-          <span class="value">{{ formatDate(user.last_login_at) }}</span>
-        </div>
-      </div>
-
-      <!-- 激活码使用区域 -->
-      <div class="activation-code-section">
-        <div class="activation-code-input-group">
-          <input
-            v-model="activationCode"
-            type="text"
-            :placeholder="t('user.activationCodePlaceholder')"
-            class="activation-code-input"
-            @keyup.enter="handleUseActivationCode"
-          />
-          <button
-            class="action-btn primary use-btn"
-            @click="handleUseActivationCode"
-            :disabled="!activationCode.trim() || isLoading"
-          >
-            <component :is="IconComponents.KEY" size="16px" />
-            {{ t('user.useActivationCode') }}
-          </button>
+          <!-- 激活码使用区域 -->
+          <div class="activation-code-section">
+            <ModalFormField>
+              <div class="activation-code-input-group">
+                <input
+                  v-model="activationCode"
+                  type="text"
+                  :placeholder="t('user.activationCodePlaceholder')"
+                  class="activation-code-input"
+                  @keyup.enter="handleUseActivationCode"
+                />
+                <HoverButton
+                  class="activation-code-use-button"
+                  @click="handleUseActivationCode"
+                  :disabled="!activationCode.trim() || isLoading"
+                >
+                  <template #icon>
+                    <component :is="IconComponents.KEY" size="16px" />
+                  </template>
+                  {{ t('user.useActivationCode') }}
+                </HoverButton>
+              </div>
+            </ModalFormField>
+          </div>
         </div>
       </div>
     </div>
@@ -79,11 +75,14 @@
 
 <script setup lang="ts">
 import UniversalModal from './UniversalModal.vue'
+import ModalFormField from '@/components/base/ModalFormField.vue'
+import HoverButton from '@/components/base/HoverButton.vue'
 import { IconComponents } from '@/constants/iconComponents'
 import { useAppI18n } from '@/core/composables/useI18n'
 import { useUnifiedStore } from '@/core/unifiedStore'
 import type { User } from '@/core/modules/UnifiedUserModule'
-import { ref } from 'vue'
+import { ref, watch } from 'vue'
+import { formatMoneyForDisplay } from '@/utils/money'
 
 const { t } = useAppI18n()
 const unifiedStore = useUnifiedStore()
@@ -102,6 +101,16 @@ const props = defineProps<{
 const emit = defineEmits<{
   close: []
 }>()
+
+watch(
+  () => props.show,
+  (visible) => {
+    if (visible) {
+      void unifiedStore.refreshBalance()
+    }
+  },
+  { immediate: true },
+)
 
 // 方法
 function handleClose() {
@@ -148,7 +157,6 @@ async function handleUseActivationCode() {
       const currentUser = unifiedStore.currentUser
       if (currentUser) {
         props.user.balance = currentUser.balance
-        props.user.total_recharged = currentUser.total_recharged
       }
     }
   } catch (error) {
@@ -171,6 +179,14 @@ async function handleUseActivationCode() {
   gap: var(--spacing-lg);
 }
 
+.user-profile-summary {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 2fr);
+  gap: var(--spacing-lg);
+  align-items: center;
+  width: 100%;
+}
+
 .user-avatar {
   width: 80px;
   height: 80px;
@@ -181,10 +197,11 @@ async function handleUseActivationCode() {
   justify-content: center;
   color: var(--color-text-secondary);
   border: 2px solid var(--color-border);
+  justify-self: center;
 }
 
 .user-details {
-  width: 100%;
+  min-width: 0;
 }
 
 .detail-item {
@@ -241,15 +258,6 @@ async function handleUseActivationCode() {
   justify-content: center;
 }
 
-.action-btn.primary {
-  background-color: var(--color-primary);
-  color: white;
-}
-
-.action-btn.primary:hover {
-  background-color: var(--color-primary-hover);
-}
-
 .action-btn.logout {
   background-color: var(--color-error);
   color: white;
@@ -273,93 +281,20 @@ async function handleUseActivationCode() {
 .activation-code-input-group {
   display: flex;
   gap: var(--spacing-sm);
-  align-items: center;
+  align-items: stretch;
 }
 
 .activation-code-input {
   flex: 4; /* 80% 宽度 */
-  padding: var(--spacing-sm) var(--spacing-md);
-  border: 1px solid var(--color-border);
-  border-radius: var(--border-radius-small);
-  font-size: var(--font-size-sm);
-  background-color: var(--color-bg-primary);
-  color: var(--color-text-primary);
-  transition: border-color 0.2s ease;
 }
 
-.activation-code-input:focus {
-  outline: none;
-  border-color: var(--color-primary);
-  box-shadow: 0 0 0 2px var(--color-primary-light);
-}
-
-.activation-code-input::placeholder {
-  color: var(--color-text-tertiary);
-}
-
-.use-btn {
-  flex: 1; /* 20% 宽度 */
+.activation-code-use-button {
+  flex: 1;
   min-width: 80px;
+  min-height: 36px;
   flex-shrink: 0;
-}
-
-.use-btn:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-
-/* BizyAir API Key 配置区域样式 */
-.bizyair-apikey-section {
-  width: 100%;
-  margin-top: var(--spacing-md);
-  padding-top: var(--spacing-md);
-  border-top: 1px solid var(--color-border-light);
-}
-
-.section-title {
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-xs);
-  color: var(--color-text-primary);
-  font-size: var(--font-size-sm);
-  font-weight: 600;
-  margin-bottom: var(--spacing-sm);
-}
-
-.apikey-input-full {
-  width: 100%;
-  padding: var(--spacing-sm) var(--spacing-md);
-  border: 1px solid var(--color-border);
-  border-radius: var(--border-radius-small);
-  font-size: var(--font-size-sm);
-  background-color: var(--color-bg-primary);
-  color: var(--color-text-primary);
-  transition: border-color 0.2s ease;
+  align-self: stretch;
   box-sizing: border-box;
 }
 
-.apikey-input-full:focus {
-  outline: none;
-  border-color: var(--color-primary);
-  box-shadow: 0 0 0 2px var(--color-primary-light);
-}
-
-.apikey-input-full::placeholder {
-  color: var(--color-text-tertiary);
-}
-
-.apikey-hint {
-  margin-top: var(--spacing-sm);
-  color: var(--color-text-tertiary);
-  font-size: var(--font-size-xs);
-}
-
-.apikey-status {
-  margin-top: var(--spacing-sm);
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-xs);
-  color: var(--color-success);
-  font-size: var(--font-size-xs);
-}
 </style>

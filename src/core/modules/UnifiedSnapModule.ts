@@ -6,19 +6,23 @@ import type {
   SnapCalculationOptions,
   SnapPointCollectionOptions,
   ClipBoundarySnapPoint,
+  TransitionBoundarySnapPoint,
   KeyframeSnapPoint,
   PlayheadSnapPoint,
   TimelineStartSnapPoint,
 } from '@/types/snap'
 import { DEFAULT_SNAP_CONFIG } from '@/types/snap'
-import type { UnifiedTimelineItemData } from '@/core/timelineitem/type'
+import type { UnifiedTimelineItemData } from '@/core/timelineitem/model/timelineItem'
+import { hasEnabledClipTransitionOut } from '@/core/timelineitem/features/transition'
 import { relativeFrameToAbsoluteFrame } from '@/core/utils/unifiedKeyframeUtils'
+import { getVisibleKeyframesForTimeline } from '@/core/utils/unifiedKeyframeUtils'
 import type { ModuleRegistry } from './ModuleRegistry'
 import { MODULE_NAMES } from './ModuleRegistry'
 import type { UnifiedTimelineModule } from './UnifiedTimelineModule'
 import type { UnifiedPlaybackModule } from './UnifiedPlaybackModule'
 import type { UnifiedConfigModule } from './UnifiedConfigModule'
 import type { UnifiedMediaModule } from './UnifiedMediaModule'
+import type { UnifiedViewportModule } from './UnifiedViewportModule'
 
 /**
  * 吸附缓存接口
@@ -53,17 +57,14 @@ export function createUnifiedSnapModule(registry: ModuleRegistry) {
 
   const timelineItems = timelineModule.timelineItems
   const currentFrame = playbackModule.currentFrame
-
-  // 获取媒体项目的getMediaItem方法
-  const getMediaItem = (id: string) => mediaModule.getMediaItem(id)
   
   // 延迟获取 viewport 模块（避免循环依赖）
-  let viewportModule: any = null
-  const getViewportModule = () => {
+  let viewportModule: UnifiedViewportModule | null = null
+  const getViewportModule = (): UnifiedViewportModule => {
     if (!viewportModule) {
       viewportModule = registry.get(MODULE_NAMES.VIEWPORT)
     }
-    return viewportModule
+    return viewportModule as UnifiedViewportModule
   }
   // ==================== 状态定义 ====================
 
@@ -125,7 +126,7 @@ export function createUnifiedSnapModule(registry: ModuleRegistry) {
           }
 
           // 获取媒体项目名称
-          const mediaItem = getMediaItem(item.mediaItemId)
+          const mediaItem = mediaModule.getMediaItem(item.mediaItemId)
           const clipName = mediaItem?.name || `片段 ${item.id.slice(0, 8)}`
 
           // 添加开始位置吸附点
@@ -147,6 +148,38 @@ export function createUnifiedSnapModule(registry: ModuleRegistry) {
             clipName,
           }
           targets.push(endPoint)
+
+          const transitionRuntime = item.runtime.transition
+          const transitionStartFrame = transitionRuntime?.activeRangeStart
+          const transitionEndFrame = transitionRuntime?.activeRangeEnd
+          const hasTransitionWindow =
+            hasEnabledClipTransitionOut(item) &&
+            (transitionRuntime?.bindingState === 'bound' ||
+              transitionRuntime?.bindingState === 'waiting-edge') &&
+            transitionStartFrame !== null &&
+            transitionStartFrame !== undefined &&
+            transitionEndFrame !== null &&
+            transitionEndFrame !== undefined
+
+          if (hasTransitionWindow) {
+            const transitionStartPoint: TransitionBoundarySnapPoint = {
+              type: 'transition-start',
+              frame: transitionStartFrame,
+              priority: 1,
+              clipId: item.id,
+              clipName,
+            }
+            targets.push(transitionStartPoint)
+
+            const transitionEndPoint: TransitionBoundarySnapPoint = {
+              type: 'transition-end',
+              frame: transitionEndFrame,
+              priority: 1,
+              clipId: item.id,
+              clipName,
+            }
+            targets.push(transitionEndPoint)
+          }
         })
       }
 
@@ -168,8 +201,9 @@ export function createUnifiedSnapModule(registry: ModuleRegistry) {
           }
 
           // 收集片段的关键帧
-          if (item.animation && item.animation.keyframes && item.animation.keyframes.length > 0) {
-            item.animation.keyframes.forEach((keyframe) => {
+          const keyframes = getVisibleKeyframesForTimeline(item)
+          if (keyframes.length > 0) {
+            keyframes.forEach((keyframe) => {
               // ✅ 使用缓存的帧位置计算绝对帧数
               const absoluteFrame = relativeFrameToAbsoluteFrame(
                 keyframe.cachedFrame,
@@ -270,13 +304,13 @@ export function createUnifiedSnapModule(registry: ModuleRegistry) {
     let bestSnapPoint: SnapPoint | null = null
     let bestDistance = Infinity
 
-    snapCache.value.targets.forEach((target) => {
-      const distance = Math.abs(frame - (target as any).frame)
+    for (const target of snapCache.value.targets) {
+      const distance = Math.abs(frame - target.frame)
       if (distance < bestDistance && distance <= frameThreshold) {
         bestDistance = distance
         bestSnapPoint = target
       }
-    })
+    }
 
     // 如果没有找到合适的吸附点，返回null
     if (!bestSnapPoint || bestDistance > frameThreshold) {
@@ -284,9 +318,10 @@ export function createUnifiedSnapModule(registry: ModuleRegistry) {
     }
 
     // 返回吸附结果
+    const snapPoint = bestSnapPoint
     return {
-      frame: (bestSnapPoint as any).frame,
-      snapPoint: bestSnapPoint,
+      frame: snapPoint.frame,
+      snapPoint,
       distance: bestDistance,
     }
   }

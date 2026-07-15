@@ -5,7 +5,7 @@
   "name": "qwen-image-edit-2512-3image",
   "description": "将三个图片进行合成，根据提示词将图2和图3的元素添加到图1中",
   "media_type": "image",
-  "cost": 0.05,
+  "cost": "0.05",
   "input_mapping": {
     "ref_images": {
       "type": "array",

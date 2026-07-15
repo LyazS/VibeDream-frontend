@@ -1,6 +1,5 @@
 /**
- * 统一数据源系统导出文件
- * 基于"核心数据与行为分离"的响应式重构方案
+ * `@/core` 统一导出入口。
  */
 
 // ==================== 基础类型和接口 ====================
@@ -36,18 +35,15 @@ export {
   UserSelectedFileTypeGuards,
 } from './datasource/providers/user-selected/UserSelectedFileSource'
 
-// ==================== 处理器基础类 ====================
+// ==================== datasource 执行基类 ====================
 export {
-  // 接口
-  type AcquisitionTask,
-
-  // 基础处理器类
+  // 基础执行器类
   DataSourceProcessor,
 } from './datasource/core/BaseDataSourceProcessor'
 
-// ==================== 具体处理器实现 ====================
+// ==================== datasource 执行器实现 ====================
 export {
-  // 用户选择文件处理器
+  // 用户选择文件执行器
   UserSelectedFileProcessor,
 } from './datasource/providers/user-selected/UserSelectedFileProcessor'
 
@@ -64,10 +60,11 @@ export {
 export {
   // 基础类型定义
   type UnifiedMediaItemData,
+  type UnifiedMediaItemMetadata,
   type MediaStatus,
   type MediaType,
   type MediaTypeOrUnknown,
-  
+
   // 状态专门类型定义
   type ReadyMediaItem,
   type ProcessingMediaItem,
@@ -134,7 +131,8 @@ export {
   // 时间轴项目类型定义
   type UnifiedTimelineItemData,
   type TimelineItemStatus,
-  type TransformData,
+  type VisualPropPatch,
+  type AudioPropPatch,
 
   // 工厂函数集合
   TimelineItemFactory,
@@ -174,6 +172,73 @@ export {
   type UnifiedSelectionModule,
 } from './modules/UnifiedSelectionModule'
 
+// ==================== 任务中心 Resource DAG MVP ====================
+export {
+  createJobRuntime,
+  JobRuntime,
+  DagScheduler,
+  FunctionResourceResolver,
+  MEDIA_DECODED_RESOURCE_TYPE,
+  MEDIA_FILE_AVAILABLE_RESOURCE_TYPE,
+  MEDIA_READY_RESOURCE_TYPE,
+  MEDIA_SOURCE_PROCESSED_RESOURCE_TYPE,
+  TIMELINE_ITEM_READY_RESOURCE_TYPE,
+  EFFECT_TEMPLATE_READY_RESOURCE_TYPE,
+  MediaDecodedResolver,
+  EffectTemplateReadyResolver,
+  MediaFileAvailableResolver,
+  MediaReadyResolver,
+  MediaSourceProcessedResolver,
+  TimelineItemReadyResolver,
+  createTaskView,
+  createTaskViews,
+  createResourceNode,
+  createMediaReadyRequest,
+  createEffectTemplateReadyRequest,
+  createMediaReadyResolver,
+  createMediaDecodedRequest,
+  createMediaDecodedResolver,
+  createMediaFileAvailableRequest,
+  createMediaFileAvailableResolver,
+  createMediaSourceProcessedRequest,
+  createMediaSourceProcessedResolver,
+  createTimelineItemReadyRequest,
+  createEffectTemplateReadyResolver,
+  createTimelineItemReadyResolver,
+  useJobTaskCenter,
+  getResourceId,
+  isTerminalResourceStatus,
+  mergeResourcePolicy,
+  type JobRuntimeOptions,
+  type DagSchedulerOptions,
+  type FunctionResourceResolverOptions,
+  type MediaDecodedInput,
+  type MediaDecodedResult,
+  type EffectTemplateReadyInput,
+  type EffectTemplateReadyResult,
+  type MediaFileAvailableInput,
+  type MediaFileAvailableResult,
+  type MediaReadyInput,
+  type MediaReadyResult,
+  type MediaSourceProcessedInput,
+  type MediaSourceProcessedResult,
+  type TimelineItemReadyInput,
+  type TimelineItemReadyResult,
+  type ResolveCheckContext,
+  type ResolveContext,
+  type ResourceResolver,
+  type ResourceDomainEvent,
+  type ResourceError,
+  type ResourceEvent,
+  type ResourceNode,
+  type ResourcePolicy,
+  type ResourceQueue,
+  type ResourceRequest,
+  type ResourceStatus,
+  type ResourceType,
+  type TaskView,
+} from './jobs'
+
 // ==================== 统一用户模块 ====================
 export {
   // 统一用户模块
@@ -211,7 +276,6 @@ export {
   DropTargetType,
 
   // 拖拽参数
-  type MediaItemDragParams,
   type FolderDragParams,
   type TimelineItemDragParams,
   type DragSourceParams,

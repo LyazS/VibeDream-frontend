@@ -5,8 +5,8 @@
   "name": "nano-banana-2-t2i",
   "description": "使用NanoBananaPro模型进行文本生成图片，根据提示词直接生成图片，无需参考图片",
   "media_type": "image",
-  "cost": 0.2,
-  "real_cost": 0.15,
+  "cost": "0.2",
+  "real_cost": "0.15",
   "input_mapping": {
     "prompt": {
       "mapping": "18:BizyAir_NanoBananaProOfficial.prompt",
@@ -58,16 +58,20 @@
       "validation": {
         "required": false,
         "description": "分辨率（如 1K, 2K, 4K）",
-        "option": ["1K", "2K", "4K"],
+        "option": [
+          "1K",
+          "2K",
+          "4K"
+        ],
         "add_cost": {
-          "1K": 0,
-          "2K": 0.05,
-          "4K": 0.1
+          "1K": "0",
+          "2K": "0.05",
+          "4K": "0.1"
         },
         "add_real_cost": {
-          "1K": 0,
-          "2K": 0.0,
-          "4K": 0.0
+          "1K": "0",
+          "2K": "0",
+          "4K": "0"
         }
       }
     }

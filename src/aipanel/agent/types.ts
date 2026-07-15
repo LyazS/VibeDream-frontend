@@ -1,90 +1,232 @@
-// 与后端类型定义完全一致的消息类型
-export enum ChatMessageType {
+export enum AgentMessageRole {
   USER = 'user',
-  ASSISTANT = 'assistant', // 直接对应后端的 ASSISTANT
-  AUTO_REPLY = 'auto_reply',
+  ASSISTANT = 'assistant',
 }
 
-// 用户消息内容类型
-export enum ChatMessageUserContentType {
+export enum MessagePartType {
   TEXT = 'text',
   IMAGE = 'image',
+  BACKGROUND_CONTEXT = 'background_context',
+  TOOL_CALL = 'tool_call',
 }
 
-// 助手消息内容类型
-export enum ChatMessageAssistantContentType {
-  TEXT = 'text',
-  TOOL_USE = 'tool_use',
+export enum ToolCallStatus {
+  REQUESTED = 'requested',
+  COMPLETED = 'completed',
+  FAILED = 'failed',
 }
 
-// 用户消息内容（对应后端的 ChatMessageUserContent）
-export interface ChatMessageUserContent {
-  type: ChatMessageUserContentType
-  content: string
+export interface TextPart {
+  type: MessagePartType.TEXT
+  text: string
 }
 
-// 助手消息内容（对应后端的 ChatMessageAssistantContent）
-export interface ChatMessageAssistantContent {
-  type: ChatMessageAssistantContentType
-  content: string
+export interface ImagePart {
+  type: MessagePartType.IMAGE
+  url: string
 }
 
-// 用户消息（对应后端的 ChatMessageUser）
-export interface ChatMessageUser {
+export interface BackgroundContextPart {
+  type: MessagePartType.BACKGROUND_CONTEXT
+  text: string
+}
+
+export interface ToolCallPart {
+  type: MessagePartType.TOOL_CALL
+  tool_call_id: string
+  tool_name: string
+  args: Record<string, unknown>
+  status: ToolCallStatus
+}
+
+export type AgentMessagePart = TextPart | ImagePart | BackgroundContextPart | ToolCallPart
+
+export interface AgentMessage {
   id: string
-  type: ChatMessageType.USER | ChatMessageType.AUTO_REPLY
-  content: ChatMessageUserContent[] // 用户消息内容数组
-  timestamp: string // ISO格式时间字符串
+  role: AgentMessageRole
+  parts: AgentMessagePart[]
+  created_at: string
 }
 
-// 助手消息（对应后端的 ChatMessageAssistant）
-export interface ChatMessageAssistant {
-  id: string
-  type: ChatMessageType.ASSISTANT
-  content: ChatMessageAssistantContent[] // 助手消息内容数组
-  timestamp: string // ISO格式时间字符串
+export interface FrontendToolInterrupt {
+  type: 'frontend_tool'
+  tool_call_id: string
+  tool_name: string
+  args: Record<string, unknown>
 }
 
-// 统一的消息类型（联合类型，对应后端的 ChatMessage）
-export type ChatMessage = ChatMessageUser | ChatMessageAssistant
+export type InteractionKind = 'ask_user'
 
-// 类型保护函数：判断消息是否为用户消息（包括自动回复）
-export function isUserMessage(message: ChatMessage): message is ChatMessageUser {
-  return message.type === ChatMessageType.USER || message.type === ChatMessageType.AUTO_REPLY
+export type InteractionSubmittedVia = 'option' | 'custom_input'
+
+export interface InteractiveInterrupt {
+  type: 'interactive_interrupt'
+  interaction_id: string
+  kind: InteractionKind
+  prompt: string
+  options: string[]
+  created_at: string
 }
 
-// 类型保护函数：判断消息是否为助手消息
-export function isAssistantMessage(message: ChatMessage): message is ChatMessageAssistant {
-  return message.type === ChatMessageType.ASSISTANT
+export interface InteractionResult {
+  interaction_id: string
+  kind: InteractionKind
+  answer: string
+  submitted_via: InteractionSubmittedVia
+  submitted_at: string
 }
 
-// 类型保护函数：判断消息是否为纯用户消息（非自动回复）
-export function isPureUserMessage(
-  message: ChatMessage,
-): message is ChatMessageUser & { type: ChatMessageType.USER } {
-  return message.type === ChatMessageType.USER
+export interface SessionInteractionRecord {
+  interrupt: InteractiveInterrupt
+  result: InteractionResult | null
 }
 
-// 类型保护函数：判断消息是否为自动回复消息
-export function isAutoReplyMessage(
-  message: ChatMessage,
-): message is ChatMessageUser & { type: ChatMessageType.AUTO_REPLY } {
-  return message.type === ChatMessageType.AUTO_REPLY
+export interface AskUserToolArgs {
+  question: string
+  suggested_options?: string[]
 }
 
-// 会话历史接口（与后端返回格式一致）
-export interface ChatHistory {
-  id: string
-  messages: ChatMessage[]
-  createdAt: string
-  updatedAt: string
+export type PendingInterrupt = FrontendToolInterrupt | InteractiveInterrupt
+
+export enum RunStatus {
+  RUNNING = 'running',
+  PAUSED = 'paused',
+  COMPLETED = 'completed',
+  FAILED = 'failed',
+  CANCELLED = 'cancelled',
 }
 
-// 与后端SessionSummary对应的前端类型
+export interface PendingRun {
+  run_id: string
+  status: RunStatus
+  interrupt?: PendingInterrupt | null
+}
+
 export interface SessionSummary {
   session_id: string
   created_at: string
   updated_at: string
   message_count: number
   preview_text: string
+}
+
+export interface SessionHistory {
+  id: string
+  messages: AgentMessage[]
+  createdAt: string
+  updatedAt: string
+}
+
+export interface RunInput {
+  parts: Array<TextPart | ImagePart | BackgroundContextPart>
+}
+
+export interface StartRunRequest {
+  input: RunInput
+}
+
+export interface ToolResultRequest {
+  tool_call_id: string
+  output: string
+  is_error: boolean
+}
+
+export interface InteractionResultRequest {
+  interaction_id: string
+  answer: string
+  submitted_via: InteractionSubmittedVia
+}
+
+export interface CancelRunRequest {
+  reason: string
+  pending_tool_call_id?: string | null
+}
+
+export interface SessionSnapshot {
+  session: {
+    session_id: string
+    created_at: string
+    updated_at: string
+  }
+  messages: AgentMessage[]
+  interactions: SessionInteractionRecord[]
+  pending_run: PendingRun | null
+}
+
+export interface RunStartedEvent {
+  type: 'run.started'
+  run_id: string
+  session_id: string
+}
+
+export interface MessageDeltaEvent {
+  type: 'message.delta'
+  run_id: string
+  message_id: string
+  part_index: number
+  delta: string
+}
+
+export interface MessageCompletedEvent {
+  type: 'message.completed'
+  run_id: string
+  message: AgentMessage
+}
+
+export interface RunPausedEvent {
+  type: 'run.paused'
+  run_id: string
+  reason: 'frontend_tool' | 'interaction'
+  interrupt: PendingInterrupt
+}
+
+export interface RunCompletedEvent {
+  type: 'run.completed'
+  run_id: string
+  message_id?: string | null
+  output_text: string
+}
+
+export interface RunFailedEvent {
+  type: 'run.failed'
+  run_id: string
+  error_code: string
+  detail: string
+  retryable: boolean
+}
+
+export type AgentStreamEvent =
+  | RunStartedEvent
+  | MessageDeltaEvent
+  | MessageCompletedEvent
+  | RunPausedEvent
+  | RunCompletedEvent
+  | RunFailedEvent
+
+export function isUserMessage(message: AgentMessage): boolean {
+  return message.role === AgentMessageRole.USER
+}
+
+export function isAssistantMessage(message: AgentMessage): boolean {
+  return message.role === AgentMessageRole.ASSISTANT
+}
+
+export function isPublicMessage(message: AgentMessage): boolean {
+  return isUserMessage(message) || isAssistantMessage(message)
+}
+
+export function getMessageTextParts(message: AgentMessage): TextPart[] {
+  return message.parts.filter((part): part is TextPart => part.type === MessagePartType.TEXT)
+}
+
+export function isInteractiveInterrupt(
+  interrupt: PendingInterrupt | null | undefined,
+): interrupt is InteractiveInterrupt {
+  return interrupt?.type === 'interactive_interrupt'
+}
+
+export function isFrontendToolInterrupt(
+  interrupt: PendingInterrupt | null | undefined,
+): interrupt is FrontendToolInterrupt {
+  return interrupt?.type === 'frontend_tool'
 }

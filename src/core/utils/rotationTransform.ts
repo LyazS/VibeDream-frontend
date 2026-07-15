@@ -1,8 +1,8 @@
 /**
- * WebAV与Vue项目的旋转角度转换工具
+ * 旋转角度转换工具
  *
- * WebAV使用弧度制 (radians)，范围：-π 到 π
- * Vue项目界面使用角度制 (degrees)，范围：-180° 到 180°
+ * 存储与 UI：角度制 (degrees)，允许任意有限值，用于保留多圈关键帧旋转。
+ * 渲染/计算：使用 degreesToRadians() 转换为等效弧度。
  */
 
 /**
@@ -22,45 +22,41 @@ export function normalizeAngle(degrees: number): number {
 }
 
 /**
- * 将角度转换为弧度
- * @param degrees 角度值（任意值，会自动标准化到 -180 到 180）
- * @returns 弧度值 (-π 到 π)
+ * 将媒体顺时针旋转角度收敛到 0 / 90 / 180 / 270。
+ * 非 90 度步进的值统一按 0 处理。
+ */
+export function normalizeClockwiseRotation(rotation: number): number {
+  const normalized = normalizeAngle(rotation)
+  if (normalized === 0 || normalized === 90) {
+    return normalized
+  }
+  if (normalized === 180 || normalized === -180) {
+    return 180
+  }
+  if (normalized === -90) {
+    return 270
+  }
+  return 0
+}
+
+/**
+ * 将角度转换为弧度（用于渲染/计算层）
+ * @param degrees 角度值
+ * @returns 弧度值
  */
 export function degreesToRadians(degrees: number): number {
-  // 先标准化角度，然后转换为弧度
   const normalizedDegrees = normalizeAngle(degrees)
   return (normalizedDegrees * Math.PI) / 180
 }
 
 /**
- * 将弧度转换为角度
- * @param radians 弧度值 (-π 到 π)
+ * 将弧度转换为角度（如有需要）
+ * @param radians 弧度值
  * @returns 角度值 (-180 到 180)
  */
 export function radiansToDegrees(radians: number): number {
   const degrees = (radians * 180) / Math.PI
-  // 限制角度范围在 -180 到 180 之间
   return Math.max(-180, Math.min(180, degrees))
-}
-
-/**
- * 将Vue界面的角度值转换为WebAV的弧度值
- * 用于：属性面板输入 → WebAV sprite.rect.angle
- * @param uiDegrees 界面输入的角度值（任意值，如 450°、-270° 等）
- * @returns WebAV使用的弧度值（自动标准化到 -π 到 π）
- */
-export function uiDegreesToWebAVRadians(uiDegrees: number): number {
-  return degreesToRadians(uiDegrees)
-}
-
-/**
- * 将WebAV的弧度值转换为Vue界面的角度值
- * 用于：WebAV sprite.rect.angle → 属性面板显示
- * @param webavRadians WebAV的弧度值
- * @returns 界面显示的角度值
- */
-export function webAVRadiansToUIDegrees(webavRadians: number): number {
-  return radiansToDegrees(webavRadians)
 }
 
 /**
@@ -70,13 +66,4 @@ export function webAVRadiansToUIDegrees(webavRadians: number): number {
  */
 export function isValidDegrees(degrees: number): boolean {
   return degrees >= -180 && degrees <= 180 && !isNaN(degrees)
-}
-
-/**
- * 验证弧度值是否在有效范围内
- * @param radians 弧度值
- * @returns 是否有效
- */
-export function isValidRadians(radians: number): boolean {
-  return radians >= -Math.PI && radians <= Math.PI && !isNaN(radians)
 }

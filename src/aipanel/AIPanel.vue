@@ -1,12 +1,16 @@
 <template>
   <div class="panel">
-    <n-tabs v-model:value="unifiedStore.aiPanelActiveTab" type="line" animated style="padding: 0 var(--spacing-md)">
+    <n-tabs
+      v-model:value="unifiedStore.aiPanelActiveTab"
+      type="line"
+      animated
+      style="padding: 0 var(--spacing-md)"
+    >
       <template #prefix>
         <component :is="IconComponents.SPARKLING" size="16px" style="padding: 0" />
       </template>
       <n-tab name="ai-generate" :tab="t('aiPanel.aiGenerate')"> </n-tab>
-      <!-- <n-tab name="agent" :tab="t('aiPanel.agent')"> </n-tab> -->
-      <n-tab v-if="unifiedStore.canShowCharacterEditor" name="character-editor" :tab="t('aiPanel.characterEditor')"> </n-tab>
+      <n-tab name="agent" :tab="t('aiPanel.agent')"> </n-tab>
       <template #suffix>
         <div class="header-buttons">
           <template v-if="unifiedStore.aiPanelActiveTab === 'agent'">
@@ -29,14 +33,17 @@
         </div>
       </template>
     </n-tabs>
-    <div v-show="unifiedStore.aiPanelActiveTab === 'ai-generate'" style="flex: 1; display: flex; flex-direction: column; overflow: hidden;">
+    <div
+      v-show="unifiedStore.aiPanelActiveTab === 'ai-generate'"
+      style="flex: 1; display: flex; flex-direction: column; overflow: hidden"
+    >
       <GeneratePanel />
     </div>
-    <div v-show="unifiedStore.aiPanelActiveTab === 'agent'" style="flex: 1; display: flex; flex-direction: column; overflow: hidden;">
-      <AgentPanel :showHistory="showHistory" />
-    </div>
-    <div v-show="unifiedStore.aiPanelActiveTab === 'character-editor'" style="flex: 1; display: flex; flex-direction: column; overflow: hidden;">
-      <CharacterEditor />
+    <div
+      v-show="unifiedStore.aiPanelActiveTab === 'agent'"
+      style="flex: 1; display: flex; flex-direction: column; overflow: hidden"
+    >
+      <AgentPanel v-model:showHistory="showHistory" />
     </div>
   </div>
 </template>
@@ -48,7 +55,6 @@ import { IconComponents } from '@/constants/iconComponents'
 import HoverButton from '@/components/base/HoverButton.vue'
 import AgentPanel from './agent/components/AgentPanel.vue'
 import GeneratePanel from './aigenerate/GeneratePanel.vue'
-import CharacterEditor from './character/CharacterEditor.vue'
 import { useAppI18n } from '@/core/composables/useI18n'
 import { useUnifiedStore } from '@/core/unifiedStore'
 import { SESSION_MANAGER } from '@/aipanel/agent/services'
@@ -57,7 +63,7 @@ const { t } = useAppI18n()
 const unifiedStore = useUnifiedStore()
 
 // 定义事件
-const emit = defineEmits<{
+defineEmits<{
   close: []
 }>()
 
@@ -78,6 +84,8 @@ onUnmounted(() => {
 // 处理新建聊天 - 只清空消息列表，不创建新会话
 const handleNewChat = async () => {
   try {
+    // 关闭历史记录面板
+    showHistory.value = false
     // 只清空当前会话的消息，不创建新会话
     SESSION_MANAGER.clearCurrentSession()
     console.log('消息列表已清空，准备开始新对话')

@@ -4,12 +4,8 @@
  * 适配新架构的统一类型系统
  */
 
-// 导出所有命令类
-export { CreateKeyframeCommand } from './CreateKeyframeCommand'
-export { DeleteKeyframeCommand } from './DeleteKeyframeCommand'
-export { UpdatePropertyCommand } from './UpdatePropertyCommand'
 export { ClearAllKeyframesCommand } from './ClearAllKeyframesCommand'
-export { ToggleKeyframeCommand } from './ToggleKeyframeCommand'
+// 导出当前仍在使用的命令类
 
 // 导出共享的类型和工具函数
 export type {

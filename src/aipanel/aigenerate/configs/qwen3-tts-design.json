@@ -1,0 +1,79 @@
+{
+  "id": "qwen3-tts-design",
+  "name": {
+    "en": "Qwen3 TTS Design",
+    "zh": "Qwen3语音设计"
+  },
+  "description": {
+    "en": "Qwen3 TTS Design - AI text-to-speech voice generation with character customization",
+    "zh": "Qwen3语音设计 - 支持角色定制的AI文本转语音生成"
+  },
+  "contentType": "audio",
+  "aiTaskType": "bizyair_generate_media",
+  "uploadServer": "bizyair",
+  "cost": "0.1",
+  "aiConfig": {
+    "text": {
+      "type": "string",
+      "value": "有些事，只要国家需要，就得有人扛起来。\n我们那一代人，是背着泥土铺路的；\n你们要做的，是让这条路，通向星辰大海。"
+    },
+    "instruct": {
+      "type": "string",
+      "value": "角色姓名：林怀岳\n音色信息：音量洪亮，音域低沉，力度感强的中年男性声音。\n身份背景：某国家重点科研项目首席顾问，年近七十的资深战略科学家。曾参与国家重大科技攻关工程，历经数十年风雨，见证了从落后追赶到自主创新的艰难历程。现任国家科技咨询委员会终身荣誉委员，仍坚持在一线培养青年人才，为国家战略发展建言献策。\n外貌特征：身形挺拔，两鬓斑白，眉宇间刻着岁月沉淀的坚毅。常着深色中山装或简洁正装，眼神沉静而锐利，举手投足间自带威严与从容。\n性格特质：意志如钢，信念坚定，面对挑战从不退缩；胸怀家国，心系民族未来，将个人命运与国家兴衰紧密相连；严谨自律，言出必行，话语中充满责任感与历史担当；外冷内热，表面严肃，实则对后辈寄予厚望，甘为人梯。\n人生信条：\"我们这一代人，不是为了站在光里，而是为了把路铺到光里。\""
+    },
+    "language": {
+      "type": "string",
+      "value": "Chinese"
+    }
+  },
+  "uiConfig": [
+    {
+      "type": "textarea-input",
+      "label": {
+        "en": "Text Content",
+        "zh": "文本内容"
+      },
+      "path": "aiConfig.text",
+      "placeholder": {
+        "en": "Enter the text to be converted to speech...",
+        "zh": "输入需要转换为语音的文本..."
+      }
+    },
+    {
+      "type": "textarea-input",
+      "label": {
+        "en": "Character Instruction",
+        "zh": "角色设定"
+      },
+      "path": "aiConfig.instruct",
+      "placeholder": {
+        "en": "Enter character voice instructions (name, voice characteristics, background, appearance, personality, etc.)...",
+        "zh": "输入角色语音设定（姓名、音色、背景、外貌、性格等）..."
+      }
+    },
+    {
+      "type": "select-input",
+      "label": {
+        "en": "Language",
+        "zh": "语言"
+      },
+      "path": "aiConfig.language",
+      "options": [
+        {
+          "label": {
+            "en": "Chinese",
+            "zh": "中文"
+          },
+          "value": "Chinese"
+        },
+        {
+          "label": {
+            "en": "English",
+            "zh": "英文"
+          },
+          "value": "English"
+        }
+      ]
+    }
+  ]
+}

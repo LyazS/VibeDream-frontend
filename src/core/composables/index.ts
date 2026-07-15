@@ -8,8 +8,20 @@ export { getDragPreviewManager } from './useDragPreview'
 // 重新导出 useKeyboardShortcuts 函数
 export { useKeyboardShortcuts } from './useKeyboardShortcuts'
 
-// 重新导出 useUnifiedKeyframeTransformControls 函数
-export { useUnifiedKeyframeTransformControls } from './useKeyframeTransformControls'
+// 重新导出视觉/音频关键帧控制函数
+export {
+  useUnifiedKeyframeVisualControls,
+  useUnifiedKeyframeTransformControls,
+} from './useKeyframeTransformControls'
+
+// 重新导出 useUnifiedMaskKeyframeControls 函数
+export { useUnifiedMaskKeyframeControls } from './useUnifiedMaskKeyframeControls'
+
+// 重新导出 useUnifiedFilterControls 函数
+export { useUnifiedFilterControls } from './useUnifiedFilterControls'
+
+// 重新导出 useUnifiedTransitionControls 函数
+export { useUnifiedTransitionControls } from './useUnifiedTransitionControls'
 
 // 重新导出 useTimelineTimeScale 函数
 export { useTimelineTimeScale } from './useTimelineTimeScale'

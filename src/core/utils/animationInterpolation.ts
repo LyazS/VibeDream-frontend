@@ -1,174 +1,193 @@
-/**
- * 动画插值工具函数
- * 负责根据关键帧数据计算当前帧的属性值
- * 使用百分比进行插值计算，提供更高精度
- */
-
-import type { UnifiedTimelineItemData } from '@/core/timelineitem/type'
-import type { AnimateKeyframe, KeyframePropertiesMap } from '@/core/timelineitem/bunnytype'
 import type { MediaType } from '@/core/mediaitem'
-import { absoluteFrameToRelativeFrame } from './unifiedKeyframeUtils'
-import { frameToPercentage } from './keyframePositionUtils'
+import type { UnifiedTimelineItemData, TimelineBaseRenderConfig } from '@/core/timelineitem/model/timelineItem'
+import type { PropertyAnimationGroupId } from '@/core/timelineitem/model/render'
+import type { ClipFilterConfig } from '@/core/filter/types'
+import type { MaskConfig } from '@/core/timelineitem/features/mask'
+import { getItemLocalSize, normalizeMaskConfig } from '@/core/timelineitem/features/mask'
+import { normalizeClipFilterConfig } from '@/core/timelineitem/features/filter'
+import { AnimationRegistry } from '@/core/animation/registry'
+import { TimelineItemQueries } from '@/core/timelineitem/queries'
+import {
+  getCurrentGroupValue,
+  getTrack,
+  getSupportedAnimationGroups,
+} from '@/core/animation/engine'
+import {
+  getFilterIntensityOverlay,
+  getFilterParamOverlay,
+} from '@/core/property-system/render-state'
+import { filterIntensitySchema } from '@/core/property-system/schema'
+import { cloneDeep } from 'lodash'
 
-/**
- * 线性插值函数
- * @param start 起始值
- * @param end 结束值
- * @param t 插值因子 (0-1)
- * @returns 插值结果
- */
-function lerp(start: number, end: number, t: number): number {
-  return start + (end - start) * t
+export function createBaseRenderConfig(item: UnifiedTimelineItemData<MediaType>) {
+  return cloneDeep(TimelineItemQueries.getBaseRenderConfig(item))
 }
 
-/**
- * 查找当前帧位置的前后关键帧
- * ✅ 使用百分比比较，更精确
- * @param keyframes 关键帧数组
- * @param relativeFrame 相对帧位置
- * @param clipDurationFrames clip 时长（帧数）
- * @returns 前后关键帧对象
- */
-function findSurroundingKeyframes<T extends MediaType>(
-  keyframes: AnimateKeyframe<T>[],
-  relativeFrame: number,
-  clipDurationFrames: number
-): {
-  before: AnimateKeyframe<T> | null
-  after: AnimateKeyframe<T> | null
-} {
-  // 关键帧已按 position 排序
-  // ✅ 计算当前帧的百分比位置
-  const currentPercentage = frameToPercentage(relativeFrame, clipDurationFrames)
-  
-  let before: AnimateKeyframe<T> | null = null
-  let after: AnimateKeyframe<T> | null = null
-  
-  for (const kf of keyframes) {
-    // ✅ 使用百分比进行比较，更精确
-    if (kf.position <= currentPercentage) {
-      before = kf
-    } else if (kf.position > currentPercentage && !after) {
-      after = kf
-      break
-    }
-  }
-  
-  return { before, after }
-}
-
-/**
- * 计算插值属性值
- * ✅ 使用百分比计算插值因子，更精确
- * @param before 前一个关键帧
- * @param after 后一个关键帧
- * @param relativeFrame 当前相对帧位置
- * @param clipDurationFrames clip 时长（帧数）
- * @returns 插值后的属性值
- */
-function interpolateProperties<T extends MediaType>(
-  before: AnimateKeyframe<T>,
-  after: AnimateKeyframe<T>,
-  relativeFrame: number,
-  clipDurationFrames: number
-): Partial<KeyframePropertiesMap[T]> {
-  // ✅ 核心改进：使用百分比计算插值因子，避免帧位置的舍入误差
-  const currentPercentage = frameToPercentage(relativeFrame, clipDurationFrames)
-  const t = (currentPercentage - before.position) / (after.position - before.position)
-  
-  const result: any = {}
-  
-  // 遍历所有可动画属性
-  const props = Object.keys(before.properties) as Array<keyof typeof before.properties>
-  
-  for (const prop of props) {
-    const startValue = before.properties[prop] as number
-    const endValue = after.properties[prop] as number
-    
-    // 只对数值类型进行插值
-    if (typeof startValue === 'number' && typeof endValue === 'number') {
-      result[prop] = lerp(startValue, endValue, t)
-    } else {
-      // 非数值类型直接使用起始值
-      result[prop] = startValue
-    }
-  }
-  
-  return result
-}
-
-/**
- * 应用动画到 TimelineItem 的 config
- * 这是核心函数，在渲染循环中每帧调用
- * @param item 时间轴项目
- * @param currentAbsoluteFrame 当前绝对帧位置
- */
-export function applyAnimationToConfig(
+export function createBaseRenderFilterConfig(
   item: UnifiedTimelineItemData<MediaType>,
-  currentAbsoluteFrame: number
-): void {
-  // 1. 懒加载：首次使用时初始化 renderConfig
-  if (!item.runtime.renderConfig) {
-    item.runtime.renderConfig = { ...item.config }
+): ClipFilterConfig | undefined {
+  const filterConfig = item.exRenderConfig?.filter
+  return filterConfig ? normalizeClipFilterConfig(filterConfig) : undefined
+}
+
+export function createBaseRenderMask(item: UnifiedTimelineItemData<MediaType>): MaskConfig | undefined {
+  if (!TimelineItemQueries.hasVisualProperties(item)) {
+    return undefined
   }
-  
-  // 2. 检查是否有动画
-  if (!item.animation || item.animation.keyframes.length === 0) {
-    // 没有动画时，确保 renderConfig 与 config 同步
-    Object.assign(item.runtime.renderConfig, item.config)
-    return
-  }
-  
-  // 3. 检查是否在时间范围内
-  const isInTimeRange =
+
+  const maskConfig = item.exRenderConfig?.mask
+  const visualConfig = TimelineItemQueries.getBaseVisualConfig(item)
+  return maskConfig
+    ? normalizeMaskConfig(maskConfig, getItemLocalSize(visualConfig?.width ?? 0, visualConfig?.height ?? 0))
+    : undefined
+}
+
+function getActiveAnimationGroups(item: UnifiedTimelineItemData<MediaType>): PropertyAnimationGroupId[] {
+  if (!item.animation?.groups) return []
+  return getSupportedAnimationGroups(item).filter((groupId) => {
+    const definition = AnimationRegistry.get(groupId)
+    const track = getTrack(item, groupId)
+    return definition.isEnabled(item) && Boolean(track && track.keyframes.length > 0)
+  })
+}
+
+function isFrameInAnimationResolveRange(
+  item: UnifiedTimelineItemData<MediaType>,
+  currentAbsoluteFrame: number,
+): boolean {
+  // Selection preview can render the clip at timelineEndTime, where 100% keyframes live.
+  return (
     currentAbsoluteFrame >= item.timeRange.timelineStartTime &&
     currentAbsoluteFrame <= item.timeRange.timelineEndTime
-  if (!isInTimeRange) {
-    // 不在范围内，使用原始 config
-    Object.assign(item.runtime.renderConfig, item.config)
-    return
-  }
-  
-  // 4. 计算相对帧位置和 clip 时长
-  const relativeFrame = absoluteFrameToRelativeFrame(currentAbsoluteFrame, item.timeRange)
-  const clipDurationFrames = item.timeRange.timelineEndTime - item.timeRange.timelineStartTime
-  
-  // 5. 查找前后关键帧（✅ 传递 clipDurationFrames 用于百分比计算）
-  const { before, after } = findSurroundingKeyframes(
-    item.animation.keyframes,
-    relativeFrame,
-    clipDurationFrames
   )
-  
-  // 6. 根据情况计算属性值
-  let animatedProps: Partial<KeyframePropertiesMap[MediaType]>
-  
-  if (before && after) {
-    // 情况1：在两个关键帧之间 - 进行插值
-    animatedProps = interpolateProperties(before, after, relativeFrame, clipDurationFrames)
-  } else if (before && !after) {
-    // 情况2：在最后一个关键帧之后 - 使用最后关键帧的值
-    animatedProps = before.properties
-  } else if (!before && after) {
-    // 情况3：在第一个关键帧之前 - 使用第一个关键帧的值
-    animatedProps = after.properties
-  } else {
-    // 情况4：没有关键帧（理论上不会发生）
-    return
-  }
-  
-  // 7. ✅ 应用到 runtime.renderConfig（不触发自动保存）
-  Object.assign(item.runtime.renderConfig, item.config, animatedProps)
 }
 
-/**
- * 批量应用动画到多个 TimelineItem
- * @param items 时间轴项目数组
- * @param currentAbsoluteFrame 当前绝对帧位置
- */
+export function resolveRenderConfigAtFrame<T extends MediaType>(
+  item: UnifiedTimelineItemData<T>,
+  currentAbsoluteFrame: number,
+): TimelineBaseRenderConfig<T> {
+  const renderConfig = createBaseRenderConfig(item) as TimelineBaseRenderConfig<T>
+
+  if (!isFrameInAnimationResolveRange(item, currentAbsoluteFrame)) {
+    return renderConfig
+  }
+
+  for (const groupId of getActiveAnimationGroups(item)) {
+    const definition = AnimationRegistry.get(groupId)
+    if (definition.scope === 'visual') {
+      if (!TimelineItemQueries.hasVisualProperties(item)) {
+        continue
+      }
+      const visualConfig = (renderConfig as TimelineBaseRenderConfig<'video' | 'image' | 'text'>).visual
+      if (!visualConfig) continue
+      definition.applyValueToConfig(
+        visualConfig as object,
+        getCurrentGroupValue(item, currentAbsoluteFrame, groupId),
+      )
+    } else if (definition.scope === 'audio') {
+      if (!TimelineItemQueries.hasAudioProperties(item)) {
+        continue
+      }
+      const audioConfig = (renderConfig as TimelineBaseRenderConfig<'video' | 'audio'>).audio
+      if (!audioConfig) continue
+      definition.applyValueToConfig(
+        audioConfig as object,
+        getCurrentGroupValue(item, currentAbsoluteFrame, groupId),
+      )
+    }
+  }
+
+  return renderConfig
+}
+
+export function resolveRenderMaskAtFrame(
+  item: UnifiedTimelineItemData<MediaType>,
+  currentAbsoluteFrame: number,
+): MaskConfig | undefined {
+  const renderMask = createBaseRenderMask(item)
+
+  if (!renderMask || !isFrameInAnimationResolveRange(item, currentAbsoluteFrame)) {
+    return renderMask
+  }
+
+  const visualConfig = TimelineItemQueries.getBaseVisualConfig(item)
+  const mutableMask = renderMask as Partial<MaskConfig>
+  for (const groupId of getActiveAnimationGroups(item)) {
+    const definition = AnimationRegistry.get(groupId)
+    if (definition.scope !== 'mask') {
+      continue
+    }
+    definition.applyValueToConfig(
+      mutableMask as Record<string, unknown>,
+      getCurrentGroupValue(item, currentAbsoluteFrame, groupId),
+    )
+  }
+
+  return normalizeMaskConfig(
+    mutableMask,
+    getItemLocalSize(visualConfig?.width ?? 0, visualConfig?.height ?? 0),
+  )
+}
+
+export function resolveRenderFilterConfigAtFrame(
+  item: UnifiedTimelineItemData<MediaType>,
+  currentAbsoluteFrame: number,
+): ClipFilterConfig | undefined {
+  const renderFilterConfig = createBaseRenderFilterConfig(item)
+
+  if (!renderFilterConfig || !isFrameInAnimationResolveRange(item, currentAbsoluteFrame)) {
+    return renderFilterConfig
+  }
+
+  const mutableFilterConfig: Partial<ClipFilterConfig> = renderFilterConfig
+  for (const groupId of getActiveAnimationGroups(item)) {
+    const definition = AnimationRegistry.get(groupId)
+    if (definition.scope !== 'filter') {
+      continue
+    }
+    definition.applyValueToConfig(
+      mutableFilterConfig as Record<string, unknown>,
+      getCurrentGroupValue(item, currentAbsoluteFrame, groupId),
+    )
+  }
+
+  const resolvedFilterConfig = normalizeClipFilterConfig(mutableFilterConfig)
+  const filterIntensityOverlay = getFilterIntensityOverlay(item.id)
+  const filterParamOverlay = getFilterParamOverlay(item.id)
+
+  if (!filterIntensityOverlay && !filterParamOverlay) {
+    return resolvedFilterConfig
+  }
+
+  return normalizeClipFilterConfig({
+    ...resolvedFilterConfig,
+    ...(filterIntensityOverlay
+      ? { [filterIntensitySchema.valueFields[0]]: filterIntensityOverlay.intensity }
+      : {}),
+    params: {
+      ...resolvedFilterConfig.params,
+      ...(filterParamOverlay?.params ?? {}),
+    },
+  })
+}
+
+export function applyAnimationToConfig(
+  item: UnifiedTimelineItemData<MediaType>,
+  currentAbsoluteFrame: number,
+): void {
+  item.runtime.renderConfig = resolveRenderConfigAtFrame(item, currentAbsoluteFrame)
+  const resolvedFilterConfig = resolveRenderFilterConfigAtFrame(item, currentAbsoluteFrame)
+  const resolvedMask = resolveRenderMaskAtFrame(item, currentAbsoluteFrame)
+  item.runtime.exRenderConfig = {
+    ...item.runtime.exRenderConfig,
+    filter: resolvedFilterConfig,
+    mask: resolvedMask,
+  }
+}
+
 export function applyAnimationsToItems(
   items: UnifiedTimelineItemData<MediaType>[],
-  currentAbsoluteFrame: number
+  currentAbsoluteFrame: number,
 ): void {
   for (const item of items) {
     applyAnimationToConfig(item, currentAbsoluteFrame)
