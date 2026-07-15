@@ -5,6 +5,25 @@ import vue from '@vitejs/plugin-vue'
 import vueDevTools from 'vite-plugin-vue-devtools'
 import removeConsole from 'vite-plugin-remove-console'
 
+function getNodeModulePackageName(id: string): string | null {
+  const normalizedId = id.replaceAll('\\', '/')
+  const nodeModulesMarker = '/node_modules/'
+  const markerIndex = normalizedId.lastIndexOf(nodeModulesMarker)
+  if (markerIndex === -1) return null
+
+  const packagePath = normalizedId.slice(markerIndex + nodeModulesMarker.length)
+  const [firstSegment, secondSegment] = packagePath.split('/')
+  if (!firstSegment) return null
+  if (firstSegment.startsWith('@')) {
+    return secondSegment ? `${firstSegment}/${secondSegment}` : null
+  }
+  return firstSegment
+}
+
+function isPackage(packageName: string, names: readonly string[]): boolean {
+  return names.some((name) => packageName === name || packageName.startsWith(`${name}/`))
+}
+
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [
@@ -14,7 +33,7 @@ export default defineConfig({
   ],
   resolve: {
     alias: {
-      '@': fileURLToPath(new URL('./src', import.meta.url))
+      '@': fileURLToPath(new URL('./src', import.meta.url)),
     },
   },
   build: {
@@ -29,50 +48,51 @@ export default defineConfig({
     rollupOptions: {
       output: {
         manualChunks: (id) => {
-          // 将大型依赖分离到单独的chunk
-          if (id.includes('node_modules')) {
-            // Vue 核心库（包括 vue、pinia、vue-router、@vue/*）
-            if (id.includes('vue') || id.includes('pinia') || id.includes('@vue')) {
-              return 'vue-vendor'
-            }
-            // UI 组件库（naive-ui 及其依赖）- 合并到 vue-vendor 以避免循环依赖
-            if (id.includes('naive-ui')) {
-              return 'vue-vendor'
-            }
-            // 媒体处理库（mediabunny 和 @mediabunny）
-            if (id.includes('mediabunny') || id.includes('@mediabunny')) {
-              return 'media-vendor'
-            }
-            // OSS 存储（ali-oss 及其依赖）
-            if (id.includes('ali-oss') || id.includes('aliyun-sdk')) {
-              return 'oss-vendor'
-            }
-            // Markdown 相关
-            if (id.includes('markdown-it') || id.includes('github-markdown-css')) {
-              return 'markdown-vendor'
-            }
-            // 工具库（lodash、axios、dexie）
-            if (id.includes('lodash') || id.includes('axios') || id.includes('dexie')) {
-              return 'utils-vendor'
-            }
-            // 国际化（vue-i18n）
-            if (id.includes('vue-i18n')) {
-              return 'i18n-vendor'
-            }
-            // 图标库（remixicon 和 @remixicon）
-            if (id.includes('remixicon') || id.includes('@remixicon')) {
-              return 'icon-vendor'
-            }
-            // 上下文菜单（@imengyu）
-            if (id.includes('@imengyu')) {
-              return 'context-vendor'
-            }
-            // 其他工具（nanoid、p-limit）
-            if (id.includes('nanoid') || id.includes('p-limit')) {
-              return 'misc-vendor'
-            }
-            // 其他 node_modules
-            return 'vendor'
+          const packageName = getNodeModulePackageName(id)
+          if (!packageName) return
+
+          if (isPackage(packageName, ['vue', '@vue', 'pinia', 'vue-router'])) {
+            return 'vue-vendor'
+          }
+          if (
+            isPackage(packageName, [
+              'naive-ui',
+              '@css-render',
+              'async-validator',
+              'css-render',
+              'evtd',
+              'seemly',
+              'treemate',
+              'vdirs',
+              'vooks',
+              'vueuc',
+            ])
+          ) {
+            return 'ui-vendor'
+          }
+          if (isPackage(packageName, ['mediabunny', '@mediabunny'])) {
+            return 'media-vendor'
+          }
+          if (isPackage(packageName, ['ali-oss', 'aliyun-sdk'])) {
+            return 'oss-vendor'
+          }
+          if (isPackage(packageName, ['markdown-it', 'github-markdown-css'])) {
+            return 'markdown-vendor'
+          }
+          if (isPackage(packageName, ['lodash', 'lodash-es', 'axios', 'dexie'])) {
+            return 'utils-vendor'
+          }
+          if (isPackage(packageName, ['vue-i18n'])) {
+            return 'i18n-vendor'
+          }
+          if (isPackage(packageName, ['remixicon', '@remixicon'])) {
+            return 'icon-vendor'
+          }
+          if (isPackage(packageName, ['@imengyu'])) {
+            return 'context-vendor'
+          }
+          if (isPackage(packageName, ['nanoid', 'p-limit'])) {
+            return 'misc-vendor'
           }
         },
       },

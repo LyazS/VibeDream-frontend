@@ -1,5 +1,5 @@
 import { reactive } from 'vue'
-import { visualPositionSchema } from '@/core/property-system/schema'
+import { visualPositionSchema } from '../schema/animatablePropertySchemas'
 
 interface PositionOverlayEntry {
   x?: number

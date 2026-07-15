@@ -1,5 +1,5 @@
 import { reactive } from 'vue'
-import { visualSizeSchema } from '@/core/property-system/schema'
+import { visualSizeSchema } from '../schema/animatablePropertySchemas'
 
 interface SizeOverlayEntry {
   width?: number
@@ -8,10 +8,7 @@ interface SizeOverlayEntry {
 
 const sizeOverlays = reactive(new Map<string, SizeOverlayEntry>())
 
-export function setVisualSizeOverlay(
-  timelineItemId: string,
-  patch: SizeOverlayEntry,
-): void {
+export function setVisualSizeOverlay(timelineItemId: string, patch: SizeOverlayEntry): void {
   if (!visualSizeSchema.supportsTransientOverlay) {
     throw new Error(`Transient overlay is not supported: ${visualSizeSchema.propertyId}`)
   }

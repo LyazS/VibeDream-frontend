@@ -4,21 +4,18 @@ import { propertyMutationCommitter } from '@/core/property-system'
 import {
   clearFilterIntensityOverlay,
   clearFilterParamOverlay,
-} from '@/core/property-system/render-state'
+} from '@/core/property-system/render-state/filterOverlay'
 import {
   getFilterParamKey,
   isFilterParamPropertyId,
-} from '@/core/property-system/schema'
+} from '@/core/property-system/schema/propertyIds'
 import type { useUnifiedStore } from '@/core/unifiedStore'
 import {
   getKeyframeButtonState,
   getNextKeyframeFrame,
   getPreviousKeyframeFrame,
 } from '@/core/utils/unifiedKeyframeUtils'
-import type {
-  FilterChannelKey,
-  UnifiedFilterControlsOptions,
-} from './types'
+import type { FilterChannelKey, UnifiedFilterControlsOptions } from './types'
 
 type UnifiedStoreInstance = ReturnType<typeof useUnifiedStore>
 

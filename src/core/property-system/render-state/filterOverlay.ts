@@ -1,5 +1,5 @@
 import { reactive } from 'vue'
-import { filterIntensitySchema } from '@/core/property-system/schema'
+import { filterIntensitySchema } from '../schema/animatablePropertySchemas'
 
 interface FilterIntensityOverlayEntry {
   intensity: number
@@ -26,7 +26,9 @@ export function setFilterIntensityOverlay(timelineItemId: string, intensity: num
   })
 }
 
-export function getFilterIntensityOverlay(timelineItemId: string): FilterIntensityOverlayEntry | undefined {
+export function getFilterIntensityOverlay(
+  timelineItemId: string,
+): FilterIntensityOverlayEntry | undefined {
   return filterIntensityOverlays.get(timelineItemId)
 }
 
@@ -34,7 +36,11 @@ export function clearFilterIntensityOverlay(timelineItemId: string): void {
   filterIntensityOverlays.delete(timelineItemId)
 }
 
-export function setFilterParamOverlay(timelineItemId: string, parameterKey: string, value: unknown): void {
+export function setFilterParamOverlay(
+  timelineItemId: string,
+  parameterKey: string,
+  value: unknown,
+): void {
   const current = filterParamOverlays.get(timelineItemId)?.params ?? {}
   filterParamOverlays.set(timelineItemId, {
     params: {

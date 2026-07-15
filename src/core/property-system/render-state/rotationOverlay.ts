@@ -1,5 +1,5 @@
 import { reactive } from 'vue'
-import { visualRotationSchema } from '@/core/property-system/schema'
+import { visualRotationSchema } from '../schema/animatablePropertySchemas'
 
 interface RotationOverlayEntry {
   rotation: number

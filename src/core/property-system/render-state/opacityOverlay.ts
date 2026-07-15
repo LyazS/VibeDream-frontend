@@ -1,5 +1,5 @@
 import { reactive } from 'vue'
-import { visualBlendIntensitySchema } from '@/core/property-system/schema'
+import { visualBlendIntensitySchema } from '../schema/animatablePropertySchemas'
 
 interface BlendIntensityOverlayEntry {
   blendIntensity: number
@@ -11,7 +11,10 @@ function clampBlendIntensity(blendIntensity: number): number {
   return Math.min(1, Math.max(0, blendIntensity))
 }
 
-export function setVisualBlendIntensityOverlay(timelineItemId: string, blendIntensity: number): void {
+export function setVisualBlendIntensityOverlay(
+  timelineItemId: string,
+  blendIntensity: number,
+): void {
   if (!visualBlendIntensitySchema.supportsTransientOverlay) {
     throw new Error(`Transient overlay is not supported: ${visualBlendIntensitySchema.propertyId}`)
   }
@@ -21,7 +24,9 @@ export function setVisualBlendIntensityOverlay(timelineItemId: string, blendInte
   })
 }
 
-export function getVisualBlendIntensityOverlay(timelineItemId: string): BlendIntensityOverlayEntry | undefined {
+export function getVisualBlendIntensityOverlay(
+  timelineItemId: string,
+): BlendIntensityOverlayEntry | undefined {
   return blendIntensityOverlays.get(timelineItemId)
 }
 

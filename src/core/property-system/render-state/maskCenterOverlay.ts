@@ -1,5 +1,5 @@
 import { reactive } from 'vue'
-import { maskCenterSchema } from '@/core/property-system/schema'
+import { maskCenterSchema } from '../schema/animatablePropertySchemas'
 
 interface MaskCenterOverlayEntry {
   centerX?: number
@@ -8,10 +8,7 @@ interface MaskCenterOverlayEntry {
 
 const maskCenterOverlays = reactive(new Map<string, MaskCenterOverlayEntry>())
 
-export function setMaskCenterOverlay(
-  timelineItemId: string,
-  patch: MaskCenterOverlayEntry,
-): void {
+export function setMaskCenterOverlay(timelineItemId: string, patch: MaskCenterOverlayEntry): void {
   if (!maskCenterSchema.supportsTransientOverlay) {
     throw new Error(`Transient overlay is not supported: ${maskCenterSchema.propertyId}`)
   }

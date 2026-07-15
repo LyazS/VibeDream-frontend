@@ -1,5 +1,5 @@
 import { reactive } from 'vue'
-import { audioVolumeSchema } from '@/core/property-system/schema'
+import { audioVolumeSchema } from '../schema/animatablePropertySchemas'
 
 interface VolumeOverlayEntry {
   volume: number

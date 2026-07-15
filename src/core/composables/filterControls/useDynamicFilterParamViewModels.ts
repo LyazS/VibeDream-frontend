@@ -1,12 +1,12 @@
 import { computed, type Ref } from 'vue'
 import type { FilterParamColorValue } from '@/core/filter/color'
 import type { ClipFilterConfig } from '@/core/filter/types'
+import { propertySchemaResolver } from '@/core/property-system/schema/resolver'
 import {
   getFilterParamKey,
   isFilterParamPropertyId,
-  propertySchemaResolver,
   type DynamicFilterParamPropertyId,
-} from '@/core/property-system/schema'
+} from '@/core/property-system/schema/propertyIds'
 import type { FilterChannelKey, FilterParamVec2Value, FilterTimelineItem } from './types'
 
 export type DynamicFilterParamViewModel =
@@ -166,8 +166,12 @@ function getVec2Value(
     Number.isFinite((value as Record<string, unknown>).y)
   ) {
     return {
-      x: integerLike ? Math.round((value as FilterParamVec2Value).x) : (value as FilterParamVec2Value).x,
-      y: integerLike ? Math.round((value as FilterParamVec2Value).y) : (value as FilterParamVec2Value).y,
+      x: integerLike
+        ? Math.round((value as FilterParamVec2Value).x)
+        : (value as FilterParamVec2Value).x,
+      y: integerLike
+        ? Math.round((value as FilterParamVec2Value).y)
+        : (value as FilterParamVec2Value).y,
     }
   }
   throw new Error(`滤镜参数不是有效二维向量: ${parameterKey}`)

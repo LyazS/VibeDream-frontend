@@ -1,5 +1,5 @@
 import { reactive } from 'vue'
-import { maskEllipseSizeSchema, maskRectangleSizeSchema } from '@/core/property-system/schema'
+import { maskEllipseSizeSchema, maskRectangleSizeSchema } from '../schema/animatablePropertySchemas'
 
 interface MaskRectangleSizeOverlayEntry {
   width?: number
