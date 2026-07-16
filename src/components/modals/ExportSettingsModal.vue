@@ -41,43 +41,21 @@
       <!-- 视频相关设置：仅在导出视频时显示 -->
       <template v-if="form.exportType === 'video'">
         <!-- 帧率选择 -->
-        <ModalFormField :label="t('editor.frameRate')" input-id="frame-rate">
-          <select id="frame-rate" v-model="form.frameRate">
-            <option :value="8">{{ t('editor.frameRate8') }}</option>
-            <option :value="12">{{ t('editor.frameRate12') }}</option>
-            <option :value="16">{{ t('editor.frameRate16') }}</option>
-            <option :value="20">{{ t('editor.frameRate20') }}</option>
-            <option :value="24">{{ t('editor.frameRate24') }}</option>
-            <option :value="25">{{ t('editor.frameRate25') }}</option>
-            <option :value="30">{{ t('editor.frameRate30') }}</option>
-            <option :value="50">{{ t('editor.frameRate50') }}</option>
-            <option :value="60">{{ t('editor.frameRate60') }}</option>
-          </select>
+        <ModalFormField :label="t('editor.frameRate')">
+          <SearchableSelect v-model="form.frameRate" :options="frameRateOptions" :searchable="false" />
           <template #hint>{{ getFrameRateHint(form.frameRate) }}</template>
         </ModalFormField>
 
         <!-- 视频质量 -->
-        <ModalFormField :label="t('editor.videoQuality')" input-id="video-quality">
-          <select id="video-quality" v-model="form.videoQuality">
-            <option value="very_low">{{ t('editor.qualityVeryLow') }}</option>
-            <option value="low">{{ t('editor.qualityLow') }}</option>
-            <option value="medium">{{ t('editor.qualityMedium') }}</option>
-            <option value="high">{{ t('editor.qualityHigh') }}</option>
-            <option value="very_high">{{ t('editor.qualityVeryHigh') }}</option>
-          </select>
+        <ModalFormField :label="t('editor.videoQuality')">
+          <SearchableSelect v-model="form.videoQuality" :options="qualityOptions" :searchable="false" />
           <template #hint>{{ getVideoQualityHint(form.videoQuality) }}</template>
         </ModalFormField>
       </template>
 
       <!-- 音频质量 -->
-      <ModalFormField :label="t('editor.audioQuality')" input-id="audio-quality">
-        <select id="audio-quality" v-model="form.audioQuality">
-          <option value="very_low">{{ t('editor.qualityVeryLow') }}</option>
-          <option value="low">{{ t('editor.qualityLow') }}</option>
-          <option value="medium">{{ t('editor.qualityMedium') }}</option>
-          <option value="high">{{ t('editor.qualityHigh') }}</option>
-          <option value="very_high">{{ t('editor.qualityVeryHigh') }}</option>
-        </select>
+      <ModalFormField :label="t('editor.audioQuality')">
+        <SearchableSelect v-model="form.audioQuality" :options="qualityOptions" :searchable="false" />
         <template #hint>{{ getAudioQualityHint(form.audioQuality) }}</template>
       </ModalFormField>
     </div>
@@ -85,9 +63,10 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 import UniversalModal from './UniversalModal.vue'
 import ModalFormField from '@/components/base/ModalFormField.vue'
+import SearchableSelect from '@/components/base/SearchableSelect.vue'
 import { useAppI18n } from '@/core/composables/useI18n'
 import {
   QUALITY_VERY_LOW,
@@ -141,6 +120,26 @@ const form = ref<{
   audioQuality: 'medium',
   frameRate: 30,
 })
+
+const frameRateOptions = computed(() => [
+  { value: 8, label: t('editor.frameRate8') },
+  { value: 12, label: t('editor.frameRate12') },
+  { value: 16, label: t('editor.frameRate16') },
+  { value: 20, label: t('editor.frameRate20') },
+  { value: 24, label: t('editor.frameRate24') },
+  { value: 25, label: t('editor.frameRate25') },
+  { value: 30, label: t('editor.frameRate30') },
+  { value: 50, label: t('editor.frameRate50') },
+  { value: 60, label: t('editor.frameRate60') },
+])
+
+const qualityOptions = computed(() => [
+  { value: 'very_low', label: t('editor.qualityVeryLow') },
+  { value: 'low', label: t('editor.qualityLow') },
+  { value: 'medium', label: t('editor.qualityMedium') },
+  { value: 'high', label: t('editor.qualityHigh') },
+  { value: 'very_high', label: t('editor.qualityVeryHigh') },
+])
 
 // 监听模态框打开，更新表单数据
 watch(
@@ -244,7 +243,11 @@ function getExportTypeHint(type: ExportType): string {
 
 .radio-group {
   display: flex;
-  gap: var(--spacing-xl);
+  gap: 4px;
+  padding: 4px;
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-bg-hover);
+  border-radius: 6px;
 }
 
 .radio-option {
@@ -252,12 +255,13 @@ function getExportTypeHint(type: ExportType): string {
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: var(--spacing-lg) var(--spacing-xl);
-  background: var(--color-bg-secondary);
-  border: 1px solid var(--color-bg-hover);
+  min-height: 40px;
+  padding: 0 var(--spacing-xl);
+  color: var(--color-text-secondary);
+  border: 1px solid transparent;
   border-radius: var(--border-radius-medium);
   cursor: pointer;
-  transition-property: background-color, border-color, color;
+  transition-property: background-color, border-color, box-shadow, color, scale;
   transition-duration: var(--transition-fast);
   transition-timing-function: ease-out;
   user-select: none;
@@ -265,22 +269,38 @@ function getExportTypeHint(type: ExportType): string {
 
 .radio-option:hover {
   background: var(--color-bg-hover);
-  border-color: var(--color-border-hover);
+  color: var(--color-text-primary);
 }
 
 .radio-option.active {
   background: var(--color-accent-primary-alpha);
-  border-color: var(--color-primary);
-  box-shadow: 0 0 0 1px var(--color-primary);
+  border-color: color-mix(in srgb, var(--color-primary) 60%, transparent);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 1px 2px rgba(0, 0, 0, 0.18);
   color: var(--color-text-primary);
 }
 
 .radio-option input[type='radio'] {
-  display: none;
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.radio-option:has(input[type='radio']:focus-visible) {
+  outline: 2px solid var(--color-accent-secondary);
+  outline-offset: 2px;
+}
+
+.radio-option:active {
+  scale: 0.96;
 }
 
 .radio-label {
   font-size: var(--font-size-sm);
-  font-weight: 500;
+  font-weight: 600;
 }
 </style>

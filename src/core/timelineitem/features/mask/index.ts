@@ -7,6 +7,13 @@ export interface MaskTextureSize {
   height: number
 }
 
+/**
+ * Pixel-space geometry derived from the persisted normalized mask config.
+ * WebGL shaders and canvas overlays must consume this shape rather than
+ * converting normalized values independently.
+ */
+export type MaskPixelGeometry = MaskConfig
+
 export interface MaskFalloff {
   outerRange: number
   decayRate: number
@@ -16,6 +23,7 @@ interface BaseMaskConfig {
   enabled: boolean
   type: MaskType
   inverted: boolean
+  /** Normalized center coordinates; (0.5, 0.5) is the item center. */
   centerX: number
   centerY: number
   rotation: number
@@ -50,18 +58,6 @@ export type MaskConfig =
   | LinearMaskConfig
   | MirrorMaskConfig
 
-interface LegacyMaskShape {
-  centerX?: number
-  centerY?: number
-  rotation?: number
-  width?: number
-  height?: number
-  ellipseWidth?: number
-  ellipseHeight?: number
-  cornerRadius?: number
-  length?: number
-}
-
 export interface MaskConfigPatch {
   enabled?: boolean
   type?: MaskType
@@ -76,7 +72,6 @@ export interface MaskConfigPatch {
   cornerRadius?: number
   length?: number
   falloff?: Partial<MaskFalloff> | null
-  shape?: LegacyMaskShape | null
 }
 
 export interface MaskCenterValue {
@@ -127,7 +122,6 @@ export type MaskPropertyPath =
   | 'mask.outerRange'
   | 'mask.decayRate'
 
-// Deprecated compatibility constants kept while legacy callers are migrated.
 export const MASK_ANIMATABLE_PATHS = [
   'mask.centerX',
   'mask.centerY',
@@ -142,11 +136,6 @@ export const MASK_ANIMATABLE_PATHS = [
   'mask.decayRate',
 ] as const satisfies readonly MaskPropertyPath[]
 
-const DEFAULT_MASK_TEXTURE_SIZE: MaskTextureSize = {
-  width: 1920,
-  height: 1080,
-}
-
 function normalizeMaskType(type: unknown): MaskType {
   if (type === 'rectangle' || type === 'ellipse' || type === 'linear' || type === 'mirror') {
     return type
@@ -156,12 +145,12 @@ function normalizeMaskType(type: unknown): MaskType {
 }
 
 function sanitizeMaskTextureSize(textureSize?: Partial<MaskTextureSize> | null): MaskTextureSize {
-  const width = textureSize?.width ?? DEFAULT_MASK_TEXTURE_SIZE.width
-  const height = textureSize?.height ?? DEFAULT_MASK_TEXTURE_SIZE.height
+  const width = textureSize?.width
+  const height = textureSize?.height
 
   return {
-    width: Number.isFinite(width) && width > 0 ? width : DEFAULT_MASK_TEXTURE_SIZE.width,
-    height: Number.isFinite(height) && height > 0 ? height : DEFAULT_MASK_TEXTURE_SIZE.height,
+    width: typeof width === 'number' && Number.isFinite(width) && width > 0 ? width : 1,
+    height: typeof height === 'number' && Number.isFinite(height) && height > 0 ? height : 1,
   }
 }
 
@@ -179,73 +168,55 @@ function clampUnitValue(value: number): number {
   return Math.min(Math.max(value, 0), 1)
 }
 
-function normalizeRectangleCornerRadius(
-  cornerRadius: number | undefined,
-  width: number,
-  height: number,
-): number {
+function normalizeNonNegativeValue(value: number | undefined, fallback: number): number {
+  if (value === undefined || !Number.isFinite(value)) {
+    return fallback
+  }
+
+  return Math.max(0, value)
+}
+
+function normalizeRectangleCornerRadius(cornerRadius: number | undefined): number {
   if (cornerRadius === undefined || !Number.isFinite(cornerRadius)) {
     return 0
   }
-
-  if (cornerRadius <= 1) {
-    return clampUnitValue(cornerRadius)
-  }
-
-  const maxPixelRadius = Math.min(width, height) * 0.5
-  if (maxPixelRadius <= 0) {
-    return 0
-  }
-
-  return clampUnitValue(cornerRadius / maxPixelRadius)
-}
-
-function createDefaultFalloff(textureSize?: Partial<MaskTextureSize> | null): MaskFalloff {
-  const safeSize = sanitizeMaskTextureSize(textureSize)
-  const defaultFeather = Math.min(safeSize.width, safeSize.height) * 0.1
-  return {
-    outerRange: defaultFeather,
-    decayRate: 1,
-  }
+  return clampUnitValue(cornerRadius)
 }
 
 function createBaseMaskDefaults(
   type: MaskType,
-  textureSize?: Partial<MaskTextureSize> | null,
 ): BaseMaskConfig {
   return {
     enabled: false,
     type,
     inverted: false,
-    centerX: 0,
-    centerY: 0,
+    centerX: 0.5,
+    centerY: 0.5,
     rotation: 0,
-    falloff: createDefaultFalloff(textureSize),
+    falloff: { outerRange: 0.1, decayRate: 1 },
   }
 }
 
 function createTypeDefaults(
   type: MaskType,
-  textureSize?: Partial<MaskTextureSize> | null,
 ): RectangleMaskConfig | EllipseMaskConfig | LinearMaskConfig | MirrorMaskConfig {
-  const safeSize = sanitizeMaskTextureSize(textureSize)
-  const base = createBaseMaskDefaults(type, textureSize)
+  const base = createBaseMaskDefaults(type)
 
   switch (type) {
     case 'rectangle':
       return {
         ...base,
         type,
-        width: safeSize.width * 0.6,
-        height: safeSize.height * 0.6,
+        width: 0.6,
+        height: 0.6,
         cornerRadius: 0,
       }
     case 'ellipse':
       return {
         ...base,
         type,
-        ellipseWidth: safeSize.width * 0.6,
-        ellipseHeight: safeSize.height * 0.4,
+        ellipseWidth: 0.6,
+        ellipseHeight: 0.4,
       }
     case 'linear':
       return {
@@ -256,7 +227,7 @@ function createTypeDefaults(
       return {
         ...base,
         type,
-        length: safeSize.width * 0.6,
+        length: 0.6,
       }
   }
 }
@@ -283,47 +254,49 @@ export function getItemLocalSize(width: number, height: number): MaskTextureSize
 
 export function createDefaultMaskConfig(
   type: MaskType = 'rectangle',
-  textureSize?: Partial<MaskTextureSize> | null,
+  _textureSize?: Partial<MaskTextureSize> | null,
 ): MaskConfig {
-  return createTypeDefaults(type, textureSize)
+  return createTypeDefaults(type)
 }
 
 export function normalizeMaskConfig(
   mask?: MaskConfigPatch | Partial<MaskConfig> | null,
-  textureSize?: Partial<MaskTextureSize> | null,
+  _textureSize?: Partial<MaskTextureSize> | null,
 ): MaskConfig {
   const patch = (mask ?? {}) as MaskConfigPatch
   const type = normalizeMaskType(patch.type)
-  const defaults = createTypeDefaults(type, textureSize)
-  const legacyShape = patch.shape
+  const defaults = createTypeDefaults(type)
 
   const base = {
     enabled: patch.enabled ?? defaults.enabled,
     type,
     inverted: patch.inverted ?? defaults.inverted,
-    centerX: pickNumericValue(patch.centerX, legacyShape?.centerX, defaults.centerX) ?? defaults.centerX,
-    centerY: pickNumericValue(patch.centerY, legacyShape?.centerY, defaults.centerY) ?? defaults.centerY,
-    rotation:
-      pickNumericValue(patch.rotation, legacyShape?.rotation, defaults.rotation) ?? defaults.rotation,
+    centerX: pickNumericValue(patch.centerX, defaults.centerX) ?? defaults.centerX,
+    centerY: pickNumericValue(patch.centerY, defaults.centerY) ?? defaults.centerY,
+    rotation: pickNumericValue(patch.rotation, defaults.rotation) ?? defaults.rotation,
     falloff: {
-      outerRange:
-        pickNumericValue(patch.falloff?.outerRange, defaults.falloff.outerRange) ??
+      outerRange: normalizeNonNegativeValue(
+        pickNumericValue(patch.falloff?.outerRange, defaults.falloff.outerRange),
         defaults.falloff.outerRange,
-      decayRate:
+      ),
+      decayRate: clampUnitValue(
         pickNumericValue(patch.falloff?.decayRate, defaults.falloff.decayRate) ??
-        defaults.falloff.decayRate,
+          defaults.falloff.decayRate,
+      ),
     },
   } as const
 
   switch (type) {
     case 'rectangle': {
       const rectangleDefaults = defaults as RectangleMaskConfig
-      const width =
-        pickNumericValue(patch.width, legacyShape?.width, rectangleDefaults.width) ??
-        rectangleDefaults.width
-      const height =
-        pickNumericValue(patch.height, legacyShape?.height, rectangleDefaults.height) ??
-        rectangleDefaults.height
+      const width = normalizeNonNegativeValue(
+        pickNumericValue(patch.width, rectangleDefaults.width),
+        rectangleDefaults.width,
+      )
+      const height = normalizeNonNegativeValue(
+        pickNumericValue(patch.height, rectangleDefaults.height),
+        rectangleDefaults.height,
+      )
 
       return {
         ...base,
@@ -331,13 +304,8 @@ export function normalizeMaskConfig(
         width,
         height,
         cornerRadius: normalizeRectangleCornerRadius(
-          pickNumericValue(
-            patch.cornerRadius,
-            legacyShape?.cornerRadius,
+          pickNumericValue(patch.cornerRadius, rectangleDefaults.cornerRadius) ??
             rectangleDefaults.cornerRadius,
-          ) ?? rectangleDefaults.cornerRadius,
-          width,
-          height,
         ),
       }
     }
@@ -346,18 +314,14 @@ export function normalizeMaskConfig(
       return {
         ...base,
         type,
-        ellipseWidth:
-          pickNumericValue(
-            patch.ellipseWidth,
-            legacyShape?.ellipseWidth,
-            ellipseDefaults.ellipseWidth,
-          ) ?? ellipseDefaults.ellipseWidth,
-        ellipseHeight:
-          pickNumericValue(
-            patch.ellipseHeight,
-            legacyShape?.ellipseHeight,
-            ellipseDefaults.ellipseHeight,
-          ) ?? ellipseDefaults.ellipseHeight,
+        ellipseWidth: normalizeNonNegativeValue(
+          pickNumericValue(patch.ellipseWidth, ellipseDefaults.ellipseWidth),
+          ellipseDefaults.ellipseWidth,
+        ),
+        ellipseHeight: normalizeNonNegativeValue(
+          pickNumericValue(patch.ellipseHeight, ellipseDefaults.ellipseHeight),
+          ellipseDefaults.ellipseHeight,
+        ),
       }
     }
     case 'linear':
@@ -370,11 +334,63 @@ export function normalizeMaskConfig(
       return {
         ...base,
         type,
-        length:
-          pickNumericValue(patch.length, legacyShape?.length, mirrorDefaults.length) ??
+        length: normalizeNonNegativeValue(
+          pickNumericValue(patch.length, mirrorDefaults.length),
           mirrorDefaults.length,
+        ),
       }
     }
+  }
+}
+
+/**
+ * Converts the canonical item-normalized config to the pixel-space geometry
+ * consumed by the render pass and preview overlay. The Y value remains in the
+ * project's Y-up coordinate system.
+ */
+export function resolveMaskPixelGeometry(
+  mask?: MaskConfigPatch | Partial<MaskConfig> | null,
+  textureSize?: Partial<MaskTextureSize> | null,
+): MaskPixelGeometry {
+  const normalized = normalizeMaskConfig(mask)
+  const size = sanitizeMaskTextureSize(textureSize)
+  const shortSide = Math.min(size.width, size.height)
+  const base = {
+    ...normalized,
+    centerX: (normalized.centerX - 0.5) * size.width,
+    // Shader texture coordinates increase upward, while the persisted project
+    // coordinate system defines normalized Y upward as well.
+    centerY: (0.5 - normalized.centerY) * size.height,
+    falloff: {
+      outerRange: normalized.falloff.outerRange * shortSide,
+      decayRate: normalized.falloff.decayRate,
+    },
+  }
+
+  switch (normalized.type) {
+    case 'rectangle':
+      return {
+        ...base,
+        type: 'rectangle',
+        width: normalized.width * size.width,
+        height: normalized.height * size.height,
+        cornerRadius: normalized.cornerRadius,
+      }
+    case 'ellipse':
+      return {
+        ...base,
+        type: 'ellipse',
+        ellipseWidth: normalized.ellipseWidth * size.width,
+        ellipseHeight: normalized.ellipseHeight * size.height,
+      }
+    case 'linear':
+      return { ...base, type: 'linear' }
+    case 'mirror':
+      return {
+        ...base,
+        type: 'mirror',
+        length: normalized.length * size.width,
+      }
   }
 }
 
@@ -564,7 +580,7 @@ export function applyMaskFeatherValue(
   return {
     ...normalized,
     falloff: {
-      outerRange: patch.outerRange ?? normalized.falloff.outerRange,
+      outerRange: normalizeNonNegativeValue(patch.outerRange, normalized.falloff.outerRange),
       decayRate: normalized.falloff.decayRate,
     },
   }
@@ -580,7 +596,7 @@ export function applyMaskIntensityValue(
     ...normalized,
     falloff: {
       outerRange: normalized.falloff.outerRange,
-      decayRate: patch.decayRate ?? normalized.falloff.decayRate,
+      decayRate: clampUnitValue(patch.decayRate ?? normalized.falloff.decayRate),
     },
   }
 }
@@ -597,8 +613,8 @@ export function applyMaskRectangleSizeValue(
 
   return {
     ...normalized,
-    width: patch.width ?? normalized.width,
-    height: patch.height ?? normalized.height,
+    width: normalizeNonNegativeValue(patch.width, normalized.width),
+    height: normalizeNonNegativeValue(patch.height, normalized.height),
   }
 }
 
@@ -614,11 +630,7 @@ export function applyMaskRectangleCornerRadiusValue(
 
   return {
     ...normalized,
-    cornerRadius: normalizeRectangleCornerRadius(
-      patch.cornerRadius ?? normalized.cornerRadius,
-      normalized.width,
-      normalized.height,
-    ),
+    cornerRadius: normalizeRectangleCornerRadius(patch.cornerRadius ?? normalized.cornerRadius),
   }
 }
 
@@ -634,8 +646,8 @@ export function applyMaskEllipseSizeValue(
 
   return {
     ...normalized,
-    ellipseWidth: patch.ellipseWidth ?? normalized.ellipseWidth,
-    ellipseHeight: patch.ellipseHeight ?? normalized.ellipseHeight,
+    ellipseWidth: normalizeNonNegativeValue(patch.ellipseWidth, normalized.ellipseWidth),
+    ellipseHeight: normalizeNonNegativeValue(patch.ellipseHeight, normalized.ellipseHeight),
   }
 }
 
@@ -651,7 +663,7 @@ export function applyMaskMirrorValue(
 
   return {
     ...normalized,
-    length: patch.length ?? normalized.length,
+    length: normalizeNonNegativeValue(patch.length, normalized.length),
   }
 }
 

@@ -1,5 +1,10 @@
 import { fileSystemService } from '@/core/managers/filesystem/fileSystemService'
-import type { UnifiedProjectConfig, UnifiedProjectTimeline } from '@/core/project'
+import {
+  PROJECT_FORMAT_VERSION,
+  isSupportedProjectFormatVersion,
+  type UnifiedProjectConfig,
+  type UnifiedProjectTimeline,
+} from '@/core/project'
 import { createUnifiedTrackData } from '@/core/track'
 import type { UnifiedTrackData } from '@/core/track'
 import { i18n } from '@/locales'
@@ -108,7 +113,7 @@ export class UnifiedProjectManager {
       description: template?.description || '',
       createdAt: now,
       updatedAt: now,
-      version: '1.0.0',
+      version: PROJECT_FORMAT_VERSION,
       thumbnail: template?.thumbnail,
       duration: template?.duration || 0,
 
@@ -261,7 +266,12 @@ export class UnifiedProjectManager {
     try {
       const configPath = fileSystemService.paths.getProjectConfigPath(projectId)
       const configText = await fileSystemService.readFile(configPath)
-      return JSON.parse(configText) as UnifiedProjectConfig
+      const config = JSON.parse(configText) as UnifiedProjectConfig
+      if (!isSupportedProjectFormatVersion(config.version)) {
+        console.warn(`项目 ${projectId} 使用不支持的格式版本: ${String(config.version)}`)
+        return null
+      }
+      return config
     } catch (error) {
       console.warn('加载统一项目配置失败:', error)
       return null

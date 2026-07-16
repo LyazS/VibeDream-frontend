@@ -1,20 +1,29 @@
 <template>
   <div class="searchable-select" ref="selectRef" :class="{ 'is-disabled': disabled }">
     <!-- 选择框触发器 -->
-    <div
+    <button
+      ref="triggerRef"
+      type="button"
       class="select-trigger"
       :class="{ 'is-open': isOpen, 'is-disabled': disabled }"
+      :aria-expanded="isOpen"
+      aria-haspopup="listbox"
+      :disabled="disabled"
       @click="toggleDropdown"
+      @keydown.down.prevent="openDropdown"
+      @keydown.up.prevent="openDropdown"
+      @keydown.enter.prevent="toggleDropdown"
+      @keydown.space.prevent="toggleDropdown"
     >
       <span class="select-value" :class="{ 'is-placeholder': !selectedOption }">
         {{ displayValue }}
       </span>
       <RiArrowDownSLine class="select-arrow" :class="{ 'is-open': isOpen }" aria-hidden="true" />
-    </div>
+    </button>
 
     <!-- 下拉菜单 -->
     <Transition name="dropdown">
-      <div v-if="isOpen" class="select-dropdown">
+      <div v-if="isOpen" class="select-dropdown" role="listbox">
         <!-- 搜索输入框 -->
         <div v-if="searchable" class="search-input-wrapper">
           <input
@@ -41,6 +50,9 @@
                 'is-selected': isSelected(option),
                 'is-highlighted': highlightedIndex === index,
               }"
+              role="option"
+              :aria-selected="isSelected(option)"
+              @mousedown.prevent
               @click="selectOption(option)"
               @mouseenter="highlightedIndex = index"
             >
@@ -110,6 +122,7 @@ const emit = defineEmits<Emits>()
 
 // 引用
 const selectRef = ref<HTMLElement>()
+const triggerRef = ref<HTMLButtonElement>()
 const searchInputRef = ref<HTMLInputElement>()
 const optionsListRef = ref<HTMLElement>()
 
@@ -213,6 +226,10 @@ const selectOption = (option: any) => {
   emit('update:modelValue', value)
   emit('change', value)
   closeDropdown()
+  nextTick(() => {
+    searchInputRef.value?.blur()
+    triggerRef.value?.blur()
+  })
 }
 
 // 选择高亮的选项
@@ -313,6 +330,7 @@ onBeforeUnmount(() => {
 /* 选择框触发器 */
 .select-trigger {
   box-sizing: border-box;
+  width: 100%;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -320,6 +338,9 @@ onBeforeUnmount(() => {
   background: var(--color-bg-secondary);
   border: 1px solid var(--color-bg-hover);
   border-radius: var(--border-radius-small);
+  color: inherit;
+  font: inherit;
+  text-align: left;
   cursor: pointer;
   min-height: 24px;
   transition-property: background-color, border-color, box-shadow, transform;
@@ -329,6 +350,11 @@ onBeforeUnmount(() => {
 
 .select-trigger:hover:not(.is-disabled) {
   background: var(--color-bg-hover);
+}
+
+.select-trigger:focus-visible {
+  outline: 2px solid var(--color-accent-secondary);
+  outline-offset: 2px;
 }
 
 .select-trigger.is-open {
@@ -381,8 +407,9 @@ onBeforeUnmount(() => {
   left: 0;
   right: 0;
   background: var(--color-bg-secondary);
-  border: 1px solid var(--color-bg-hover);
-  border-radius: var(--border-radius-small);
+  padding: var(--spacing-xs);
+  border: 1px solid var(--color-border-primary);
+  border-radius: var(--border-radius-medium);
   box-shadow:
     0 2px 4px rgba(0, 0, 0, 0.35),
     0 8px 18px rgba(0, 0, 0, 0.4);
@@ -429,8 +456,11 @@ onBeforeUnmount(() => {
 
 /* 选项项 */
 .option-item {
-  margin: var(--spacing-xxs) var(--spacing-xs);
-  padding: var(--spacing-xs) var(--spacing-sm);
+  min-height: 32px;
+  display: flex;
+  align-items: center;
+  margin: 0;
+  padding: 0 var(--spacing-md);
   border-radius: var(--border-radius-small);
   cursor: pointer;
   color: var(--color-text-primary);
@@ -446,10 +476,10 @@ onBeforeUnmount(() => {
 }
 
 .option-item.is-selected {
-  background: var(--color-bg-active);
-  color: var(--color-accent-secondary);
+  background: var(--color-accent-primary-alpha);
+  color: var(--color-text-primary);
   font-weight: 500;
-  box-shadow: inset 2px 0 0 var(--color-accent-secondary);
+  box-shadow: inset 2px 0 0 var(--color-accent-primary);
 }
 
 /* 无结果提示 */
@@ -472,13 +502,13 @@ onBeforeUnmount(() => {
 .dropdown-enter-from,
 .dropdown-leave-to {
   opacity: 0;
-  transform: scaleY(0.8);
+  transform: translateY(-4px) scale(0.98);
 }
 
 .dropdown-enter-to,
 .dropdown-leave-from {
   opacity: 1;
-  transform: scaleY(1);
+  transform: translateY(0) scale(1);
 }
 
 /* 滚动条样式由 n-scrollbar 组件处理，移除原生滚动条样式 */

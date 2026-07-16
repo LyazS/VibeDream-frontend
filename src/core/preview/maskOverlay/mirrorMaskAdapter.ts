@@ -175,8 +175,8 @@ export const mirrorMaskAdapter: MaskOverlayAdapter = {
       const currentLocal = toLocalPoint(point, geometry.center, geometry.rotation)
       return {
         'mask.length': Math.max(
-          MIN_MASK_SIZE,
-          (Math.max(0, Math.abs(currentLocal.x)) * 2) / Math.max(geometry.displayScaleX, 0.0001),
+          MIN_MASK_SIZE / Math.max(geometry.itemWidth, 0.0001),
+          (Math.max(0, Math.abs(currentLocal.x)) * 2) / Math.max(geometry.itemWidth, 0.0001),
         ),
       }
     }
@@ -191,7 +191,7 @@ export const mirrorMaskAdapter: MaskOverlayAdapter = {
         'mask.outerRange': Math.max(
           0,
           (Math.abs(localPoint.x) - geometry.length / 2 - geometry.displayOffsetX) /
-            Math.max(geometry.displayScaleX, 0.0001),
+            Math.max(geometry.shortSide, 0.0001),
         ),
       }
     }

@@ -321,7 +321,7 @@ export const rectangleMaskAdapter: MaskOverlayAdapter = {
         'mask.outerRange': Math.max(
           0,
           (-localPoint.y - geometry.height / 2 - geometry.displayOffsetY) /
-            Math.max(geometry.displayScaleY, 0.0001),
+            Math.max(geometry.shortSide, 0.0001),
         ),
       }
     }

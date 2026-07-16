@@ -156,8 +156,10 @@ export const maskRectangleSizeSchema: AnimatablePropertySchema = {
   supportsDirectCommit: true,
   supportsKeyframeToggle: true,
   supportsTransientOverlay: true,
-  normalizeDirectValue: (value) =>
-    assertFiniteNumberRecord(value, ['width', 'height'], 'mask.rectangle.size'),
+  normalizeDirectValue: (value) => {
+    const normalized = assertFiniteNumberRecord(value, ['width', 'height'], 'mask.rectangle.size')
+    return { width: Math.max(0, normalized.width), height: Math.max(0, normalized.height) }
+  },
 }
 
 export const maskEllipseSizeSchema: AnimatablePropertySchema = {
@@ -169,8 +171,13 @@ export const maskEllipseSizeSchema: AnimatablePropertySchema = {
   supportsDirectCommit: true,
   supportsKeyframeToggle: true,
   supportsTransientOverlay: true,
-  normalizeDirectValue: (value) =>
-    assertFiniteNumberRecord(value, ['ellipseWidth', 'ellipseHeight'], 'mask.ellipse.size'),
+  normalizeDirectValue: (value) => {
+    const normalized = assertFiniteNumberRecord(value, ['ellipseWidth', 'ellipseHeight'], 'mask.ellipse.size')
+    return {
+      ellipseWidth: Math.max(0, normalized.ellipseWidth),
+      ellipseHeight: Math.max(0, normalized.ellipseHeight),
+    }
+  },
 }
 
 export const maskRectangleCornerRadiusSchema: AnimatablePropertySchema = {
@@ -197,7 +204,7 @@ export const maskFeatherSchema: AnimatablePropertySchema = {
   supportsKeyframeToggle: true,
   supportsTransientOverlay: true,
   normalizeDirectValue: (value) => ({
-    outerRange: assertFiniteNumber(value, 'mask.feather'),
+    outerRange: Math.max(0, assertFiniteNumber(value, 'mask.feather')),
   }),
 }
 

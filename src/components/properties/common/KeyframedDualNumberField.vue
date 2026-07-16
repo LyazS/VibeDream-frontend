@@ -62,10 +62,10 @@ const props = withDefaults(defineProps<{
   secondLabel: string
   firstValue: number
   secondValue: number
-  firstMin: number
-  firstMax: number
-  secondMin: number
-  secondMax: number
+  firstMin?: number
+  firstMax?: number
+  secondMin?: number
+  secondMax?: number
   step: number
   precision: number
   firstPlaceholder?: string

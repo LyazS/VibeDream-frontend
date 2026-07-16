@@ -11,6 +11,7 @@ import {
   isLinearMaskConfig,
   isMirrorMaskConfig,
   isRectangleMaskConfig,
+  resolveMaskPixelGeometry,
 } from '@/core/timelineitem/features/mask'
 import type {
   MaskDeferredPatch,
@@ -45,6 +46,9 @@ export interface BaseMaskGeometry {
   displayScaleY: number
   displayOffsetX: number
   displayOffsetY: number
+  itemWidth: number
+  itemHeight: number
+  shortSide: number
 }
 
 export interface BoxMaskGeometry extends BaseMaskGeometry {
@@ -76,7 +80,7 @@ export function getCanvasDisplayScale(context: MaskOverlayContext) {
 
 export function getMaskBaseGeometry(context: MaskOverlayContext): BaseMaskGeometry {
   const item = context.visualConfig
-  const mask = context.maskConfig
+  const mask = resolveMaskPixelGeometry(context.maskConfig, context.itemLocalSize)
   const localCenter = {
     x: mask.centerX,
     y: -mask.centerY,
@@ -95,13 +99,19 @@ export function getMaskBaseGeometry(context: MaskOverlayContext): BaseMaskGeomet
     displayScaleY: 1,
     displayOffsetX: HANDLE_OFFSET_PX / Math.max(displayScale.x, 0.0001),
     displayOffsetY: HANDLE_OFFSET_PX / Math.max(displayScale.y, 0.0001),
+    itemWidth: context.itemLocalSize.width,
+    itemHeight: context.itemLocalSize.height,
+    shortSide: Math.min(context.itemLocalSize.width, context.itemLocalSize.height),
   }
 }
 
 export function getMappedRectangleGeometry(context: MaskOverlayContext): BoxMaskGeometry | null {
   if (!isRectangleMaskConfig(context.maskConfig)) return null
 
-  const mask = context.maskConfig
+  const mask = resolveMaskPixelGeometry(
+    context.maskConfig,
+    context.itemLocalSize,
+  ) as RectangleMaskConfig
   const base = getMaskBaseGeometry(context)
   return {
     ...base,
@@ -115,7 +125,10 @@ export function getMappedRectangleGeometry(context: MaskOverlayContext): BoxMask
 export function getMappedEllipseGeometry(context: MaskOverlayContext): BoxMaskGeometry | null {
   if (!isEllipseMaskConfig(context.maskConfig)) return null
 
-  const mask = context.maskConfig
+  const mask = resolveMaskPixelGeometry(
+    context.maskConfig,
+    context.itemLocalSize,
+  ) as EllipseMaskConfig
   const base = getMaskBaseGeometry(context)
   return {
     ...base,
@@ -129,7 +142,10 @@ export function getMappedEllipseGeometry(context: MaskOverlayContext): BoxMaskGe
 export function getMappedLinearGeometry(context: MaskOverlayContext): LinearMaskGeometry | null {
   if (!isLinearMaskConfig(context.maskConfig)) return null
 
-  const mask = context.maskConfig
+  const mask = resolveMaskPixelGeometry(
+    context.maskConfig,
+    context.itemLocalSize,
+  ) as LinearMaskConfig
   const base = getMaskBaseGeometry(context)
   const span = Math.max(
     Math.hypot(context.visualConfig.width, context.visualConfig.height),
@@ -152,7 +168,10 @@ export function getMappedLinearGeometry(context: MaskOverlayContext): LinearMask
 export function getMappedMirrorGeometry(context: MaskOverlayContext): MirrorMaskGeometry | null {
   if (!isMirrorMaskConfig(context.maskConfig)) return null
 
-  const mask = context.maskConfig
+  const mask = resolveMaskPixelGeometry(
+    context.maskConfig,
+    context.itemLocalSize,
+  ) as MirrorMaskConfig
   const base = getMaskBaseGeometry(context)
   const spanHeight = Math.max(
     Math.hypot(context.visualConfig.width, context.visualConfig.height),
@@ -269,8 +288,8 @@ export function getMovePatch(
   )
 
   return {
-    'mask.centerX': startMask.centerX + localDelta.x / Math.max(geometry.displayScaleX, 0.0001),
-    'mask.centerY': startMask.centerY - localDelta.y / Math.max(geometry.displayScaleY, 0.0001),
+    'mask.centerX': startMask.centerX + localDelta.x / Math.max(geometry.itemWidth, 0.0001),
+    'mask.centerY': startMask.centerY + localDelta.y / Math.max(geometry.itemHeight, 0.0001),
   }
 }
 
@@ -341,10 +360,10 @@ export function getResizeBoundsPatch(
   )
 
   return {
-    'mask.centerX': centerOffsetLocalToItem.x / Math.max(geometry.displayScaleX, 0.0001),
-    'mask.centerY': -centerOffsetLocalToItem.y / Math.max(geometry.displayScaleY, 0.0001),
-    [widthPath]: (clamped.right - clamped.left) / Math.max(geometry.displayScaleX, 0.0001),
-    [heightPath]: (clamped.top - clamped.bottom) / Math.max(geometry.displayScaleY, 0.0001),
+    'mask.centerX': 0.5 + centerOffsetLocalToItem.x / Math.max(geometry.itemWidth, 0.0001),
+    'mask.centerY': 0.5 + centerOffsetLocalToItem.y / Math.max(geometry.itemHeight, 0.0001),
+    [widthPath]: (clamped.right - clamped.left) / Math.max(geometry.itemWidth, 0.0001),
+    [heightPath]: (clamped.top - clamped.bottom) / Math.max(geometry.itemHeight, 0.0001),
   }
 }
 

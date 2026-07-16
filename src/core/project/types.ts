@@ -6,6 +6,12 @@
 import type { UnifiedTrackData } from '@/core/track'
 import type { UnifiedTimelineItemData } from '@/core/timelineitem/model/timelineItem'
 
+export const PROJECT_FORMAT_VERSION = '1.0.1'
+
+export function isSupportedProjectFormatVersion(version: unknown): boolean {
+  return version === PROJECT_FORMAT_VERSION
+}
+
 /**
  * 项目内容数据（从UnifiedProjectConfig中拆分出来）
  *

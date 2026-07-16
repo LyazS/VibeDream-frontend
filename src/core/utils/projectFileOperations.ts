@@ -1,5 +1,10 @@
 import { fileSystemService } from '@/core/managers/filesystem/fileSystemService'
-import type { UnifiedProjectConfig, UnifiedProjectTimeline } from '@/core/project'
+import {
+  PROJECT_FORMAT_VERSION,
+  isSupportedProjectFormatVersion,
+  type UnifiedProjectConfig,
+  type UnifiedProjectTimeline,
+} from '@/core/project'
 import type { UnifiedDirectoryConfig } from '@/core/directory/types'
 
 /**
@@ -26,6 +31,12 @@ export async function loadProjectConfig(projectId: string): Promise<UnifiedProje
       throw new Error(`项目配置文件读取失败或格式错误`)
     }
 
+    if (!isSupportedProjectFormatVersion(projectConfig.version)) {
+      throw new Error(
+        `项目格式不兼容：当前版本仅支持 ${PROJECT_FORMAT_VERSION}，此项目为 ${String(projectConfig.version ?? '未知版本')}`,
+      )
+    }
+
     if (!projectConfig.settings) {
       throw new Error(`项目配置文件缺少settings字段`)
     }
@@ -47,9 +58,9 @@ export async function loadProjectConfig(projectId: string): Promise<UnifiedProje
       return null
     }
 
-    // 其他错误（文件损坏、格式错误等）抛出异常
+    // 其他错误（格式不兼容、文件损坏等）交给调用方显示明确错误。
     console.error(`❌ [Project Config Load] 加载项目配置失败: ${projectId}`, error)
-    return null
+    throw error
   }
 }
 

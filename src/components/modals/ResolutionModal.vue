@@ -13,31 +13,43 @@
   >
     <!-- 预设分辨率 -->
     <div class="resolution-grid">
-      <div
+      <button
         v-for="resolution in resolutionOptions"
         :key="resolution.name"
+        type="button"
         class="resolution-option"
         :class="{
           active:
             tempSelectedResolution.name === resolution.name &&
             tempSelectedResolution.category !== '自定义',
         }"
+        :aria-pressed="
+          tempSelectedResolution.name === resolution.name &&
+          tempSelectedResolution.category !== '自定义'
+        "
         @click="selectPresetResolution(resolution)"
       >
+        <span class="selection-check" aria-hidden="true"><RiCheckLine size="14" /></span>
         <div class="resolution-preview" :style="getPreviewStyle(resolution)"></div>
         <div class="resolution-info">
           <div class="resolution-name">{{ resolution.name }}</div>
           <div class="resolution-size">{{ resolution.width }} × {{ resolution.height }}</div>
           <div class="resolution-ratio">{{ resolution.aspectRatio }}</div>
         </div>
-      </div>
+      </button>
 
       <!-- 自定义分辨率选项 -->
       <div
         class="resolution-option custom-option"
         :class="{ active: tempSelectedResolution.category === '自定义' }"
+        role="button"
+        tabindex="0"
+        :aria-pressed="tempSelectedResolution.category === '自定义'"
         @click="selectCustomResolution"
+        @keydown.enter.prevent="selectCustomResolution"
+        @keydown.space.prevent="selectCustomResolution"
       >
+        <span class="selection-check" aria-hidden="true"><RiCheckLine size="14" /></span>
         <div
           class="resolution-preview"
           :style="getPreviewStyle({ width: customWidth, height: customHeight })"
@@ -84,6 +96,7 @@
 
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
+import { RiCheckLine } from '@remixicon/vue'
 import UniversalModal from './UniversalModal.vue'
 import { useAppI18n } from '@/core/composables/useI18n'
 import {
@@ -254,67 +267,108 @@ function getPreviewStyle(resolution: { width: number; height: number }) {
 /* 这里只需要定义内容区域特有的样式 */
 .resolution-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-  gap: var(--spacing-xl);
-  max-height: 400px;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: var(--spacing-md);
+  max-height: 440px;
   overflow-y: auto;
+  padding: 2px;
 }
 
 .resolution-option {
-  background-color: var(--color-bg-tertiary);
-  border: 1px solid var(--color-border-light);
-  border-radius: var(--border-radius-xlarge);
-  padding: var(--spacing-lg);
+  position: relative;
+  min-height: 104px;
+  box-sizing: border-box;
+  appearance: none;
+  background-color: var(--color-bg-secondary);
+  border: 1px solid var(--color-border-primary);
+  border-radius: var(--border-radius-large);
+  padding: var(--spacing-md);
+  color: inherit;
+  font: inherit;
   cursor: pointer;
-  transition-property: background-color, border-color, box-shadow;
+  transition-property: background-color, border-color, box-shadow, transform, scale;
   transition-duration: var(--transition-fast);
   transition-timing-function: ease-out;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: var(--spacing-md);
+  justify-content: center;
+  gap: var(--spacing-sm);
 }
 
 .resolution-option:hover {
-  border-color: var(--color-border-hover);
+  border-color: var(--color-border-secondary);
   background-color: var(--color-bg-hover);
+  transform: translateY(-1px);
 }
 
 .resolution-option.active {
-  border-color: var(--color-primary);
+  border-color: color-mix(in srgb, var(--color-primary) 65%, transparent);
   background-color: var(--color-accent-primary-alpha);
-  box-shadow: 0 0 0 1px var(--color-primary);
+  box-shadow: inset 0 0 0 1px var(--color-primary), 0 2px 6px rgba(0, 0, 0, 0.2);
+}
+
+.resolution-option:focus-visible {
+  outline: 2px solid var(--color-accent-secondary);
+  outline-offset: 2px;
+}
+
+.resolution-option:active {
+  scale: 0.96;
+}
+
+.selection-check {
+  position: absolute;
+  top: var(--spacing-sm);
+  right: var(--spacing-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--color-primary);
+  color: var(--color-text-primary);
+  opacity: 0;
+  scale: 0.25;
+  filter: blur(4px);
+  transition-property: filter, opacity, scale;
+  transition-duration: var(--transition-fast);
+  transition-timing-function: cubic-bezier(0.2, 0, 0, 1);
+}
+
+.resolution-option.active .selection-check {
+  opacity: 1;
+  scale: 1;
+  filter: blur(0);
 }
 
 .resolution-preview {
   background-color: var(--color-bg-active);
-  border: 1px solid var(--color-border-secondary);
   border-radius: var(--border-radius-small);
-  transition-property: background-color, border-color;
+  transition-property: background-color, box-shadow;
   transition-duration: var(--transition-fast);
   transition-timing-function: ease-out;
   flex-shrink: 0;
 }
 
 .resolution-option:hover .resolution-preview {
-  background-color: var(--color-bg-quaternary);
-  border-color: var(--color-border-hover);
+  background-color: var(--color-border-secondary);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
 }
 
 .resolution-option.active .resolution-preview {
   background-color: var(--color-primary);
-  border-color: var(--color-primary-hover);
 }
 
 .resolution-info {
   text-align: center;
-  flex: 1;
 }
 
 .resolution-name {
-  font-weight: bold;
+  font-weight: 600;
   color: var(--color-text-primary);
-  margin-bottom: var(--spacing-xs);
+  margin-bottom: var(--spacing-xxs);
   font-size: var(--font-size-md);
 }
 
@@ -330,6 +384,10 @@ function getPreviewStyle(resolution: { width: number; height: number }) {
   font-size: var(--font-size-xs);
   font-family: monospace;
   font-variant-numeric: tabular-nums;
+}
+
+.custom-option {
+  grid-column: span 2;
 }
 
 /* 自定义分辨率输入（集成在选项内） */
@@ -365,6 +423,16 @@ function getPreviewStyle(resolution: { width: number; height: number }) {
   outline: none;
   border-color: var(--color-primary);
   box-shadow: 0 0 0 2px var(--color-accent-primary-alpha);
+}
+
+@media (max-width: 560px) {
+  .resolution-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .custom-option {
+    grid-column: span 2;
+  }
 }
 
 .input-separator {

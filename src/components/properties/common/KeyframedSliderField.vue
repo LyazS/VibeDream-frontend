@@ -15,10 +15,10 @@
       <NumberInput
         :model-value="value"
         :disabled="disabled"
-        :min="min"
-        :max="max"
         :step="step"
         :precision="precision"
+        :min="numberMin === null ? undefined : numberMin ?? min"
+        :max="numberMax === null ? undefined : numberMax ?? max"
         :show-controls="false"
         :placeholder="placeholder"
         input-class="scale-input"
@@ -58,9 +58,13 @@ const props = withDefaults(defineProps<{
   precision: number
   sliderClass?: string
   placeholder?: string
+  numberMin?: number | null
+  numberMax?: number | null
 }>(), {
   sliderClass: undefined,
   placeholder: undefined,
+  numberMin: undefined,
+  numberMax: undefined,
 })
 
 defineEmits<{

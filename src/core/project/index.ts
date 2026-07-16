@@ -4,7 +4,12 @@
  */
 
 // 导出项目配置类型
-export type { UnifiedProjectConfig, UnifiedProjectTimeline } from './types'
+export {
+  PROJECT_FORMAT_VERSION,
+  isSupportedProjectFormatVersion,
+  type UnifiedProjectConfig,
+  type UnifiedProjectTimeline,
+} from './types'
 export type {
   BaseLibraryAssetMetaFile,
   EffectTemplateLibraryAssetMetaFile,

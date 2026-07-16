@@ -145,7 +145,7 @@ export const linearMaskAdapter: MaskOverlayAdapter = {
       return {
         'mask.outerRange': Math.max(
           0,
-          (localPoint.x - geometry.displayOffsetX) / Math.max(geometry.displayScaleX, 0.0001),
+          (localPoint.x - geometry.displayOffsetX) / Math.max(geometry.shortSide, 0.0001),
         ),
       }
     }

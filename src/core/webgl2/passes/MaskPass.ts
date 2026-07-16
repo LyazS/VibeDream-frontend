@@ -4,7 +4,7 @@ import type {
   MirrorMaskConfig,
   RectangleMaskConfig,
 } from '@/core/timelineitem/features/mask'
-import { normalizeMaskConfig } from '@/core/timelineitem/features/mask'
+import { resolveMaskPixelGeometry } from '@/core/timelineitem/features/mask'
 import type { RenderPass } from '@/core/webgl2/renderchain/RenderPass'
 import type { RenderPassContext } from '@/core/webgl2/renderchain/RenderPassContext'
 import type { ProgramManager } from '@/core/webgl2/runtime/ProgramManager'
@@ -83,13 +83,13 @@ export class MaskPass implements RenderPass {
     const mask = this.getMaskConfig()
     if (!mask?.enabled) return
 
-    const normalized = normalizeMaskConfig(mask, {
+    const pixelGeometry = resolveMaskPixelGeometry(mask, {
       width: input.width,
       height: input.height,
     })
     const output = ctx.targets.ensureRenderTarget(this.outputTextureId, input.width, input.height)
     const gl = ctx.gl
-    const entry = this.programsByType[normalized.type]
+    const entry = this.programsByType[pixelGeometry.type]
     const program = entry.program
 
     gl.bindFramebuffer(gl.FRAMEBUFFER, output.framebuffer)
@@ -103,12 +103,12 @@ export class MaskPass implements RenderPass {
     gl.bindTexture(gl.TEXTURE_2D, input.texture)
     gl.uniform1i(gl.getUniformLocation(program, 'u_source'), 0)
     gl.uniform2f(gl.getUniformLocation(program, 'u_textureSize'), input.width, input.height)
-    gl.uniform2f(gl.getUniformLocation(program, 'u_center'), normalized.centerX, normalized.centerY)
-    gl.uniform1f(gl.getUniformLocation(program, 'u_rotation'), (normalized.rotation * Math.PI) / 180)
-    gl.uniform1f(gl.getUniformLocation(program, 'u_outerRange'), normalized.falloff.outerRange)
-    gl.uniform1f(gl.getUniformLocation(program, 'u_decayRate'), normalized.falloff.decayRate)
-    gl.uniform1i(gl.getUniformLocation(program, 'u_inverted'), normalized.inverted ? 1 : 0)
-    entry.bindShapeUniforms(gl, program, normalized)
+    gl.uniform2f(gl.getUniformLocation(program, 'u_center'), pixelGeometry.centerX, pixelGeometry.centerY)
+    gl.uniform1f(gl.getUniformLocation(program, 'u_rotation'), (pixelGeometry.rotation * Math.PI) / 180)
+    gl.uniform1f(gl.getUniformLocation(program, 'u_outerRange'), pixelGeometry.falloff.outerRange)
+    gl.uniform1f(gl.getUniformLocation(program, 'u_decayRate'), pixelGeometry.falloff.decayRate)
+    gl.uniform1i(gl.getUniformLocation(program, 'u_inverted'), pixelGeometry.inverted ? 1 : 0)
+    entry.bindShapeUniforms(gl, program, pixelGeometry)
     gl.drawArrays(gl.TRIANGLES, 0, 6)
   }
 
