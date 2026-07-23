@@ -5,6 +5,11 @@ import type { CommonEffectType } from '@/core/effect-template/commonTypes'
 export type PropertyTabKey = 'basic' | 'transition' | 'mask' | 'filter' | 'animation'
 export type LibrarySectionKey = 'media' | 'transition' | 'filter'
 
+export interface LibraryRevealRequest {
+  assetId: string
+  requestId: number
+}
+
 /**
  * 统一 UI 模块
  * 负责管理应用内的 UI 状态
@@ -14,12 +19,14 @@ export function createUnifiedUIModule(_registry: ModuleRegistry): {
   isChatPanelVisible: Ref<boolean>
   aiPanelActiveTab: Ref<'ai-generate' | 'agent'>
   librarySection: Ref<LibrarySectionKey>
+  libraryRevealRequest: Ref<LibraryRevealRequest | null>
   effectTemplateCategorySelection: Ref<Record<CommonEffectType, string>>
   activePropertyTab: Ref<PropertyTabKey>
 
   // AI 面板状态管理方法
   setChatPanelVisible: (visible: boolean) => void
   setLibrarySection: (section: LibrarySectionKey) => void
+  requestLibraryAssetReveal: (assetId: string) => void
   setEffectTemplateCategory: (effectType: CommonEffectType, categoryKey: string) => void
   setActivePropertyTab: (tab: PropertyTabKey) => void
 } {
@@ -33,6 +40,8 @@ export function createUnifiedUIModule(_registry: ModuleRegistry): {
 
   // 素材区当前激活的一级分区
   const librarySection = ref<LibrarySectionKey>('media')
+  const libraryRevealRequest = ref<LibraryRevealRequest | null>(null)
+  let libraryRevealRequestId = 0
   const effectTemplateCategorySelection = ref<Record<CommonEffectType, string>>({
     transition: 'all',
     filter: 'all',
@@ -54,6 +63,13 @@ export function createUnifiedUIModule(_registry: ModuleRegistry): {
     librarySection.value = section
   }
 
+  function requestLibraryAssetReveal(assetId: string): void {
+    libraryRevealRequest.value = {
+      assetId,
+      requestId: ++libraryRevealRequestId,
+    }
+  }
+
   function setEffectTemplateCategory(effectType: CommonEffectType, categoryKey: string): void {
     effectTemplateCategorySelection.value = {
       ...effectTemplateCategorySelection.value,
@@ -70,12 +86,14 @@ export function createUnifiedUIModule(_registry: ModuleRegistry): {
     isChatPanelVisible,
     aiPanelActiveTab,
     librarySection,
+    libraryRevealRequest,
     effectTemplateCategorySelection,
     activePropertyTab,
 
     // AI 面板状态管理方法
     setChatPanelVisible,
     setLibrarySection,
+    requestLibraryAssetReveal,
     setEffectTemplateCategory,
     setActivePropertyTab,
   }

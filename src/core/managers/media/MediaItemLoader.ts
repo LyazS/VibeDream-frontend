@@ -126,6 +126,7 @@ export class MediaItemLoader {
       source,
       {
         createdAt: metaData.createdAt,
+        parentDirectoryId: metaData.parentDirectoryId,
         mediaType: metaData.mediaType,
         duration: metaData.duration,
         mediaStatus: metaData.mediaStatus || 'pending', // 🌟 如果 meta 文件中有终态状态，使用它；否则默认为 pending

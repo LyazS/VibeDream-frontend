@@ -1,26 +1,27 @@
-import { ref, computed } from 'vue'
+import { ref, computed, shallowRef, triggerRef } from 'vue'
 import { generateDirectoryId, generateTabId } from '@/core/utils/idGenerator'
 import type {
   VirtualDirectory,
   DisplayTab,
   DisplayItem,
-  DirectoryNavigationState,
   ClipboardState,
   ClipboardItem,
-  ClipboardOperation,
   PasteResult,
   ViewMode,
   SortBy,
   SortOrder,
   UnifiedDirectoryConfig,
-  CharacterInfo,
   CharacterDirectory,
 } from '@/core/directory/types'
 import type { FileData } from '@/core/datasource/providers/ai-generation/types'
 import { DirectoryType } from '@/core/directory/types'
-import { ClipboardOperation as ClipboardOp } from '@/core/directory/types'
+import {
+  AssetLocationIndex,
+  persistAssetDirectoryMove,
+} from '@/core/directory/AssetLocationIndex'
 import { ModuleRegistry, MODULE_NAMES } from './ModuleRegistry'
 import type { UnifiedMediaModule } from './UnifiedMediaModule'
+import { globalMetaFileManager } from '@/core/managers/media/globalMetaFileManager'
 
 /**
  * 统一目录模块（简化版）
@@ -37,6 +38,13 @@ export function createUnifiedDirectoryModule(registry: ModuleRegistry) {
   // 目录列表
   const directories = ref<Map<string, VirtualDirectory>>(new Map())
 
+  // 目录内容的运行时索引。持久化归属只保存在媒体 Meta 的 parentDirectoryId 中。
+  const assetLocationIndex = shallowRef(new AssetLocationIndex())
+
+  function notifyAssetLocationChanged(): void {
+    triggerRef(assetLocationIndex)
+  }
+
   // 打开的标签页列表
   const openTabs = ref<DisplayTab[]>([])
 
@@ -45,7 +53,6 @@ export function createUnifiedDirectoryModule(registry: ModuleRegistry) {
 
   // 剪贴板状态
   const clipboardState = ref<ClipboardState>({
-    operation: null,
     items: [],
     sourceDirId: null,
     timestamp: 0,
@@ -125,7 +132,6 @@ export function createUnifiedDirectoryModule(registry: ModuleRegistry) {
       parentId,
       createdAt: new Date().toISOString(),
       childDirIds: [],
-      assetIds: [],
     }
 
     directories.value.set(newDir.id, newDir)
@@ -193,7 +199,6 @@ export function createUnifiedDirectoryModule(registry: ModuleRegistry) {
       parentId,
       createdAt: new Date().toISOString(),
       childDirIds: [],
-      assetIds: [],
       character: {
         remark,
         refVideo,
@@ -263,94 +268,93 @@ export function createUnifiedDirectoryModule(registry: ModuleRegistry) {
   }
 
   /**
-   * 添加媒体到目录
-   * @param mediaId 媒体ID
-   * @param dirId 目录ID
-   * @param updateRefCount 是否更新引用计数，默认为true。剪切/拖拽移动时应设为false
+   * 为刚创建或刚恢复的媒体登记目录归属。
+   * 媒体对象必须已经带有有效的 parentDirectoryId，不能在这里自动补齐。
    */
-  function addAssetToDirectory(
-    assetId: string,
-    dirId: string,
-    updateRefCount: boolean = true,
-  ): boolean {
-    const dir = directories.value.get(dirId)
-    if (!dir) return false
-
+  function registerAssetLocation(assetId: string): { success: boolean; error?: string } {
     const asset = mediaModule.getMediaAsset(assetId)
     if (!asset) {
-      console.warn(`⚠️ [addAssetToDirectory] 普通素材目录只接受媒体资产，已跳过: ${assetId}`)
-      return false
+      return { success: false, error: '素材不存在' }
+    }
+    if (!directories.value.has(asset.parentDirectoryId)) {
+      return { success: false, error: '素材所属文件夹不存在' }
     }
 
-    if (!dir.assetIds.includes(assetId)) {
-      dir.assetIds.push(assetId)
-
-      // 🆕 增加引用计数（仅在需要时）
-      if (updateRefCount) {
-        asset.runtime.refCount = (asset.runtime.refCount || 0) + 1
-        console.log(
-          `📊 [addAssetToDirectory] 素材 ${asset.name} 引用计数: ${asset.runtime.refCount}`,
-        )
+    try {
+      assetLocationIndex.value.register(asset.id, asset.parentDirectoryId)
+      notifyAssetLocationChanged()
+      return { success: true }
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : '登记素材目录归属失败',
       }
-
-      return true
     }
-    return false
   }
 
   /**
-   * 从目录移除媒体
-   * @param mediaId 媒体ID
-   * @param dirId 目录ID
-   * @param updateRefCount 是否更新引用计数，默认为true。剪切/拖拽移动时应设为false
+   * 返回素材持久化的所属目录。目录不存在时视为无效归属。
    */
-  function removeAssetFromDirectory(
+  function getAssetDirectoryId(assetId: string): string | null {
+    const asset = mediaModule.getMediaAsset(assetId)
+    if (!asset || !directories.value.has(asset.parentDirectoryId)) {
+      return null
+    }
+    return asset.parentDirectoryId
+  }
+
+  function getAssetIdsInDirectory(dirId: string): string[] {
+    return assetLocationIndex.value.getAssetIds(dirId)
+  }
+
+  /**
+   * 移动素材。先持久化 Meta，保存失败时恢复内存中的原目录并保持索引不变。
+   */
+  async function moveAssetToDirectory(
     assetId: string,
-    dirId: string,
-    updateRefCount: boolean = true,
-  ): boolean {
-    const dir = directories.value.get(dirId)
-    if (!dir) return false
-
-    const index = dir.assetIds.indexOf(assetId)
-    if (index > -1) {
-      dir.assetIds.splice(index, 1)
-
-      // 🆕 减少引用计数（仅在需要时）
-      if (updateRefCount) {
-        const asset = mediaModule.getMediaAsset(assetId)
-        if (asset && asset.runtime.refCount !== undefined) {
-          asset.runtime.refCount--
-
-          // 如果引用计数降为0，记录日志
-          if (asset.runtime.refCount === 0) {
-            console.warn(`⚠️ [removeAssetFromDirectory] 素材引用计数为0: ${asset.name}，可以删除`)
-          } else {
-            console.log(
-              `📊 [removeAssetFromDirectory] 素材 ${asset.name} 引用计数: ${asset.runtime.refCount}`,
-            )
-          }
-        }
-      }
-
-      return true
+    targetDirectoryId: string,
+  ): Promise<{ success: boolean; error?: string }> {
+    const asset = mediaModule.getMediaAsset(assetId)
+    if (!asset) {
+      return { success: false, error: '素材不存在' }
     }
-    return false
-  }
+    if (!directories.value.has(targetDirectoryId)) {
+      return { success: false, error: '目标文件夹不存在' }
+    }
 
-  /**
-   * 查找媒体项所在的所有目录ID
-   * @param mediaId 媒体项ID
-   * @returns 目录ID数组，如果未找到返回空数组
-   */
-  function findAllDirectoriesByAssetId(assetId: string): string[] {
-    const dirIds: string[] = []
-    for (const [dirId, dir] of directories.value) {
-      if (dir.assetIds.includes(assetId)) {
-        dirIds.push(dirId)
+    const sourceDirectoryId = getAssetDirectoryId(assetId)
+    if (!sourceDirectoryId) {
+      return { success: false, error: '素材所属文件夹不存在' }
+    }
+    if (assetLocationIndex.value.getDirectoryId(assetId) !== sourceDirectoryId) {
+      return { success: false, error: '素材目录索引未初始化' }
+    }
+    if (sourceDirectoryId === targetDirectoryId) {
+      return { success: true }
+    }
+
+    const persisted = await persistAssetDirectoryMove(
+      asset,
+      targetDirectoryId,
+      (mediaItem) => globalMetaFileManager.saveMetaFile(mediaItem),
+    )
+    if (!persisted) {
+      return { success: false, error: '保存素材所属文件夹失败，已恢复原位置' }
+    }
+
+    try {
+      assetLocationIndex.value.move(assetId, targetDirectoryId)
+      notifyAssetLocationChanged()
+      return { success: true }
+    } catch (error) {
+      // 索引异常不应让已成功持久化的数据保持错误的内存状态。
+      asset.parentDirectoryId = sourceDirectoryId
+      await globalMetaFileManager.saveMetaFile(asset)
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : '更新素材目录索引失败，已恢复原位置',
       }
     }
-    return dirIds
   }
 
   /**
@@ -371,7 +375,7 @@ export function createUnifiedDirectoryModule(registry: ModuleRegistry) {
     })
 
     // 添加媒体项
-    dir.assetIds.forEach((mediaId) => {
+    assetLocationIndex.value.getAssetIds(dirId).forEach((mediaId) => {
       items.push({
         id: mediaId,
         type: 'asset',
@@ -477,13 +481,13 @@ export function createUnifiedDirectoryModule(registry: ModuleRegistry) {
     }
 
     // 处理当前目录的资产项
-    dir.assetIds.forEach(startAssetIfNeeded)
+    getAssetIdsInDirectory(dirId).forEach(startAssetIfNeeded)
 
     // 处理角色类型子文件夹中的资产项
     dir.childDirIds.forEach((childDirId) => {
       const childDir = directories.value.get(childDirId)
       if (childDir && isCharacterDirectory(childDir)) {
-        childDir.assetIds.forEach(startAssetIfNeeded)
+        getAssetIdsInDirectory(childDirId).forEach(startAssetIfNeeded)
       }
     })
 
@@ -555,6 +559,8 @@ export function createUnifiedDirectoryModule(registry: ModuleRegistry) {
    */
   function resetDirectories(): void {
     directories.value.clear()
+    assetLocationIndex.value.clear()
+    notifyAssetLocationChanged()
     openTabs.value.length = 0
     activeTabId.value = ''
   }
@@ -617,19 +623,14 @@ export function createUnifiedDirectoryModule(registry: ModuleRegistry) {
    */
   async function dragMoveMediaItems(
     assetIds: string[],
-    sourceFolderId: string | null,
+    _sourceFolderId: string | null,
     targetFolderId: string,
   ): Promise<void> {
-    // 从源文件夹移除（不更新引用计数，因为是移动操作）
-    if (sourceFolderId) {
-      for (const assetId of assetIds) {
-        removeAssetFromDirectory(assetId, sourceFolderId, false)
-      }
-    }
-
-    // 添加到目标文件夹（不更新引用计数，因为是移动操作）
     for (const assetId of assetIds) {
-      addAssetToDirectory(assetId, targetFolderId, false)
+      const result = await moveAssetToDirectory(assetId, targetFolderId)
+      if (!result.success) {
+        throw new Error(result.error)
+      }
     }
 
     console.log(`✅ 拖拽移动 ${assetIds.length} 个资产到文件夹 ${targetFolderId}`)
@@ -675,7 +676,7 @@ export function createUnifiedDirectoryModule(registry: ModuleRegistry) {
   }
 
   /**
-   * 剪切项目
+   * 剪切项目。素材库仅支持剪切粘贴移动，不支持复制。
    */
   function cut(items: DisplayItem[]): void {
     if (items.length === 0) return
@@ -688,7 +689,6 @@ export function createUnifiedDirectoryModule(registry: ModuleRegistry) {
 
     // 更新剪贴板状态
     clipboardState.value = {
-      operation: ClipboardOp.CUT,
       items: clipboardItems,
       sourceDirId: currentDir.value?.id || null,
       timestamp: Date.now(),
@@ -698,31 +698,8 @@ export function createUnifiedDirectoryModule(registry: ModuleRegistry) {
   }
 
   /**
-   * 复制项目
-   */
-  function copy(items: DisplayItem[]): void {
-    if (items.length === 0) return
-
-    // 构建剪贴板项目
-    const clipboardItems: ClipboardItem[] = items.map((item) => ({
-      id: item.id,
-      type: item.type,
-    }))
-
-    // 更新剪贴板状态
-    clipboardState.value = {
-      operation: ClipboardOp.COPY,
-      items: clipboardItems,
-      sourceDirId: currentDir.value?.id || null,
-      timestamp: Date.now(),
-    }
-
-    console.log(`📋 复制 ${items.length} 个项目`)
-  }
-
-  /**
    * 检查是否可以粘贴到目标目录
-   * ❌ 不能粘贴到来源目录（剪切和复制都不允许）
+   * ❌ 不能粘贴到来源目录
    * ❌ 不能粘贴目录到自己
    * ❌ 不能粘贴目录到子目录（防止循环引用）
    * ✅ 可以粘贴到其他任何目录
@@ -780,65 +757,10 @@ export function createUnifiedDirectoryModule(registry: ModuleRegistry) {
         targetDir.childDirIds.push(item.id)
       }
     } else {
-      // 移动媒体项（不更新引用计数，因为是剪切移动操作）
-      // 从原目录移除
-      if (clipboardState.value.sourceDirId) {
-        removeAssetFromDirectory(item.id, clipboardState.value.sourceDirId, false)
+      const result = await moveAssetToDirectory(item.id, targetDirId)
+      if (!result.success) {
+        throw new Error(result.error)
       }
-
-      // 添加到目标目录
-      addAssetToDirectory(item.id, targetDirId, false)
-    }
-  }
-
-  /**
-   * 递归复制目录
-   */
-  async function copyDirectoryRecursive(
-    sourceDirId: string,
-    targetParentId: string,
-    newName: string,
-  ): Promise<string> {
-    const sourceDir = getDirectory(sourceDirId)
-    if (!sourceDir) throw new Error('源目录不存在')
-
-    // 创建新目录
-    const createResult = createDirectory(newName, targetParentId)
-    if (!createResult.success) {
-      throw new Error(createResult.error)
-    }
-    const newDir = createResult.directory
-
-    // 复制子目录
-    for (const childDirId of sourceDir.childDirIds) {
-      const childDir = getDirectory(childDirId)
-      if (childDir) {
-        await copyDirectoryRecursive(childDirId, newDir.id, childDir.name)
-      }
-    }
-
-    // 复制媒体项
-    for (const mediaId of sourceDir.assetIds) {
-      await copyItem({ id: mediaId, type: 'asset' }, newDir.id)
-    }
-
-    return newDir.id
-  }
-
-  /**
-   * 复制项目（复制操作）
-   */
-  async function copyItem(item: ClipboardItem, targetDirId: string): Promise<void> {
-    if (item.type === 'directory') {
-      // 复制目录（递归复制所有子项）
-      const sourceDir = getDirectory(item.id)
-      const dirName = sourceDir?.name || 'untitled'
-      await copyDirectoryRecursive(item.id, targetDirId, dirName)
-    } else {
-      // 复制媒体项（只复制引用）
-      // 注意：这里需要访问 unifiedStore 的媒体数据
-      // 暂时只复制引用到目标目录
-      addAssetToDirectory(item.id, targetDirId)
     }
   }
 
@@ -881,14 +803,7 @@ export function createUnifiedDirectoryModule(registry: ModuleRegistry) {
     // 处理每个剪贴板项目
     for (const clipItem of clipboardState.value.items) {
       try {
-        // 根据操作类型执行不同逻辑
-        if (clipboardState.value.operation === ClipboardOp.CUT) {
-          // 剪切：移动项目
-          await moveItem(clipItem, targetDirId)
-        } else {
-          // 复制：复制项目
-          await copyItem(clipItem, targetDirId)
-        }
+        await moveItem(clipItem, targetDirId)
 
         result.successCount++
       } catch (error) {
@@ -900,7 +815,7 @@ export function createUnifiedDirectoryModule(registry: ModuleRegistry) {
       }
     }
 
-    // 粘贴成功后，无论是剪切还是复制，都清空剪贴板
+    // 移动完成后清空剪贴板
     clearClipboard()
 
     result.success = result.failedCount === 0
@@ -914,7 +829,6 @@ export function createUnifiedDirectoryModule(registry: ModuleRegistry) {
    */
   function clearClipboard(): void {
     clipboardState.value = {
-      operation: null,
       items: [],
       sourceDirId: null,
       timestamp: 0,
@@ -1002,7 +916,8 @@ export function createUnifiedDirectoryModule(registry: ModuleRegistry) {
   }
 
   /**
-   * 删除文件夹（递归删除所有子文件夹和引用计数为0的素材）
+   * 删除文件夹及其子树中的媒体。
+   * 先完整删除媒体（包含关联时间线片段），全部成功后才改变目录树。
    */
   async function deleteDirectory(dirId: string): Promise<{
     success: boolean
@@ -1022,7 +937,7 @@ export function createUnifiedDirectoryModule(registry: ModuleRegistry) {
     const deletedMediaIds: string[] = []
 
     try {
-      // 步骤1: 收集所有需要删除的子文件夹（使用广度优先遍历）
+      // 步骤1: 收集所有需要删除的子文件夹。
       const dirsToDelete: string[] = [dirId]
       const allMediaIds = new Set<string>()
 
@@ -1035,8 +950,7 @@ export function createUnifiedDirectoryModule(registry: ModuleRegistry) {
           // 收集子文件夹
           dirsToDelete.push(...currentDir.childDirIds)
 
-          // 收集媒体项
-          currentDir.assetIds.forEach((mediaId) => allMediaIds.add(mediaId))
+          getAssetIdsInDirectory(currentDirId).forEach((mediaId) => allMediaIds.add(mediaId))
         }
 
         index++
@@ -1049,28 +963,22 @@ export function createUnifiedDirectoryModule(registry: ModuleRegistry) {
         media: Array.from(allMediaIds),
       })
 
-      // 步骤2: 从所有文件夹中移除媒体项（更新引用计数）
-      for (const currentDirId of dirsToDelete) {
-        const currentDir = directories.value.get(currentDirId)
-        if (currentDir) {
-          const mediaIds = [...currentDir.assetIds]
-          for (const mediaId of mediaIds) {
-            removeAssetFromDirectory(mediaId, currentDirId)
-          }
-        }
-      }
-
-      // 步骤3: 检查并删除引用计数为0的素材
+      // 步骤2: 先删除所有素材及其关联时间线片段。任一失败时保留目录树，
+      // 未删除的素材和目录可供用户重试。
       for (const mediaId of allMediaIds) {
-        const asset = mediaModule.getMediaAsset(mediaId)
-        if (asset && asset.runtime.refCount === 0) {
-          console.log(`🗑️ [deleteDirectory] 删除引用计数为0的素材: ${asset.name}`)
-          await mediaModule.removeAsset(mediaId)
-          deletedMediaIds.push(mediaId)
+        const mediaDirectoryId = getAssetDirectoryId(mediaId)
+        if (!mediaDirectoryId || !dirsToDelete.includes(mediaDirectoryId)) {
+          throw new Error(`素材 ${mediaId} 的所属文件夹无效`)
         }
+
+        const result = await deleteAssetItem(mediaId, mediaDirectoryId)
+        if (!result.success) {
+          throw new Error(result.error || `删除素材 ${mediaId} 失败`)
+        }
+        deletedMediaIds.push(mediaId)
       }
 
-      // 步骤4: 从父文件夹中移除根文件夹
+      // 步骤3: 所有素材成功删除后，再从父文件夹中移除根文件夹。
       if (dir.parentId) {
         const parentDir = directories.value.get(dir.parentId)
         if (parentDir) {
@@ -1081,7 +989,7 @@ export function createUnifiedDirectoryModule(registry: ModuleRegistry) {
         }
       }
 
-      // 步骤5: 关闭显示被删除文件夹的标签页
+      // 步骤4: 关闭显示被删除文件夹的标签页。
       const tabsToClose: string[] = []
       for (const tab of openTabs.value) {
         if (dirsToDelete.includes(tab.dirId)) {
@@ -1091,12 +999,20 @@ export function createUnifiedDirectoryModule(registry: ModuleRegistry) {
 
       // 关闭所有相关标签页
       for (const tabId of tabsToClose) {
-        closeTab(tabId)
+        if (openTabs.value.length === 1) {
+          const remainingTab = openTabs.value.find((tab) => tab.id === tabId)
+          if (remainingTab && dir.parentId) {
+            remainingTab.dirId = dir.parentId
+            activeTabId.value = remainingTab.id
+          }
+        } else {
+          closeTab(tabId)
+        }
       }
 
       console.log(`🗂️ [deleteDirectory] 关闭了 ${tabsToClose.length} 个标签页`)
 
-      // 步骤6: 删除所有收集到的文件夹（从子到父的顺序）
+      // 步骤5: 删除所有收集到的文件夹（从子到父的顺序）。
       for (let i = dirsToDelete.length - 1; i >= 0; i--) {
         directories.value.delete(dirsToDelete[i])
       }
@@ -1119,7 +1035,8 @@ export function createUnifiedDirectoryModule(registry: ModuleRegistry) {
   }
 
   /**
-   * 删除媒体项（从指定目录移除，如果引用计数为0则删除文件）
+   * 删除媒体项及其关联时间线片段。
+   * 单归属模型下，素材只要从所属目录删除，就必须从项目中删除。
    */
   async function deleteAssetItem(
     mediaId: string,
@@ -1129,47 +1046,41 @@ export function createUnifiedDirectoryModule(registry: ModuleRegistry) {
     deletedFile: boolean
     error?: string
   }> {
-    const dir = directories.value.get(dirId)
-    if (!dir) {
+    if (!directories.value.has(dirId)) {
       return { success: false, deletedFile: false, error: '目录不存在' }
     }
 
     const mediaItem = mediaModule.getMediaAsset(mediaId)
 
     try {
-      // 如果资产不存在，直接从目录移除该无效引用（不更新引用计数）
       if (!mediaItem) {
-        console.warn(`⚠️ [deleteAssetItem] 资产不存在，从目录移除无效引用: ${mediaId}`)
-        const removed = removeAssetFromDirectory(mediaId, dirId, false)
-        if (removed) {
-          console.log(`✅ [deleteAssetItem] 已从目录移除无效引用: ${mediaId}`)
-          return { success: true, deletedFile: false }
-        }
+        return { success: false, deletedFile: false, error: '素材不存在' }
+      }
+
+      if (
+        mediaItem.parentDirectoryId !== dirId ||
+        assetLocationIndex.value.getDirectoryId(mediaId) !== dirId
+      ) {
         return { success: false, deletedFile: false, error: '资产不在该目录中' }
       }
 
-      // 步骤1: 从目录移除（会自动减少引用计数）
-      const removed = removeAssetFromDirectory(mediaId, dirId)
-      if (!removed) {
-        return { success: false, deletedFile: false, error: '资产不在该目录中' }
-      }
-
-      // 步骤2: 检查引用计数，如果为0则删除素材文件
-      const updatedMediaItem = mediaModule.getMediaAsset(mediaId)
-      let deletedFile = false
-
-      if (updatedMediaItem && updatedMediaItem.runtime.refCount === 0) {
-        console.log(`🗑️ [deleteAssetItem] 删除引用计数为0的素材: ${mediaItem.name}`)
+      // removeAsset 会删除关联时间线片段、媒体文件和 Meta 文件。
+      try {
         await mediaModule.removeAsset(mediaId)
-        deletedFile = true
+      } catch (error) {
+        return {
+          success: false,
+          deletedFile: false,
+          error: error instanceof Error ? error.message : '删除素材文件失败',
+        }
       }
 
-      console.log(`✅ [deleteAssetItem] 资产删除成功: ${mediaItem.name}`, {
-        deletedFile,
-        remainingRefCount: updatedMediaItem?.runtime.refCount || 0,
-      })
+      assetLocationIndex.value.remove(mediaId)
+      notifyAssetLocationChanged()
 
-      return { success: true, deletedFile }
+      console.log(`✅ [deleteAssetItem] 资产删除成功: ${mediaItem.name}`)
+
+      return { success: true, deletedFile: true }
     } catch (error) {
       console.error(`❌ [deleteAssetItem] 删除资产失败: ${mediaItem?.name || mediaId}`, error)
       return {
@@ -1204,8 +1115,10 @@ export function createUnifiedDirectoryModule(registry: ModuleRegistry) {
     getCharacterDirectory, // 🆕 新增获取角色文件夹方法
     isCharacterDirectory, // 🆕 新增类型守卫方法
     setMediaReadyEnsurer,
-    addAssetToDirectory,
-    removeAssetFromDirectory,
+    registerAssetLocation,
+    moveAssetToDirectory,
+    getAssetDirectoryId,
+    getAssetIdsInDirectory,
     getDirectoryContent,
     getBreadcrumb,
     openTab,
@@ -1215,7 +1128,6 @@ export function createUnifiedDirectoryModule(registry: ModuleRegistry) {
     deleteDirectory, // 🆕 新增删除文件夹方法
     deleteAssetItem,
     deleteMediaItem, // 🆕 新增删除媒体项方法
-    findAllDirectoriesByAssetId,
 
     // 初始化和管理方法
     initializeRootDirectory,
@@ -1227,7 +1139,6 @@ export function createUnifiedDirectoryModule(registry: ModuleRegistry) {
     // 剪贴板操作
     clipboardState,
     cut,
-    copy,
     paste,
     canPaste,
     clearClipboard,
@@ -1266,9 +1177,6 @@ export type {
   UnifiedDirectoryConfig,
   DirectoryType,
 } from '@/core/directory/types'
-
-// 导出枚举（不使用 type）
-export { ClipboardOperation } from '@/core/directory/types'
 
 /**
  * 导出模块类型

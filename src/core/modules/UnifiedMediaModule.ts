@@ -106,6 +106,8 @@ export function createUnifiedMediaModule(registry: ModuleRegistry) {
    */
   function addMediaItem(mediaItem: UnifiedMediaItemData) {
     mediaItems.value.push(mediaItem)
+    const autoSaveModule = registry.get<UnifiedAutoSaveModule>(MODULE_NAMES.AUTOSAVE)
+    autoSaveModule.setupMediaItemWatcher(mediaItem)
     printUnifiedDebugInfo(
       '添加统一媒体项目到素材库',
       {
@@ -148,41 +150,31 @@ export function createUnifiedMediaModule(registry: ModuleRegistry) {
     if (index > -1) {
       const mediaItem = mediaItems.value[index]
 
-      // 1. 🌟 清理 watcher
+      // 1. 先删除硬盘文件（媒体文件 + Meta文件）。失败时保留媒体和目录归属以便重试。
+      const deleteResult = await globalMetaFileManager.deleteMediaFiles(mediaItemId)
+      if (!deleteResult.success) {
+        throw new Error(deleteResult.error || `删除媒体文件失败: ${mediaItem.name}`)
+      }
+      console.log(`✅ [UnifiedMediaModule] 硬盘文件已删除: ${mediaItem.name}`)
+
+      // 2. 清理 watcher
       const autoSaveModule = registry.get<UnifiedAutoSaveModule>(MODULE_NAMES.AUTOSAVE)
       autoSaveModule.cleanupMediaItemWatcher(mediaItemId)
 
-      // 2. 清理相关的时间轴项目（先清理使用该素材的时间轴项目）
+      // 3. 清理相关的时间轴项目
       await cleanupRelatedTimelineItems(mediaItemId)
 
-      // 3. 清理 bunnyMedia
+      // 4. 清理 bunnyMedia
       if (mediaItem.runtime.bunny?.bunnyMedia) {
         await mediaItem.runtime.bunny.bunnyMedia.dispose()
         mediaItem.runtime.bunny.bunnyMedia = undefined
         console.log(`🧹 [UnifiedMediaModule] bunnyMedia已清理: ${mediaItem.name}`)
       }
 
-      // 4. 清理缩略图URL
+      // 5. 清理缩略图URL
       if (mediaItem.runtime.bunny?.thumbnailUrl) {
         URL.revokeObjectURL(mediaItem.runtime.bunny.thumbnailUrl)
         console.log(`🧹 [UnifiedMediaModule] bunny缩略图URL已清理: ${mediaItem.name}`)
-      }
-
-      // 5. 删除硬盘文件（媒体文件 + Meta文件）
-      try {
-        const deleteResult = await globalMetaFileManager.deleteMediaFiles(mediaItemId)
-
-        if (deleteResult.success) {
-          console.log(`✅ [UnifiedMediaModule] 硬盘文件已删除: ${mediaItem.name}`)
-        } else {
-          console.warn(
-            `⚠️ [UnifiedMediaModule] 硬盘文件删除失败: ${mediaItem.name}`,
-            deleteResult.error,
-          )
-        }
-      } catch (error) {
-        console.error(`❌ [UnifiedMediaModule] 删除硬盘文件时出错: ${mediaItem.name}`, error)
-        // 即使文件删除失败，也继续从内存中移除
       }
 
       // 6. 从数组中移除

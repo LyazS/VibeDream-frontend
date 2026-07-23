@@ -22,6 +22,7 @@ export interface BaseLibraryAssetMetaFile {
 
 export interface MediaLibraryAssetMetaFile extends BaseLibraryAssetMetaFile {
   assetKind: 'media'
+  parentDirectoryId: string
   source: BaseDataSourcePersistedData
   mediaType: MediaTypeOrUnknown
   mediaStatus?: MediaStatus
@@ -229,6 +230,7 @@ export function isMediaLibraryAssetMetaFileValue(
   const candidate = value as unknown as Record<string, unknown>
 
   return isMediaPersistedSourceData(candidate.source)
+    && typeof candidate.parentDirectoryId === 'string'
     && isMediaTypeOrUnknown(candidate.mediaType)
     && (candidate.mediaStatus === undefined || isMediaStatus(candidate.mediaStatus))
     && isOptionalNumber(candidate.duration)

@@ -28,7 +28,7 @@ export interface CharacterInfo {
 
 /**
  * 虚拟目录数据结构
- * 包含子文件夹和资产的完整信息
+ * 仅包含文件夹树信息。素材归属保存在媒体 Meta 的 parentDirectoryId 中。
  */
 export interface VirtualDirectory {
   readonly type: DirectoryType // 目录类型，用于区分不同类型的特殊文件夹（默认：'base'）
@@ -38,9 +38,8 @@ export interface VirtualDirectory {
   parentId: string | null // 父目录ID，null表示根目录
   createdAt: string // 创建时间（ISO 8601）
 
-  // 内容引用
+  // 子目录引用
   childDirIds: string[] // 子目录ID列表
-  assetIds: string[] // 资产ID列表
 }
 
 /**
@@ -82,15 +81,7 @@ export interface DirectoryNavigationState {
 // ==================== 剪贴板相关类型 ====================
 
 /**
- * 剪贴板操作类型
- */
-export enum ClipboardOperation {
-  CUT = 'cut',
-  COPY = 'copy',
-}
-
-/**
- * 剪贴板项目（DisplayItem 的类型别名）
+ * 移动剪贴板项目（DisplayItem 的类型别名）
  * 剪贴板中的项目与显示项结构完全相同
  */
 export type ClipboardItem = DisplayItem
@@ -99,7 +90,6 @@ export type ClipboardItem = DisplayItem
  * 剪贴板状态
  */
 export interface ClipboardState {
-  operation: ClipboardOperation | null
   items: ClipboardItem[]
   sourceDirId: string | null
   timestamp: number

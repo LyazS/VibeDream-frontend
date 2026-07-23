@@ -153,20 +153,23 @@ export function createUnifiedAutoSaveModule(
     const unwatch = watch(
       () => ({
         name: mediaItem.name,
+        parentDirectoryId: isMediaAsset(mediaItem) ? mediaItem.parentDirectoryId : undefined,
         metadata: isMediaAsset(mediaItem) ? mediaItem.metadata : undefined,
         templatePayload: !isMediaAsset(mediaItem) ? mediaItem.templatePayload : undefined,
       }),
       (newValues, oldValues) => {
         // 检查是否有变化
         const nameChanged = newValues.name !== oldValues.name
+        const parentDirectoryChanged = newValues.parentDirectoryId !== oldValues.parentDirectoryId
         const metadataChanged =
           JSON.stringify(newValues.metadata) !== JSON.stringify(oldValues.metadata)
         const templatePayloadChanged =
           JSON.stringify(newValues.templatePayload) !== JSON.stringify(oldValues.templatePayload)
 
-        if (nameChanged || metadataChanged || templatePayloadChanged) {
+        if (nameChanged || parentDirectoryChanged || metadataChanged || templatePayloadChanged) {
           console.log(`📝 [AutoSave] 检测到 mediaItem 变化: ${mediaItem.id}`, {
             nameChanged,
+            parentDirectoryChanged,
             metadataChanged,
             templatePayloadChanged,
             oldName: oldValues.name,

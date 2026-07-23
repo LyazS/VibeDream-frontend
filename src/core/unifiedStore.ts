@@ -54,6 +54,7 @@ import {
 import { ModuleRegistry, MODULE_NAMES } from '@/core/modules/ModuleRegistry'
 import { useHistoryOperations } from '@/core/composables/useHistoryOperations'
 import { useUnifiedDrag } from '@/core/composables/useUnifiedDrag'
+import { revealMediaInLibrary as coordinateMediaReveal } from '@/core/directory/LibraryReveal'
 import type { UnifiedTimelineItemData } from '@/core/timelineitem/model/timelineItem'
 import { frameToPixel, pixelToFrame } from '@/core/utils/timelineScaleUtils'
 import {
@@ -384,6 +385,29 @@ export const useUnifiedStore = defineStore('unified', () => {
     unifiedSelectionModule,
     unifiedTrackModule,
   )
+
+  /**
+   * 从时间线或其他入口定位素材库中的源素材。
+   * 不向时间线写入目录信息，始终通过媒体 Meta 的 parentDirectoryId 反查。
+   */
+  function revealMediaInLibrary(mediaId: string): { success: boolean; error?: string } {
+    const result = coordinateMediaReveal(mediaId, {
+      getAssetDirectoryId: unifiedDirectoryModule.getAssetDirectoryId,
+      getOpenTabs: () => unifiedDirectoryModule.openTabs.value,
+      hasActiveTab: () => Boolean(unifiedDirectoryModule.activeTab.value),
+      switchTab: unifiedDirectoryModule.switchTab,
+      navigateToDir: unifiedDirectoryModule.navigateToDir,
+      openTab: unifiedDirectoryModule.openTab,
+      setMediaSection: () => unifiedUIModule.setLibrarySection('media'),
+      // 素材选择模型会按既有规则清除时间线选择，并切换右侧属性面板内容。
+      selectAsset: unifiedSelectionModule.selectLibraryAsset,
+      requestScrollAndHighlight: unifiedUIModule.requestLibraryAssetReveal,
+    })
+
+    return result.success
+      ? { success: true }
+      : { success: false, error: '未找到素材或所属文件夹' }
+  }
 
   // ==================== 导出接口 ====================
 
@@ -835,12 +859,13 @@ export const useUnifiedStore = defineStore('unified', () => {
     deleteDirectory: unifiedDirectoryModule.deleteDirectory, // 🆕 新增删除文件夹方法
     deleteAssetItem: unifiedDirectoryModule.deleteAssetItem,
     deleteMediaItem: unifiedDirectoryModule.deleteMediaItem, // 🆕 新增删除媒体项方法
-    findAllDirectoriesByAssetId: unifiedDirectoryModule.findAllDirectoriesByAssetId,
     getDirectory: unifiedDirectoryModule.getDirectory,
     getCharacterDirectory: unifiedDirectoryModule.getCharacterDirectory, // 🆕 新增获取角色文件夹方法
     isCharacterDirectory: unifiedDirectoryModule.isCharacterDirectory, // 🆕 新增类型守卫方法
-    addAssetToDirectory: unifiedDirectoryModule.addAssetToDirectory,
-    removeAssetFromDirectory: unifiedDirectoryModule.removeAssetFromDirectory,
+    registerAssetLocation: unifiedDirectoryModule.registerAssetLocation,
+    moveAssetToDirectory: unifiedDirectoryModule.moveAssetToDirectory,
+    getAssetDirectoryId: unifiedDirectoryModule.getAssetDirectoryId,
+    getAssetIdsInDirectory: unifiedDirectoryModule.getAssetIdsInDirectory,
     getDirectoryContent: unifiedDirectoryModule.getDirectoryContent,
     getBreadcrumb: unifiedDirectoryModule.getBreadcrumb,
     openTab: unifiedDirectoryModule.openTab,
@@ -859,7 +884,6 @@ export const useUnifiedStore = defineStore('unified', () => {
 
     // 剪贴板操作
     cut: unifiedDirectoryModule.cut,
-    copy: unifiedDirectoryModule.copy,
     paste: unifiedDirectoryModule.paste,
     canPaste: unifiedDirectoryModule.canPaste,
     clearClipboard: unifiedDirectoryModule.clearClipboard,
@@ -898,12 +922,15 @@ export const useUnifiedStore = defineStore('unified', () => {
     isChatPanelVisible: unifiedUIModule.isChatPanelVisible,
     aiPanelActiveTab: unifiedUIModule.aiPanelActiveTab,
     librarySection: unifiedUIModule.librarySection,
+    libraryRevealRequest: unifiedUIModule.libraryRevealRequest,
     effectTemplateCategorySelection: unifiedUIModule.effectTemplateCategorySelection,
     activePropertyTab: unifiedUIModule.activePropertyTab,
 
     // AI 面板状态管理方法
     setChatPanelVisible: unifiedUIModule.setChatPanelVisible,
     setLibrarySection: unifiedUIModule.setLibrarySection,
+    requestLibraryAssetReveal: unifiedUIModule.requestLibraryAssetReveal,
+    revealMediaInLibrary,
     setEffectTemplateCategory: unifiedUIModule.setEffectTemplateCategory,
     setActivePropertyTab: unifiedUIModule.setActivePropertyTab,
   }

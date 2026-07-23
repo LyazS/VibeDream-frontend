@@ -148,11 +148,12 @@ class GlobalMetaFileManager {
 
       const metaData: MediaMetaFile = isMediaAsset(asset)
         ? {
-            version: '1.0.0',
+            version: '1.1.0',
             id: asset.id,
             name: asset.name,
             createdAt: asset.createdAt,
             assetKind: 'media',
+            parentDirectoryId: asset.parentDirectoryId,
             mediaType: asset.mediaType,
             source: extractSourceData(asset.source),
             duration: asset.duration,
@@ -312,11 +313,15 @@ class GlobalMetaFileManager {
 
       let deletedMedia = false
       let deletedMeta = false
+      let mediaExists = false
+      let metaExists = false
+      let mediaDeleteFailed = false
+      let metaDeleteFailed = false
 
       // 1. 删除媒体文件
       try {
         const mediaPath = fileSystemService.paths.getMediaPath(this.projectId, id)
-        const mediaExists = await fileSystemService.fileExists(mediaPath)
+        mediaExists = await fileSystemService.fileExists(mediaPath)
 
         if (mediaExists) {
           await fileSystemService.deleteFile(mediaPath)
@@ -327,13 +332,13 @@ class GlobalMetaFileManager {
         }
       } catch (error) {
         console.error(`❌ [globalMetaFileManager] 删除媒体文件失败: ${id}`, error)
-        // 继续尝试删除meta文件
+        mediaDeleteFailed = true
       }
 
       // 2. 删除Meta文件
       try {
         const metaPath = fileSystemService.paths.getMetaPath(this.projectId, id)
-        const metaExists = await fileSystemService.fileExists(metaPath)
+        metaExists = await fileSystemService.fileExists(metaPath)
 
         if (metaExists) {
           await fileSystemService.deleteFile(metaPath)
@@ -344,21 +349,27 @@ class GlobalMetaFileManager {
         }
       } catch (error) {
         console.error(`❌ [globalMetaFileManager] 删除Meta文件失败: ${id}.meta`, error)
+        metaDeleteFailed = true
       }
 
-      // 3. 返回结果
-      const success = deletedMedia || deletedMeta
+      // 3. 只有所有已存在文件都成功删除，才允许上层删除内存素材和目录归属。
+      const success =
+        !mediaDeleteFailed &&
+        !metaDeleteFailed &&
+        (!mediaExists || deletedMedia) &&
+        (!metaExists || deletedMeta)
 
       if (success) {
         console.log(`✅ [globalMetaFileManager] 媒体文件删除完成: ${id}`)
       } else {
-        console.warn(`⚠️ [globalMetaFileManager] 没有文件被删除: ${id}`)
+        console.warn(`⚠️ [globalMetaFileManager] 媒体文件删除不完整: ${id}`)
       }
 
       return {
         success,
         deletedMedia,
         deletedMeta,
+        ...(success ? {} : { error: '媒体文件或 Meta 文件删除失败' }),
       }
     } catch (error) {
       console.error(`❌ [globalMetaFileManager] 删除媒体文件失败: ${id}`, error)

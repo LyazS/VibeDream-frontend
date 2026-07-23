@@ -22,6 +22,7 @@ import { submitASRTask } from '@/core/jobs'
 import type { FileData } from '@/core/datasource/providers/ai-generation/types'
 import { RENDERER_FPS } from '@/core/mediabunny/constant'
 import { buildClipSelectionId } from '@/core/types/timelineSelection'
+import { canRevealTimelineSource } from '@/core/timelineitem/TimelineSourceReveal'
 
 /**
  * 菜单项类型定义
@@ -128,6 +129,16 @@ export function useTimelineContextMenu(
 
     const menuItems: MenuItem[] = []
 
+    // 定位不依赖片段是否就绪；只要它有真实源媒体即可反查所属文件夹。
+    if (canRevealTimelineSource(timelineItem)) {
+      menuItems.push({
+        label: t('timeline.contextMenu.clip.revealInLibrary'),
+        icon: IconComponents.FOLDER_OPEN,
+        onClick: () => revealClipInLibrary(),
+      })
+      menuItems.push({ type: 'separator' } as MenuItem)
+    }
+
     // 只有 ready 状态的 timelineItem 才有各种右键选项
     // 非 ready 状态（loading 或 error）只有删除选项
     if (timelineItem.timelineStatus === 'ready') {
@@ -174,6 +185,22 @@ export function useTimelineContextMenu(
     })
 
     return menuItems
+  }
+
+  function revealClipInLibrary(): void {
+    const clipId = contextMenuTarget.value.clipId
+    const timelineItem = clipId ? unifiedStore.getTimelineItem(clipId) : undefined
+    if (!timelineItem?.mediaItemId) {
+      unifiedStore.messageWarning(t('timeline.contextMenu.clip.revealInLibraryFailed'))
+      showContextMenu.value = false
+      return
+    }
+
+    const result = unifiedStore.revealMediaInLibrary(timelineItem.mediaItemId)
+    if (!result.success) {
+      unifiedStore.messageWarning(t('timeline.contextMenu.clip.revealInLibraryFailed'))
+    }
+    showContextMenu.value = false
   }
 
   function getTransitionMenuItems(): MenuItem[] {

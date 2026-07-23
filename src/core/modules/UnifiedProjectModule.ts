@@ -383,27 +383,18 @@ export function createUnifiedProjectModule(registry: ModuleRegistry) {
 
       console.log(`📄 [rebuildMediaItems] 从 Meta 文件加载了 ${metaMediaItems.length} 个媒体项目`)
 
-      // 🆕 步骤1: 统计每个素材的引用计数
-      const refCountMap = new Map<string, number>()
-
-      // 遍历所有目录，统计每个素材被引用的次数
-      directoryModule.directories.value.forEach((dir) => {
-        dir.assetIds.forEach((mediaId) => {
-          refCountMap.set(mediaId, (refCountMap.get(mediaId) || 0) + 1)
-        })
-      })
-
-      console.log(`📊 [rebuildMediaItems] 引用计数统计完成，共 ${refCountMap.size} 个素材被引用`)
-
-      // 🆕 步骤2: 为每个媒体项目设置引用计数
+      // 先恢复媒体对象，再从其 parentDirectoryId 建立目录运行时索引。
       for (const mediaItem of metaMediaItems) {
-        mediaItem.runtime.refCount = refCountMap.get(mediaItem.id) || 0
-
-        // 如果引用计数为0，标记为孤立素材
-        if (mediaItem.runtime.refCount === 0) {
-          console.warn(
-            `⚠️ [rebuildMediaItems] 发现孤立素材: ${mediaItem.name} (ID: ${mediaItem.id})`,
-          )
+        mediaModule.addAsset(mediaItem)
+        if (isMediaAsset(mediaItem)) {
+          const locationResult = directoryModule.registerAssetLocation(mediaItem.id)
+          if (!locationResult.success) {
+            // 不兼容旧 Meta，也不会尝试修复归属。素材保留在内存中以便诊断，
+            // 但不会出现在任何文件夹中。
+            console.warn(
+              `⚠️ [rebuildMediaItems] 素材目录归属无效: ${mediaItem.name} (${locationResult.error})`,
+            )
+          }
         }
       }
 
@@ -424,14 +415,14 @@ export function createUnifiedProjectModule(registry: ModuleRegistry) {
         if (activeTab) {
           const activeDir = directoryModule.directories.value.get(activeTab.dirId)
           if (activeDir) {
-            // 收集当前目录的媒体ID
-            activeDir.assetIds.forEach((id) => immediateLoadIds.add(id))
+            directoryModule.getAssetIdsInDirectory(activeDir.id).forEach((id) => immediateLoadIds.add(id))
 
-            // 收集角色类型子文件夹中的媒体ID
             activeDir.childDirIds.forEach((childDirId) => {
               const childDir = directoryModule.directories.value.get(childDirId)
               if (childDir && directoryModule.isCharacterDirectory(childDir)) {
-                childDir.assetIds.forEach((id) => immediateLoadIds.add(id))
+                directoryModule
+                  .getAssetIdsInDirectory(childDirId)
+                  .forEach((id) => immediateLoadIds.add(id))
               }
             })
           }
@@ -440,12 +431,18 @@ export function createUnifiedProjectModule(registry: ModuleRegistry) {
 
       console.log(`📊 [rebuildMediaItems] 需要立即加载 ${immediateLoadIds.size} 个媒体项目`)
 
-      // 添加媒体项目并选择性启动
+      // 选择性启动已恢复的媒体。
       let immediateCount = 0
       let deferredCount = 0
 
       for (const mediaItem of metaMediaItems) {
-        mediaModule.addAsset(mediaItem)
+        if (isMediaAsset(mediaItem) && !directoryModule.getAssetDirectoryId(mediaItem.id)) {
+          console.warn(
+            `⚠️ [rebuildMediaItems] 跳过目录归属无效的素材处理: ${mediaItem.name} (ID: ${mediaItem.id})`,
+          )
+          deferredCount++
+          continue
+        }
 
         if (isMediaAsset(mediaItem) && isRecoverableAIGeneratedMedia(mediaItem)) {
           if (ensureAIGeneratedMediaForProjectLoad) {

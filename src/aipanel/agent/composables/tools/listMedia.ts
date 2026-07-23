@@ -233,7 +233,7 @@ function getDirectoryEntries(dirId: string): VirtualEntry[] {
       }
     }
 
-    for (const mediaId of dir.assetIds) {
+    for (const mediaId of store.getAssetIdsInDirectory(dirId)) {
       const media = mediaItemsMap.get(mediaId)
       if (media) {
         entries.push({

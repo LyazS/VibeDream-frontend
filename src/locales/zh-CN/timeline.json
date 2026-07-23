@@ -40,6 +40,8 @@
         "smartSceneDetection": "智能分镜头",
         "speechRecognition": "语音识别",
         "duplicateClip": "复制片段",
+        "revealInLibrary": "在素材库中显示",
+        "revealInLibraryFailed": "未找到源素材或所属文件夹",
         "regenerateThumbnail": "重新生成缩略图",
         "deleteClip": "删除片段"
       },

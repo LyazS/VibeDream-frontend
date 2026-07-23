@@ -40,6 +40,8 @@
         "smartSceneDetection": "Scene Detection",
         "speechRecognition": "Speech Recognition",
         "duplicateClip": "Duplicate Clip",
+        "revealInLibrary": "Show in Media Library",
+        "revealInLibraryFailed": "Source media or its folder was not found",
         "regenerateThumbnail": "Regenerate Thumbnail",
         "deleteClip": "Delete Clip"
       },

@@ -53,6 +53,10 @@ export interface UnifiedMediaItemData {
   createdAt: string
   assetKind: 'media'
 
+  // ==================== 目录归属（持久化） ====================
+  // 素材仅属于一个目录。该字段写入项目 Meta，是目录归属的唯一真相。
+  parentDirectoryId: string
+
   // ==================== 状态信息 ====================
   mediaStatus: MediaStatus
   mediaType: MediaType | 'unknown'
@@ -63,7 +67,6 @@ export interface UnifiedMediaItemData {
   // ==================== 运行时对象（状态相关） ====================
   runtime: {
     bunny?: BunnyObjects
-    refCount?: number // 引用计数：有多少个文件夹引用了这个素材
   }
 
   // ==================== 元数据（状态相关） ====================
@@ -235,7 +238,9 @@ export function createUnifiedMediaItemData(
   id: string,
   name: string,
   source: UnifiedDataSourceData,
-  options?: Partial<UnifiedMediaItemData>,
+  options: Omit<Partial<UnifiedMediaItemData>, 'parentDirectoryId'> & {
+    parentDirectoryId: string
+  },
 ): UnifiedMediaItemData {
   return reactive({
     id,

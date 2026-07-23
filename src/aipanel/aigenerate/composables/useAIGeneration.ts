@@ -157,10 +157,10 @@ export function useAIGeneration() {
    * @param configData 配置数据
    * @returns 创建的媒体项
    */
-  function createAndAddMediaItem(
+  async function createAndAddMediaItem(
     source: AIGenerationSourceData | BizyAirSourceData,
     configData: AIGenerateConfig,
-  ): UnifiedMediaItemData {
+  ): Promise<UnifiedMediaItemData> {
     // 根据内容类型确定文件扩展名和媒体类型
     let extension = 'png'
     let mediaType: 'image' | 'video' | 'audio' = 'image'
@@ -173,25 +173,30 @@ export function useAIGeneration() {
       mediaType = 'audio'
     }
 
+    const targetDirectory = unifiedStore.currentDir
+    if (
+      outputLocation.value !== 'current' ||
+      !targetDirectory ||
+      !unifiedStore.getDirectory(targetDirectory.id)
+    ) {
+      throw new Error('当前文件夹不存在，无法创建 AI 素材')
+    }
+
     const mediaId = generateMediaId(extension)
     const mediaName = `${configData.name[currentLang.value]}_${Date.now()}`
 
     const mediaItem = unifiedStore.createUnifiedMediaItemData(mediaId, mediaName, source, {
       mediaType,
+      parentDirectoryId: targetDirectory.id,
     })
 
     // 添加到媒体库
     unifiedStore.addMediaItem(mediaItem)
 
-    // 根据输出位置添加到目录
-    if (outputLocation.value === 'current') {
-      if (unifiedStore.currentDir) {
-        unifiedStore.addAssetToDirectory(mediaId, unifiedStore.currentDir.id)
-      } else {
-        console.warn('⚠️ [useAIGeneration] 当前目录不存在，无法添加媒体项')
-      }
-    } else {
-      console.log('📁 [useAIGeneration] 添加到临时目录（待实现）')
+    const locationResult = unifiedStore.registerAssetLocation(mediaId)
+    if (!locationResult.success) {
+      await unifiedStore.removeMediaItem(mediaId)
+      throw new Error(locationResult.error ?? '登记素材目录归属失败')
     }
 
     return mediaItem
@@ -352,7 +357,7 @@ export function useAIGeneration() {
       const result = strategy.createSource(requestParams, taskId, configData)
 
       // 7. 创建并添加媒体项
-      const mediaItem = createAndAddMediaItem(result.source, configData)
+      const mediaItem = await createAndAddMediaItem(result.source, configData)
       const saved = await globalMetaFileManager.saveMetaFile(mediaItem)
       if (!saved) {
         throw new Error('保存 AI 生成素材元数据失败')

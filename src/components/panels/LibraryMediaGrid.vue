@@ -29,9 +29,9 @@
           :class="{
             'directory-item': item.type === 'directory',
             'media-item': item.type === 'asset',
+            'is-revealed': item.type === 'asset' && revealedAssetId === item.id,
             selected: isItemSelected(item),
             'is-cut': isItemCut(item),
-            'is-copy': isItemCopy(item),
             'drag-over-folder': item.type === 'directory' && folderDragState[item.id]?.isDragOver,
             'can-drop-folder': item.type === 'directory' && folderDragState[item.id]?.canDrop,
             'cannot-drop-folder':
@@ -39,6 +39,7 @@
               folderDragState[item.id]?.isDragOver &&
               !folderDragState[item.id]?.canDrop,
           }"
+          :data-library-asset-id="item.type === 'asset' ? item.id : undefined"
         >
           <!-- 可拖拽和点击的图标区域 -->
           <div
@@ -89,9 +90,9 @@
           :class="{
             'directory-item': item.type === 'directory',
             'media-item': item.type === 'asset',
+            'is-revealed': item.type === 'asset' && revealedAssetId === item.id,
             selected: isItemSelected(item),
             'is-cut': isItemCut(item),
-            'is-copy': isItemCopy(item),
             'drag-over-folder': item.type === 'directory' && folderDragState[item.id]?.isDragOver,
             'can-drop-folder': item.type === 'directory' && folderDragState[item.id]?.canDrop,
             'cannot-drop-folder':
@@ -99,6 +100,7 @@
               folderDragState[item.id]?.isDragOver &&
               !folderDragState[item.id]?.canDrop,
           }"
+          :data-library-asset-id="item.type === 'asset' ? item.id : undefined"
           @dblclick="onItemDoubleClick(item)"
           @click="onItemClick(item, $event)"
           @contextmenu="onItemContextMenu(item, $event)"
@@ -231,7 +233,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, nextTick, onBeforeUnmount, watch, type Component } from 'vue'
 import { NScrollbar } from 'naive-ui'
 import { useAppI18n } from '@/core/composables/useI18n'
 import { useUnifiedStore } from '@/core/unifiedStore'
@@ -246,8 +248,6 @@ import {
 import type { UnifiedMediaItemData } from '@/core'
 import { DataSourceFactory } from '@/core'
 import { generateMediaId, extractExtension } from '@/core/utils/idGenerator'
-import { ContentType, AITaskType } from '@/core/datasource/providers/ai-generation/AIGenerationSource'
-import { SourceOrigin } from '@/core/datasource/core/BaseDataSource'
 import { IconComponents } from '@/constants/iconComponents'
 import {
   ContextMenu,
@@ -318,7 +318,7 @@ const contextMenuOptions = ref({
 type MenuItem =
   | {
       label: string
-      icon: any // 图标组件
+      icon: Component
       onClick?: () => void
       disabled?: boolean
       children?: MenuItem[]
@@ -329,6 +329,37 @@ type MenuItem =
 
 // 从 store 获取状态
 const currentDir = computed(() => unifiedStore.currentDir)
+const revealedAssetId = ref<string | null>(null)
+let revealedAssetTimer: ReturnType<typeof setTimeout> | null = null
+
+watch(
+  () => unifiedStore.libraryRevealRequest,
+  async (request) => {
+    if (!request) return
+
+    // 等待标签页切换和列表渲染完成后再寻找目标元素。
+    await nextTick()
+    await nextTick()
+
+    const targetElement = Array.from(
+      document.querySelectorAll<HTMLElement>('[data-library-asset-id]'),
+    ).find((element) => element.dataset.libraryAssetId === request.assetId)
+    if (!targetElement) return
+
+    targetElement.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'nearest' })
+    revealedAssetId.value = request.assetId
+    if (revealedAssetTimer) clearTimeout(revealedAssetTimer)
+    revealedAssetTimer = setTimeout(() => {
+      revealedAssetId.value = null
+      revealedAssetTimer = null
+    }, 1200)
+  },
+  { flush: 'post', immediate: true },
+)
+
+onBeforeUnmount(() => {
+  if (revealedAssetTimer) clearTimeout(revealedAssetTimer)
+})
 
 // 剪贴板状态
 const clipboardState = computed(() => unifiedStore.clipboardState)
@@ -338,29 +369,14 @@ const canPasteHere = computed(() => {
   return unifiedStore.canPaste(currentDir.value.id)
 })
 
-// 在组件内部计算剪切和复制项ID列表
+// 在组件内部计算剪切项ID列表
 const cutItemIds = computed(() => {
-  if (clipboardState.value.operation === 'cut') {
-    return clipboardState.value.items.map((item: ClipboardItem) => item.id)
-  }
-  return []
-})
-
-const copyItemIds = computed(() => {
-  if (clipboardState.value.operation === 'copy') {
-    return clipboardState.value.items.map((item: ClipboardItem) => item.id)
-  }
-  return []
+  return clipboardState.value.items.map((item: ClipboardItem) => item.id)
 })
 
 // 检查项目是否被剪切
 function isItemCut(item: DisplayItem): boolean {
   return cutItemIds.value.includes(item.id)
-}
-
-// 检查项目是否被复制
-function isItemCopy(item: DisplayItem): boolean {
-  return copyItemIds.value.includes(item.id)
 }
 
 // 当前目录的显示项列表（带排序）
@@ -579,11 +595,6 @@ const currentMenuItems = computed((): MenuItem[] => {
         icon: IconComponents.CUT,
         onClick: handleCut,
       },
-      {
-        label: t('media.copy'),
-        icon: IconComponents.COPY,
-        onClick: handleCopy,
-      },
       { type: 'separator' },
       {
         label: t('media.delete'),
@@ -610,11 +621,6 @@ const currentMenuItems = computed((): MenuItem[] => {
         label: t('media.cut'),
         icon: IconComponents.CUT,
         onClick: handleCut,
-      },
-      {
-        label: t('media.copy'),
-        icon: IconComponents.COPY,
-        onClick: handleCopy,
       },
       {
         label: t('media.paste'),
@@ -648,11 +654,6 @@ const currentMenuItems = computed((): MenuItem[] => {
         label: t('media.cut'),
         icon: IconComponents.CUT,
         onClick: handleCut,
-      },
-      {
-        label: t('media.copy'),
-        icon: IconComponents.COPY,
-        onClick: handleCopy,
       },
       { type: 'separator' },
       {
@@ -1256,7 +1257,10 @@ async function handlePasteFromClipboard(): Promise<void> {
 
 // 添加媒体项
 async function addMediaItem(file: File): Promise<void> {
-  if (!currentDir.value) return
+  const targetDirectory = currentDir.value
+  if (!targetDirectory || !unifiedStore.getDirectory(targetDirectory.id)) {
+    throw new Error('当前文件夹不存在，无法导入素材')
+  }
 
   try {
     // 创建用户选择文件数据源
@@ -1271,13 +1275,17 @@ async function addMediaItem(file: File): Promise<void> {
       mediaId,
       file.name,
       userSelectedSource,
+      { parentDirectoryId: targetDirectory.id },
     )
 
     // 添加到媒体库
     unifiedStore.addMediaItem(mediaItem)
 
-    // 添加到当前目录
-    unifiedStore.addAssetToDirectory(mediaId, currentDir.value.id)
+    const locationResult = unifiedStore.registerAssetLocation(mediaId)
+    if (!locationResult.success) {
+      await unifiedStore.removeMediaItem(mediaId)
+      throw new Error(locationResult.error ?? '登记素材目录归属失败')
+    }
 
     // 通过 Resource DAG 声明媒体资源需要 ready。
     // 这里不 await，保持手动导入“加入后后台处理”的现有交互节奏。
@@ -1489,24 +1497,9 @@ function removeAssetItem(mediaId: string): void {
     return
   }
 
-  // 检查引用计数
-  const refCount = mediaItem.runtime.refCount || 0
-  const isReferencedByOthers = refCount > 1
-
-  // 构建确认对话框内容
-  let confirmContent = ''
-  if (isReferencedByOthers) {
-    confirmContent = t('media.deleteMediaMultiRef', { name: mediaItem.name, count: refCount })
-  } else if (refCount === 1) {
-    confirmContent = t('media.deleteMediaSingleRef', { name: mediaItem.name })
-  } else {
-    // refCount === 0，孤立素材
-    confirmContent = t('media.deleteMediaNoRef', { name: mediaItem.name })
-  }
-
   unifiedStore.dialogWarning({
     title: t('media.deleteMedia'),
-    content: confirmContent,
+    content: t('media.deleteMediaSingleRef', { name: mediaItem.name }),
     positiveText: t('media.confirm'),
     negativeText: t('media.cancel'),
     draggable: true,
@@ -1597,14 +1590,6 @@ function handleCut(): void {
   const selectedItems = getSelectedDisplayItems()
   if (selectedItems.length === 0) return
   unifiedStore.cut(selectedItems)
-  showContextMenu.value = false
-}
-
-// 复制操作
-function handleCopy(): void {
-  const selectedItems = getSelectedDisplayItems()
-  if (selectedItems.length === 0) return
-  unifiedStore.copy(selectedItems)
   showContextMenu.value = false
 }
 
@@ -1964,18 +1949,18 @@ async function handleBatchDelete(): Promise<void> {
   z-index: 1;
 }
 
-/* 复制状态样式 */
-.content-item.is-copy {
-  position: relative;
+.content-item.is-revealed,
+.list-item.is-revealed {
+  animation: library-item-reveal 1.2s ease-out;
 }
 
-.content-item.is-copy .item-draggable-area::after {
-  content: '📋';
-  position: absolute;
-  top: 2px;
-  right: 2px;
-  font-size: 12px;
-  z-index: 1;
+@keyframes library-item-reveal {
+  0% {
+    box-shadow: 0 0 0 0 rgba(45, 212, 191, 0.75);
+  }
+  100% {
+    box-shadow: 0 0 0 8px rgba(45, 212, 191, 0);
+  }
 }
 
 /* 文件夹拖拽目标样式 */
@@ -2051,13 +2036,6 @@ async function handleBatchDelete(): Promise<void> {
 
 .list-item.is-cut::before {
   content: '✂️';
-  position: absolute;
-  left: 8px;
-  font-size: 12px;
-}
-
-.list-item.is-copy::before {
-  content: '📋';
   position: absolute;
   left: 8px;
   font-size: 12px;
