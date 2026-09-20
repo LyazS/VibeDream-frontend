@@ -124,6 +124,37 @@ python main.py
 start.bat
 ```
 
+### Cloudflare Pages、R2 与账户 API（第一阶段）
+
+前端构建只包含 Vue 应用代码，不会下载或复制 ONNX 模型和 Wasm。模型资源需要单独准备、校验并发布到 R2：
+
+```bash
+npm run assets:prepare
+npm run assets:verify
+CLOUDFLARE_R2_BUCKET=lightcut-frontend-assets \
+CLOUDFLARE_R2_PUBLIC_URL=https://<r2-managed-host>.r2.dev \
+npm run assets:publish
+npm run build
+```
+
+`assets:prepare` 会生成不可变的 `models/<model>/<sha256>/`、`wasm/<kind>/<sha256>/` 和 `manifests/models/latest.json` 路径。发布前请将 [cloudflare/r2-cors.example.json](cloudflare/r2-cors.example.json) 中的 Pages 地址替换为实际域名，并在 R2 配置只读跨域访问。
+
+Pages Production 环境变量：
+
+```text
+VITE_API_BASE_URL=
+VITE_API_CAPABILITIES=auth,account,admin
+VITE_ASSET_BASE_URL=https://<cloudflare-managed-r2-host>.r2.dev
+VITE_ENABLE_ORT_CDN_FALLBACK=false
+```
+
+生产入口为 `https://lightcut-editor.pages.dev`，预览入口为
+`https://preview.lightcut-editor.pages.dev`。Pages 通过 `wrangler.toml` 中的 `API`
+Service Binding 将同源 `/api/*` 分别转发到 Production 或 Preview Worker。
+
+1.2 已开放 `auth,account,admin`。`fetchClient` 仍会在请求发出前拒绝媒体、Agent 和
+其他第二阶段接口，因此不会误调用尚未迁移的 FastAPI 能力。
+
 ## 使用说明
 
 ### 项目管理

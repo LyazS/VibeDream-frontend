@@ -4,15 +4,25 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "npm run validate:money-configs && npm run generate:model-manifest && vite",
-    "build": "npm run validate:money-configs && npm run generate:model-manifest && run-p \"type-check:no-generate {@}\" \"build-only {@}\" --",
+    "dev": "npm run validate:money-configs && vite",
+    "dev:local": "npm run validate:money-configs && vite --mode development",
+    "dev:preview": "npm run build:preview && wrangler pages dev dist --port 8788 --compatibility-date 2026-09-14 --service API=lightcut-api-preview",
+    "build": "npm run validate:money-configs && run-p \"type-check:no-generate {@}\" \"build-only {@}\" --",
+    "build:preview": "npm run validate:money-configs && run-p \"type-check:no-generate {@}\" \"build-only:preview {@}\" --",
+    "deploy:preview": "npm run build:preview && npx wrangler pages deploy dist --project-name lightcut-editor --branch preview --commit-dirty=true",
+    "deploy:production": "npm run build && npx wrangler pages deploy dist --project-name lightcut-editor --branch main --commit-dirty=true",
     "preview": "vite preview",
+    "test:auth": "vitest run --config vitest.auth.config.ts",
     "generate:model-manifest": "npm run download:music-analysis-models && npm run build:music-analysis-wasm && node scripts/generate-model-manifest.mjs",
+    "assets:prepare": "node scripts/prepare-model-assets.mjs",
+    "assets:verify": "node scripts/verify-model-assets.mjs",
+    "assets:publish": "npm run assets:verify && node scripts/publish-model-assets.mjs",
     "download:music-analysis-models": "node scripts/download-music-analysis-models.mjs",
     "build:music-analysis-wasm": "node scripts/build-music-analysis-wasm.mjs",
     "validate:money-configs": "node scripts/validate-money-configs.mjs",
     "build-only": "vite build",
-    "type-check": "npm run validate:money-configs && npm run generate:model-manifest && npm run type-check:no-generate",
+    "build-only:preview": "vite build --mode preview",
+    "type-check": "npm run validate:money-configs && npm run type-check:no-generate",
     "type-check:no-generate": "vue-tsc --build",
     "lint": "eslint . --fix",
     "format": "prettier --write src/"
@@ -60,8 +70,10 @@
     "terser": "^5.44.0",
     "typescript": "~5.9.2",
     "vite": "^7.1.1",
+    "vitest": "^4.1.0",
     "vite-plugin-remove-console": "^2.2.0",
     "vite-plugin-vue-devtools": "^8.0.0",
-    "vue-tsc": "^3.0.5"
+    "vue-tsc": "^3.0.5",
+    "wrangler": "4.131.1"
   }
 }

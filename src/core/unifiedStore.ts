@@ -919,7 +919,6 @@ export const useUnifiedStore = defineStore('unified', () => {
 
     // 用户信息获取
     getCurrentUser: unifiedUserModule.getCurrentUser,
-    getAccessToken: unifiedUserModule.getAccessToken,
     checkLoginStatus: unifiedUserModule.checkLoginStatus,
     refreshBalance: unifiedUserModule.refreshBalance,
 

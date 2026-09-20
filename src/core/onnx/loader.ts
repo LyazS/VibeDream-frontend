@@ -1,5 +1,6 @@
 import * as ort from 'onnxruntime-web/webgpu'
-import localOrtWasmUrl from 'onnxruntime-web/ort-wasm-simd-threaded.asyncify.wasm?url'
+import { ENABLE_ORT_CDN_FALLBACK, resolveAssetUrl } from '@/config/runtimeConfig'
+import { wasmManifest } from '@/generated/model-manifest'
 import { loadCachedOnnxModelBytes } from './modelCache'
 import type {
   OnnxDimensionExpectation,
@@ -13,11 +14,18 @@ import type {
 const modelCache = new Map<string, Promise<OnnxModelRunner>>()
 
 const ORT_WASM_FILE_NAME = 'ort-wasm-simd-threaded.asyncify.wasm'
-const WASM_CDN_FETCH_TIMEOUT_MS = 5_000
-const ortWasmCdnUrls = [
-  `https://cdn.jsdelivr.net/npm/onnxruntime-web@${ort.env.versions.web}/dist/${ORT_WASM_FILE_NAME}`,
-  `https://unpkg.com/onnxruntime-web@${ort.env.versions.web}/dist/${ORT_WASM_FILE_NAME}`,
+const ORT_WASM_MODULE_FILE_NAME = 'ort-wasm-simd-threaded.asyncify.mjs'
+const WASM_FETCH_TIMEOUT_MS = 30_000
+const ortWasmCdnAssetBases = [
+  `https://cdn.jsdelivr.net/npm/onnxruntime-web@${ort.env.versions.web}/dist`,
+  `https://unpkg.com/onnxruntime-web@${ort.env.versions.web}/dist`,
 ]
+
+interface OrtWasmAssetCandidate {
+  source: string
+  wasmUrl: string
+  mjsUrl: string
+}
 
 let wasmConfigurationPromise: Promise<void> | undefined
 
@@ -109,7 +117,7 @@ async function waitForRunner(
 
 async function fetchWasmBinary(url: string): Promise<ArrayBuffer> {
   const controller = new AbortController()
-  const timeoutId = globalThis.setTimeout(() => controller.abort(), WASM_CDN_FETCH_TIMEOUT_MS)
+  const timeoutId = globalThis.setTimeout(() => controller.abort(), WASM_FETCH_TIMEOUT_MS)
 
   try {
     const response = await fetch(url, { signal: controller.signal })
@@ -123,18 +131,44 @@ async function fetchWasmBinary(url: string): Promise<ArrayBuffer> {
   }
 }
 
-async function fetchFirstAvailableWasmBinary(urls: readonly string[]): Promise<ArrayBuffer> {
+async function checkWasmModule(url: string): Promise<void> {
+  const controller = new AbortController()
+  const timeoutId = globalThis.setTimeout(() => controller.abort(), WASM_FETCH_TIMEOUT_MS)
+
+  try {
+    const response = await fetch(url, {
+      method: 'HEAD',
+      cache: 'no-store',
+      signal: controller.signal,
+    })
+    if (!response.ok) {
+      throw new Error(`WASM 模块下载失败: ${response.status}`)
+    }
+  } finally {
+    globalThis.clearTimeout(timeoutId)
+  }
+}
+
+async function fetchFirstAvailableWasmAsset(
+  candidates: readonly OrtWasmAssetCandidate[],
+): Promise<{ wasmBinary: ArrayBuffer; mjsUrl: string }> {
   let lastError: unknown
 
-  for (const url of urls) {
+  for (const candidate of candidates) {
     try {
-      return await fetchWasmBinary(url)
+      // Both files must come from the same source. ONNX Runtime imports the
+      // module separately, so a successful binary download alone is not enough.
+      await checkWasmModule(candidate.mjsUrl)
+      return {
+        wasmBinary: await fetchWasmBinary(candidate.wasmUrl),
+        mjsUrl: candidate.mjsUrl,
+      }
     } catch (error) {
-      lastError = error
+      lastError = new Error(`${candidate.source}: ${getErrorMessage(error)}`)
     }
   }
 
-  throw lastError ?? new Error('所有 ONNX WASM CDN 均不可用')
+  throw lastError ?? new Error('所有 ONNX WASM 资源均不可用')
 }
 
 async function configureWasmRuntime(): Promise<void> {
@@ -145,13 +179,27 @@ async function configureWasmRuntime(): Promise<void> {
   wasmConfigurationPromise = (async () => {
     ort.env.wasm.numThreads = 1
 
-    try {
-      // Download the CDN asset completely before ONNX Runtime starts, so failed mirrors can
-      // safely fall back to the same-origin asset without poisoning its one-time initialization.
-      ort.env.wasm.wasmBinary = await fetchFirstAvailableWasmBinary(ortWasmCdnUrls)
-    } catch {
-      ort.env.wasm.wasmBinary = await fetchWasmBinary(localOrtWasmUrl)
-    }
+    const configuredAssetUrl = resolveAssetUrl(wasmManifest.ort.path)
+    const configuredModuleUrl = resolveAssetUrl(wasmManifest.ortMjs.path)
+    const candidates: OrtWasmAssetCandidate[] = [
+      {
+        source: 'R2',
+        wasmUrl: configuredAssetUrl,
+        mjsUrl: configuredModuleUrl,
+      },
+      ...(ENABLE_ORT_CDN_FALLBACK
+        ? ortWasmCdnAssetBases.map((baseUrl, index) => ({
+            source: `CDN ${index + 1}`,
+            wasmUrl: `${baseUrl}/${ORT_WASM_FILE_NAME}`,
+            mjsUrl: `${baseUrl}/${ORT_WASM_MODULE_FILE_NAME}`,
+          }))
+        : []),
+    ]
+
+    // Download and select a complete resource pair before ONNX Runtime starts.
+    const { wasmBinary, mjsUrl } = await fetchFirstAvailableWasmAsset(candidates)
+    ort.env.wasm.wasmPaths = { mjs: mjsUrl }
+    ort.env.wasm.wasmBinary = wasmBinary
   })().catch((error) => {
     wasmConfigurationPromise = undefined
     throw error

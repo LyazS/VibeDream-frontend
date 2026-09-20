@@ -32,6 +32,9 @@ export default defineConfig({
     removeConsole(), // 移除所有console打印
   ],
   resolve: {
+    // Use ONNX Runtime's external-Wasm build. The Wasm binary is published to R2 by
+    // assets:prepare/assets:publish and must not be copied into the Pages artifact.
+    conditions: ['onnxruntime-web-use-extern-wasm'],
     alias: {
       '@': fileURLToPath(new URL('./src', import.meta.url)),
     },

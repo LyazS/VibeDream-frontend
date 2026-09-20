@@ -4,9 +4,37 @@ import path from 'node:path'
 
 const projectRoot = process.cwd()
 const modelSourcesDir = path.join(projectRoot, 'model-sources')
-const publicChunkDir = path.join(projectRoot, 'public', 'model-chunks')
 const outputFile = path.join(projectRoot, 'src', 'generated', 'model-manifest.ts')
+const defaultAssetsDir = path.join(projectRoot, '.model-assets')
+const assetsDirArgumentIndex = process.argv.indexOf('--assets-dir')
+const assetsDir = path.resolve(
+  assetsDirArgumentIndex >= 0
+    ? (process.argv[assetsDirArgumentIndex + 1] ?? defaultAssetsDir)
+    : (process.env.LIGHTCUT_ASSETS_DIR ?? defaultAssetsDir),
+)
+
+function assertSafeAssetsDirectory(directory) {
+  const relativePath = path.relative(projectRoot, directory)
+  const isInsideProject =
+    relativePath &&
+    relativePath !== '..' &&
+    !relativePath.startsWith(`..${path.sep}`) &&
+    !path.isAbsolute(relativePath)
+  if (path.basename(directory) !== '.model-assets' || !isInsideProject) {
+    throw new Error(`资源目录必须是仓库内的 .model-assets 目录: ${directory}`)
+  }
+}
+
+assertSafeAssetsDirectory(assetsDir)
 const MODEL_CHUNK_SIZE = 4 * 1024 * 1024
+const ORT_WASM_FILE_NAME = 'ort-wasm-simd-threaded.asyncify.wasm'
+const ORT_WASM_MODULE_FILE_NAME = 'ort-wasm-simd-threaded.asyncify.mjs'
+const REQUIRED_MODEL_IDS = [
+  'beat_this_small0',
+  'transnetv2',
+  'htdemucs-core',
+  ...Array.from({ length: 8 }, (_, index) => `harmonix-fold${index}`),
+]
 
 async function collectOnnxFiles(dir) {
   const entries = await fs.readdir(dir, { withFileTypes: true })
@@ -38,14 +66,16 @@ function formatChunkIndex(index, total) {
   return String(index).padStart(width, '0')
 }
 
-async function writeModelChunks(modelId, fileBuffer) {
-  const totalChunks = Math.ceil(fileBuffer.byteLength / MODEL_CHUNK_SIZE)
-  const modelChunkDir = path.join(publicChunkDir, modelId)
+function sha256(buffer) {
+  return createHash('sha256').update(buffer).digest('hex')
+}
 
+async function writeModelChunks(modelId, version, fileBuffer) {
+  const totalChunks = Math.ceil(fileBuffer.byteLength / MODEL_CHUNK_SIZE)
+  const modelChunkDir = path.join(assetsDir, 'models', modelId, version)
   await fs.mkdir(modelChunkDir, { recursive: true })
 
   const chunks = []
-
   for (let index = 0; index < totalChunks; index += 1) {
     const start = index * MODEL_CHUNK_SIZE
     const end = Math.min(start + MODEL_CHUNK_SIZE, fileBuffer.byteLength)
@@ -54,68 +84,152 @@ async function writeModelChunks(modelId, fileBuffer) {
     const chunkFilePath = path.join(modelChunkDir, chunkFileName)
 
     await fs.writeFile(chunkFilePath, chunkBuffer)
-
     chunks.push({
-      path: `model-chunks/${modelId}/${chunkFileName}`,
+      path: `models/${modelId}/${version}/${chunkFileName}`,
       size: chunkBuffer.byteLength,
+      sha256: sha256(chunkBuffer),
     })
   }
 
   return chunks
 }
 
-async function cleanGeneratedChunks() {
-  await fs.rm(publicChunkDir, { recursive: true, force: true })
+async function addWasmAsset(manifest, id, sourcePath, destinationPrefix, destinationName) {
+  const sourceBuffer = await fs.readFile(sourcePath)
+  const version = `sha256-${sha256(sourceBuffer)}`
+  const relativePath = `wasm/${destinationPrefix}/${version}/${destinationName}`
+  const destinationPath = path.join(assetsDir, relativePath)
+  await fs.mkdir(path.dirname(destinationPath), { recursive: true })
+  await fs.writeFile(destinationPath, sourceBuffer)
+  manifest[id] = {
+    path: relativePath,
+    version,
+    size: sourceBuffer.byteLength,
+    sha256: version.slice('sha256-'.length),
+  }
 }
 
 async function buildManifest() {
   const manifest = {}
+  const wasmManifest = {}
   const hasModelSourcesDir = await fs
     .access(modelSourcesDir)
     .then(() => true)
     .catch(() => false)
 
-  if (!hasModelSourcesDir) {
-    return manifest
-  }
+  if (hasModelSourcesDir) {
+    const modelFiles = await collectOnnxFiles(modelSourcesDir)
+    for (const filePath of modelFiles.sort()) {
+      const relativePath = path.relative(modelSourcesDir, filePath)
+      const modelId = toModelId(relativePath)
 
-  await cleanGeneratedChunks()
+      if (manifest[modelId]) {
+        throw new Error(`重复的模型 ID: ${modelId}`)
+      }
 
-  const modelFiles = await collectOnnxFiles(modelSourcesDir)
-
-  for (const filePath of modelFiles.sort()) {
-    const relativePath = path.relative(modelSourcesDir, filePath)
-    const modelId = toModelId(relativePath)
-
-    if (manifest[modelId]) {
-      throw new Error(`重复的模型 ID: ${modelId}`)
+      const fileBuffer = await fs.readFile(filePath)
+      const version = `sha256-${sha256(fileBuffer)}`
+      const chunks = await writeModelChunks(modelId, version, fileBuffer)
+      manifest[modelId] = {
+        version,
+        size: fileBuffer.byteLength,
+        chunkSize: MODEL_CHUNK_SIZE,
+        sha256: version.slice('sha256-'.length),
+        chunks,
+      }
     }
 
-    const fileBuffer = await fs.readFile(filePath)
-    const hash = createHash('sha256').update(fileBuffer).digest('hex')
-    const chunks = await writeModelChunks(modelId, fileBuffer)
-
-    manifest[modelId] = {
-      version: `sha256-${hash}`,
-      size: fileBuffer.byteLength,
-      chunkSize: MODEL_CHUNK_SIZE,
-      chunks,
+    const missingModels = REQUIRED_MODEL_IDS.filter((modelId) => !manifest[modelId])
+    if (missingModels.length > 0) {
+      throw new Error(`缺少运行时模型: ${missingModels.join(', ')}`)
     }
   }
 
-  return manifest
+  const dspPath = path.join(
+    projectRoot,
+    'src',
+    'core',
+    'utils',
+    'music-analysis',
+    'dsp-engine.wasm',
+  )
+  if (
+    await fs
+      .access(dspPath)
+      .then(() => true)
+      .catch(() => false)
+  ) {
+    await addWasmAsset(wasmManifest, 'dsp', dspPath, 'music-analysis', 'dsp-engine.wasm')
+  }
+
+  const ortPath = path.join(
+    projectRoot,
+    'node_modules',
+    'onnxruntime-web',
+    'dist',
+    ORT_WASM_FILE_NAME,
+  )
+  const ortModulePath = path.join(
+    projectRoot,
+    'node_modules',
+    'onnxruntime-web',
+    'dist',
+    ORT_WASM_MODULE_FILE_NAME,
+  )
+  if (
+    await fs
+      .access(ortPath)
+      .then(() => true)
+      .catch(() => false)
+  ) {
+    await addWasmAsset(wasmManifest, 'ort', ortPath, 'onnxruntime', ORT_WASM_FILE_NAME)
+  }
+  if (
+    await fs
+      .access(ortModulePath)
+      .then(() => true)
+      .catch(() => false)
+  ) {
+    await addWasmAsset(
+      wasmManifest,
+      'ortMjs',
+      ortModulePath,
+      'onnxruntime',
+      ORT_WASM_MODULE_FILE_NAME,
+    )
+  }
+
+  if (!wasmManifest.dsp || !wasmManifest.ort || !wasmManifest.ortMjs) {
+    throw new Error('缺少 DSP 或 ONNX Runtime Wasm 模块，请先运行 npm run assets:prepare')
+  }
+
+  return { manifest, wasmManifest }
 }
 
-async function writeManifestFile(manifest) {
-  await fs.mkdir(path.dirname(outputFile), { recursive: true })
+async function writeManifestFiles({ manifest, wasmManifest }) {
+  const manifestPayload = {
+    schemaVersion: 1,
+    models: manifest,
+    wasm: wasmManifest,
+  }
+  const manifestJson = JSON.stringify(manifestPayload, null, 2)
+  const manifestVersion = `sha256-${sha256(Buffer.from(JSON.stringify(manifestPayload)))}`
+  const manifestDirectory = path.join(assetsDir, 'manifests', 'models')
+  await fs.mkdir(manifestDirectory, { recursive: true })
+  await fs.writeFile(path.join(manifestDirectory, `${manifestVersion}.json`), `${manifestJson}\n`)
+  await fs.writeFile(path.join(manifestDirectory, 'latest.json'), `${manifestJson}\n`)
 
+  await fs.mkdir(path.dirname(outputFile), { recursive: true })
   const content = `export const modelManifest = ${JSON.stringify(manifest, null, 2)} as const
 
-export type ModelManifest = typeof modelManifest
-`
+export const wasmManifest = ${JSON.stringify(wasmManifest, null, 2)} as const
 
+export type ModelManifest = typeof modelManifest
+export type WasmManifest = typeof wasmManifest
+`
   await fs.writeFile(outputFile, content, 'utf8')
 }
 
-const manifest = await buildManifest()
-await writeManifestFile(manifest)
+await fs.rm(assetsDir, { recursive: true, force: true })
+const generated = await buildManifest()
+await writeManifestFiles(generated)

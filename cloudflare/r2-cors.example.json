@@ -1,0 +1,14 @@
+{
+  "rules": [
+    {
+      "id": "pages-model-assets",
+      "allowed": {
+        "origins": ["https://<pages-project>.pages.dev", "http://localhost:5173"],
+        "methods": ["GET", "HEAD"],
+        "headers": ["Range", "Content-Type", "Origin"]
+      },
+      "exposeHeaders": ["Content-Length", "Content-Range", "ETag"],
+      "maxAgeSeconds": 86400
+    }
+  ]
+}

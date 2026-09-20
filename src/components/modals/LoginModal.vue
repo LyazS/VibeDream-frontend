@@ -18,13 +18,25 @@
       </div>
     </template>
     <form @submit.prevent="handleSubmit" class="login-form">
-      <ModalFormField :label="t('user.username')" input-id="username">
+      <ModalFormField v-if="isRegisterMode" :label="t('user.displayName')" input-id="display-name">
         <input
-          id="username"
-          v-model="formData.username"
+          id="display-name"
+          v-model="formData.name"
           type="text"
           required
-          :placeholder="t('user.usernamePlaceholder')"
+          :placeholder="t('user.displayNamePlaceholder')"
+          :disabled="isLoading"
+        />
+      </ModalFormField>
+
+      <ModalFormField :label="t('user.email')" input-id="email">
+        <input
+          id="email"
+          v-model="formData.email"
+          type="email"
+          required
+          autocomplete="email"
+          :placeholder="t('user.emailPlaceholder')"
           :disabled="isLoading"
         />
       </ModalFormField>
@@ -104,7 +116,8 @@ const isRegisterMode = ref(false)
 const errorMessage = ref('')
 
 const formData = reactive({
-  username: '',
+  name: '',
+  email: '',
   password: '',
   confirmPassword: '',
 })
@@ -118,7 +131,8 @@ function handleCancel() {
 }
 
 function resetForm() {
-  formData.username = ''
+  formData.name = ''
+  formData.email = ''
   formData.password = ''
   formData.confirmPassword = ''
   errorMessage.value = ''
@@ -133,8 +147,10 @@ async function handleSubmit() {
   if (isLoading.value) return
 
   // 验证表单
-  if (!formData.username || !formData.password) {
-    errorMessage.value = t('user.usernameRequired') + '、' + t('user.passwordRequired')
+  if (!formData.email || !formData.password || (isRegisterMode.value && !formData.name)) {
+    errorMessage.value = isRegisterMode.value
+      ? t('user.displayNameRequired') + '、' + t('user.emailRequired') + '、' + t('user.passwordRequired')
+      : t('user.emailRequired') + '、' + t('user.passwordRequired')
     return
   }
 
@@ -159,20 +175,20 @@ async function handleSubmit() {
   try {
     if (isRegisterMode.value) {
       // 注册用户（注册成功后会自动保存认证信息）
-      await unifiedStore.register(formData.username, formData.password)
+      await unifiedStore.register(formData.name, formData.email, formData.password)
 
       // 关闭对话框（成功消息已在 UnifiedUserModule 中发出）
       emit('close')
     } else {
       // 用户登录
-      await unifiedStore.login(formData.username, formData.password)
+      await unifiedStore.login(formData.email, formData.password)
 
       // 关闭对话框（成功消息已在 UnifiedUserModule 中发出）
       emit('close')
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('登录/注册失败:', error)
-    errorMessage.value = error.message || t('user.loginFailed')
+    errorMessage.value = error instanceof Error ? error.message : t('user.loginFailed')
   } finally {
     isLoading.value = false
   }

@@ -1,12 +1,12 @@
 import type { OnnxModelConfig, OnnxModelLoadOptions, OnnxModelLoadProgress } from './types'
+import { resolveAssetUrl } from '@/config/runtimeConfig'
 
 const MODEL_CACHE_NAME = 'lightcut-onnx-models-v1'
 const MODEL_CACHE_PREFIX = '/__onnx_model_cache__'
 const MODEL_CHUNK_RETRY_COUNT = 3
 
 function getPublicUrl(path: string): string {
-  const base = import.meta.env.BASE_URL || '/'
-  return `${base}${path}`.replace(/\/{2,}/g, '/')
+  return resolveAssetUrl(path)
 }
 
 function getCacheKey(config: Pick<OnnxModelConfig, 'modelId' | 'version'>): string {

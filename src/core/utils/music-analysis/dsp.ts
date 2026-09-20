@@ -1,4 +1,5 @@
-import dspWasmUrl from './dsp-engine.wasm?url'
+import { wasmManifest } from '@/generated/model-manifest'
+import { resolveAssetUrl } from '@/config/runtimeConfig'
 import type { AcousticEvent } from './types'
 
 export const DEMUCS_SEGMENT_SAMPLES = 343_980
@@ -40,7 +41,7 @@ let runtime: Promise<DspWasmExports> | undefined
 async function loadRuntime(): Promise<DspWasmExports> {
   if (!runtime) {
     runtime = (async () => {
-      const response = await fetch(dspWasmUrl)
+      const response = await fetch(resolveAssetUrl(wasmManifest.dsp.path))
       if (!response.ok) throw new Error(`无法加载音乐分析 DSP Wasm (${response.status})`)
       const bytes = await response.arrayBuffer()
       const { instance } = await WebAssembly.instantiate(bytes)

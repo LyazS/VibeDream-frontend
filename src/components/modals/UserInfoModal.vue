@@ -128,11 +128,13 @@ function formatDate(dateString: string): string {
   })
 }
 
-function handleLogout() {
-  // 执行退出登录（成功消息已在 UnifiedUserModule 中发出）
-  unifiedStore.logout()
-  // 关闭对话框
-  emit('close')
+async function handleLogout() {
+  try {
+    await unifiedStore.logout()
+    emit('close')
+  } catch {
+    // The user module reports the failure; keep the dialog available for retry.
+  }
 }
 
 // 使用激活码
