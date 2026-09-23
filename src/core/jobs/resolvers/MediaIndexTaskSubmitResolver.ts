@@ -1,9 +1,14 @@
-import { fetchClient } from '@/utils/fetchClient'
-import { DashScopeTemporaryFileUploader } from '@/core/utils/dashscopeTemporaryFileUploader'
 import { exportMediaItem } from '@/core/utils/mediaExporter'
-import type { TaskSubmitResponse } from '@/types/taskApi'
+import type { ImageMediaItem, VideoMediaItem } from '@/core/mediaitem/types'
 import type { ResolveCheckContext, ResolveContext, ResourceResolver } from '../ResourceResolver'
 import type { ResourceRequest } from '../ResourceTypes'
+import { CloudflareTemporaryFileUploader } from '@/core/utils/cloudflareTemporaryFileUploader'
+import {
+  createMediaTaskIdempotencyKey,
+  getTaskProgressOriginTabId,
+  submitMediaTask,
+} from './mediaTaskApi'
+import type { MediaIndexingTask, MediaIndexingTaskSubmission } from './mediaIndexingTask'
 import {
   canResumeMediaIndexingFromRemote,
   createMediaIndexTaskSubmitRequest,
@@ -20,9 +25,10 @@ import {
 } from './mediaIndexingShared'
 
 const IMAGE_INDEXING_MAX_SIDE = 768
+const INDEXING_INPUT_TTL_MILLISECONDS = 45 * 60 * 1000
 
 function buildImageIndexingExportSize(
-  mediaItem: MediaIndexingModule['getMediaItem'] extends (id: any) => infer T ? NonNullable<T> : never,
+  mediaItem: ImageMediaItem | VideoMediaItem,
 ): { outputWidth?: number; outputHeight?: number } | undefined {
   if (mediaItem.mediaType !== 'image') {
     return undefined
@@ -51,6 +57,67 @@ function buildImageIndexingExportSize(
   }
 }
 
+function providerSegments(
+  segments: MediaIndexSegmentInput[],
+): MediaIndexingTaskSubmission['input']['segments'] {
+  return segments.map((segment) => {
+    if (segment.sourceType === 'image_url') {
+      return {
+        segment_id: 'image',
+        provider_urls: [segment.taggingImageUrl, segment.embeddingImageUrl],
+        source_type: segment.sourceType,
+      }
+    }
+    const metadata = {
+      source_type: segment.sourceType,
+      segment_index: segment.segmentIndex,
+      start_timecode: segment.startTimecode,
+      end_timecode: segment.endTimecode,
+      duration_n: segment.durationN,
+    }
+    if (segment.sourceType === 'image_urls') {
+      return {
+        segment_id: `segment-${segment.segmentIndex}`,
+        provider_urls: [...segment.taggingImageUrls, segment.embeddingVideoUrl],
+        image_timecodes: segment.imageTimecodes,
+        ...metadata,
+      }
+    }
+    return {
+      segment_id: `segment-${segment.segmentIndex}`,
+      provider_urls: [segment.taggingOssUrl, segment.embeddingOssUrl],
+      ...metadata,
+    }
+  })
+}
+
+async function createMediaVersion(
+  mediaItem: ReturnType<typeof getIndexableMediaItem>,
+  segments: MediaIndexSegmentInput[],
+): Promise<string> {
+  const stableSegments = segments.map((segment) => {
+    if (segment.sourceType === 'image_url') return { source_type: segment.sourceType }
+    return {
+      source_type: segment.sourceType,
+      segment_index: segment.segmentIndex,
+      start_timecode: segment.startTimecode,
+      end_timecode: segment.endTimecode,
+      duration_n: segment.durationN,
+      ...(segment.sourceType === 'image_urls' ? { image_timecodes: segment.imageTimecodes } : {}),
+    }
+  })
+  const source = JSON.stringify({
+    schema: 1,
+    media_id: mediaItem.id,
+    created_at: mediaItem.createdAt,
+    media_kind: mediaItem.mediaType,
+    duration: mediaItem.duration,
+    segments: stableSegments,
+  })
+  const hash = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(source))
+  return `v1-${Array.from(new Uint8Array(hash), (byte) => byte.toString(16).padStart(2, '0')).join('')}`
+}
+
 export class MediaIndexTaskSubmitResolver
   implements ResourceResolver<MediaIndexTaskSubmitInput, MediaIndexTaskSubmitResult>
 {
@@ -68,6 +135,7 @@ export class MediaIndexTaskSubmitResolver
     const mediaItem = this.module.getMediaItem(ctx.input.mediaId)
     const indexing = mediaItem?.metadata?.indexing
     const taskId = indexing?.lastIndexTaskId
+    // 项目重新打开时优先复用仍在处理中的新 Cloudflare 任务，避免再次上传与重复扣费。
     if (canResumeMediaIndexingFromRemote(indexing) && typeof taskId === 'string' && taskId.trim()) {
       return {
         mediaId: ctx.input.mediaId,
@@ -78,7 +146,9 @@ export class MediaIndexTaskSubmitResolver
     return null
   }
 
-  async getDependencies(ctx: ResolveContext<MediaIndexTaskSubmitInput>): Promise<ResourceRequest[]> {
+  async getDependencies(
+    ctx: ResolveContext<MediaIndexTaskSubmitInput>,
+  ): Promise<ResourceRequest[]> {
     const mediaItem = this.module.getMediaItem(ctx.input.mediaId)
     if (mediaItem?.mediaType === 'video') {
       return [createVideoSegmentOssUploadsRequest(ctx.input.mediaId)]
@@ -86,7 +156,9 @@ export class MediaIndexTaskSubmitResolver
     return []
   }
 
-  async resolve(ctx: ResolveContext<MediaIndexTaskSubmitInput>): Promise<MediaIndexTaskSubmitResult> {
+  async resolve(
+    ctx: ResolveContext<MediaIndexTaskSubmitInput>,
+  ): Promise<MediaIndexTaskSubmitResult> {
     const mediaItem = getIndexableMediaItem(this.module, ctx.input.mediaId)
     let segments: MediaIndexSegmentInput[]
 
@@ -108,18 +180,20 @@ export class MediaIndexTaskSubmitResolver
         mediaItem,
         ...exportSize,
       })
+      ctx.signal.throwIfAborted()
 
-      const taggingResult = await DashScopeTemporaryFileUploader.uploadBlob(
+      // DashScope 的视觉打标与多模态 embedding 分别申请用途受限的 OSS policy，
+      // 即使当前 Blob 相同也不复用 URL，避免模型资源用途混淆。
+      const taggingResult = await CloudflareTemporaryFileUploader.uploadBlob(
         imageBlob,
-        mediaItem.name,
-        'tagging',
+        { capability: 'indexing', purpose: 'tagging', fileName: mediaItem.name },
         (progress) => {
           ctx.update({
-            progress: Math.max(0.05, Math.min(0.25, progress / 100 * 0.2 + 0.05)),
+            progress: Math.max(0.05, Math.min(0.25, (progress / 100) * 0.2 + 0.05)),
             stage: 'uploading-image',
             message: `上传打标图片: ${progress}%`,
           })
-        },
+        }, ctx.signal,
       )
 
       if (!taggingResult.success || !taggingResult.url) {
@@ -132,17 +206,16 @@ export class MediaIndexTaskSubmitResolver
         message: `正在上传图片素材（向量化）: ${mediaItem.name}`,
       })
 
-      const embeddingResult = await DashScopeTemporaryFileUploader.uploadBlob(
+      const embeddingResult = await CloudflareTemporaryFileUploader.uploadBlob(
         imageBlob,
-        mediaItem.name,
-        'embedding',
+        { capability: 'indexing', purpose: 'embedding', fileName: mediaItem.name },
         (progress) => {
           ctx.update({
-            progress: Math.max(0.25, Math.min(0.45, progress / 100 * 0.2 + 0.25)),
+            progress: Math.max(0.25, Math.min(0.45, (progress / 100) * 0.2 + 0.25)),
             stage: 'uploading-image',
             message: `上传向量化图片: ${progress}%`,
           })
-        },
+        }, ctx.signal,
       )
 
       if (!embeddingResult.success || !embeddingResult.url) {
@@ -161,6 +234,7 @@ export class MediaIndexTaskSubmitResolver
       throw new Error('不支持的索引素材类型')
     }
 
+    ctx.signal.throwIfAborted()
     setIndexingMetadata(mediaItem, {
       mediaKind: mediaItem.mediaType,
       indexStatus: 'processing',
@@ -177,75 +251,45 @@ export class MediaIndexTaskSubmitResolver
       message: `正在提交索引任务: ${mediaItem.name}`,
     })
 
-    const response = await fetchClient.post<TaskSubmitResponse>(
-      '/api/media/indexing',
+    // 媒体版本由素材与分片计划计算。后端用它进行活跃任务去重，同一版本不会重复创建任务。
+    const response = await submitMediaTask<MediaIndexingTask, MediaIndexingTaskSubmission>(
+      'indexing',
       {
         project_id: this.module.getProjectId(),
-        media_item_id: mediaItem.id,
-        media_name: mediaItem.name,
-        segments: segments.map((segment) => {
-          if (segment.sourceType === 'image_url') {
-            return {
-              media_item_id: segment.mediaItemId,
-              source_type: segment.sourceType,
-              tagging_image_url: segment.taggingImageUrl,
-              embedding_image_url: segment.embeddingImageUrl,
-            }
-          }
-          const base = {
-            media_item_id: segment.mediaItemId,
-            segment_index: segment.segmentIndex,
-            start_timecode: segment.startTimecode,
-            end_timecode: segment.endTimecode,
-            duration_n: segment.durationN,
-            source_type: segment.sourceType,
-          }
-          if (segment.sourceType === 'image_urls') {
-            return {
-              ...base,
-              tagging_image_urls: segment.taggingImageUrls,
-              image_timecodes: segment.imageTimecodes,
-              embedding_video_url: segment.embeddingVideoUrl,
-            }
-          }
-          return {
-            ...base,
-            tagging_oss_url: segment.taggingOssUrl,
-            embedding_oss_url: segment.embeddingOssUrl,
-          }
-        }),
+        origin_tab_id: getTaskProgressOriginTabId(),
+        input: {
+          media_id: mediaItem.id,
+          media_version: await createMediaVersion(mediaItem, segments),
+          media_kind: mediaItem.mediaType,
+          media_name: mediaItem.name,
+          expires_at: new Date(Date.now() + INDEXING_INPUT_TTL_MILLISECONDS).toISOString(),
+          segments: providerSegments(segments),
+        },
       },
-      { signal: ctx.signal },
+      createMediaTaskIdempotencyKey('indexing'),
+      ctx.signal,
     )
 
-    if (response.status !== 200) {
-      throw new Error(`提交素材索引任务失败: ${response.statusText}`)
-    }
-
-    if (!response.data.success) {
-      const details = response.data.error_details
-      const message =
-        (details && typeof details.error === 'string' && details.error) ||
-        `提交素材索引任务失败: ${response.data.error_code}`
-      throw new Error(message)
+    if (response.capability !== 'indexing' || !response.task_id) {
+      throw new Error('素材索引任务返回数据无效')
     }
 
     setIndexingMetadata(mediaItem, {
       mediaKind: mediaItem.mediaType,
       indexStatus: 'processing',
-      lastIndexTaskId: response.data.task_id,
+      lastIndexTaskId: response.task_id,
     })
     await persistMediaItem(mediaItem)
 
     ctx.update({
       progress: 1,
       stage: 'index-task-submitted',
-      message: `索引任务已提交: ${response.data.task_id}`,
+      message: `索引任务已提交: ${response.task_id}`,
     })
 
     return {
       mediaId: mediaItem.id,
-      taskId: response.data.task_id,
+      taskId: response.task_id,
     }
   }
 }

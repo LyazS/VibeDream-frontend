@@ -54,6 +54,9 @@ export class MediaIndexMetadataWritebackResolver
     const { taskId, result } = await ctx.ensure<MediaIndexTaskCompleteResult>(
       createMediaIndexTaskCompleteRequest(ctx.input.mediaId),
     )
+    if (result.project_id !== this.module.getProjectId() || result.media_item_id !== mediaItem.id) {
+      throw new Error('索引结果与当前项目或素材不匹配')
+    }
 
     const status = result.metadata?.status || (
       result.media_kind === 'video' && result.failed_segment_count > 0

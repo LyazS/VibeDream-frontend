@@ -1,6 +1,6 @@
-import { fetchClient } from '@/utils/fetchClient'
 import type { ResolveContext, ResourceResolver } from '../ResourceResolver'
 import type { ResourceRequest } from '../ResourceTypes'
+import { cancelMediaTask } from './mediaTaskApi'
 import {
   canResumeMediaIndexingFromRemote,
   createMediaIndexTaskCompleteRequest,
@@ -28,12 +28,15 @@ export class MediaIndexTaskCompleteResolver
     return input.taskId ? `${input.mediaId}:${input.taskId}` : input.mediaId
   }
 
-  async getDependencies(ctx: ResolveContext<MediaIndexTaskCompleteInput>): Promise<ResourceRequest[]> {
+  async getDependencies(
+    ctx: ResolveContext<MediaIndexTaskCompleteInput>,
+  ): Promise<ResourceRequest[]> {
     const mediaItem = this.module.getMediaItem(ctx.input.mediaId)
     const indexing = mediaItem?.metadata?.indexing
     const existingTaskId = canResumeMediaIndexingFromRemote(indexing)
       ? ctx.input.taskId || indexing?.lastIndexTaskId
       : undefined
+    // 已有待处理任务时跳过提交 Resolver，后续只重新订阅其进度。
     if (existingTaskId) {
       return []
     }
@@ -41,7 +44,9 @@ export class MediaIndexTaskCompleteResolver
     return [createMediaIndexTaskSubmitRequest(ctx.input.mediaId)]
   }
 
-  async resolve(ctx: ResolveContext<MediaIndexTaskCompleteInput>): Promise<MediaIndexTaskCompleteResult> {
+  async resolve(
+    ctx: ResolveContext<MediaIndexTaskCompleteInput>,
+  ): Promise<MediaIndexTaskCompleteResult> {
     const mediaItem = getIndexableMediaItem(this.module, ctx.input.mediaId)
     const indexing = mediaItem.metadata?.indexing
     const existingTaskId = canResumeMediaIndexingFromRemote(indexing)
@@ -50,8 +55,8 @@ export class MediaIndexTaskCompleteResolver
     const submitted = existingTaskId
       ? null
       : await ctx.ensure<MediaIndexTaskSubmitResult>(
-        createMediaIndexTaskSubmitRequest(ctx.input.mediaId),
-      )
+          createMediaIndexTaskSubmitRequest(ctx.input.mediaId),
+        )
     const taskId = existingTaskId || submitted?.taskId
     if (!taskId) {
       throw new Error(`索引任务缺少 taskId: ${mediaItem.id}`)
@@ -95,8 +100,9 @@ export class MediaIndexTaskCompleteResolver
       return
     }
 
+    // 先终止本地等待，再请求后端状态机取消；后端 Workflow 会在安全检查点退款并发布最终状态。
     this.abortControllers.get(taskId)?.abort()
-    await fetchClient.delete(`/api/media/tasks/${taskId}`)
+    await cancelMediaTask(taskId, 'indexing')
 
     if (mediaItem) {
       setIndexingMetadata(mediaItem, {

@@ -9,14 +9,17 @@ import type {
 } from '@/core/mediaitem/types'
 import type { UnifiedMediaModule } from '@/core/modules/UnifiedMediaModule'
 import { RENDERER_FPS } from '@/core/mediabunny/constant'
-import type { FileData, FinalEvent, TaskStreamEvent } from '@/core/datasource/providers/ai-generation/types'
-import { TaskStatus, TaskStreamEventType } from '@/core/datasource/providers/ai-generation/types'
-import type { UnifiedTimelineItemData, VideoMediaConfig } from '@/core/timelineitem/model/timelineItem'
+import type { FileData } from '@/core/datasource/providers/ai-generation/types'
+import type {
+  UnifiedTimelineItemData,
+  VideoMediaConfig,
+} from '@/core/timelineitem/model/timelineItem'
 import { createDefaultTimelineExtraRenderConfig } from '@/core/timelineitem/model/timelineItem'
 import { DEFAULT_BLEND_MODE } from '@/core/timelineitem/model/blendMode'
 import type { UploadFileExportOptions } from '@/core/utils/bizyairFileUploader'
-import { fetchClient, sleepWithAbortSignal } from '@/utils/fetchClient'
 import type { ResourcePolicy, ResourceRequest } from '../ResourceTypes'
+import { getMediaTaskResult, getTaskProgressOriginTabId } from './mediaTaskApi'
+import { subscribeToMediaIndexingTask } from './mediaIndexingTask'
 
 export const VIDEO_SCENE_SEGMENTS_RESOURCE_TYPE = 'video-scene-segments'
 export const VIDEO_SEGMENT_EXPORTS_RESOURCE_TYPE = 'video-segment-exports'
@@ -177,11 +180,6 @@ export interface ImageMediaIndexingResult {
 
 export type MediaIndexingResult = VideoMediaIndexingResult | ImageMediaIndexingResult
 
-export interface MediaIndexingTaskResultData {
-  url: string
-  media_indexing_result?: MediaIndexingResult
-}
-
 export interface MediaIndexTaskCompleteResult {
   mediaId: string
   taskId: string
@@ -304,10 +302,7 @@ export function getIndexableMediaItem(
   return mediaItem as VideoMediaItem | ImageMediaItem
 }
 
-export function getVideoMediaItem(
-  module: MediaIndexingModule,
-  mediaId: string,
-): VideoMediaItem {
+export function getVideoMediaItem(module: MediaIndexingModule, mediaId: string): VideoMediaItem {
   const mediaItem = getIndexableMediaItem(module, mediaId)
   if (mediaItem.mediaType !== 'video') {
     throw new Error(`仅支持视频素材索引: ${mediaId}`)
@@ -457,8 +452,10 @@ export function setIndexingMetadata(
     summary?: UnifiedMediaIndexMetadata['summary']
   },
 ): void {
+  // 只将 UI 恢复所需的索引摘要写入项目元数据；完整的结构化结果由任务完成后从 R2 读取。
   const current = mediaItem.metadata?.indexing
-  const mediaKind = patch.mediaKind || current?.mediaKind || (mediaItem.mediaType === 'image' ? 'image' : 'video')
+  const mediaKind =
+    patch.mediaKind || current?.mediaKind || (mediaItem.mediaType === 'image' ? 'image' : 'video')
   mediaItem.metadata = {
     ...mediaItem.metadata,
     indexing: {
@@ -478,6 +475,7 @@ export function shouldRecoverMediaIndexing(
 export function canResumeMediaIndexingFromRemote(
   indexing: UnifiedMediaIndexMetadata | undefined,
 ): boolean {
+  // 当前系统只有新的 Cloudflare 任务模型，因此存在待处理状态和 taskId 即可恢复，不再兼容旧协议。
   return shouldRecoverMediaIndexing(indexing) && Boolean(indexing?.lastIndexTaskId)
 }
 
@@ -500,97 +498,64 @@ export async function waitForMediaIndexTaskCompletion(
   onProgress: (patch: { progress?: number; stage?: string; message?: string }) => void,
   signal: AbortSignal,
 ): Promise<MediaIndexingResult> {
-  let finalResult: MediaIndexingResult | null = null
-  let needReconnect = true
-  let delaySeconds = 1
+  const originTabId = getTaskProgressOriginTabId()
+  const subscription = subscribeToMediaIndexingTask(taskId, originTabId)
+  try {
+    while (true) {
+      throwIfAborted(signal)
+      const task = await subscription.next(signal)
+      if (task.status === 'completed') {
+        const result = await getMediaTaskResult<unknown>(taskId, signal)
+        if (!isMediaIndexingResult(result)) throw new Error('索引任务结果格式无效')
+        return result
+      }
+      if (
+        task.status === 'failed' ||
+        task.status === 'cancelled' ||
+        task.status === 'input_expired'
+      ) {
+        setIndexingMetadata(mediaItem, {
+          indexStatus: 'failed',
+          lastIndexTaskId: taskId,
+        })
+        await persistMediaItem(mediaItem)
+        throw new Error(task.message || task.error || mediaIndexingTaskFailureMessage(task.status))
+      }
 
-  while (needReconnect) {
-    await fetchClient
-      .stream<TaskStreamEvent>(
-        'GET',
-        `/api/media/tasks/${taskId}/status`,
-        (event): boolean | void => {
-          if (event.type === TaskStreamEventType.PROGRESS_UPDATE) {
-            setIndexingMetadata(mediaItem, {
-              indexStatus: 'processing',
-              lastIndexTaskId: taskId,
-            })
-            onProgress({
-              progress: Math.max(0.05, Math.min(0.95, event.progress / 100)),
-              stage: 'polling-index-task',
-              message: event.message,
-            })
-            return false
-          }
-
-          if (event.type === TaskStreamEventType.FINAL) {
-            const finalEvent = event as FinalEvent
-            if (finalEvent.status === TaskStatus.FAILED) {
-              setIndexingMetadata(mediaItem, {
-                indexStatus: 'failed',
-                lastIndexTaskId: taskId,
-              })
-              throw new Error(finalEvent.message || '素材索引失败')
-            }
-
-            if (finalEvent.status === TaskStatus.CANCELLED) {
-              setIndexingMetadata(mediaItem, {
-                indexStatus: 'failed',
-                lastIndexTaskId: taskId,
-              })
-              throw new Error(finalEvent.message || '素材索引已取消')
-            }
-
-            const resultData = finalEvent.result_data as MediaIndexingTaskResultData | undefined
-            if (!resultData?.media_indexing_result) {
-              throw new Error('索引任务 FINAL 事件缺少 media_indexing_result')
-            }
-
-            finalResult = resultData.media_indexing_result
-            needReconnect = false
-            return true
-          }
-
-          if (event.type === TaskStreamEventType.NOT_FOUND) {
-            setIndexingMetadata(mediaItem, {
-              indexStatus: 'failed',
-              lastIndexTaskId: taskId,
-            })
-            throw new Error(event.message)
-          }
-
-          if (event.type === TaskStreamEventType.ERROR) {
-            return true
-          }
-
-          return false
-        },
-        undefined,
-        { signal },
-      )
-      .catch((error: unknown) => {
-        if (error instanceof DOMException && error.name === 'AbortError') {
-          throw error
-        }
-        if (error instanceof Error) {
-          throw error
-        }
-        throw new Error(String(error))
+      // processing/cancelling 不发 HTTP 轮询；等待下一条 Durable Object 推送即可。
+      setIndexingMetadata(mediaItem, {
+        indexStatus: 'processing',
+        lastIndexTaskId: taskId,
       })
-
-    if (needReconnect) {
-      const jitter = delaySeconds * 0.2 * (Math.random() * 2 - 1)
-      const actualDelay = Math.max(0, delaySeconds + jitter)
-      await sleepWithAbortSignal(actualDelay * 1000, signal)
-      delaySeconds = Math.min(delaySeconds * 2, 60)
+      onProgress({
+        progress: task.status === 'processing' ? 0.6 : 0.35,
+        stage: 'waiting-index-task',
+        message: task.status === 'cancelling' ? '正在取消索引任务' : '正在等待索引任务完成',
+      })
     }
+  } finally {
+    subscription.close()
   }
+}
 
-  if (!finalResult) {
-    throw new Error('未获取到索引任务结果')
-  }
+function mediaIndexingTaskFailureMessage(status: 'failed' | 'cancelled' | 'input_expired'): string {
+  if (status === 'cancelled') return '素材索引已取消'
+  if (status === 'input_expired') return '素材索引临时上传地址已过期，请重新上传后重试'
+  return '素材索引失败'
+}
 
-  return finalResult
+function isMediaIndexingResult(value: unknown): value is MediaIndexingResult {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false
+  const result = value as Record<string, unknown>
+  if (typeof result.project_id !== 'string' || typeof result.media_item_id !== 'string')
+    return false
+  if (result.media_kind === 'image') return typeof result.indexed_count === 'number'
+  return (
+    result.media_kind === 'video' &&
+    typeof result.segment_count === 'number' &&
+    typeof result.indexed_count === 'number' &&
+    typeof result.failed_segment_count === 'number'
+  )
 }
 
 export function isShortSegment(durationN: number): boolean {
@@ -611,7 +576,11 @@ export function computeFrameTimestampsMs(durationN: number): {
   return { frameCount, timestampsMs }
 }
 
-export function buildFrameFileName(mediaName: string, segmentIndex: number, frameIndex: number): string {
+export function buildFrameFileName(
+  mediaName: string,
+  segmentIndex: number,
+  frameIndex: number,
+): string {
   const dotIndex = mediaName.lastIndexOf('.')
   const baseName = dotIndex > 0 ? mediaName.slice(0, dotIndex) : mediaName
   return `${baseName}-segment-${String(segmentIndex).padStart(4, '0')}-frame-${String(frameIndex).padStart(2, '0')}.png`

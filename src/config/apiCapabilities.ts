@@ -1,4 +1,11 @@
-export type ApiCapability = 'auth' | 'account' | 'media' | 'agent' | 'admin' | 'other'
+export type ApiCapability =
+  | 'auth'
+  | 'account'
+  | 'media-indexing'
+  | 'media'
+  | 'agent'
+  | 'admin'
+  | 'other'
 
 const capabilityPrefixes: readonly [string, ApiCapability][] = [
   ['/api/auth/', 'auth'],
@@ -17,7 +24,7 @@ function readEnabledCapabilities(): ReadonlySet<ApiCapability> {
       .split(',')
       .map((value) => value.trim())
       .filter((value): value is ApiCapability =>
-        ['auth', 'account', 'media', 'agent', 'admin', 'other'].includes(value),
+        ['auth', 'account', 'media-indexing', 'media', 'agent', 'admin', 'other'].includes(value),
       ),
   )
 }
@@ -54,10 +61,20 @@ export function getApiPath(url: string): string | undefined {
 }
 
 export function getApiCapability(path: string): ApiCapability {
+  if (path === '/api/media/upload-policies' || path === '/api/media/tasks/indexing') {
+    return 'media-indexing'
+  }
+  if (
+    /^\/api\/media\/tasks\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}(?:\/(?:cancel|retry|result))?$/i.test(
+      path,
+    )
+  ) {
+    return 'media-indexing'
+  }
   return capabilityPrefixes.find(([prefix]) => path.startsWith(prefix))?.[1] ?? 'other'
 }
 
-/** Reject disabled API calls before fetch so legacy FastAPI is never contacted in phase 1.1. */
+/** Reject disabled API calls before fetch so unmigrated FastAPI routes are never contacted. */
 export function assertApiCapabilityEnabled(url: string): void {
   const path = getApiPath(url)
   if (!path) return
