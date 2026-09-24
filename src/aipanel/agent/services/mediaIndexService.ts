@@ -609,10 +609,6 @@ async function ensureSearchMediaIndexed(params: {
     (item) => item.mediaType === 'video' || item.mediaType === 'image',
   )
 
-  if (indexableItems.length === 0) {
-    return
-  }
-
   const reconcileResult = await reconcileMediaIndexing(
     projectId,
     indexableItems.map((item) => item.id),

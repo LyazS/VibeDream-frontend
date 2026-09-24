@@ -528,9 +528,11 @@ export async function waitForMediaIndexTaskCompletion(
         lastIndexTaskId: taskId,
       })
       onProgress({
-        progress: task.status === 'processing' ? 0.6 : 0.35,
+        progress: task.status === 'processing'
+          ? 0.45 + Math.max(0, Math.min(100, task.progress ?? 0)) * 0.005
+          : 0.35,
         stage: 'waiting-index-task',
-        message: task.status === 'cancelling' ? '正在取消索引任务' : '正在等待索引任务完成',
+        message: task.status === 'cancelling' ? '正在取消索引任务' : task.progress_message || '正在等待索引任务完成',
       })
     }
   } finally {

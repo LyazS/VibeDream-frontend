@@ -19,6 +19,8 @@ export interface MediaIndexingTask {
   project_id: string
   status: MediaIndexingTaskStatus
   revision: number
+  progress?: number
+  progress_message?: string
   origin_tab_id?: string
   result_summary?: unknown
   error?: string
