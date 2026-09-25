@@ -92,7 +92,14 @@ export async function executeApplyTransition(args: Record<string, any>) {
     if (typeof args.templateId !== 'string' || !args.templateId.trim())
       throw toolError('invalid_arguments', 'templateId 为必填项。')
     requireTransitionTarget(args)
-    const { identity, payload } = await resolveTransitionTemplate(args.templateId.trim())
+    const { identity, payload } = await resolveTransitionTemplate(
+      args.templateId.trim(),
+      typeof args.catalog_version === 'string'
+        ? args.catalog_version
+        : typeof args.catalogVersion === 'string'
+          ? args.catalogVersion
+          : undefined,
+    )
     // Installing a package is asynchronous; reject a target that changed while awaiting it.
     let target
     try {

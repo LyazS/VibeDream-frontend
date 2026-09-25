@@ -14,6 +14,7 @@ interface ImportMetaEnv {
   readonly VITE_API_BASE_URL?: string
   readonly VITE_API_CAPABILITIES?: string
   readonly VITE_ASSET_BASE_URL?: string
+  readonly VITE_TRANSITION_ASSET_BASE_URL?: string
   readonly VITE_MODEL_MANIFEST_URL?: string
   readonly VITE_ENABLE_ORT_CDN_FALLBACK?: string
 }

@@ -14,6 +14,7 @@
     "preview": "vite preview",
     "test:auth": "vitest run --config vitest.auth.config.ts",
     "test:task-progress": "vitest run --config vitest.task-progress.config.ts",
+    "test:transitions": "vitest run --config vitest.transitions.config.ts",
     "generate:model-manifest": "npm run download:music-analysis-models && npm run build:music-analysis-wasm && node scripts/generate-model-manifest.mjs",
     "assets:prepare": "node scripts/prepare-model-assets.mjs",
     "assets:verify": "node scripts/verify-model-assets.mjs",

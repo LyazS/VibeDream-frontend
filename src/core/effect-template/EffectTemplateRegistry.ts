@@ -194,7 +194,9 @@ export class EffectTemplateRegistry {
     const identity = this.createIdentity(effectType, templateId, packageVersion, catalogVersion)
     const existingTask = this.activeInstalls.get(identity.effectPackageId)
     if (existingTask) {
-      return existingTask
+      await existingTask
+      if (this.packageStates.get(identity.effectPackageId)?.catalogVersion === identity.catalogVersion) return
+      return this.installTemplate(effectType, templateId, packageVersion, catalogVersion)
     }
 
     const task = this.installTemplateInternal(identity)
@@ -211,18 +213,21 @@ export class EffectTemplateRegistry {
       ? parseEffectPackageId(identityOrEffectPackageId)
       : identityOrEffectPackageId
     const readyPackage = effectPackageRegistry.getPackage(identity.effectPackageId)
-    if (readyPackage && this.packageStates.get(identity.effectPackageId)?.status === 'ready') {
+    if (readyPackage && this.packageStates.get(identity.effectPackageId)?.status === 'ready' &&
+      (!identity.catalogVersion || this.packageStates.get(identity.effectPackageId)?.catalogVersion === identity.catalogVersion)) {
       return
     }
 
     const currentState = this.packageStates.get(identity.effectPackageId)
-    if (currentState?.status === 'ready' && currentState.packagePath) {
+    if (currentState?.status === 'ready' && currentState.packagePath &&
+      (!identity.catalogVersion || currentState.catalogVersion === identity.catalogVersion)) {
       await this.loadInstalledPackage(identity, currentState.packagePath)
       return
     }
 
     if (
       currentState?.packagePath &&
+      (!identity.catalogVersion || currentState.catalogVersion === identity.catalogVersion) &&
       (currentState.status === 'installed' || currentState.status === 'loading')
     ) {
       await this.loadInstalledPackage(identity, currentState.packagePath)
@@ -231,7 +236,7 @@ export class EffectTemplateRegistry {
 
     const resolvedIdentity = await this.resolveInstallIdentity(identity)
     if (!resolvedIdentity) {
-      const fallbackIdentity = currentState
+      const fallbackIdentity = currentState && !identity.catalogVersion
         ? this.createIdentity(
             currentState.effectType,
             currentState.templateId,
@@ -730,6 +735,14 @@ export class EffectTemplateRegistry {
       ) ?? null
     }
 
+    if (identity.effectType === 'transition' && identity.catalogVersion) {
+      const versioned = await transitionTemplateCatalogService.getTemplateSummaries(identity.catalogVersion)
+      if (versioned.catalog_version !== identity.catalogVersion) return null
+      return versioned.items.find((item) =>
+        item.id === identity.templateId && item.package_version === identity.packageVersion,
+      ) ?? null
+    }
+
     const loadedCatalog = await this.loadCatalog(identity.effectType)
     if (loadedCatalog.catalogVersion !== identity.catalogVersion) {
       return null
@@ -741,13 +754,18 @@ export class EffectTemplateRegistry {
 
   private async resolveInstallIdentity(identity: EffectPackageIdentity): Promise<EffectPackageIdentity | null> {
     const currentState = this.packageStates.get(identity.effectPackageId)
-    if (currentState?.catalogVersion && currentState.catalogVersion !== 'local-only') {
+    if (currentState?.catalogVersion && currentState.catalogVersion !== 'local-only' &&
+      (!identity.catalogVersion || currentState.catalogVersion === identity.catalogVersion)) {
       return this.createIdentity(
         currentState.effectType,
         currentState.templateId,
         currentState.packageVersion,
         currentState.catalogVersion,
       )
+    }
+
+    if (identity.effectType === 'transition' && identity.catalogVersion) {
+      return await this.resolveCatalogItem(identity) ? identity : null
     }
 
     const catalog = await this.loadCatalog(identity.effectType)
@@ -802,9 +820,10 @@ export class EffectTemplateRegistry {
       }
 
       this.setState(identity, {
-        catalogVersion,
+        catalogVersion: previous.status === 'remote' ? catalogVersion : previous.catalogVersion,
         meta: {
           ...displayMeta,
+          catalogVersion: previous.status === 'remote' ? catalogVersion : previous.catalogVersion,
           installedAt: previous.meta?.installedAt || displayMeta.installedAt,
         },
       })

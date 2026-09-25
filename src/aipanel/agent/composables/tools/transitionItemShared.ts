@@ -1,4 +1,5 @@
 import { effectTemplateRegistry } from '@/core/effect-template/EffectTemplateRegistry'
+import { transitionTemplateCatalogService } from '@/core/effect-template/TransitionTemplateCatalogService'
 import type { EffectPackageParameterDefinition, TransitionPackagePayload } from '@/core/effect-package/types'
 import { buildEffectPackageId, type EffectPackageIdentity } from '@/core/effect-template/commonTypes'
 import {
@@ -109,11 +110,16 @@ export function transitionOverlaps(snapshot: TransitionItemSnapshot, ignoreLeftC
   )
 }
 
-export async function resolveTransitionTemplate(templateId: string): Promise<{
+export async function resolveTransitionTemplate(templateId: string, catalogVersion?: string): Promise<{
   identity: EffectPackageIdentity
   payload: TransitionPackagePayload
 }> {
-  const catalog = await effectTemplateRegistry.loadCatalog('transition')
+  const catalog = catalogVersion
+    ? await transitionTemplateCatalogService.getTemplateSummaries(catalogVersion).then((response) => ({
+        catalogVersion: response.catalog_version,
+        items: response.items,
+      }))
+    : await effectTemplateRegistry.loadCatalog('transition')
   const entry = catalog.items.find((item) => item.id === templateId)
   if (!entry) throw toolError('transition_template_not_found', `未找到转场模板: ${templateId}`)
   const identity: EffectPackageIdentity = {
