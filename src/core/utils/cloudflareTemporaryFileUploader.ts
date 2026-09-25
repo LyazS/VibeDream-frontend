@@ -1,14 +1,15 @@
 import { fetchClient } from '@/utils/fetchClient'
 
-// Worker 目前只为 indexing 签发 policy。新增能力必须同时扩展 Worker 白名单与这里的联合类型，
-// 防止前端在后端尚未授权时误申请任意用途的上传凭证。
-export type MediaUploadCapability = 'indexing'
-export type MediaUploadPurpose = 'tagging' | 'embedding'
+// Worker 只为白名单能力签发 policy。搜索候选额外绑定 point_id，并返回只能在对应任务中使用的 upload_ref。
+export type MediaUploadCapability = 'indexing' | 'rerank' | 'validate'
+export type MediaUploadPurpose = 'tagging' | 'embedding' | 'rerank' | 'validate'
 
 export interface TemporaryFileUploadRequest {
   capability: MediaUploadCapability
   purpose: MediaUploadPurpose
   fileName: string
+  projectId?: string
+  pointId?: string
 }
 
 interface UploadPolicyData {
@@ -24,11 +25,15 @@ interface UploadPolicyData {
 
 interface UploadPolicyResponse {
   data: UploadPolicyData
+  upload_ref?: string
+  expires_at?: string
 }
 
 export interface TemporaryFileUploadResult {
   success: boolean
   url?: string
+  uploadRef?: string
+  expiresAt?: string
   error?: string
 }
 
@@ -40,14 +45,19 @@ export class CloudflareTemporaryFileUploader {
   private static async getUploadPolicy(
     request: TemporaryFileUploadRequest,
     signal?: AbortSignal,
-  ): Promise<UploadPolicyData> {
+  ): Promise<UploadPolicyResponse> {
+    if (request.capability !== 'indexing' && (!request.projectId || !request.pointId)) {
+      throw new Error('搜索候选上传必须关联项目和索引点')
+    }
     const response = await fetchClient.post<UploadPolicyResponse>('/api/media/upload-policies', {
       capability: request.capability,
       purpose: request.purpose,
       file_name: request.fileName,
+      ...(request.projectId ? { project_id: request.projectId } : {}),
+      ...(request.pointId ? { point_id: request.pointId } : {}),
     }, { signal })
     if (!response.data?.data) throw new Error('获取临时上传 policy 返回数据为空')
-    return response.data.data
+    return response.data
   }
 
   private static async uploadBlobToOss(
@@ -102,14 +112,23 @@ export class CloudflareTemporaryFileUploader {
       signal?.throwIfAborted()
       // 进度前 20% 表示申请 policy，剩余 80% 映射到实际 OSS 上传，供调用方组合任务总进度。
       onProgress?.(10)
-      const policy = await this.getUploadPolicy(request, signal)
+      const policyResponse = await this.getUploadPolicy(request, signal)
+      const policy = policyResponse.data
       signal?.throwIfAborted()
       onProgress?.(20)
       const url = await this.uploadBlobToOss(blob, policy, (progress) => {
         onProgress?.(20 + Math.round(progress * 0.8))
       }, signal)
       onProgress?.(100)
-      return { success: true, url }
+      if (request.capability !== 'indexing' && !policyResponse.upload_ref) {
+        throw new Error('搜索候选上传未返回受限引用')
+      }
+      return {
+        success: true,
+        url,
+        uploadRef: policyResponse.upload_ref,
+        expiresAt: policyResponse.expires_at,
+      }
     } catch (error) {
       if (signal?.aborted) throw new DOMException('上传已取消', 'AbortError')
       return {

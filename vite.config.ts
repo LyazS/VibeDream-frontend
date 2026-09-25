@@ -1,4 +1,5 @@
 import { fileURLToPath, URL } from 'node:url'
+import { rm } from 'node:fs/promises'
 
 import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
@@ -24,12 +25,27 @@ function isPackage(packageName: string, names: readonly string[]): boolean {
   return names.some((name) => packageName === name || packageName.startsWith(`${name}/`))
 }
 
+function excludeR2HostedModelChunks() {
+  return {
+    name: 'exclude-r2-hosted-model-chunks',
+    apply: 'build' as const,
+    async closeBundle() {
+      // 模型分片由 VITE_ASSET_BASE_URL 指向的 R2 发布，不应重复进入 Pages 部署包。
+      await rm(fileURLToPath(new URL('./dist/model-chunks', import.meta.url)), {
+        recursive: true,
+        force: true,
+      })
+    },
+  }
+}
+
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [
     vue(),
     vueDevTools(),
     removeConsole(), // 移除所有console打印
+    excludeR2HostedModelChunks(),
   ],
   resolve: {
     // Use ONNX Runtime's external-Wasm build. The Wasm binary is published to R2 by

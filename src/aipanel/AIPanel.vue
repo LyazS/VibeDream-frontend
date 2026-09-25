@@ -11,6 +11,7 @@
       </template>
       <!-- <n-tab name="ai-generate" :tab="t('aiPanel.aiGenerate')"> </n-tab> -->
       <n-tab name="agent" :tab="t('aiPanel.agent')"> </n-tab>
+      <n-tab v-if="showMediaSearchTest" name="media-search-test" tab="素材搜索测试"> </n-tab>
       <template #suffix>
         <div class="header-buttons">
           <template v-if="unifiedStore.aiPanelActiveTab === 'agent'">
@@ -45,6 +46,13 @@
     >
       <AgentPanel v-model:showHistory="showHistory" />
     </div>
+    <div
+      v-if="showMediaSearchTest"
+      v-show="unifiedStore.aiPanelActiveTab === 'media-search-test'"
+      style="flex: 1; display: flex; flex-direction: column; overflow: hidden"
+    >
+      <MediaSearchTestPanel />
+    </div>
   </div>
 </template>
 
@@ -54,6 +62,7 @@ import { NTab, NTabs } from 'naive-ui'
 import { IconComponents } from '@/constants/iconComponents'
 import HoverButton from '@/components/base/HoverButton.vue'
 import AgentPanel from './agent/components/AgentPanel.vue'
+import MediaSearchTestPanel from './agent/components/MediaSearchTestPanel.vue'
 import GeneratePanel from './aigenerate/GeneratePanel.vue'
 import { useAppI18n } from '@/core/composables/useI18n'
 import { useUnifiedStore } from '@/core/unifiedStore'
@@ -61,6 +70,7 @@ import { SESSION_MANAGER } from '@/aipanel/agent/services'
 
 const { t } = useAppI18n()
 const unifiedStore = useUnifiedStore()
+const showMediaSearchTest = import.meta.env.DEV || import.meta.env.MODE === 'preview'
 
 // 定义事件
 defineEmits<{

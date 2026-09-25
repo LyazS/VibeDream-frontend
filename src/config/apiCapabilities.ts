@@ -62,6 +62,8 @@ export function getApiPath(url: string): string | undefined {
 
 export function getApiCapability(path: string): ApiCapability {
   if (path === '/api/media/upload-policies' || path === '/api/media/tasks/indexing' ||
+      path === '/api/media/tasks/retrieval' || path === '/api/media/tasks/rerank' ||
+      path === '/api/media/tasks/validate' ||
       path === '/api/media/indexing/reconcile') {
     return 'media-indexing'
   }
