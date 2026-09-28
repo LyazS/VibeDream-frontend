@@ -12,6 +12,7 @@
 
 <script setup lang="ts">
 import { ref, nextTick, watch, provide, computed, onBeforeUnmount } from 'vue'
+import type { UIMessage } from 'ai'
 import MarkdownIt from 'markdown-it'
 import UserMessage from './UserMessage.vue'
 import AgentMessage from './AgentMessage.vue'
@@ -32,7 +33,14 @@ import type {
 import { useAppI18n } from '@/core/composables/useI18n'
 
 // AI 发送状态
-const isSending = computed(() => SESSION_MANAGER.isSending.value)
+const props = defineProps<{
+  demoMessages?: UIMessage[]
+  demoSending?: boolean
+}>()
+
+const isSending = computed(() =>
+  props.demoMessages ? Boolean(props.demoSending) : SESSION_MANAGER.isSending.value,
+)
 const indicatorStatus = ref<'thinking' | 'completed' | null>(null)
 let completedIndicatorTimer: ReturnType<typeof setTimeout> | null = null
 
@@ -42,15 +50,30 @@ const md = new MarkdownIt({
   linkify: true,
   typographer: true,
 })
+const demoMd = new MarkdownIt({ html: false, linkify: true, typographer: true })
 
 const renderMarkdown = (content: string) => {
-  return md.render(content)
+  return (props.demoMessages ? demoMd : md).render(content)
 }
 
 provide('renderMarkdown', renderMarkdown)
 
-const messages = computed(() => SESSION_MANAGER.messages.value.filter(isPublicMessage))
-const interactions = computed(() => SESSION_MANAGER.interactions.value)
+const messages = computed<AgentMessageModel[]>(() =>
+  props.demoMessages
+    ? props.demoMessages.map((message) => ({
+        id: message.id,
+        role: message.role === 'user' ? AgentMessageRole.USER : AgentMessageRole.ASSISTANT,
+        parts: message.parts
+          .filter((part) => part.type === 'text')
+          .map((part) => ({
+            type: MessagePartType.TEXT,
+            text: part.text,
+          })),
+        created_at: new Date().toISOString(),
+      }))
+    : SESSION_MANAGER.messages.value.filter(isPublicMessage),
+)
+const interactions = computed(() => (props.demoMessages ? [] : SESSION_MANAGER.interactions.value))
 
 type TimelineItem =
   | { type: 'message'; id: string; createdAt: string; message: AgentMessageModel }
@@ -109,10 +132,7 @@ const renderBlocks = computed<RenderBlock[]>(() => {
       continue
     }
 
-    if (
-      pendingAssistantGroup?.type === 'assistant_group'
-      && isAssistantMessage(item.message)
-    ) {
+    if (pendingAssistantGroup?.type === 'assistant_group' && isAssistantMessage(item.message)) {
       pendingAssistantGroup.messages.push(item.message)
       continue
     }

@@ -41,6 +41,12 @@ function excludeR2HostedModelChunks() {
 
 // https://vite.dev/config/
 export default defineConfig({
+  server: {
+    proxy: {
+      '/api/chat': { target: 'http://localhost:8787', changeOrigin: true },
+      '/agents': { target: 'http://localhost:8787', changeOrigin: true, ws: true },
+    },
+  },
   plugins: [
     vue(),
     vueDevTools(),
@@ -50,7 +56,7 @@ export default defineConfig({
   resolve: {
     // Use ONNX Runtime's external-Wasm build. The Wasm binary is published to R2 by
     // assets:prepare/assets:publish and must not be copied into the Pages artifact.
-    conditions: ['onnxruntime-web-use-extern-wasm'],
+    conditions: ['browser', 'module', 'onnxruntime-web-use-extern-wasm'],
     alias: {
       '@': fileURLToPath(new URL('./src', import.meta.url)),
     },

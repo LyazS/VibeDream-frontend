@@ -1,5 +1,18 @@
 <template>
-  <template v-if="!showHistory">
+  <template v-if="cloudChatDemoEnabled">
+    <MessageList :demo-messages="demo.messages.value" :demo-sending="demo.isSending.value" />
+    <div v-if="demo.errorText.value" class="chat-error" role="alert">
+      {{ demo.errorText.value }}
+    </div>
+    <AgentInput
+      demo-mode
+      :demo-connecting="demo.isConnecting.value"
+      :demo-sending="demo.isSending.value"
+      @demo-send="sendDemoMessage"
+      @demo-stop="demo.stop"
+    />
+  </template>
+  <template v-else-if="!showHistory">
     <MessageList />
     <AgentInput />
   </template>
@@ -12,6 +25,12 @@
 import MessageList from './MessageList.vue'
 import AgentInput from './AgentInput.vue'
 import SessionHistoryPanel from './SessionHistoryPanel.vue'
+import { cloudChatDemoEnabled, useCloudChatDemo } from '../composables/useCloudChatDemo'
+
+const demo = useCloudChatDemo()
+const sendDemoMessage = (text: string, onSubmitted: () => void, onRejected: () => void) => {
+  void demo.send(text, onSubmitted, onRejected).catch(() => {})
+}
 
 // 定义 props
 defineProps<{
@@ -25,5 +44,13 @@ const emit = defineEmits<{
 </script>
 
 <style scoped>
-/* Agent 面板样式 */
+.chat-error {
+  margin: 0 16px;
+  padding: 8px 10px;
+  color: var(--color-text-primary);
+  background: rgba(190, 65, 55, 0.18);
+  border: 1px solid rgba(230, 104, 86, 0.4);
+  border-radius: 6px;
+  font-size: 12px;
+}
 </style>

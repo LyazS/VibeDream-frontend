@@ -13,6 +13,7 @@
     "deploy:production": "npm run build && npx wrangler pages deploy dist --project-name lightcut-editor --branch main --commit-dirty=true",
     "preview": "vite preview",
     "test:auth": "vitest run --config vitest.auth.config.ts",
+    "test:chat-demo": "vitest run --config vitest.chat-demo.config.ts",
     "test:task-progress": "vitest run --config vitest.task-progress.config.ts",
     "test:transitions": "vitest run --config vitest.transitions.config.ts",
     "generate:model-manifest": "npm run download:music-analysis-models && npm run build:music-analysis-wasm && node scripts/generate-model-manifest.mjs",
@@ -30,11 +31,14 @@
     "format": "prettier --write src/"
   },
   "dependencies": {
+    "@ai-sdk/vue": "^4.0.118",
     "@imengyu/vue3-context-menu": "^1.5.2",
     "@mediabunny/mp3-encoder": "^1.55.7",
     "@remixicon/vue": "^4.7.0",
     "@types/big.js": "^7.0.0",
     "@types/markdown-it": "^14.1.2",
+    "agents": "^0.24.0",
+    "ai": "^7.0.118",
     "ali-oss": "^6.23.0",
     "axios": "^1.12.2",
     "big.js": "^7.0.1",
@@ -51,7 +55,8 @@
     "remixicon": "^4.6.0",
     "vue": "^3.5.18",
     "vue-i18n": "^11.1.12",
-    "vue-router": "^4.5.1"
+    "vue-router": "^4.5.1",
+    "zod": "^4.5.4"
   },
   "devDependencies": {
     "@tsconfig/node22": "^22.0.2",
@@ -72,9 +77,9 @@
     "terser": "^5.44.0",
     "typescript": "~5.9.2",
     "vite": "^7.1.1",
-    "vitest": "^4.1.0",
     "vite-plugin-remove-console": "^2.2.0",
     "vite-plugin-vue-devtools": "^8.0.0",
+    "vitest": "^4.1.0",
     "vue-tsc": "^3.0.5",
     "wrangler": "4.131.1"
   }

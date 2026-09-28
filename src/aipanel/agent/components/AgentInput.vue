@@ -1,5 +1,5 @@
 <template>
-  <div v-if="!pendingAskUserArgs" class="chat-input-wrapper">
+  <div v-if="demoMode || !pendingAskUserArgs" class="chat-input-wrapper">
     <div class="chat-input-shell">
       <div class="chat-input-main">
         <textarea
@@ -8,13 +8,17 @@
           :placeholder="inputPlaceholder"
           :style="textareaStyle"
           autocomplete="off"
+          :disabled="demoMode && (demoConnecting || demoSending)"
           @input="adjustTextareaHeight"
           @keydown.enter="handleEnterKey"
           @compositionstart="isComposing = true"
           @compositionend="isComposing = false"
         />
         <ChatSendButton
-          :disabled="hasProcessingMessage ? false : !inputMessage.trim()"
+          :disabled="
+            (demoMode && demoConnecting) ||
+            (hasProcessingMessage ? false : !inputMessage.trim())
+          "
           :title="hasProcessingMessage ? t('common.chat.stop') : t('common.chat.send')"
           :icon="hasProcessingMessage ? IconComponents.STOP : IconComponents.SEND"
           @click="hasProcessingMessage ? handleStop() : handleSend()"
@@ -40,14 +44,27 @@ import { useAppI18n } from '@/core/composables/useI18n'
 
 const { t } = useAppI18n()
 
-// AgentInput 现在完全自主，不需要发射任何事件
+const props = withDefaults(
+  defineProps<{
+    demoMode?: boolean
+    demoConnecting?: boolean
+    demoSending?: boolean
+  }>(),
+  { demoMode: false, demoConnecting: false, demoSending: false },
+)
+const emit = defineEmits<{
+  demoSend: [text: string, onSubmitted: () => void, onRejected: () => void]
+  demoStop: []
+}>()
 
 const inputMessage = ref('')
 const isComposing = ref(false) // 跟踪输入法 composition 状态
 const textareaHeight = ref(72) // 初始高度 72px (3行 × 24px)
 
 // 检查是否有进行中的消息（使用响应式计算属性）
-const hasProcessingMessage = computed(() => SESSION_MANAGER.isSending.value)
+const hasProcessingMessage = computed(() =>
+  props.demoMode ? props.demoSending : SESSION_MANAGER.isSending.value,
+)
 const pendingInteraction = computed(() => SESSION_MANAGER.pendingInteraction.value)
 const pendingAskUserArgs = computed(() => pendingInteraction.value)
 
@@ -101,9 +118,32 @@ const handleEnterKey = (event: KeyboardEvent) => {
 }
 
 const handleSend = async () => {
-  if (!inputMessage.value.trim()) return
+  if (
+    !inputMessage.value.trim() ||
+    (props.demoMode && (props.demoConnecting || props.demoSending))
+  )
+    return
 
-  const message = inputMessage.value.trim()
+  const draft = inputMessage.value
+  const message = draft.trim()
+
+  if (props.demoMode) {
+    emit(
+      'demoSend',
+      message,
+      () => {
+        if (inputMessage.value !== draft) return
+        inputMessage.value = ''
+        textareaHeight.value = MIN_LINES * LINE_HEIGHT
+      },
+      () => {
+        if (inputMessage.value) return
+        inputMessage.value = draft
+        adjustTextareaHeight()
+      },
+    )
+    return
+  }
 
   // 清空输入框并重置高度
   inputMessage.value = ''
@@ -120,6 +160,10 @@ const handleSend = async () => {
 
 // 停止当前进行中的消息
 const handleStop = () => {
+  if (props.demoMode) {
+    emit('demoStop')
+    return
+  }
   // 中止当前进行中的消息请求
   SESSION_MANAGER.abortCurrentMessage()
   console.log('已停止当前进行中的消息')
@@ -158,8 +202,11 @@ const handleStop = () => {
   min-height: 88px;
   padding: 10px 58px 10px 12px;
   border-radius: 10px;
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.03) 0%, rgba(255, 255, 255, 0.018) 100%);
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.03) 0%,
+    rgba(255, 255, 255, 0.018) 100%
+  );
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.04),
     0 4px 10px rgba(0, 0, 0, 0.08);
@@ -170,8 +217,11 @@ const handleStop = () => {
 }
 
 .chat-input-main:focus-within {
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.04) 0%, rgba(255, 255, 255, 0.022) 100%);
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.04) 0%,
+    rgba(255, 255, 255, 0.022) 100%
+  );
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.06),
     0 18px 34px rgba(0, 0, 0, 0.2),
