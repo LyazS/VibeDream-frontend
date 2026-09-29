@@ -1,15 +1,18 @@
 <template>
-  <template v-if="cloudChatDemoEnabled">
-    <MessageList :demo-messages="demo.messages.value" :demo-sending="demo.isSending.value" />
-    <div v-if="demo.errorText.value" class="chat-error" role="alert">
-      {{ demo.errorText.value }}
+  <template v-if="cloudChatEnabled">
+    <MessageList
+      :chat-messages="cloudChat.messages.value"
+      :chat-sending="cloudChat.isSending.value"
+    />
+    <div v-if="cloudChat.errorText.value" class="chat-error" role="alert">
+      {{ cloudChat.errorText.value }}
     </div>
     <AgentInput
-      demo-mode
-      :demo-connecting="demo.isConnecting.value"
-      :demo-sending="demo.isSending.value"
-      @demo-send="sendDemoMessage"
-      @demo-stop="demo.stop"
+      chat-mode
+      :chat-connecting="cloudChat.isConnecting.value"
+      :chat-sending="cloudChat.isSending.value"
+      @chat-send="sendChatMessage"
+      @chat-stop="cloudChat.stop"
     />
   </template>
   <template v-else-if="!showHistory">
@@ -25,11 +28,11 @@
 import MessageList from './MessageList.vue'
 import AgentInput from './AgentInput.vue'
 import SessionHistoryPanel from './SessionHistoryPanel.vue'
-import { cloudChatDemoEnabled, useCloudChatDemo } from '../composables/useCloudChatDemo'
+import { cloudChatEnabled, useCloudChat } from '../composables/useCloudChat'
 
-const demo = useCloudChatDemo()
-const sendDemoMessage = (text: string, onSubmitted: () => void, onRejected: () => void) => {
-  void demo.send(text, onSubmitted, onRejected).catch(() => {})
+const cloudChat = useCloudChat()
+const sendChatMessage = (text: string, onSubmitted: () => void, onRejected: () => void) => {
+  void cloudChat.send(text, onSubmitted, onRejected).catch(() => {})
 }
 
 // 定义 props

@@ -15,7 +15,7 @@
       <n-tab v-if="showTransitionTest" name="transition-test" tab="转场测试"> </n-tab>
       <template #suffix>
         <div class="header-buttons">
-          <template v-if="unifiedStore.aiPanelActiveTab === 'agent' && !cloudChatDemoEnabled">
+          <template v-if="unifiedStore.aiPanelActiveTab === 'agent' && !cloudChatEnabled">
             <HoverButton @click="handleNewChat" :title="t('common.chat.new')">
               <template #icon>
                 <component :is="IconComponents.ADD" size="18px" />
@@ -76,7 +76,7 @@ import GeneratePanel from './aigenerate/GeneratePanel.vue'
 import { useAppI18n } from '@/core/composables/useI18n'
 import { useUnifiedStore } from '@/core/unifiedStore'
 import { SESSION_MANAGER } from '@/aipanel/agent/services'
-import { cloudChatDemoEnabled } from '@/aipanel/agent/composables/useCloudChatDemo'
+import { cloudChatEnabled } from '@/aipanel/agent/composables/useCloudChat'
 
 const { t } = useAppI18n()
 const unifiedStore = useUnifiedStore()
@@ -99,7 +99,7 @@ onMounted(() => {
 // 组件卸载时清理资源
 onUnmounted(() => {
   // 清理进行中的消息请求
-  if (!cloudChatDemoEnabled) SESSION_MANAGER.abortCurrentMessage()
+  if (!cloudChatEnabled) SESSION_MANAGER.abortCurrentMessage()
 })
 
 // 处理新建聊天 - 只清空消息列表，不创建新会话

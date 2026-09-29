@@ -4,7 +4,7 @@ export type ApiCapability =
   | 'media-indexing'
   | 'media'
   | 'agent'
-  | 'chat-demo'
+  | 'chat'
   | 'admin'
   | 'transition-search'
   | 'other'
@@ -17,7 +17,7 @@ const capabilityPrefixes: readonly [string, ApiCapability][] = [
   ['/api/admin/', 'admin'],
   ['/api/media/', 'media'],
   ['/api/agent/', 'agent'],
-  ['/api/chat/', 'chat-demo'],
+  ['/api/chat/', 'chat'],
 ]
 
 function readEnabledCapabilities(): ReadonlySet<ApiCapability> {
@@ -33,7 +33,7 @@ function readEnabledCapabilities(): ReadonlySet<ApiCapability> {
           'media-indexing',
           'media',
           'agent',
-          'chat-demo',
+          'chat',
           'admin',
           'transition-search',
           'other',

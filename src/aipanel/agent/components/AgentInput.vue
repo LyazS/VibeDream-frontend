@@ -1,5 +1,5 @@
 <template>
-  <div v-if="demoMode || !pendingAskUserArgs" class="chat-input-wrapper">
+  <div v-if="chatMode || !pendingAskUserArgs" class="chat-input-wrapper">
     <div class="chat-input-shell">
       <div class="chat-input-main">
         <textarea
@@ -8,7 +8,7 @@
           :placeholder="inputPlaceholder"
           :style="textareaStyle"
           autocomplete="off"
-          :disabled="demoMode && (demoConnecting || demoSending)"
+          :disabled="chatMode && (chatConnecting || chatSending)"
           @input="adjustTextareaHeight"
           @keydown.enter="handleEnterKey"
           @compositionstart="isComposing = true"
@@ -16,8 +16,7 @@
         />
         <ChatSendButton
           :disabled="
-            (demoMode && demoConnecting) ||
-            (hasProcessingMessage ? false : !inputMessage.trim())
+            (chatMode && chatConnecting) || (hasProcessingMessage ? false : !inputMessage.trim())
           "
           :title="hasProcessingMessage ? t('common.chat.stop') : t('common.chat.send')"
           :icon="hasProcessingMessage ? IconComponents.STOP : IconComponents.SEND"
@@ -46,15 +45,15 @@ const { t } = useAppI18n()
 
 const props = withDefaults(
   defineProps<{
-    demoMode?: boolean
-    demoConnecting?: boolean
-    demoSending?: boolean
+    chatMode?: boolean
+    chatConnecting?: boolean
+    chatSending?: boolean
   }>(),
-  { demoMode: false, demoConnecting: false, demoSending: false },
+  { chatMode: false, chatConnecting: false, chatSending: false },
 )
 const emit = defineEmits<{
-  demoSend: [text: string, onSubmitted: () => void, onRejected: () => void]
-  demoStop: []
+  chatSend: [text: string, onSubmitted: () => void, onRejected: () => void]
+  chatStop: []
 }>()
 
 const inputMessage = ref('')
@@ -63,7 +62,7 @@ const textareaHeight = ref(72) // 初始高度 72px (3行 × 24px)
 
 // 检查是否有进行中的消息（使用响应式计算属性）
 const hasProcessingMessage = computed(() =>
-  props.demoMode ? props.demoSending : SESSION_MANAGER.isSending.value,
+  props.chatMode ? props.chatSending : SESSION_MANAGER.isSending.value,
 )
 const pendingInteraction = computed(() => SESSION_MANAGER.pendingInteraction.value)
 const pendingAskUserArgs = computed(() => pendingInteraction.value)
@@ -118,18 +117,15 @@ const handleEnterKey = (event: KeyboardEvent) => {
 }
 
 const handleSend = async () => {
-  if (
-    !inputMessage.value.trim() ||
-    (props.demoMode && (props.demoConnecting || props.demoSending))
-  )
+  if (!inputMessage.value.trim() || (props.chatMode && (props.chatConnecting || props.chatSending)))
     return
 
   const draft = inputMessage.value
   const message = draft.trim()
 
-  if (props.demoMode) {
+  if (props.chatMode) {
     emit(
-      'demoSend',
+      'chatSend',
       message,
       () => {
         if (inputMessage.value !== draft) return
@@ -160,8 +156,8 @@ const handleSend = async () => {
 
 // 停止当前进行中的消息
 const handleStop = () => {
-  if (props.demoMode) {
-    emit('demoStop')
+  if (props.chatMode) {
+    emit('chatStop')
     return
   }
   // 中止当前进行中的消息请求

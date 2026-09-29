@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createRenderer, nextTick } from 'vue'
-import { useCloudChatDemo } from '../src/aipanel/agent/composables/useCloudChatDemo'
+import { useCloudChat } from '../src/aipanel/agent/composables/useCloudChat'
 
 const state = vi.hoisted(() => ({
   agents: [] as Array<{ name: string; disconnect: (code?: number) => void }>,
@@ -13,7 +13,7 @@ const state = vi.hoisted(() => ({
   rejectNextConnection: false,
 }))
 
-vi.mock('@/config/apiCapabilities', () => ({ enabledApiCapabilities: new Set(['chat-demo']) }))
+vi.mock('@/config/apiCapabilities', () => ({ enabledApiCapabilities: new Set(['chat']) }))
 vi.mock('@/core/unifiedStore', () => ({
   useUnifiedStore: () => ({ currentUser: { id: 'user-1' } }),
 }))
@@ -121,16 +121,16 @@ const renderer = createRenderer({
   nextSibling: () => null,
 })
 
-function mountDemo() {
-  let demo!: ReturnType<typeof useCloudChatDemo>
+function mountChat() {
+  let cloudChat!: ReturnType<typeof useCloudChat>
   const app = renderer.createApp({
     setup() {
-      demo = useCloudChatDemo()
+      cloudChat = useCloudChat()
       return () => null
     },
   })
   app.mount({})
-  return { demo, unmount: () => app.unmount() }
+  return { cloudChat, unmount: () => app.unmount() }
 }
 
 beforeEach(() => {
@@ -152,12 +152,12 @@ afterEach(() => vi.unstubAllGlobals())
 
 describe('cloud chat connection lifecycle', () => {
   it('sends text without fetching model configuration or enforcing a frontend length limit', async () => {
-    const { demo, unmount } = mountDemo()
+    const { cloudChat, unmount } = mountChat()
     try {
       await nextTick()
       expect(state.getRequests).toBe(0)
       const text = 'x'.repeat(16001)
-      await demo.send(text)
+      await cloudChat.send(text)
       expect(state.requests[0].messages[0].parts).toEqual([{ type: 'text', text }])
       expect(state.getRequests).toBe(0)
     } finally {
@@ -166,20 +166,20 @@ describe('cloud chat connection lifecycle', () => {
   })
 
   it('restores a rejected draft and allows the next message', async () => {
-    const { demo, unmount } = mountDemo()
+    const { cloudChat, unmount } = mountChat()
     try {
       state.rejectNextRequest = true
       const onSubmitted = vi.fn()
       const onRejected = vi.fn()
-      await demo.send('too long', onSubmitted, onRejected)
+      await cloudChat.send('too long', onSubmitted, onRejected)
       expect(onSubmitted).toHaveBeenCalledOnce()
       expect(onRejected).toHaveBeenCalledOnce()
-      expect(demo.errorText.value).toBe('聊天文本过长')
-      expect(demo.messages.value).toEqual([])
+      expect(cloudChat.errorText.value).toBe('聊天文本过长')
+      expect(cloudChat.messages.value).toEqual([])
 
-      await demo.send('short')
+      await cloudChat.send('short')
       expect(state.requests).toHaveLength(2)
-      expect(demo.messages.value.map((message) => message.role)).toEqual(['user', 'assistant'])
+      expect(cloudChat.messages.value.map((message) => message.role)).toEqual(['user', 'assistant'])
     } finally {
       unmount()
     }
@@ -189,19 +189,19 @@ describe('cloud chat connection lifecycle', () => {
     let releaseCreate!: () => void
     state.createGate = new Promise<void>((resolve) => { releaseCreate = resolve })
     state.holdNextResponse = true
-    const { demo, unmount } = mountDemo()
+    const { cloudChat, unmount } = mountChat()
     try {
       const onSubmitted = vi.fn()
-      const pending = demo.send('first', onSubmitted)
+      const pending = cloudChat.send('first', onSubmitted)
       await vi.waitFor(() => expect(state.creations).toBe(1))
-      expect(demo.isConnecting.value).toBe(true)
-      expect(demo.isSending.value).toBe(false)
+      expect(cloudChat.isConnecting.value).toBe(true)
+      expect(cloudChat.isSending.value).toBe(false)
       expect(onSubmitted).not.toHaveBeenCalled()
 
       releaseCreate()
       await vi.waitFor(() => expect(state.requests).toHaveLength(1))
-      expect(demo.isConnecting.value).toBe(false)
-      expect(demo.isSending.value).toBe(true)
+      expect(cloudChat.isConnecting.value).toBe(false)
+      expect(cloudChat.isSending.value).toBe(true)
       expect(onSubmitted).toHaveBeenCalledOnce()
 
       state.agents[0].disconnect()
@@ -213,24 +213,24 @@ describe('cloud chat connection lifecycle', () => {
   })
 
   it('silently reconnects the same conversation without losing completed messages', async () => {
-    const { demo, unmount } = mountDemo()
+    const { cloudChat, unmount } = mountChat()
     try {
-      await demo.send('first')
+      await cloudChat.send('first')
       await nextTick()
       expect(state.requests[0].messages.map((message) => message.role)).toEqual(['user'])
-      expect(demo.messages.value.map((message) => message.role)).toEqual(['user', 'assistant'])
+      expect(cloudChat.messages.value.map((message) => message.role)).toEqual(['user', 'assistant'])
 
       state.agents[0].disconnect()
-      expect(demo.errorText.value).toBe('')
+      expect(cloudChat.errorText.value).toBe('')
 
-      await demo.send('second')
+      await cloudChat.send('second')
       await nextTick()
       expect(state.creations).toBe(1)
       expect(state.agents).toHaveLength(2)
       expect(state.requests[1].agent).toBe('conversation-1')
       expect(state.requests[1].messages.map((message) => message.role)).toEqual(['user'])
       expect(state.requests[1].messages[0].parts).toEqual([{ type: 'text', text: 'second' }])
-      expect(demo.messages.value.map((message) => message.role)).toEqual([
+      expect(cloudChat.messages.value.map((message) => message.role)).toEqual([
         'user',
         'assistant',
         'user',
@@ -242,15 +242,15 @@ describe('cloud chat connection lifecycle', () => {
   })
 
   it('keeps an interrupted turn visible and never resends it', async () => {
-    const { demo, unmount } = mountDemo()
+    const { cloudChat, unmount } = mountChat()
     try {
       state.holdNextResponse = true
-      const pending = demo.send('first')
+      const pending = cloudChat.send('first')
       await vi.waitFor(() => expect(state.requests).toHaveLength(1))
       state.agents[0].disconnect()
       await pending
-      expect(demo.errorText.value).toContain('回复已中断')
-      await demo.send('second')
+      expect(cloudChat.errorText.value).toContain('回复已中断')
+      await cloudChat.send('second')
       expect(state.requests).toHaveLength(1)
       expect(state.agents).toHaveLength(1)
     } finally {
@@ -259,27 +259,27 @@ describe('cloud chat connection lifecycle', () => {
   })
 
   it('shows an authentication error for a revoked session', async () => {
-    const { demo, unmount } = mountDemo()
+    const { cloudChat, unmount } = mountChat()
     try {
-      await demo.send('first')
+      await cloudChat.send('first')
       state.agents[0].disconnect(4001)
-      expect(demo.errorText.value).toBe('登录状态已失效，请重新登录。')
+      expect(cloudChat.errorText.value).toBe('登录状态已失效，请重新登录。')
     } finally {
       unmount()
     }
   })
 
   it('fails promptly when authorization closes the connection before it is ready', async () => {
-    const { demo, unmount } = mountDemo()
+    const { cloudChat, unmount } = mountChat()
     try {
       state.rejectNextConnection = true
       const onSubmitted = vi.fn()
-      await expect(demo.send('first', onSubmitted)).rejects.toThrow('登录状态已失效')
+      await expect(cloudChat.send('first', onSubmitted)).rejects.toThrow('登录状态已失效')
       expect(onSubmitted).not.toHaveBeenCalled()
-      expect(demo.errorText.value).toBe('登录状态已失效，请重新登录。')
+      expect(cloudChat.errorText.value).toBe('登录状态已失效，请重新登录。')
       expect(state.requests).toHaveLength(0)
 
-      await demo.send('first', onSubmitted)
+      await cloudChat.send('first', onSubmitted)
       expect(onSubmitted).toHaveBeenCalledOnce()
       expect(state.requests).toHaveLength(1)
     } finally {

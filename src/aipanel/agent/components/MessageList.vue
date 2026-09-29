@@ -34,12 +34,12 @@ import { useAppI18n } from '@/core/composables/useI18n'
 
 // AI 发送状态
 const props = defineProps<{
-  demoMessages?: UIMessage[]
-  demoSending?: boolean
+  chatMessages?: UIMessage[]
+  chatSending?: boolean
 }>()
 
 const isSending = computed(() =>
-  props.demoMessages ? Boolean(props.demoSending) : SESSION_MANAGER.isSending.value,
+  props.chatMessages ? Boolean(props.chatSending) : SESSION_MANAGER.isSending.value,
 )
 const indicatorStatus = ref<'thinking' | 'completed' | null>(null)
 let completedIndicatorTimer: ReturnType<typeof setTimeout> | null = null
@@ -50,17 +50,17 @@ const md = new MarkdownIt({
   linkify: true,
   typographer: true,
 })
-const demoMd = new MarkdownIt({ html: false, linkify: true, typographer: true })
+const chatMd = new MarkdownIt({ html: false, linkify: true, typographer: true })
 
 const renderMarkdown = (content: string) => {
-  return (props.demoMessages ? demoMd : md).render(content)
+  return (props.chatMessages ? chatMd : md).render(content)
 }
 
 provide('renderMarkdown', renderMarkdown)
 
 const messages = computed<AgentMessageModel[]>(() =>
-  props.demoMessages
-    ? props.demoMessages.map((message) => ({
+  props.chatMessages
+    ? props.chatMessages.map((message) => ({
         id: message.id,
         role: message.role === 'user' ? AgentMessageRole.USER : AgentMessageRole.ASSISTANT,
         parts: message.parts
@@ -73,7 +73,7 @@ const messages = computed<AgentMessageModel[]>(() =>
       }))
     : SESSION_MANAGER.messages.value.filter(isPublicMessage),
 )
-const interactions = computed(() => (props.demoMessages ? [] : SESSION_MANAGER.interactions.value))
+const interactions = computed(() => (props.chatMessages ? [] : SESSION_MANAGER.interactions.value))
 
 type TimelineItem =
   | { type: 'message'; id: string; createdAt: string; message: AgentMessageModel }

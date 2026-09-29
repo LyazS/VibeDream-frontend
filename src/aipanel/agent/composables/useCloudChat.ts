@@ -7,7 +7,7 @@ import { enabledApiCapabilities } from '@/config/apiCapabilities'
 import { useUnifiedStore } from '@/core/unifiedStore'
 import { fetchClient } from '@/utils/fetchClient'
 
-export const cloudChatDemoEnabled = enabledApiCapabilities.has('chat-demo')
+export const cloudChatEnabled = enabledApiCapabilities.has('chat')
 const CHAT_REJECTION_PREFIX = 'CHAT_REJECTED:'
 
 const inactiveTransport: ChatTransport<UIMessage> = {
@@ -27,7 +27,7 @@ function connectionError(error: unknown): string {
   return error instanceof Error ? error.message : '聊天连接失败，请稍后再试。'
 }
 
-export function useCloudChatDemo() {
+export function useCloudChat() {
   const store = useUnifiedStore()
   const userId = computed(() => store.currentUser?.id || null)
   const conversationId = shallowRef<string | null>(null)
@@ -157,7 +157,11 @@ export function useCloudChatDemo() {
     await nextTick()
   }
 
-  async function send(text: string, onSubmitted?: () => void, onRejected?: () => void): Promise<void> {
+  async function send(
+    text: string,
+    onSubmitted?: () => void,
+    onRejected?: () => void,
+  ): Promise<void> {
     const content = text.trim()
     if (!content || creating.value || chat.status.value !== 'ready') return
     if (!userId.value) {
@@ -198,8 +202,12 @@ export function useCloudChatDemo() {
       if (error?.message.startsWith(CHAT_REJECTION_PREFIX)) {
         const messages = chat.messages.value
         const latest = messages[messages.length - 1]
-        if (latest?.role === 'user' && latest.parts.length === 1 &&
-          latest.parts[0]?.type === 'text' && latest.parts[0].text === content) {
+        if (
+          latest?.role === 'user' &&
+          latest.parts.length === 1 &&
+          latest.parts[0]?.type === 'text' &&
+          latest.parts[0].text === content
+        ) {
           chat.messages.value = messages.slice(0, -1)
         }
         chat.clearError()
