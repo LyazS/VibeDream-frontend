@@ -6,6 +6,7 @@ export type ApiCapability =
   | 'agent'
   | 'admin'
   | 'transition-search'
+  | 'item-properties'
   | 'other'
 
 const capabilityPrefixes: readonly [string, ApiCapability][] = [
@@ -33,6 +34,7 @@ function readEnabledCapabilities(): ReadonlySet<ApiCapability> {
           'agent',
           'admin',
           'transition-search',
+          'item-properties',
           'other',
         ].includes(value),
       ),
@@ -71,6 +73,7 @@ export function getApiPath(url: string): string | undefined {
 }
 
 export function getApiCapability(path: string): ApiCapability {
+  if (path === '/api/agent/tools/describe-item-property') return 'item-properties'
   if (path === '/api/transitions/test-search') return 'transition-search'
   if (
     path === '/api/media/upload-policies' ||

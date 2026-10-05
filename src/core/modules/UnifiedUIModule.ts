@@ -4,6 +4,12 @@ import type { CommonEffectType } from '@/core/effect-template/commonTypes'
 
 export type PropertyTabKey = 'basic' | 'transition' | 'mask' | 'filter' | 'animation'
 export type LibrarySectionKey = 'media' | 'transition' | 'filter'
+export type AIPanelTabKey =
+  | 'ai-generate'
+  | 'agent'
+  | 'media-search-test'
+  | 'transition-test'
+  | 'item-property-test'
 
 export interface LibraryRevealRequest {
   assetId: string
@@ -17,7 +23,7 @@ export interface LibraryRevealRequest {
 export function createUnifiedUIModule(_registry: ModuleRegistry): {
   // 状态
   isChatPanelVisible: Ref<boolean>
-  aiPanelActiveTab: Ref<'ai-generate' | 'agent' | 'media-search-test' | 'transition-test'>
+  aiPanelActiveTab: Ref<AIPanelTabKey>
   librarySection: Ref<LibrarySectionKey>
   libraryRevealRequest: Ref<LibraryRevealRequest | null>
   effectTemplateCategorySelection: Ref<Record<CommonEffectType, string>>
@@ -36,9 +42,7 @@ export function createUnifiedUIModule(_registry: ModuleRegistry): {
   const isChatPanelVisible = ref(true)
 
   // AI 面板当前激活的标签页
-  const aiPanelActiveTab = ref<'ai-generate' | 'agent' | 'media-search-test' | 'transition-test'>(
-    'agent',
-  )
+  const aiPanelActiveTab = ref<AIPanelTabKey>('agent')
 
   // 素材区当前激活的一级分区
   const librarySection = ref<LibrarySectionKey>('media')

@@ -11,6 +11,7 @@
       </template>
       <!-- <n-tab name="ai-generate" :tab="t('aiPanel.aiGenerate')"> </n-tab> -->
       <n-tab name="agent" :tab="t('aiPanel.agent')"> </n-tab>
+      <n-tab v-if="showItemPropertyTest" name="item-property-test" tab="属性描述"> </n-tab>
       <n-tab v-if="showMediaSearchTest" name="media-search-test" tab="素材搜索测试"> </n-tab>
       <n-tab v-if="showTransitionTest" name="transition-test" tab="转场测试"> </n-tab>
       <template #suffix>
@@ -61,6 +62,13 @@
     >
       <TransitionTestPanel />
     </div>
+    <div
+      v-if="showItemPropertyTest"
+      v-show="unifiedStore.aiPanelActiveTab === 'item-property-test'"
+      style="flex: 1; display: flex; flex-direction: column; overflow: hidden; min-height: 0"
+    >
+      <ItemPropertyTestPanel />
+    </div>
   </div>
 </template>
 
@@ -72,6 +80,7 @@ import HoverButton from '@/components/base/HoverButton.vue'
 import AgentPanel from './agent/components/AgentPanel.vue'
 import MediaSearchTestPanel from './agent/components/MediaSearchTestPanel.vue'
 import TransitionTestPanel from './agent/components/TransitionTestPanel.vue'
+import ItemPropertyTestPanel from './agent/components/ItemPropertyTestPanel.vue'
 import GeneratePanel from './aigenerate/GeneratePanel.vue'
 import { useAppI18n } from '@/core/composables/useI18n'
 import { useUnifiedStore } from '@/core/unifiedStore'
@@ -81,6 +90,7 @@ const { t } = useAppI18n()
 const unifiedStore = useUnifiedStore()
 const showMediaSearchTest = import.meta.env.DEV || import.meta.env.MODE === 'preview'
 const showTransitionTest = import.meta.env.MODE === 'preview'
+const showItemPropertyTest = import.meta.env.DEV || import.meta.env.MODE === 'preview'
 
 // 定义事件
 defineEmits<{

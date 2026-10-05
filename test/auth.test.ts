@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createUnifiedUserModule } from '../src/core/modules/UnifiedUserModule'
 import { ModuleRegistry, MODULE_NAMES } from '../src/core/modules/ModuleRegistry'
 import { fetchClient } from '../src/utils/fetchClient'
+import { describeItemProperties } from '../src/aipanel/agent/services/itemPropertyService'
 
 vi.mock('../src/core/composables/useI18n', () => ({
   useAppI18n: () => ({ t: (key: string) => key }),
@@ -27,6 +28,36 @@ afterEach(() => {
   fetchClient.setUnauthorizedHandler()
   vi.unstubAllGlobals()
   vi.restoreAllMocks()
+})
+
+describe('migrated property API access', () => {
+  it('sends property queries with the existing same-origin session', async () => {
+    const payload = { tool: 'describe_item_property', error: '转场模板不存在。' }
+    const request = vi.fn(async () => Response.json(payload))
+    vi.stubGlobal('fetch', request)
+    const body = {
+      usage: 'transition_edit' as const,
+      templateId: 'missing',
+      propertyIds: ['timeline.start'],
+    }
+    const result = await describeItemProperties(body)
+    expect(result.data).toEqual(payload)
+    expect(request).toHaveBeenCalledWith(
+      '/api/agent/tools/describe-item-property',
+      expect.objectContaining({
+        method: 'POST',
+        credentials: 'include',
+        body: JSON.stringify(body),
+      }),
+    )
+  })
+
+  it('continues to reject unmigrated agent routes before fetch', async () => {
+    const request = vi.fn()
+    vi.stubGlobal('fetch', request)
+    await expect(fetchClient.post('/api/agent/messages', {})).rejects.toThrow('API 能力暂未开放')
+    expect(request).not.toHaveBeenCalled()
+  })
 })
 
 describe('request-scoped authentication state', () => {

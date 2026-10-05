@@ -5,7 +5,7 @@ export default defineConfig({
   resolve: { alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) } },
   define: {
     'import.meta.env.VITE_API_BASE_URL': JSON.stringify(''),
-    'import.meta.env.VITE_API_CAPABILITIES': JSON.stringify('auth,account,admin'),
+    'import.meta.env.VITE_API_CAPABILITIES': JSON.stringify('auth,account,admin,item-properties'),
   },
   test: { include: ['test/auth.test.ts'] },
 })
