@@ -1,6 +1,6 @@
 /**
  * 工具执行类型定义
- * 在 useEditSDK 和工具实现之间共享
+ * 在工具运行时和工具实现之间共享
  */
 
 export interface ToolExecutionContext {
@@ -9,10 +9,7 @@ export interface ToolExecutionContext {
 
 export interface ToolDefinition {
   name: string
-  execute: (
-    args: Record<string, any>,
-    context?: ToolExecutionContext,
-  ) => Promise<ToolResult>
+  execute: (args: Record<string, any>, context?: ToolExecutionContext) => Promise<ToolResult>
 }
 
 export interface ToolResult {

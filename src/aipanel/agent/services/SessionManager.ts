@@ -397,10 +397,6 @@ export class SessionManager {
       return
     }
 
-    if (interrupt.tool_name === 'edit_sdk') {
-      throw new Error('edit_sdk 已停用')
-    }
-
     if (!this.agentToolRuntime.hasTool(interrupt.tool_name)) {
       throw new Error(`前端工具不存在: ${interrupt.tool_name}`)
     }
