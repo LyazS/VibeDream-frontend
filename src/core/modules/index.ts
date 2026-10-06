@@ -53,3 +53,6 @@ export { createUnifiedAutoSaveModule, type UnifiedAutoSaveModule } from './Unifi
 
 // ==================== 统一吸附模块 ====================
 export { createUnifiedSnapModule, type UnifiedSnapModule } from './UnifiedSnapModule'
+
+// ==================== Agent 单轮测试模块 ====================
+export { createUnifiedAgentTestModule, type UnifiedAgentTestModule } from './UnifiedAgentTestModule'

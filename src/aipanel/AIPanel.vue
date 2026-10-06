@@ -11,6 +11,7 @@
       </template>
       <!-- <n-tab name="ai-generate" :tab="t('aiPanel.aiGenerate')"> </n-tab> -->
       <n-tab name="agent" :tab="t('aiPanel.agent')"> </n-tab>
+      <n-tab v-if="showSingleTurnTest" name="single-turn-test" tab="单轮对话测试"> </n-tab>
       <n-tab v-if="showItemPropertyTest" name="item-property-test" tab="属性描述"> </n-tab>
       <n-tab v-if="showMediaSearchTest" name="media-search-test" tab="素材搜索测试"> </n-tab>
       <n-tab v-if="showTransitionTest" name="transition-test" tab="转场测试"> </n-tab>
@@ -56,6 +57,13 @@
       <MediaSearchTestPanel />
     </div>
     <div
+      v-if="showSingleTurnTest"
+      v-show="unifiedStore.aiPanelActiveTab === 'single-turn-test'"
+      style="flex: 1; display: flex; flex-direction: column; overflow: hidden; min-height: 0"
+    >
+      <SingleTurnTestPanel />
+    </div>
+    <div
       v-if="showTransitionTest"
       v-show="unifiedStore.aiPanelActiveTab === 'transition-test'"
       style="flex: 1; display: flex; flex-direction: column; overflow: hidden"
@@ -81,6 +89,7 @@ import AgentPanel from './agent/components/AgentPanel.vue'
 import MediaSearchTestPanel from './agent/components/MediaSearchTestPanel.vue'
 import TransitionTestPanel from './agent/components/TransitionTestPanel.vue'
 import ItemPropertyTestPanel from './agent/components/ItemPropertyTestPanel.vue'
+import SingleTurnTestPanel from './agent/components/SingleTurnTestPanel.vue'
 import GeneratePanel from './aigenerate/GeneratePanel.vue'
 import { useAppI18n } from '@/core/composables/useI18n'
 import { useUnifiedStore } from '@/core/unifiedStore'
@@ -91,6 +100,8 @@ const unifiedStore = useUnifiedStore()
 const showMediaSearchTest = import.meta.env.DEV || import.meta.env.MODE === 'preview'
 const showTransitionTest = import.meta.env.MODE === 'preview'
 const showItemPropertyTest = import.meta.env.DEV || import.meta.env.MODE === 'preview'
+// 单轮测试入口仅在本地开发和 Preview 环境显示。
+const showSingleTurnTest = import.meta.env.DEV || import.meta.env.MODE === 'preview'
 
 // 定义事件
 defineEmits<{

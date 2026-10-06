@@ -10,6 +10,7 @@ export type AIPanelTabKey =
   | 'media-search-test'
   | 'transition-test'
   | 'item-property-test'
+  | 'single-turn-test'
 
 export interface LibraryRevealRequest {
   assetId: string
