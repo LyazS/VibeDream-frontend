@@ -27,11 +27,7 @@
           </button>
         </div>
       </div>
-      <form
-        v-if="isPending"
-        class="interaction-custom-form"
-        @submit.prevent="submitCustomAnswer"
-      >
+      <form v-if="isPending" class="interaction-custom-form" @submit.prevent="submitCustomAnswer">
         <div class="interaction-custom-index">
           {{ record.interrupt.options.length + 1 }}
         </div>
@@ -55,29 +51,31 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, ref, type DeepReadonly } from 'vue'
 import { IconComponents } from '@/constants/iconComponents'
-import { SESSION_MANAGER } from '@/aipanel/agent/services'
+import { useUnifiedStore } from '@/core/unifiedStore'
 import { useAppI18n } from '@/core/composables/useI18n'
 import type { SessionInteractionRecord } from '../types'
 
 const props = defineProps<{
-  record: SessionInteractionRecord
+  record: DeepReadonly<SessionInteractionRecord>
 }>()
 
 const { t } = useAppI18n()
-const isSending = computed(() => SESSION_MANAGER.isSending.value)
+const store = useUnifiedStore()
+// 其他会话正在运行时也不能恢复当前问题，同工程共享一个运行槽。
+const isSending = computed(() => store.agentBusy || !store.agentReady)
 const isPending = computed(
-  () => SESSION_MANAGER.pendingInteraction.value?.interaction_id === props.record.interrupt.interaction_id,
+  () => store.agentPendingInteraction?.interaction_id === props.record.interrupt.interaction_id,
 )
 const customAnswer = ref('')
 
 const submitOption = async (option: string) => {
   if (!isPending.value || isSending.value) return
   try {
-    await SESSION_MANAGER.submitPendingAskUserOption(option)
+    await store.answerAgentQuestion(option, 'option')
   } catch {
-    // SessionManager already exposes the user-facing error state.
+    // 模块已保存当前错误，交互组件只负责输入。
   }
 }
 
@@ -86,7 +84,7 @@ const submitCustomAnswer = async () => {
   const answer = customAnswer.value
   customAnswer.value = ''
   try {
-    await SESSION_MANAGER.submitPendingAskUserResponse(answer)
+    await store.answerAgentQuestion(answer)
   } catch {
     customAnswer.value = answer
   }
@@ -180,8 +178,7 @@ const submitCustomAnswer = async () => {
   flex: 1;
   min-width: 0;
   border: none;
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.05) 0%, rgba(255, 255, 255, 0.03) 100%);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.05) 0%, rgba(255, 255, 255, 0.03) 100%);
   color: var(--color-text-primary);
   border-radius: var(--border-radius-large);
   min-height: 40px;
@@ -219,8 +216,11 @@ const submitCustomAnswer = async () => {
 }
 
 .interaction-option-chip:hover:not(:disabled) {
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.085) 0%, rgba(255, 255, 255, 0.05) 100%);
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.085) 0%,
+    rgba(255, 255, 255, 0.05) 100%
+  );
   box-shadow:
     0 0 0 1px rgba(255, 255, 255, 0.07),
     0 8px 18px rgba(0, 0, 0, 0.12);
@@ -229,8 +229,11 @@ const submitCustomAnswer = async () => {
 
 .interaction-option-chip:focus-visible {
   outline: none;
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.085) 0%, rgba(255, 255, 255, 0.05) 100%);
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.085) 0%,
+    rgba(255, 255, 255, 0.05) 100%
+  );
   box-shadow:
     0 0 0 1px rgba(255, 255, 255, 0.14),
     0 0 0 3px rgba(255, 159, 67, 0.12),

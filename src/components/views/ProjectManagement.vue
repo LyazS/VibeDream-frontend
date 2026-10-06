@@ -267,7 +267,6 @@
 
 <script setup lang="ts">
 import { ref, onMounted, computed } from 'vue'
-import { useRouter } from 'vue-router'
 import { NScrollbar } from 'naive-ui'
 import MarkdownIt from 'markdown-it'
 import { fileSystemService, unifiedProjectManager } from '@/core/managers'
@@ -296,7 +295,6 @@ interface Announcement {
   content: string
 }
 
-const router = useRouter()
 const { t } = useAppI18n()
 
 // 公告数据
@@ -474,7 +472,7 @@ async function createNewProject() {
     const project = await unifiedProjectManager.createProject(projectName)
 
     // 跳转到编辑器页面
-    router.push(`/editor/${project.id}`)
+    window.location.href = `/editor/${project.id}`
   } catch (error) {
     console.error('创建项目失败:', error)
     // 可以添加错误提示

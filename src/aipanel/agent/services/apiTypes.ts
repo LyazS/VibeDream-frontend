@@ -1,3 +1,4 @@
+/** @deprecated 旧 FastAPI 会话 API，主应用不使用；保留供参考。 */
 import type {
   CancelRunRequest,
   InteractionResultRequest,

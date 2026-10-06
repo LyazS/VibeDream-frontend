@@ -7,7 +7,7 @@ export class IndexedDBService {
   private db: IDBDatabase | null = null
 
   private readonly DB_NAME = 'VideoEditorDB'
-  private readonly DB_VERSION = 2 // 升级版本以添加 sessions store
+  private readonly DB_VERSION = 3 // 新 Agent 独立存储，不读取或迁移旧 sessions。
 
   // 私有构造函数，确保单例
   private constructor() {}
@@ -48,6 +48,14 @@ export class IndexedDBService {
         // sessions store（会话存储）
         if (!db.objectStoreNames.contains('sessions')) {
           db.createObjectStore('sessions', { keyPath: 'sessionId' })
+        }
+        // 会话、模型请求快照和工具日志按账户、工程及工具契约分区。
+        for (const name of ['agentSessions', 'agentTurns', 'agentTools']) {
+          if (!db.objectStoreNames.contains(name)) {
+            const store = db.createObjectStore(name, { keyPath: 'key' })
+            store.createIndex('owner', 'owner')
+            store.createIndex('session', 'sessionKey')
+          }
         }
       }
     })

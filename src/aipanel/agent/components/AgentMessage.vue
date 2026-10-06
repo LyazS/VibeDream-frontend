@@ -9,10 +9,7 @@
               class="markdown-body"
               v-html="renderMarkdown(item.text)"
             ></div>
-            <ToolCallDisplay
-              v-else-if="item.type === MessagePartType.TOOL_CALL"
-              :item="item"
-            />
+            <ToolCallDisplay v-else-if="item.type === MessagePartType.TOOL_CALL" :item="item" />
           </template>
         </div>
       </div>
@@ -21,7 +18,7 @@
 </template>
 
 <script setup lang="ts">
-import { inject } from 'vue'
+import { inject, type DeepReadonly } from 'vue'
 import 'github-markdown-css/github-markdown.css'
 import type { AgentMessage } from '../types'
 import { MessagePartType } from '../types'
@@ -33,7 +30,7 @@ const renderMarkdown = inject<(content: string) => string>('renderMarkdown', (co
 })
 
 defineProps<{
-  messages: AgentMessage[]
+  messages: readonly DeepReadonly<AgentMessage>[]
 }>()
 </script>
 

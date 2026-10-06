@@ -1,3 +1,4 @@
+/** @deprecated 旧会话工具编排，新 Agent 将通过独立 ToolRuntime 复用工具。 */
 import { unref } from 'vue'
 import { useUnifiedStore } from '@/core/unifiedStore'
 import * as tools from './tools'

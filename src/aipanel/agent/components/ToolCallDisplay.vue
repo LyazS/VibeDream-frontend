@@ -1,7 +1,7 @@
 <template>
   <div class="tool-call-display">
     <div class="tool-header tool-header--interactive" @click="toggleExpand">
-      <div class="status-dot"></div>
+      <div class="status-dot" :data-status="item.status"></div>
       <component :is="IconComponents.TOOLS_FILL" size="16px" class="tool-icon" />
       <div class="tool-title-group">
         <div class="tool-title-stack">
@@ -214,6 +214,14 @@ const handleCancelToolExecution = async () => {
   background-color: #10b981;
   flex-shrink: 0;
   box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.1);
+}
+.status-dot[data-status='requested'] {
+  background-color: var(--color-accent-secondary);
+  box-shadow: none;
+}
+.status-dot[data-status='failed'] {
+  background-color: var(--color-error);
+  box-shadow: none;
 }
 
 .tool-icon {

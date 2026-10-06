@@ -1,6 +1,7 @@
 /**
  * 前端工具注册表
  * 负责工具的注册、查询和执行
+ * 新 Agent 通过 ToolRuntime 复用这些执行器和原输出，不初始化旧会话编排。
  */
 
 import { addTrackTool } from './addTrack'

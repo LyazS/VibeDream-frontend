@@ -1,5 +1,5 @@
-// 文本单轮协议版本，客户端发出的帧和服务端事件必须使用同一版本。
-export const AGENT_PROTOCOL_VERSION = 'agent-text-v2'
+// 单轮文本及工具协议，客户端与服务端必须使用同一版本。
+export const AGENT_PROTOCOL_VERSION = 'agent-tools-v1'
 export type Acceptance = 'not_accepted' | 'accepted' | 'unknown'
 export class AgentClientError extends Error {
   /** 携带轮次 ID 与受理状态，便于界面区分未受理、已受理及结果未知。 */
@@ -21,16 +21,34 @@ export type ConnectionState = Readonly<{
   /** 需要向调用方暴露的连接错误，正常空闲或页面退出时为 null。 */
   error: string | null
 }>
-export type TextMessage = { role: 'system' | 'user' | 'assistant'; content: string }
+/** 请求正文支持字符串或有序文本部件，保留各段原文及边界；暂不支持图片等其他部件。 */
+export type TextContentPart = { type: 'text'; text: string }
+export type MessageContent = string | TextContentPart[]
+export type TextMessage = { role: 'system' | 'user' | 'assistant'; content: MessageContent }
+export type ToolCall = { id: string; name: string; args: Record<string, unknown> }
+export type AssistantMessage = {
+  role: 'assistant'
+  content: string
+  tool_calls?: ToolCall[]
+}
+export type ModelMessage =
+  | TextMessage
+  | (Omit<AssistantMessage, 'content'> & { content: MessageContent })
+  | { role: 'tool'; content: MessageContent; tool_call_id: string; name: string }
+export type ModelTool = {
+  name: string
+  description: string
+  parameters: Record<string, unknown>
+}
 export type Completion = {
   turnId: string
-  message: { role: 'assistant'; content: string }
+  message: AssistantMessage
   usage: { inputTokens: number; outputTokens: number; totalTokens: number } | null
 }
 export type StreamParams = {
   turnId: string
-  taskId: string
-  messages: TextMessage[]
+  messages: ModelMessage[]
+  tools?: ModelTool[]
   projectId: string
 }
 export type Delta = { delta: string }
@@ -71,6 +89,8 @@ type Call = {
   started: ReturnType<typeof deferred<CompletionStream>>
   /** 流式调用的最终结果 Promise 控制入口。 */
   final: ReturnType<typeof deferred<Completion>>
+  /** 调用槽释放的等待入口；本地取消消费后仍须等待服务端终态或连接清理。 */
+  released: ReturnType<typeof deferred<void>>
   /** 尚未消费的文本增量，按到达顺序缓存。 */
   queue: Delta[]
   /** 迭代器等待新事件时登记的唤醒入口，每次唤醒后移除。 */
@@ -157,6 +177,10 @@ export class AgentClient {
   get connectionState(): ConnectionState {
     return this.state
   }
+  /** 等待当前调用槽释放，不关闭连接或重发请求；空闲时立即完成。 */
+  waitForIdle(): Promise<void> {
+    return this.active?.released.promise ?? Promise.resolve()
+  }
   /** 订阅连接状态并立即推送当前值，返回用于取消订阅的函数。 */
   subscribeConnection(listener: (state: ConnectionState) => void) {
     this.listeners.add(listener)
@@ -207,6 +231,7 @@ export class AgentClient {
       ended: false,
       started: deferred<CompletionStream>(),
       final: deferred<Completion>(),
+      released: deferred<void>(),
       queue: [],
       detachAbort: /** 未注册取消监听器时提供可安全调用的空清理函数。 */ () => {},
       stream: undefined as unknown as CompletionStream,
@@ -295,9 +320,9 @@ export class AgentClient {
       type: 'turn.start',
       protocol_version: AGENT_PROTOCOL_VERSION,
       turn_id: params.turnId,
-      task_id: params.taskId,
       project_id: params.projectId,
       messages: params.messages,
+      tools: params.tools ?? [],
     })
     call.sent = true
     this.socket!.send(frame)
@@ -444,23 +469,65 @@ export class AgentClient {
       case 'turn.completed': {
         const message = v.message as Record<string, unknown> | null
         const usage = v.usage as Record<string, unknown> | null
-        if (
+
+        // 1. 必须先收到 turn.started，才能接受成功终态；消息须存在、角色为助手且正文为字符串。
+        // 先检查这些基本条件，避免后续对缺失消息或非字符串正文调用 Object.keys / trim。
+        const hasInvalidMessageShape =
           !call.accepted ||
           !message ||
           message.role !== 'assistant' ||
-          typeof message.content !== 'string' ||
-          !message.content.trim() ||
-          Object.keys(message).some(
-            /** 检测最终消息是否包含协议未定义的字段。 */ (key) =>
-              !['role', 'content'].includes(key),
-          ) ||
-          (usage !== null &&
-            (!usage ||
-              !['inputTokens', 'outputTokens', 'totalTokens'].every(
-                /** 逐项验证最终用量为非负安全整数。 */
-                (key) => Number.isSafeInteger(usage[key]) && Number(usage[key]) >= 0,
-              ) ||
-              Number(usage.totalTokens) !== Number(usage.inputTokens) + Number(usage.outputTokens)))
+          typeof message.content !== 'string'
+        if (hasInvalidMessageShape) {
+          this.close('PROTOCOL_INVALID')
+          return
+        }
+
+        // 2. 普通回复必须有非空白正文；工具调用可以只有 tool_calls 而没有正文。
+        // 此处只判断是否有内容，tool_calls 的实际结构由下一项检查。
+        const isEmptyMessage = !(message.content as string).trim() && !message.tool_calls
+
+        // 3. tool_calls 可以省略；提供时必须是数组，且当前协议每轮只允许一个工具调用。
+        const hasInvalidToolCalls =
+          message.tool_calls !== undefined &&
+          (!Array.isArray(message.tool_calls) ||
+            message.tool_calls.length !== 1 ||
+            message.tool_calls.some(
+              (toolCall) =>
+                !toolCall ||
+                // 工具调用 ID 和工具名称必须是非空字符串，用于结果配对和执行器查找。
+                typeof toolCall.id !== 'string' ||
+                !toolCall.id ||
+                typeof toolCall.name !== 'string' ||
+                !toolCall.name ||
+                // 参数必须是非 null 的对象且不能是数组；具体工具的参数 schema 由 ToolRuntime 校验。
+                !toolCall.args ||
+                typeof toolCall.args !== 'object' ||
+                Array.isArray(toolCall.args) ||
+                // 工具调用只接受协议定义的三个字段，避免把其他格式当作合法调用。
+                Object.keys(toolCall).some((key) => !['id', 'name', 'args'].includes(key)),
+            ))
+
+        // 4. 助手消息只接受 role、content 和可选的 tool_calls，出现其他字段即违反协议。
+        const hasUnexpectedMessageFields = Object.keys(message).some(
+          (key) => !['role', 'content', 'tool_calls'].includes(key),
+        )
+
+        // 5. usage 可以显式为 null；否则三个 token 数都必须是非负安全整数，且总量等于输入加输出。
+        // undefined（遗漏 usage）、缺字段、负数、小数及总量不一致都会被拒绝。
+        const hasInvalidUsage =
+          usage !== null &&
+          (!usage ||
+            !['inputTokens', 'outputTokens', 'totalTokens'].every(
+              (key) => Number.isSafeInteger(usage[key]) && Number(usage[key]) >= 0,
+            ) ||
+            Number(usage.totalTokens) !== Number(usage.inputTokens) + Number(usage.outputTokens))
+
+        // 任一校验失败都关闭连接并拒绝当前调用，不把异常终态提交为成功回复。
+        if (
+          isEmptyMessage ||
+          hasInvalidToolCalls ||
+          hasUnexpectedMessageFields ||
+          hasInvalidUsage
         ) {
           this.close('PROTOCOL_INVALID')
           return
@@ -565,6 +632,7 @@ export class AgentClient {
       this.active = undefined
       this.scheduleIdle()
     }
+    call.released.resolve()
   }
   /** 仅在已连接且没有活动调用时安排空闲关闭。 */
   private scheduleIdle() {

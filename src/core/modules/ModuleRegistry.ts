@@ -16,7 +16,7 @@ import type { UnifiedUserModule } from './UnifiedUserModule'
 import type { UnifiedDirectoryModule } from './UnifiedDirectoryModule'
 import type { UnifiedMediaBunnyModule } from './UnifiedMediaBunnyModule'
 import type { UnifiedUIModule } from './UnifiedUIModule'
-import type { UnifiedAgentTestModule } from './UnifiedAgentTestModule'
+import type { UnifiedAgentModule } from './UnifiedAgentModule'
 // 模块名称常量
 export const MODULE_NAMES = {
   CONFIG: 'config',
@@ -36,13 +36,12 @@ export const MODULE_NAMES = {
   DIRECTORY: 'directory',
   MEDIABUNNY: 'mediabunny',
   UI: 'ui',
-  // 单轮协议测试专用模块，正式 Agent 的注册入口留待后续实现。
-  AGENT_TEST: 'agentTest',
+  AGENT: 'agent',
 } as const
 
 // 模块类型映射
 export type ModuleMap = {
-  [MODULE_NAMES.AGENT_TEST]: UnifiedAgentTestModule
+  [MODULE_NAMES.AGENT]: UnifiedAgentModule
   [MODULE_NAMES.CONFIG]: UnifiedConfigModule
   [MODULE_NAMES.MEDIA]: UnifiedMediaModule
   [MODULE_NAMES.TRACK]: UnifiedTrackModule

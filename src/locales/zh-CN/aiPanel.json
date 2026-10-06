@@ -4,6 +4,17 @@
     "agent": "智能助手",
     "tools": {
       "unknown": "未知工具",
+      "ask_user": "向用户提问",
+      "read_project_info": "读取工程信息",
+      "modify_project_info": "修改工程信息",
+      "create_folder": "创建文件夹",
+      "rename_library_item": "重命名素材库项目",
+      "move_library_items": "移动素材库项目",
+      "delete_empty_folder": "删除空文件夹",
+      "describe_item_property": "查看属性说明",
+      "search_transitions": "检索转场",
+      "apply_transition": "应用转场",
+      "remove_item": "删除时间轴项目",
       "add_track": "新增轨道",
       "create_subtitle_clip": "创建字幕片段",
       "insert_clip": "插入片段",
@@ -53,6 +64,8 @@
     },
     "agentStatus": {
       "thinking": "思考中",
+      "running": "运行中",
+      "waiting": "等待回答",
       "completed": "已完成"
     },
     "indexAllMediaSuccess": "已提交 {count} 个素材的索引任务",

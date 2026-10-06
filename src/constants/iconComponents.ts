@@ -103,6 +103,7 @@ import {
 
   // AI 相关
   RiChatAiFill,
+  RiChatAiLine,
   RiHistoryLine,
   RiSendPlaneFill,
 
@@ -246,6 +247,7 @@ export const IconComponents = {
 
   // AI
   CHAT_AI: RiChatAiFill,
+  CHAT_AI_LINE: RiChatAiLine,
   HISTORY: RiHistoryLine,
   SEND: RiSendPlaneFill,
 

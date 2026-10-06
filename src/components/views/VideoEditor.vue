@@ -109,8 +109,7 @@ onMounted(async () => {
 })
 
 onUnmounted(() => {
-  // 编辑器退出时关闭 Agent 测试连接并丢弃当前轮次的迟到结果。
-  unifiedStore.leaveAgentTestProject()
+  unifiedStore.leaveAgentProject()
   // 禁用自动保存（模块化版本）
   unifiedStore.disableAutoSave()
   // 清理键盘快捷键

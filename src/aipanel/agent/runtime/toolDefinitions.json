@@ -1,0 +1,962 @@
+{
+  "contractVersion": "editor-tools-v1",
+  "tools": [
+    {
+      "name": "ask_user",
+      "description": "What It Does\n-------------\n向用户发起一次澄清提问，并等待用户回答后继续任务。\n\nUse When\n---------\n- 继续执行所需的关键信息缺失\n- 缺失信息无法通过素材、轨道、片段或关键帧读取工具获得\n- 贸然默认会改变用户意图或造成错误编辑\n\nDo NOT Use When\n---------------\n- 可以通过读取素材、轨道、片段等现有信息直接取得答案\n- 能安全采用常识默认值且不会影响编辑结果\n- 任务已经完成，应直接回复用户\n\nReturns\n--------\n最终返回给你的是用户回答文本，格式如下：\n\n[ASK_RESULT]\n<answer>\n\nLimitations\n-----------\n一次只问一个最阻塞的问题。候选项应简短、互斥、易选择；不要提供“其他/自定义”选项，用户仍可自由补充回答。",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "question": {
+            "type": "string",
+            "description": "直接展示给用户的单个澄清问题。必须具体说明你需要用户决定什么，不要一次询问多个问题。"
+          },
+          "suggested_options": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "description": "一个简短、互斥、可点击的候选回答。"
+            },
+            "description": "建议回答选项。优先提供 2-3 个简短且互斥的候选；不要包含“其他/自定义”。"
+          }
+        },
+        "required": ["question", "suggested_options"]
+      }
+    },
+    {
+      "name": "read_project_info",
+      "description": "What It Does\n-------------\n读取当前工程的名称、描述和画布尺寸信息。\n\nUse When\n---------\n- 需要查看当前工程名称或描述\n- 需要查看当前画布宽高或对应的预设尺寸\n- 修改工程信息前，需要先读取当前值\n\nDo NOT Use When\n---------------\n- 需要修改工程信息时，应使用 modify_project_info\n- 需要读取时间轴、轨道或素材信息时，应使用对应读取工具\n\nReturns\n--------\n{\n  \"tool\": \"read_project_info\",           // 工具名\n  \"name\": \"<name>\",                      // 当前工程名称\n  \"description\": \"<description>\",        // 当前工程描述\n  \"canvas\": {                            // 当前画布信息\n    \"width\": \"<width>\",                  // 画布宽度（像素）\n    \"height\": \"<height>\",                // 画布高度（像素）\n    \"presetKey\": \"<presetKey>\"           // 命中的预设尺寸 key；自定义尺寸时为 null\n  }\n}\n\n{\n  \"tool\": \"read_project_info\",           // 工具名\n  \"error\": \"<errorMessage>\"              // 错误说明\n}\n\nLimitations\n-----------\n只返回最小工程信息，不返回项目 ID、时间戳、版本号或其他设置。",
+      "parameters": {
+        "type": "object",
+        "properties": {},
+        "required": [],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "modify_project_info",
+      "description": "What It Does\n-------------\n修改当前工程的名称、描述或画布尺寸。\n\nUse When\n---------\n- 需要修改工程名称\n- 需要修改工程描述\n- 需要切换画布预设尺寸或设置自定义宽高\n\nDo NOT Use When\n---------------\n- 需要先查看当前工程信息时，应使用 read_project_info\n- 需要修改轨道、片段或素材时，应使用对应编辑工具\n\nReturns\n--------\n{\n  \"tool\": \"modify_project_info\",         // 工具名\n  \"before\": {                            // 修改前工程信息\n    \"name\": \"<oldName>\",                 // 修改前工程名称\n    \"description\": \"<oldDescription>\",   // 修改前工程描述\n    \"canvas\": {                          // 修改前画布信息\n      \"width\": \"<oldWidth>\",             // 修改前画布宽度（像素）\n      \"height\": \"<oldHeight>\",           // 修改前画布高度（像素）\n      \"presetKey\": \"<oldPresetKey>\"      // 修改前预设尺寸 key；自定义尺寸时为 null\n    }\n  },\n  \"after\": {                             // 修改后工程信息\n    \"name\": \"<newName>\",                 // 修改后工程名称\n    \"description\": \"<newDescription>\",   // 修改后工程描述\n    \"canvas\": {                          // 修改后画布信息\n      \"width\": \"<newWidth>\",             // 修改后画布宽度（像素）\n      \"height\": \"<newHeight>\",           // 修改后画布高度（像素）\n      \"presetKey\": \"<newPresetKey>\"      // 修改后预设尺寸 key；自定义尺寸时为 null\n    }\n  }\n}\n\n{\n  \"tool\": \"modify_project_info\",         // 工具名\n  \"error\": \"<errorMessage>\"              // 错误说明\n}\n\nLimitations\n-----------\nmatch 和 apply 的顶层 key 集合必须一致。canvas 只支持使用 presetKey 切换预设，或使用 width/height 设置尺寸。",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "match": {
+            "type": "object",
+            "description": "当前工程信息匹配条件。键只支持 name、description、canvas；必须来自最近一次 read_project_info 返回，用于防止覆盖用户刚刚修改过的值。",
+            "properties": {
+              "name": {
+                "type": "string",
+                "description": "当前工程名称。必须与 read_project_info 返回的 name 完全一致。"
+              },
+              "description": {
+                "type": "string",
+                "description": "当前工程描述。必须与 read_project_info 返回的 description 完全一致。"
+              },
+              "canvas": {
+                "type": "object",
+                "description": "当前画布完整信息。必须完整包含 width、height、presetKey，并与 read_project_info 返回的 canvas 完全一致。",
+                "properties": {
+                  "width": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "height": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "presetKey": {
+                    "type": ["string", "null"],
+                    "description": "当前画布对应的预设 key；自定义尺寸时为 null。"
+                  }
+                },
+                "required": ["width", "height", "presetKey"],
+                "additionalProperties": false
+              }
+            },
+            "additionalProperties": false
+          },
+          "apply": {
+            "type": "object",
+            "description": "要应用的新工程信息。顶层 key 集合必须与 match 完全一致。",
+            "properties": {
+              "name": {
+                "type": "string",
+                "description": "新的工程名称。必须是非空字符串。"
+              },
+              "description": {
+                "type": "string",
+                "description": "新的工程描述。可为空字符串。"
+              },
+              "canvas": {
+                "type": "object",
+                "description": "新的画布设置。二选一：只传 presetKey 切换到预设尺寸，或只传 width 和 height 设置自定义尺寸。",
+                "properties": {
+                  "presetKey": {
+                    "type": "string",
+                    "description": "目标预设尺寸 key。必须是系统支持的稳定 presetKey。"
+                  },
+                  "width": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "目标画布宽度。与 height 一起传入，用于设置自定义尺寸。"
+                  },
+                  "height": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "目标画布高度。与 width 一起传入，用于设置自定义尺寸。"
+                  }
+                },
+                "additionalProperties": false
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "required": ["match", "apply"],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "list_media",
+      "description": "What It Does\n-------------\n浏览当前项目素材库中某个目录的直接子项。\n\nUse When\n---------\n- 需要查看素材库、文件夹或某个目录下有什么\n- 需要按目录逐层浏览素材\n- 需要先取得素材 mediaId，再读取素材详情或插入时间轴\n\nDo NOT Use When\n---------------\n- 需要按内容语义找镜头、图片或视频片段时，应使用 search_media\n- 需要读取素材详情时，应使用 read_media\n- 需要查看时间轴轨道或 clip，应使用 read_tracks/read_item\n\nReturns\n--------\n{\n  \"tool\": \"list_media\",                   // 工具名\n  \"path\": \"<path>\",                       // 当前返回结果对应的规范目录路径\n  \"entries\": [\n    {\n      \"type\": \"directory\",                // 目录条目\n      \"name\": \"<directoryName>\"           // 目录名；可继续拼接到路径中做下一次 list_media\n    },\n    {\n      \"type\": \"media\",                    // 素材条目\n      \"mediaId\": \"<mediaId>\",             // 完整素材 ID\n      \"name\": \"<mediaName>\",              // 用户定义的素材名\n      \"mediaType\": \"<mediaType>\",         // 素材类型\n      \"title\": \"<title>\",                 // 可选；视觉识别生成的标题\n      \"shots\": \"<shotCount>\"              // 可选；视频分镜数量\n    }\n  ],\n  \"page\": {\n    \"offset\": \"<offset>\",                 // 本次返回的起始位置，1-based\n    \"limit\": \"<limit>\",                   // 本次请求的返回上限\n    \"total\": \"<total>\",                   // 当前目录下条目总数\n    \"nextOffset\": \"<nextOffset>\"          // 下一页起始位置；没有下一页时为 null\n  }\n}\n\n{\n  \"tool\": \"list_media\",                   // 工具名\n  \"error\": \"<errorMessage>\"               // 错误说明\n}\n\nLimitations\n-----------\n只返回当前目录直接子项，不递归。",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "filePath": {
+            "type": "string",
+            "description": "要浏览的素材目录名称路径。必须以 '/' 开头，例如 '/'、'/视频/'、'/角色/张三/'。可直接使用用户指定的目录，或基于上一次 list_media 返回的 directory name 继续拼接。"
+          },
+          "offset": {
+            "type": "integer",
+            "description": "分页起始位置，1-indexed。省略时从第 1 个条目开始；当上一次返回结果未覆盖全部条目时，用于继续翻页。",
+            "minimum": 1
+          },
+          "limit": {
+            "type": "integer",
+            "description": "本次最多返回的条目数。省略时默认返回 20 条；当只需快速预览时可取较小值。",
+            "minimum": 1
+          }
+        },
+        "required": ["filePath"],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "read_media",
+      "description": "What It Does\n-------------\n读取一个或多个素材的详情信息。\n\nUse When\n---------\n- 需要读取素材基础信息、时长、类型或摘要\n- 需要读取视频素材的分镜信息\n\nDo NOT Use When\n---------------\n- 需要按目录浏览素材库时，应使用 list_media\n- 需要按内容语义搜索素材时，应使用 search_media\n- 需要读取时间轴 clip 状态，应使用 read_item\n\nReturns\n--------\n{\n  \"tool\": \"read_media\",                   // 工具名\n  \"mediaItems\": [\n    {\n      \"mediaId\": \"<mediaId>\",             // 素材 ID\n      \"status\": \"<status>\",               // 读取结果状态；常见为 found 或 not_found\n      \"mediaType\": \"<mediaType>\",         // 素材类型\n      \"basic\": {                          // 素材基础信息\n        \"name\": \"<name>\",                 // 素材名称\n        \"width\": \"<width>\",               // video/image 的原始宽度\n        \"height\": \"<height>\",             // video/image 的原始高度\n        \"duration\": \"<duration>\"          // video/audio 的时长，格式 HH:MM:SS+FF\n      },\n      \"summary\": \"<summary>\",             // 素材摘要\n      \"segments\": [                       // 视频分镜列表\n        {\n          \"index\": \"<index>\",             // 分镜序号\n          \"clipStart\": \"<clipStart>\",     // 分镜开始时间码\n          \"clipEnd\": \"<clipEnd>\",         // 分镜结束时间码\n          \"title\": \"<title>\",             // 分镜标题\n          \"summary\": \"<summary>\"          // 分镜摘要\n        }\n      ],\n      \"warning\": \"<warningMessage>\",      // 警告信息\n      \"error\": \"<errorMessage>\"           // 错误信息\n    }\n  ]\n}\n\n{\n  \"tool\": \"read_media\",                   // 工具名\n  \"error\": \"<errorMessage>\"               // 错误说明\n}\n\nLimitations\n-----------\n默认返回 basic 和 summary。includeSegments 为 true 时额外返回视频分镜。\n如果内容分析或分镜分析不可用，工具会在 error 或 warning 中说明。",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "mediaIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "description": "素材 ID。"
+            },
+            "description": "素材 ID 数组，1-10 个。仅用于读取已知素材；如果还没有 mediaId，应先通过 list_media 或 search_media 获取。必须使用完整原始 mediaId，不要截断、补全、翻译或修改扩展名。",
+            "minItems": 1,
+            "maxItems": 10
+          },
+          "includeSegments": {
+            "type": "boolean",
+            "description": "是否额外返回视频分镜。默认 false；只有需要选择视频片段、裁切源区间或分析分镜时才设为 true。"
+          }
+        },
+        "required": ["mediaIds"],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "search_media",
+      "description": "What It Does\n-------------\n按自然语言在当前项目内检索图片素材和视频分片候选。\n\nUse When\n---------\n- 需要“找素材”“找镜头”或“搜索某类图片或视频片段”\n- 需要根据画面、内容、动作、人物、场景或语义描述找候选素材\n- 需要先找到候选，再读取详情或插入时间轴\n\nDo NOT Use When\n---------------\n- 需要按目录浏览素材库时，应使用 list_media\n- 需要素材详情时，应使用 read_media\n- 需要查看时间轴上已有片段时，应使用 read_item\n\nReturns\n--------\n{\n  \"tool\": \"search_media\",                 // 工具名\n  \"query\": \"<query>\",                     // 本次检索词\n  \"requestedTopK\": \"<topK>\",              // 请求返回的候选数量\n  \"results\": [\n    {\n      \"type\": \"<mediaType>\",              // 候选素材类型；video 或 image\n      \"mediaId\": \"<mediaId>\",             // 候选素材 ID\n      \"mediaName\": \"<mediaName>\",         // 候选素材名称\n      \"verdict\": \"<verdict>\",             // 检索校验结论\n      \"segment\": {                        // 命中的视频分段\n        \"index\": \"<segmentIndex>\",        // 分段序号\n        \"clipStart\": \"<clipStart>\",       // 分段开始时间码\n        \"clipEnd\": \"<clipEnd>\"            // 分段结束时间码\n      },\n      \"evidence\": \"<reason>\"              // 检索校验依据\n    }\n  ]\n}\n\n{\n  \"tool\": \"search_media\",                 // 工具名\n  \"error\": \"<errorMessage>\"               // 错误说明\n}\n\nLimitations\n-----------\n仅支持检索 video 和 image 素材。\n工具会在检索前自动补齐可搜索素材的索引；若索引失败，检索可能失败或结果不完整。\nevidence 是检索校验依据，不是正式素材摘要；需要素材完整详情时继续调用 read_media。",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "query": {
+            "type": "string",
+            "description": "自然语言检索词。应来自用户对画面、内容、动作、人物、场景或素材类型的描述；不要填目录路径或 mediaId。"
+          },
+          "top_k": {
+            "type": "integer",
+            "description": "希望返回的候选数量，范围 1-10。默认 5；用户要求多个备选时适当增大。",
+            "minimum": 1,
+            "maximum": 10
+          }
+        },
+        "required": ["query"]
+      }
+    },
+    {
+      "name": "create_folder",
+      "description": "What It Does\n-------------\n在素材库指定目录下创建一个普通文件夹。操作会写入项目的撤销/重做历史。\n\nUse When\n---------\n- 用户要求在某个素材库目录中新建文件夹\n\nDo NOT Use When\n---------------\n- 用户要求导入素材、创建特殊资源或删除目录\n- 目标目录路径不明确时；应先使用 list_media 或 ask_user\n\nReturns\n-------\n返回创建前后状态、新文件夹路径和历史记录描述。\n\nLimitations\n-----------\nparentPath 必须是以 / 开头的现有目录路径。文件夹名称遵循素材库现有命名规则，不能与同级文件夹重名。",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "parentPath": {
+            "type": "string",
+            "description": "父目录的规范路径，例如 / 或 /素材/。必须是用户指定、被动上下文或 list_media 已确认的现有目录。"
+          },
+          "name": {
+            "type": "string",
+            "description": "新文件夹名称。不能是空白、.、..，且不能包含 / 或 \\\\。"
+          }
+        },
+        "required": ["parentPath", "name"],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "rename_library_item",
+      "description": "What It Does\n-------------\n重命名一个素材库文件夹或素材。操作会写入项目的撤销/重做历史。\n\nUse When\n---------\n- 用户要求修改已知文件夹或素材的名称\n\nDo NOT Use When\n---------------\n- 需要移动项目，应使用 move_library_items\n- 目标身份、当前名称或父目录不明确时；应先使用 list_media、被动上下文或 ask_user\n\nReturns\n-------\n返回项目的 before、after 和历史记录描述。\n\nLimitations\n-----------\n文件夹用完整路径定位；素材必须使用完整 mediaId 定位。match 是并发校验，当前状态不匹配时不会执行。",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "item": {
+            "oneOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "const": "directory"
+                  },
+                  "path": {
+                    "type": "string",
+                    "description": "待重命名文件夹的完整规范路径，例如 /素材/原始视频/。"
+                  },
+                  "match": {
+                    "type": "object",
+                    "properties": {
+                      "name": {
+                        "type": "string",
+                        "description": "当前名称。必须与最近一次读取或被动上下文中的值完全一致。"
+                      },
+                      "parentPath": {
+                        "type": "string",
+                        "description": "当前父目录的规范路径。必须与最近一次读取或被动上下文中的值完全一致。"
+                      }
+                    },
+                    "required": ["name", "parentPath"],
+                    "additionalProperties": false
+                  }
+                },
+                "required": ["type", "path", "match"],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "const": "media"
+                  },
+                  "mediaId": {
+                    "type": "string",
+                    "description": "待重命名素材的完整 mediaId，必须来自 list_media、read_media 或被动上下文。"
+                  },
+                  "match": {
+                    "type": "object",
+                    "properties": {
+                      "name": {
+                        "type": "string",
+                        "description": "当前名称。必须与最近一次读取或被动上下文中的值完全一致。"
+                      },
+                      "parentPath": {
+                        "type": "string",
+                        "description": "当前父目录的规范路径。必须与最近一次读取或被动上下文中的值完全一致。"
+                      }
+                    },
+                    "required": ["name", "parentPath"],
+                    "additionalProperties": false
+                  }
+                },
+                "required": ["type", "mediaId", "match"],
+                "additionalProperties": false
+              }
+            ]
+          },
+          "newName": {
+            "type": "string",
+            "description": "新的非空名称。"
+          }
+        },
+        "required": ["item", "newName"],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "move_library_items",
+      "description": "What It Does\n-------------\n将一个或多个素材、文件夹或混合项目移动到目标文件夹。整个操作只写入一条可撤销历史记录。\n\nUse When\n---------\n- 用户要求整理素材库、移动选中素材或移动文件夹\n\nDo NOT Use When\n---------------\n- 需要复制素材；素材库当前只支持移动\n- 目标、来源或项目身份不明确时；应先使用 list_media、被动上下文或 ask_user\n\nReturns\n-------\n返回每个项目移动前后状态、目标路径和历史记录描述。\n\nLimitations\n-----------\n素材使用 mediaId 和 match.parentPath；文件夹使用完整路径和 match。不能移动根目录、移动到当前父目录、移动到自身/子目录，或同时移动存在父子关系的文件夹。",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "minItems": 1,
+            "description": "要移动的素材库项目。每个项目必须提供最新 match 作为状态校验。",
+            "items": {
+              "oneOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "const": "directory"
+                    },
+                    "path": {
+                      "type": "string",
+                      "description": "待移动文件夹的完整规范路径。"
+                    },
+                    "match": {
+                      "type": "object",
+                      "properties": {
+                        "name": {
+                          "type": "string",
+                          "description": "当前名称。必须与最近一次读取或被动上下文中的值完全一致。"
+                        },
+                        "parentPath": {
+                          "type": "string",
+                          "description": "当前父目录的规范路径。必须与最近一次读取或被动上下文中的值完全一致。"
+                        }
+                      },
+                      "required": ["name", "parentPath"],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": ["type", "path", "match"],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "const": "media"
+                    },
+                    "mediaId": {
+                      "type": "string",
+                      "description": "待移动素材的完整 mediaId。"
+                    },
+                    "match": {
+                      "type": "object",
+                      "properties": {
+                        "name": {
+                          "type": "string",
+                          "description": "当前名称。必须与最近一次读取或被动上下文中的值完全一致。"
+                        },
+                        "parentPath": {
+                          "type": "string",
+                          "description": "当前父目录的规范路径。必须与最近一次读取或被动上下文中的值完全一致。"
+                        }
+                      },
+                      "required": ["name", "parentPath"],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": ["type", "mediaId", "match"],
+                  "additionalProperties": false
+                }
+              ]
+            }
+          },
+          "targetPath": {
+            "type": "string",
+            "description": "目标文件夹的完整规范路径，例如 /整理后/。"
+          }
+        },
+        "required": ["items", "targetPath"],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "delete_empty_folder",
+      "description": "What It Does\n-------------\n删除一个空素材库文件夹。操作会写入项目的撤销/重做历史。\n\nUse When\n---------\n- 用户要求删除已经确认为空的文件夹\n\nDo NOT Use When\n---------------\n- 需要删除素材或非空文件夹；这些操作不属于此工具\n- 路径或当前状态不明确时；应先使用 list_media 或 ask_user\n\nReturns\n-------\n返回删除前快照、after: null 和历史记录描述。\n\nLimitations\n-----------\n不能删除根目录。目录必须没有直属素材且没有子文件夹；match 不一致或目录变为非空时不会执行。",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string",
+            "description": "待删除空文件夹的完整规范路径。"
+          },
+          "match": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string",
+                "description": "当前名称。必须与最近一次读取或被动上下文中的值完全一致。"
+              },
+              "parentPath": {
+                "type": "string",
+                "description": "当前父目录的规范路径。必须与最近一次读取或被动上下文中的值完全一致。"
+              }
+            },
+            "required": ["name", "parentPath"],
+            "additionalProperties": false
+          }
+        },
+        "required": ["path", "match"],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "add_track",
+      "description": "What It Does\n-------------\n在时间轴中新增一条指定类型的轨道。\n\nUse When\n---------\n- 需要新增轨道\n- 插入素材或字幕前发现没有合适类型的目标轨道，且用户意图允许创建\n\nDo NOT Use When\n---------------\n- 已有合适轨道，应直接使用现有 trackId\n- 需要先查看轨道结构或轨道顺序时，应使用 list_tracks\n\nReturns\n--------\n{\n  \"tool\": \"add_track\",                    // 工具名\n  \"trackId\": \"<trackId>\",                 // 新轨道 ID\n  \"index\": \"<trackIndex>\"                 // 新轨道在时间轴中的 0-based 索引\n}\n\n{\n  \"tool\": \"add_track\",                    // 工具名\n  \"error\": \"<errorMessage>\"               // 错误说明；\n}",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "trackType": {
+            "type": "string",
+            "enum": ["video", "audio", "text"],
+            "description": "要新增的轨道类型。video 用于 video/image 素材；audio 用于音频；text 用于字幕/文字。"
+          },
+          "position": {
+            "type": "integer",
+            "description": "可选插入位置，0-based 轨道索引。来自用户指定或根据 list_tracks 返回的轨道顺序推导；不提供时追加到末尾。",
+            "minimum": 0
+          }
+        },
+        "required": ["trackType"]
+      }
+    },
+    {
+      "name": "list_tracks",
+      "description": "What It Does\n-------------\n获取当前时间轴所有轨道的概览信息。\n\nUse When\n---------\n- 需要查看时间轴结构或当前有哪些轨道\n- 需要选择 video/audio/text 目标轨道\n\nDo NOT Use When\n---------------\n- 需要读取一个或多个轨道上的片段时，应使用 read_tracks\n- 需要读取某个 clip 详情，应使用 read_item\n- 需要浏览素材库，应使用 list_media\n\nReturns\n--------\n{\n  \"tool\": \"list_tracks\",                  // 工具名\n  \"tracks\": [\n    {\n      \"trackId\": \"<trackId>\",             // 轨道 ID\n      \"name\": \"<trackName>\",              // 轨道名称\n      \"type\": \"<trackType>\",              // 轨道类型\n      \"index\": \"<trackIndex>\",            // 轨道在时间轴中的 0-based 顺序\n      \"visible\": \"<visible>\",             // 轨道是否可见\n      \"muted\": \"<muted>\",                 // 轨道是否静音\n      \"clipCount\": \"<clipCount>\"          // 当前轨道上的片段数量\n    }\n  ],\n  \"total\": \"<total>\"                      // 当前时间轴轨道总数\n}\n\n{\n  \"tool\": \"list_tracks\",                  // 工具名\n  \"error\": \"<errorMessage>\"               // 错误说明\n}\n\nLimitations\n-----------\n只返回轨道概览，不返回每条轨道上的完整 clip 列表；\n需要片段列表时继续调用 read_tracks。",
+      "parameters": {
+        "type": "object",
+        "properties": {},
+        "required": [],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "read_tracks",
+      "description": "What It Does\n-------------\n读取一个或多个指定轨道上的时间轴 item 列表，可按时间范围过滤。items 同时包含 clip 和虚拟转场，并按时间轴顺序混合排列；转场紧跟其左侧 clip，并位于同一拼接点的右侧 clip 之前。\n\nUse When\n---------\n- 已知一个或多个 trackId，想查看这些轨道上有哪些 clip 或转场\n- 需要找某个时间点或时间段内的 itemId、mediaId 或时间范围\n- 修改、删除、切分、裁切 clip 或编辑转场前，需要先定位目标 item\n\nFilter Semantics\n----------------\n- clip 或具有有效展示范围的转场只要与筛选区间有重叠，就应返回\n- 无法计算有效范围的转场按 seamTime 是否落在筛选区间内决定是否返回\n- 例如 clip 时间范围是 00:00:10+00 到 00:00:20+00，而筛选区间是 00:00:05+00 到 00:00:15+00，该 clip 仍会被返回\n\nDo NOT Use When\n---------------\n- 需要读取轨道概览或选择目标轨道时，应使用 list_tracks\n- 已经有明确 itemId 且需要详细属性，应使用 read_item\n- 需要读取素材库素材详情，应使用 read_media\n\nReturns\n--------\n{\n  \"tool\": \"read_tracks\",                  // 工具名\n  \"tracks\": [\n    {\n      \"trackId\": \"<trackId>\",             // 轨道 ID\n      \"items\": [                         // 当前轨道命中的 clip 和 transition item\n        {\n          \"itemId\": \"<clipId>\",           // 普通时间轴 clip ID\n          \"itemType\": \"clip\",             // item 类型\n          \"mediaId\": \"<mediaId>\",         // 对应素材 ID\n          \"start\": \"<start>\",             // 时间轴开始时间\n          \"end\": \"<end>\",                 // 时间轴结束时间\n          \"mediaType\": \"<mediaType>\"      // 片段类型\n        },\n        {\n          \"itemId\": \"transition:<leftClipId>:<templateId>\", // 虚拟转场 item ID\n          \"itemType\": \"transition\",       // item 类型\n          \"leftClipId\": \"<leftClipId>\",   // 转场配置所属的左侧 clip ID\n          \"rightClipId\": \"<rightClipId>\", // 当前右侧相邻 clip ID；无右侧目标时不返回\n          \"start\": \"<start>\",             // 实际有效展示范围开始；无法计算时不返回\n          \"end\": \"<end>\"                  // 实际有效展示范围结束；无法计算时不返回\n        }\n      ],\n      \"total\": \"<total>\"                  // 当前轨道命中的 item 总数\n    },\n    {\n      \"trackId\": \"<trackId>\",             // 轨道 ID\n      \"error\": \"<errorMessage>\"           // 该轨道读取失败说明\n    }\n  ],\n  \"requestedTotal\": \"<requestedTotal>\",   // 输入的轨道 ID 数量\n  \"total\": \"<total>\",                     // 去重后的轨道数量\n  \"failedTotal\": \"<failedTotal>\",         // 读取失败的轨道数量\n  \"filter\": {                             // 本次使用的筛选条件\n    \"start\": \"<start>\",\n    \"end\": \"<end>\"\n  }\n}\n\n{\n  \"tool\": \"read_tracks\",                  // 工具名\n  \"error\": \"<errorMessage>\"               // 错误说明\n}\n\nLimitations\n-----------\ntrackIds 必须是 1-10 个字符串组成的数组，重复 ID 会自动去重并保留首次出现顺序。\nstart/end 只是共享筛选条件，不会修改时间轴。转场的绑定状态、拼接时间和有效时长属于诊断信息，应通过 read_item 读取。时间码必须使用 HH:MM:SS+FF。",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "trackIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "description": "轨道 ID。"
+            },
+            "description": "要读取的轨道 ID 数组，1-10 个。如果还没有 trackId，应先通过 list_tracks 获取。必须使用 list_tracks 返回的 trackId，或用户明确提供的有效 trackId。重复 ID 会自动去重并保留首次出现顺序。",
+            "minItems": 1,
+            "maxItems": 10
+          },
+          "start": {
+            "type": "string",
+            "description": "可选共享筛选起始时间，格式 HH:MM:SS+FF。对所有 trackIds 生效；clip 按时间范围相交、无法计算范围的转场按 seamTime 落点筛选。不是编辑操作。"
+          },
+          "end": {
+            "type": "string",
+            "description": "可选共享筛选结束时间，格式 HH:MM:SS+FF。对所有 trackIds 生效；clip 按时间范围相交、无法计算范围的转场按 seamTime 落点筛选。不是编辑操作。"
+          }
+        },
+        "required": ["trackIds"],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "move_track",
+      "description": "What It Does\n-------------\n调整一条轨道在时间轴轨道列表中的顺序。\n\nUse When\n---------\n- 需要上移、下移或移动某条轨道到指定层级\n- 需要改变视觉层级，且已通过 list_tracks 确认当前 index\n\nDo NOT Use When\n---------------\n- 需要移动的是 clip 时，应使用 move_clip\n- 只是要修改轨道名称、显隐或静音属性，应使用 update_track_properties\n\nReturns\n--------\n{\n  \"tool\": \"move_track\",                   // 工具名\n  \"trackId\": \"<trackId>\",                 // 被移动的轨道 ID\n  \"before\": {                             // 移动前状态\n    \"index\": \"<trackIndex>\"               // 0-based 轨道索引\n  },\n  \"after\": {                              // 移动后状态\n    \"index\": \"<trackIndex>\"\n  }\n}\n\n{\n  \"tool\": \"move_track\",                   // 工具名\n  \"error\": \"<errorMessage>\"               // 错误说明\n}\n\nLimitations\n-----------\n只修改轨道顺序，不移动轨道内片段的时间位置。轨道 index 越小视觉层级越高。\nindex.from 用于校验轨道当前顺序；若轨道实际 index 与 index.from 不一致，不会执行移动并失败。",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "trackId": {
+            "type": "string",
+            "description": "要移动的轨道 ID。必须来自 list_tracks 返回的 trackId。"
+          },
+          "index": {
+            "type": "object",
+            "description": "轨道顺序的变更。from/to 都必填，均为 0-based 轨道索引。",
+            "properties": {
+              "from": {
+                "type": "integer",
+                "description": "移动前的轨道索引，0-based。必须来自 list_tracks 返回的 index。",
+                "minimum": 0
+              },
+              "to": {
+                "type": "integer",
+                "description": "移动后的目标轨道索引，0-based。根据 list_tracks 返回的 index 或用户指定层级计算；越小越靠上。",
+                "minimum": 0
+              }
+            },
+            "required": ["from", "to"],
+            "additionalProperties": false
+          }
+        },
+        "required": ["trackId", "index"],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "update_track_properties",
+      "description": "What It Does\n-------------\n修改指定轨道的名称、可见性或静音状态。\n\nUse When\n---------\n- 需要修改轨道名称、可见性或静音状态\n- 只需要改少量静态属性，而不是增删轨道或调整轨道顺序\n\nDo NOT Use When\n---------------\n- 需要新增轨道时，应使用 add_track\n- 需要移动轨道顺序时，应使用 move_track\n- 需要删除轨道时，应使用 remove_track\n\nExamples\n--------\n把轨道从可见改为隐藏：\n{\n  \"trackId\": \"track_123\",\n  \"match\": { \"visible\": true },\n  \"apply\": { \"visible\": false }\n}\n\n同时重命名并静音：\n{\n  \"trackId\": \"track_456\",\n  \"match\": { \"name\": \"旁白\", \"muted\": false },\n  \"apply\": { \"name\": \"男声旁白\", \"muted\": true }\n}\n\nReturns\n--------\n{\n  \"tool\": \"update_track_properties\",      // 工具名\n  \"trackId\": \"<trackId>\",                 // 被修改的轨道 ID\n  \"before\": {                             // 修改前属性；只包含本次修改涉及的字段\n    \"name\": \"<oldName>\",                  // 轨道名称\n    \"visible\": \"<oldVisible>\",            // 轨道可见性\n    \"muted\": \"<oldMuted>\"                 // 轨道静音状态\n  },\n  \"after\": {                              // 修改后属性；只包含本次修改涉及的字段\n    \"name\": \"<newName>\",\n    \"visible\": \"<newVisible>\",\n    \"muted\": \"<newMuted>\"\n  }\n}\n\n{\n  \"tool\": \"update_track_properties\",      // 工具名\n  \"error\": \"<errorMessage>\"               // 错误说明\n}\n\nLimitations\n-----------\nmatch 和 apply 的 key 集合必须一致。\naudio 轨道不支持 visible，text 轨道不支持 muted。",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "trackId": {
+            "type": "string",
+            "description": "要修改的轨道 ID。必须来自 list_tracks 返回的 trackId。"
+          },
+          "match": {
+            "type": "object",
+            "description": "当前属性匹配条件，键为轨道属性名，值为预期旧值。必须来自最近一次 list_tracks 返回的轨道属性；用于防止覆盖用户或编辑环境刚刚产生的变化。"
+          },
+          "apply": {
+            "type": "object",
+            "description": "属性修改内容，键为轨道属性名，值为新值。key 集合必须与 match 完全一致。支持 name、visible、muted。"
+          }
+        },
+        "required": ["trackId", "match", "apply"]
+      }
+    },
+    {
+      "name": "remove_track",
+      "description": "What It Does\n-------------\n删除一条时间轴轨道。\n\nUse When\n---------\n- 需要删除某条轨道\n- 确认目标 trackId 和影响范围\n\nDo NOT Use When\n---------------\n- 只需要修改轨道名称、显隐或静音属性时，应使用 update_track_properties\n\nReturns\n--------\n{\n  \"tool\": \"remove_track\",                 // 工具名\n  \"trackId\": \"<trackId>\",                 // 被删除的轨道 ID\n  \"summary\": \"<summary>\"                  // 结果摘要\n}\n\n{\n  \"tool\": \"remove_track\",                 // 工具名\n  \"error\": \"<errorMessage>\"               // 错误说明\n}\n\nLimitations\n-----------\n删除轨道会同时删除该轨道上的所有片段。不允许删除最后一个轨道。",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "trackId": {
+            "type": "string",
+            "description": "要删除的轨道 ID。如果还没有 trackId，应先通过 list_tracks 获取，并在需要时用 read_tracks 确认该轨道上的片段。必须使用 list_tracks 返回的 trackId，或用户明确提供的有效 trackId。"
+          }
+        },
+        "required": ["trackId"]
+      }
+    },
+    {
+      "name": "create_subtitle_clip",
+      "description": "What It Does\n-------------\n在 text 轨道上创建一个字幕/文字类型时间轴片段。\n\nUse When\n---------\n- 需要新增字幕、标题、文字卡或文本片段等\n\nDo NOT Use When\n---------------\n- 需要插入素材库中的 video/image/audio，应使用 insert_clip\n- 目标轨道不是 text 类型，应先通过 list_tracks 选择或创建新的 text 轨道\n\nReturns\n--------\n{\n  \"tool\": \"create_subtitle_clip\",         // 工具名\n  \"clipId\": \"<clipId>\",                   // 新字幕片段 ID，可用于 read_item、trim_clip 等工具\n  \"trackId\": \"<trackId>\",                 // 字幕所在的 text 轨道 ID\n  \"text\": \"<text>\",                       // 实际创建出的字幕内容\n  \"start\": \"<start>\",                     // 时间轴起始时间码\n  \"end\": \"<end>\",                         // 时间轴结束时间码\n  \"warning\": \"<warning>\",                 // 警告信息\n  \"overlapClipIds\": [\"<clipId>\"]          // 与本次字幕重叠的片段 ID 列表\n}\n\n{\n  \"tool\": \"create_subtitle_clip\",         // 工具名\n  \"error\": \"<errorMessage>\"               // 错误说明；根据提示调整参数、先检查轨道类型或轨道占用情况\n}\n\nLimitations\n-----------\n只在 text 轨道创建字幕片段。若目标区间与同轨现有片段重叠，不会自动避让或调整已有片段位置。",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "text": {
+            "type": "string",
+            "description": "字幕/文字内容。必须来自用户提供或根据用户请求生成。"
+          },
+          "trackId": {
+            "type": "string",
+            "description": "目标 text 轨道 ID。如果还没有合适的 text 轨道，应先通过 list_tracks 选择，必要时再创建新的 text 轨道。必须使用 text 类型的 trackId。"
+          },
+          "start": {
+            "type": "string",
+            "description": "字幕在时间轴上的开始时间，格式 HH:MM:SS+FF。来自用户指定或根据当前编辑上下文推导；需要检查该时间段是否已有片段时，可先用 read_tracks 查看。"
+          },
+          "duration": {
+            "type": "string",
+            "description": "字幕显示时长，格式 HH:MM:SS+FF。不是结束时间；应根据用户要求或目标节奏填写。"
+          }
+        },
+        "required": ["text", "trackId", "start", "duration"]
+      }
+    },
+    {
+      "name": "insert_clip",
+      "description": "What It Does\n-------------\n将素材库中的素材插入到指定轨道的指定时间点；也可选择素材源区间，只插入素材其中一段。\n\nUse When\n---------\n- 需要把现有 video/image/audio 素材放到时间轴\n\nDo NOT Use When\n---------------\n- 需要创建文字/字幕 clip 时，应使用 create_subtitle_clip\n- 需要移动已有片段时，应使用 move_clip\n\nExamples\n--------\n把一个视频素材从素材开头插入到视频轨道的第 10 秒：\n{\n  \"mediaId\": \"video_001.mp4\",\n  \"trackId\": \"track_video_1\",\n  \"start\": \"00:00:10+00\"\n  // 如果只插入素材的第 3 秒到第 8 秒片段，则需要额外提供以下两个字段：\n  \"clipStart\": \"00:00:03+00\",\n  \"clipEnd\": \"00:00:08+00\"\n}\n\nReturns\n--------\n{\n  \"tool\": \"insert_clip\",                  // 工具名\n  \"clipId\": \"<clipId>\",                   // 新时间轴片段 ID\n  \"mediaId\": \"<mediaId>\",                 // 被插入的素材 ID\n  \"trackId\": \"<trackId>\",                 // 目标轨道 ID\n  \"start\": \"<start>\",                     // 时间轴起始时间码\n  \"end\": \"<end>\",                         // 时间轴结束时间码\n  \"warning\": \"<warning>\",                 // 警告信息\n  \"overlapClipIds\": [\"<clipId>\"]          // 与本次插入重叠的片段 ID 列表\n}\n\n{\n  \"tool\": \"insert_clip\",                  // 工具名\n  \"error\": \"<errorMessage>\"               // 错误说明；根据提示调整参数，或先读取素材/轨道状态\n}\n\nLimitations\n-----------\ninsert_clip 只负责把素材放到指定位置，不会自动调整同轨已有片段的位置或时长。\nvideo 轨道可放 video/image；audio 轨道只能放 audio。",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "mediaId": {
+            "type": "string",
+            "description": "要插入的素材 ID。必须来自 list_media/search_media/read_media 返回的完整 mediaId，不要传 clipId。"
+          },
+          "trackId": {
+            "type": "string",
+            "description": "目标轨道 ID。如果还没有 trackId，应先通过 list_tracks 选择。必须使用 list_tracks 返回的 trackId，并与素材类型兼容。"
+          },
+          "start": {
+            "type": "string",
+            "description": "插入到时间轴的开始时间，格式 HH:MM:SS+FF。来自用户指定或根据当前时间轴计算。"
+          },
+          "clipStart": {
+            "type": "string",
+            "description": "可选素材源区间开始时间，格式 HH:MM:SS+FF。不提供时会从素材开头开始。"
+          },
+          "clipEnd": {
+            "type": "string",
+            "description": "可选素材源区间结束时间，格式 HH:MM:SS+FF。用于只插入素材的一段。不提供时会使用素材末尾。"
+          }
+        },
+        "required": ["mediaId", "trackId", "start"]
+      }
+    },
+    {
+      "name": "move_clip",
+      "description": "What It Does\n-------------\n移动已有时间轴片段到新的开始时间，也可同时移动到另一条兼容轨道。\n\nUse When\n---------\n- 需要移动、对齐或换轨某个已有 clip\n\nDo NOT Use When\n---------------\n- 需要插入新素材时，应使用 insert_clip\n- 需要调整片段边界/时长时，应使用 trim_clip\n\nReturns\n--------\n{\n  \"tool\": \"move_clip\",                    // 工具名\n  \"clipId\": \"<clipId>\",                   // 被移动的片段 ID\n  \"before\": {                             // 移动前状态；仅包含本次发生变化的字段\n    \"trackId\": \"<trackId>\",               // 可选；轨道 ID\n    \"start\": \"<start>\"                    // 可选；开始时间\n  },\n  \"after\": {                              // 移动后状态；\n    \"trackId\": \"<trackId>\",\n    \"start\": \"<start>\"\n  },\n  \"warning\": \"<warning>\",                 // 可选；警告信息\n  \"overlapClipIds\": [\"<clipId>\"]          // 可选；当发生同轨重叠时出现，表示与本次移动重叠的片段 ID 列表\n}\n\n{\n  \"tool\": \"move_clip\",                    // 工具名\n  \"error\": \"<errorMessage>\"               // 错误说明\n}\n\nLimitations\n-----------\n只修改 clip 在 timeline 位置与轨道归属，不修改素材源区间。\n只能移动到与该 clip 媒体类型兼容的轨道。\n如果实际当前 start 或 trackId 与传入的 from 值不一致，不会执行移动并会返回错误。",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "clipId": {
+            "type": "string",
+            "description": "要移动的时间轴片段 ID。必须来自 read_tracks/read_item 返回的 clipId，不要传 mediaId。"
+          },
+          "start": {
+            "type": "object",
+            "description": "时间轴开始时间的变更。from/to 都必填，格式 HH:MM:SS+FF。",
+            "properties": {
+              "from": {
+                "type": "string",
+                "description": "移动前的时间轴开始时间，格式 HH:MM:SS+FF。"
+              },
+              "to": {
+                "type": "string",
+                "description": "移动后的时间轴开始时间。"
+              }
+            },
+            "required": ["from", "to"],
+            "additionalProperties": false
+          },
+          "trackId": {
+            "type": "object",
+            "description": "可选轨道变更。不提供时表示保持原轨道；提供时 from/to 都必填。",
+            "properties": {
+              "from": {
+                "type": "string",
+                "description": "移动前的轨道 ID。"
+              },
+              "to": {
+                "type": "string",
+                "description": "移动后的轨道 ID。"
+              }
+            },
+            "required": ["from", "to"],
+            "additionalProperties": false
+          }
+        },
+        "required": ["clipId", "start"],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "split_clip",
+      "description": "What It Does\n-------------\n在一个已有时间轴片段内部按一个或多个时间点切分。\n\nUse When\n---------\n- 需要把某个 clip 切开、分割或在指定时间点剪一刀\n- 已通过 read_item 的 timeline group 确认 clipId 和片段时间范围\n\nDo NOT Use When\n---------------\n- 需要裁掉片段开头或结尾时，应使用 trim_clip\n- 分割点不在片段内部，或等于开始/结束边界\n\nExamples\n--------\n在时间轴绝对时间 00:00:10+00 和 00:00:20+00 处切分一个 clip：\n{\n  \"clipId\": \"clip_123\",\n  \"splitTimes\": [\"00:00:10+00\", \"00:00:20+00\"]\n}\n\nReturns\n--------\n{\n  \"tool\": \"split_clip\",                   // 工具名\n  \"originalClipId\": \"<clipId>\",           // 被切分的原始片段 ID\n  \"splitTimes\": [\"<timecode>\"],           // 实际执行的切分时间点\n  \"newClips\": [\n    {\n      \"clipId\": \"<clipId>\",               // 新片段 ID\n      \"start\": \"<timecode>\",              // 新片段在时间轴上的开始时间\n      \"end\": \"<timecode>\"                 // 新片段在时间轴上的结束时间\n    }\n  ],\n  \"summary\": \"<summary>\"                  // 结果摘要\n}\n\n{\n  \"tool\": \"split_clip\",                   // 工具名\n  \"error\": \"<errorMessage>\"               // 错误说明\n}\n\nLimitations\n-----------\nsplitTimes 会去重并按时间升序处理。分割点必须位于片段内部。",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "clipId": {
+            "type": "string",
+            "description": "要切分的时间轴片段 ID。如果还没有 clipId，应先通过 read_tracks/read_item 定位。必须使用 read_tracks/read_item 返回的 clipId。"
+          },
+          "splitTimes": {
+            "type": "array",
+            "description": "分割时间点数组，格式 HH:MM:SS+FF，表示时间轴上的绝对时间。不是相对这个 clip 起点的偏移时间。每个时间点都必须位于该 clip 的时间轴范围内部，不能等于片段开始或结束边界。",
+            "items": {
+              "type": "string",
+              "description": "一个时间轴绝对分割点，格式 HH:MM:SS+FF。"
+            },
+            "minItems": 1
+          }
+        },
+        "required": ["clipId", "splitTimes"]
+      }
+    },
+    {
+      "name": "trim_clip",
+      "description": "What It Does\n-------------\n调整已有时间轴片段的一侧边界，用于 trim 或 extend。\n\nUse When\n---------\n- 需要裁掉/延长某个 clip 的开头或结尾\n\nDo NOT Use When\n---------------\n- 需要移动整个 clip 时，应使用 move_clip\n- 需要在中间切开时，应使用 split_clip\n- 需要修改画面位置、透明度、文本等静态属性时，应使用 update_item\n\nExamples\n--------\n把片段开始边界从当前时间向后裁到 00:00:12+00：\n{\n  \"clipId\": \"clip_123\",\n  \"side\": \"start\",\n  \"newValue\": \"00:00:12+00\"\n}\n\n把片段结束边界延长到 00:00:25+00：\n{\n  \"clipId\": \"clip_123\",\n  \"side\": \"end\",\n  \"newValue\": \"00:00:25+00\"\n}\n\nReturns\n--------\n{\n  \"tool\": \"trim_clip\",                    // 工具名\n  \"clipId\": \"<clipId>\",                   // 被裁切的片段 ID\n  \"before\": {                             // 裁切前状态\n    \"start\": \"<timecode>\",                // 片段在时间轴上的开始时间\n    \"end\": \"<timecode>\",                  // 片段在时间轴上的结束时间\n    \"clipStart\": \"<timecode>\",            // video/audio 的素材起始时间\n    \"clipEnd\": \"<timecode>\"               // video/audio 的素材结束时间\n  },\n  \"after\": {                              // 裁切后状态\n    \"start\": \"<timecode>\",\n    \"end\": \"<timecode>\",\n    \"clipStart\": \"<timecode>\",\n    \"clipEnd\": \"<timecode>\"\n  },\n  \"warning\": \"<warning>\",                 // 可选；警告信息\n  \"overlapClipIds\": [\"<clipId>\"],         // 可选；与本次裁切结果发生同轨重叠的片段 ID 列表\n  \"summary\": \"<summary>\"                  // 可选摘要\n}\n\n{\n  \"tool\": \"trim_clip\",                    // 工具名\n  \"error\": \"<errorMessage>\"               // 错误说明\n}\n\nLimitations\n-----------\n一次只调整一侧边界。\nnewValue 是由 side 指定的时间轴边界新值，不是素材 source 时间。\nvideo/audio 保持当前播放倍速并同步 source 区间；\nimage/text 只调整 timeline 边界。\n超出素材可用范围或时间轴合法边界会报错。",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "clipId": {
+            "type": "string",
+            "description": "要调整边界的时间轴片段 ID。必须来自 read_tracks/read_item 返回的 clipId。"
+          },
+          "side": {
+            "type": "string",
+            "enum": ["start", "end"],
+            "description": "要调整哪一侧边界。start=片段开始边界，end=片段结束边界。"
+          },
+          "newValue": {
+            "type": "string",
+            "description": "由 side 指定的时间轴边界新值，格式 HH:MM:SS+FF。不是素材 source 内部时间。"
+          }
+        },
+        "required": ["clipId", "side", "newValue"]
+      }
+    },
+    {
+      "name": "remove_item",
+      "description": "What It Does\n-------------\n删除一个或多个时间轴 item，可混合普通 clip ID 和虚拟 transition item ID，并作为一次撤销/重做操作提交。\n\nUse When\n---------\n- 需要删除时间轴 clip\n- 需要删除某个已配置的转场\n- 需要在一次操作中同时删除多个 clip 和转场\n\nDo NOT Use When\n---------------\n- 需要删除素材库素材时；本工具只删除时间轴 item\n- 需要删除整条轨道时，应使用 remove_track\n- 只需要替换转场模板时，应使用 apply_transition\n\nReturns\n--------\n{\n  \"tool\": \"remove_item\",                 // 工具名\n  \"removedItemIds\": [\"<itemId>\"]          // 去重后实际删除的 clip 或 transition item ID\n}\n\n{\n  \"tool\": \"remove_item\",                 // 工具名\n  \"error\": \"<errorMessage>\"               // item 不存在、转场 ID 失效或预检失败的说明\n}\n\nLimitations\n-----------\n普通 clip ID 会删除时间轴片段并保留空隙。转场 ID 必须来自 read_tracks/read_item，格式为 transition:<leftClipId>:<templateId>；若模板已被替换，工具会拒绝删除新的转场。",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "itemIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1,
+            "description": "要删除的 clip 或 transition item ID 数组；重复 ID 会自动去重。"
+          }
+        },
+        "required": ["itemIds"],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "search_transitions",
+      "description": "What It Does\n-------------\n按自然语言检索可用转场模板。\n\nUse When\n---------\n- 需要添加转场特效，且需要根据用户描述选择合适模板\n\nDo NOT Use When\n---------------\n- 已知明确的 templateId 时，无需搜索，直接使用 apply_transition\n- 需要读取已配置转场的时长或参数时，应使用 read_item\n\nReturns\n--------\n{\n  \"tool\": \"search_transitions\",          // 工具名\n  \"results\": [                            // 按相关性排序的转场模板候选\n    {\n      \"templateId\": \"<templateId>\",      // 用于 apply_transition 的模板 ID\n      \"name\": \"<englishName>\",           // 模板英文名称\n      \"description\": \"<description>\"     // 模板的语义检索描述\n    }\n  ]\n}\n\n{\n  \"tool\": \"search_transitions\",          // 工具名\n  \"error\": \"<errorMessage>\"               // 检索失败或参数无效的说明\n}\n\nLimitations\n-----------\n结果只用于选择模板，不返回检索分数。Agent 必须结合用户意图、名称和 description 自行判断候选是否合适，不能将返回顺序视为最终推荐。\n模板默认参数会由 apply_transition 在创建转场时加载。",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "query": {
+            "type": "string",
+            "description": "描述所需转场视觉风格、运动或剪辑意图的自然语言查询。"
+          },
+          "topK": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 10,
+            "description": "返回候选数量，默认 5。"
+          }
+        },
+        "required": ["query"],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "apply_transition",
+      "description": "What It Does\n-------------\n在视频轨道上一对相邻视觉 clip 的精确拼接点应用转场模板。\n\nUse When\n---------\n- 需要在两个相邻视觉 clip 的拼接点添加转场特效\n- 需要替换该拼接点当前转场的模板\n\nDo NOT Use When\n---------------\n- 需要仅调整已存在转场的时长或参数时，应使用 update_item\n- 需要删除转场时，应使用 remove_item\n- 左右 clip 不相邻、不是视频/图片视觉 clip，或拼接点不明确时\n\nReturns\n--------\n{\n  \"tool\": \"apply_transition\",                         // 工具名\n  \"itemId\": \"transition:<leftClipId>:<templateId>\",   // 新建转场的虚拟时间轴 item ID\n  \"item\": {                                           // 新建转场的摘要\n    \"leftClipId\": \"<leftClipId>\",                     // 持久化转场配置的左侧 clip ID\n    \"rightClipId\": \"<rightClipId>\",                   // 当前与左侧 clip 相邻的右侧 clip ID\n    \"seamTime\": \"<timecode>\",                         // 转场所在拼接点，格式 HH:MM:SS+FF\n    \"transition\": {                                   // 转场配置\n      \"templateId\": \"<templateId>\",                   // 实际应用的模板 ID\n      \"duration\": \"<timecode>\",                       // 模板默认的配置时长，不是有效时长\n      \"params\": { ... }                               // 模板默认参数\n    }\n  }\n}\n\n{\n  \"tool\": \"apply_transition\",            // 工具名\n  \"error\": \"<errorMessage>\"               // 无效目标、模板未就绪、目标过期或范围重叠的说明\n}\n\nLimitations\n-----------\ntrackId 必须是视频轨。seamTime 必须同时等于 leftClipId 的结束时间和 rightClipId 的开始时间；工具会在异步安装模板后再次校验目标，拼接点发生变化会拒绝写入。",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "trackId": {
+            "type": "string",
+            "description": "目标轨道 ID，必须来自 list_tracks/read_tracks。"
+          },
+          "leftClipId": {
+            "type": "string",
+            "description": "拼接点左侧 clip ID，必须来自 read_tracks。"
+          },
+          "rightClipId": {
+            "type": "string",
+            "description": "拼接点右侧且当前相邻的 clip ID，用于并发保护。"
+          },
+          "seamTime": {
+            "type": "string",
+            "description": "目标拼接时间，格式 HH:MM:SS+FF，必须同时等于左右 clip 边界。"
+          },
+          "templateId": {
+            "type": "string",
+            "description": "search_transitions 返回的转场模板 ID。"
+          }
+        },
+        "required": ["trackId", "leftClipId", "rightClipId", "seamTime", "templateId"],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "read_item",
+      "description": "What It Does\n-------------\n读取一个时间轴 item 的结构化属性。普通 clip 支持原有属性组；虚拟转场支持 timeline 和 transition 属性组。\n\nUse When\n---------\n- 修改 clip 或转场前，需要读取当前值作为 update_item 的 match 条件\n- 准备修改 clip 静态属性，需要读取 visual、audio、text、mask 或 timeline 属性组\n- 需要在当前播放头或指定时间点读取受关键帧动画影响后的 clip 实际属性值\n- 需要确认 clip 所在轨道、时间范围或源区间，再进行 move_clip、trim_clip 或 split_clip\n- 需要确认转场绑定的左右 clip、有效时长、实际展示范围或参数\n\nDo NOT Use When\n---------------\n- 需要先在轨道中定位 item 时，应使用 read_tracks\n- 需要读取关键帧动画时，应使用 read_clip_keyframe\n- 需要读取素材库素材详情时，应使用 read_media\n\nReturns\n--------\nclip item 示例：\n{\n  \"tool\": \"read_item\",                   // 工具名\n  \"itemId\": \"<clipId>\",                  // 被读取的时间轴 clip ID\n  \"itemType\": \"clip\",                    // item 类型\n  \"mediaType\": \"<mediaType>\",            // clip 媒体类型\n  \"sampleTime\": \"<timecode>\",            // 请求语义上的绝对采样时间；始终存在\n  \"groups\": {                            // 按请求 propertyGroups 返回的属性组\n    \"visual\": { ... },                   // 画面属性组\n    \"audio\": { ... },                    // 音量和静音状态\n    \"text\": { ... },                     // 文本内容和文本样式\n    \"mask\": { ... },                     // 蒙版属性组\n    \"timeline\": { ... }                  // 轨道归属、时间轴区间和素材源区间\n  }\n}\n\ntransition item 示例：\n{\n  \"tool\": \"read_item\",                   // 工具名\n  \"itemId\": \"<transitionItemId>\",        // 被读取的虚拟 transition item ID\n  \"itemType\": \"transition\",              // item 类型\n  \"groups\": {                             // 按请求 propertyGroups 返回的属性组\n    \"timeline\": { ... },                  // 左右 clip、轨道、拼接点、有效范围、有效时长和绑定状态\n    \"transition\": { ... }                 // 模板 ID、配置时长和当前参数\n  }\n}\n\n{\n  \"tool\": \"read_item\",                   // 工具名\n  \"error\": \"<errorMessage>\"               // item 不存在、ID 失效或属性组不受支持的说明\n}\n\nLimitations\n-----------\nclip 支持 visual、audio、text、mask、timeline；读取多个 group 时，只要任一 group 无效或不受支持则整次失败。未传 sampleTime 时，clip 默认使用当前播放头时间；请求时间越过 clip 边界时，内部在最近边界取值，但 sampleTime 仍回显原始请求时间。当前只有受支持的 visual/audio 动画属性会按采样时间返回实际值，关键帧记录本身仍应使用 read_clip_keyframe。\n\ntransition itemId 必须使用 read_tracks/apply_transition 返回的完整 ID。转场只允许 timeline 和 transition；其 duration 是配置时长，timeline.effectiveDuration 才是受 clip 可用帧数限制后的实际时长。",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "itemId": {
+            "type": "string",
+            "description": "时间轴 clip ID，或 read_tracks/apply_transition 返回的完整 transition item ID。若尚未定位目标，应先调用 read_tracks。"
+          },
+          "propertyGroups": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1,
+            "description": "要读取的属性组。clip 支持 visual、audio、text、mask、timeline；transition 只支持 timeline、transition。多个 group 中任一项无效会使整次读取失败。"
+          },
+          "sampleTime": {
+            "type": "string",
+            "description": "仅 clip 可用的可选绝对采样时间，格式 HH:MM:SS+FF。未传时默认当前播放头；越过 clip 边界时在最近边界取值，但返回仍回显原始请求时间。"
+          }
+        },
+        "required": ["itemId", "propertyGroups"],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "describe_item_property",
+      "description": "What It Does\n-------------\n根据属性 ID 与用途返回 clip 或转场属性的结构化编辑说明。\n\nUse When\n---------\n- 不确定属性值类型、范围、步长、可选值或编辑含义\n- 修改转场参数前，需要确认 transition.params.<parameterKey> 的模板 schema\n- 修改 clip 静态属性或关键帧前，需要解析正确的 propertyId\n\nExamples\n--------\nclip 静态属性：\n{\n  \"propertyIds\": [\"visual.position.x\"],\n  \"usage\": \"static_edit\"\n}\n\nclip 关键帧属性，可一次查询多个属性：\n{\n  \"propertyIds\": [\"visual.position.x\", \"visual.size.width\"],\n  \"usage\": \"keyframe_edit\"\n}\n\n转场属性：\n{\n  \"propertyIds\": [\"transition.duration\", \"transition.params.adjust\"],\n  \"usage\": \"transition_edit\",\n  \"templateId\": \"gl-bow-tie-with-parameter\"\n}\n\nReturns\n--------\n{\n  \"tool\": \"describe_item_property\",       // 工具名\n  \"usage\": \"<usage>\",                     // 本次解析用途：static_edit、keyframe_edit 或 transition_edit\n  \"templateId\": \"<templateId>\",           // transition_edit 时对应的模板 ID\n  \"propertyIds\": [\"<propertyId>\"],         // 去重后的请求属性路径；clip 场景不返回 templateId\n  \"propertyDescriptions\": [                // 与请求 propertyIds 对应的说明结果\n    {\n      \"requestedPropertyId\": \"<propertyId>\", // 原始请求属性路径\n      \"success\": true,                     // 是否成功解析该属性\n      \"resolvedPropertyId\": \"<propertyId>\", // 当前用途下真正应操作或读取的属性路径\n      \"targetKind\": \"leaf|property\",      // leaf 为直接字段；property 为关键帧属性\n      \"groupId\": \"<groupId>\",             // 属性组，例如 visual、timeline、transition\n      \"valueType\": \"<type>\",              // 值类型，例如 number、timecode、enum\n      \"editable\": true,                     // 是否可通过对应编辑工具修改\n      \"animatable\": false,                  // 是否支持关键帧动画\n      \"constraints\": [\"<constraint>\"],    // 类型、范围、只读或使用注意事项\n      \"default\": \"<default>\",             // transition 参数默认值；不适用时为 null/省略\n      \"min\": \"<min>\",                     // 数值下限；不适用时为 null/省略\n      \"max\": \"<max>\",                     // 数值上限；不适用时为 null/省略\n      \"step\": \"<step>\",                   // 建议步长；不适用时为 null/省略\n      \"options\": [],                        // 参数可选值，或 bindingState 的值及说明\n      \"propertyId\": \"<propertyId>\",       // 仅关键帧 targetKind=property 时返回\n      \"valueShape\": { ... },                // 仅关键帧 targetKind=property 时返回\n      \"componentHint\": \"<componentHint>\", // 仅复合关键帧字段时返回\n      \"description\": \"<description>\"      // 字段视觉含义和编辑建议\n    },\n    {\n      \"requestedPropertyId\": \"<propertyId>\", // 原始请求属性路径\n      \"success\": false,                    // 当前属性无法解析\n      \"error\": \"<errorMessage>\"           // 不支持、只读限制或用途不匹配的说明\n    }\n  ]\n}\n\n{\n  \"tool\": \"describe_item_property\",      // 工具名\n  \"error\": \"<errorMessage>\"               // usage、templateId 或 propertyIds 不合法的说明\n}\n\nLimitations\n-----------\nclip 只接受 static_edit 或 keyframe_edit，且不传 templateId。\n转场必须使用 transition_edit 并传 templateId；\n支持只读的 timeline.bindingState、transition.duration 和该模板 manifest 中存在的 transition.params.<parameterKey>。",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "propertyIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1,
+            "description": "要查询的完整属性路径数组。"
+          },
+          "usage": {
+            "type": "string",
+            "enum": ["static_edit", "keyframe_edit", "transition_edit"],
+            "description": "clip 使用 static_edit/keyframe_edit；转场使用 transition_edit。"
+          },
+          "templateId": {
+            "type": "string",
+            "description": "仅 transition_edit 必填，使用 search_transitions/apply_transition 的模板 ID。"
+          }
+        },
+        "required": ["propertyIds", "usage"],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "update_item",
+      "description": "What It Does\n-------------\n按 match 条件更新一个时间轴 item。clip 保持静态属性编辑能力；转场只允许修改配置时长和模板参数。\n\nUse When\n---------\n- 需要修改 clip 的位置、尺寸、旋转、透明度、音量、静音、文本或文本样式等静态属性\n- 已通过 read_item 读取目标 item 的当前属性值，准备将其作为 match 条件\n- 已通过 describe_item_property(propertyIds=[\"visual.position.x\"], usage=\"static_edit\") 确认 clip 静态属性的 propertyId、值类型和限制\n- 已读取转场的 transition group，准备修改 transition.duration 或 transition.params.<parameterKey>\n- 已通过 describe_item_property 确认转场参数类型、范围和选项\n- 只需要修改少量静态属性，而不是时间轴位置、素材源区间或关键帧动画\n\nDo NOT Use When\n---------------\n- 需要替换转场模板时，应使用 apply_transition\n- 需要改变左右 clip、轨道或拼接点时；这些不是可编辑属性\n- 目标 clip 属性已被关键帧控制时，应使用关键帧工具\n- 没有 read_item 返回的当前属性值可作为 match 时\n\nExamples\n--------\nclip 静态属性：\n{\n  \"itemId\": \"clip_123\",\n  \"match\": { \"visual.opacity\": 1 },\n  \"apply\": { \"visual.opacity\": 0.6 }\n}\n\nclip 文本内容：\n{\n  \"itemId\": \"clip_text_1\",\n  \"match\": { \"text.content\": \"旧字幕\" },\n  \"apply\": { \"text.content\": \"新字幕\" }\n}\n\n转场配置时长：\n{\n  \"itemId\": \"transition:<leftClipId>:<templateId>\",\n  \"match\": { \"transition.duration\": \"00:00:00+15\" },\n  \"apply\": { \"transition.duration\": \"00:00:01+00\" }\n}\n\n转场模板参数：\n{\n  \"itemId\": \"transition:<leftClipId>:<templateId>\",\n  \"match\": { \"transition.params.adjust\": 0.5 },\n  \"apply\": { \"transition.params.adjust\": 0.8 }\n}\n\nReturns\n--------\n{\n  \"tool\": \"update_item\",                 // 工具名\n  \"itemId\": \"<itemId>\",                  // 被更新的 clip 或 transition item ID\n  \"itemType\": \"clip|transition\",         // item 类型\n  \"before\": { ... },                       // apply 中每个属性在写入前的值\n  \"after\": { ... }                         // 成功写入后的属性值\n}\n\n{\n  \"tool\": \"update_item\",                 // 工具名\n  \"error\": \"<errorMessage>\"               // match 失败、参数无效或转场范围重叠的说明\n}\n\nLimitations\n-----------\nmatch 和 apply 必须使用相同的属性路径，且 match 的值必须与 read_item 返回的当前值一致。\n\nclip 仅支持静态 propertyId；应先用 describe_item_property 的 static_edit 用途确认属性。若属性已受关键帧控制，工具会拒绝写入，应改用 write_clip_keyframe 或 patch_clip_keyframe。\n\n转场 itemId 必须使用 read_tracks 或 apply_transition 返回的完整 ID。转场仅支持 transition.duration（HH:MM:SS+FF）和 transition.params.<parameterKey>；应先以 transition_edit 用途描述参数 schema。工具会校验参数 schema 及转场有效范围，不允许创建与共享 clip 上其他转场重叠的配置。",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "itemId": {
+            "type": "string",
+            "description": "要修改的时间轴 clip ID，或 read_tracks/apply_transition 返回的完整 transition item ID。"
+          },
+          "match": {
+            "type": "object",
+            "description": "当前属性匹配条件。键必须是将要写入的完整属性路径，值必须来自 read_item 的预期旧值，用于防止覆盖用户或编辑环境刚刚产生的变化。clip 应先通过 describe_item_property(propertyIds=[\"visual.position.x\"], usage=\"static_edit\") 确认静态 propertyId；转场仅支持 transition.duration 或 transition.params.<parameterKey>。"
+          },
+          "apply": {
+            "type": "object",
+            "description": "属性修改内容。键必须与 match 使用完全相同的属性路径，值为新值。clip 仅支持未被关键帧控制的静态 propertyId；转场 duration 必须为 HH:MM:SS+FF，参数值必须符合 describe_item_property(..., usage=\"transition_edit\") 返回的 schema。"
+          }
+        },
+        "required": ["itemId", "match", "apply"],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "read_clip_keyframe",
+      "description": "What It Does\n-------------\n在写入或修改关键帧前，先读取指定片段某个关键帧属性的当前状态。\n\nUse When\n---------\n- 准备为 clip 写入、重写或局部修改关键帧动画\n- 已先通过 describe_item_property(propertyIds=[\"visual.position.x\"], usage='keyframe_edit') 解析出正确的 propertyId\n- 需要先查看当前关键帧状态\n\nDo NOT Use When\n---------------\n- 用户只要修改静态属性，应使用 update_item\n- 需要先在轨道中定位目标片段时，应使用 read_tracks\n- 用户只是查看素材详情，应使用 read_media\n\nReturns\n--------\n{\n  \"tool\": \"read_clip_keyframe\",\n  \"clipId\": \"<clipId>\",                  // 时间轴片段 ID\n  \"mediaType\": \"<mediaType>\",            // 片段类型\n  \"propertyId\": \"<propertyId>\",          // 本次读取的可动画属性 ID\n  \"timelineRange\": {                     // 该片段在时间轴上的时间范围\n    \"start\": \"<timecode>\",\n    \"end\": \"<timecode>\",\n    \"duration\": \"<timecode>\"\n  },\n  \"keyframes\": [                         // 当前关键帧列表，按 time 升序\n    {\n      \"time\": \"<timecode>\",              // 时间轴绝对时间\n      \"relativeTime\": \"<timecode>\",      // 相对片段起点的时间\n      \"position\": \"<position>\",          // 在片段时长中的归一化位置\n      \"value\": \"<value>\",                // 关键帧值；其具体结构应以 describe_item_property 和当前读取结果为准\n      \"easing\": { \"type\": \"linear\" }     // 当前仅支持 linear\n    }\n  ]\n}\n\n{\n  \"tool\": \"read_clip_keyframe\",\n  \"error\": \"<errorMessage>\"\n}\n\nLimitations\n-----------\n一次读取单个 propertyId。关键帧场景下的 propertyId 必须是可动画属性；静态字段不能直接用于关键帧工具。describe_item_property 已升级为批量接口，即使只查询一个属性，也应传单元素 `propertyIds` 数组。",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "clipId": {
+            "type": "string",
+            "description": "时间轴片段 ID，也就是 clipId。如果还没有 clipId，应先通过 read_tracks 或 read_item 定位。必须使用 read_tracks/read_item 返回的 clipId。"
+          },
+          "propertyId": {
+            "type": "string",
+            "description": "关键帧场景下的属性 ID。必须与用户要动画化的属性一致；不能传 visual.position.x 这类静态字段，应先通过 describe_item_property(propertyIds=[\"visual.position.x\"], usage='keyframe_edit') 解析。"
+          }
+        },
+        "required": ["clipId", "propertyId"]
+      }
+    },
+    {
+      "name": "write_clip_keyframe",
+      "description": "What It Does\n-------------\n整体替换一个 clip 某个关键帧属性的完整关键帧数组。\n\nUse When\n---------\n- 需要生成一段新的动画，例如位置移动、淡入淡出、旋转或缩放\n- 需要重写整条关键帧曲线\n- 已先通过 describe_item_property(propertyIds=[\"visual.position.x\"], usage='keyframe_edit') 解析出正确的 propertyId\n- 已先调用 read_clip_keyframe 了解当前状态和 value shape\n\nDo NOT Use When\n---------------\n- 只要修改局部连续关键帧，应使用 patch_clip_keyframe\n- 只要修改静态属性，应使用 update_item\n- 不知道 clipId、propertyId 或 value shape\n\nReturns\n--------\n{\n  \"tool\": \"write_clip_keyframe\",          // 工具名\n  \"clipId\": \"<clipId>\",                   // 被修改的片段 ID\n  \"propertyId\": \"<propertyId>\",           // 被写入的可动画属性 ID\n  \"status\": \"applied\"                     // 写入结果\n}\n\n{\n  \"tool\": \"write_clip_keyframe\",          // 工具名\n  \"error\": \"<errorMessage>\"               // 错误说明\n}\n\nLimitations\n-----------\nkeyframes 表示写入后的完整目标状态，默认 entire-channel 整体替换旧关键帧。time 使用时间轴绝对时间码 HH:MM:SS+FF。工具会排序、去重、校验 value shape 并归一化。",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "clipId": {
+            "type": "string",
+            "description": "时间轴片段 ID，也就是 clipId。必须来自 read_tracks/read_item/read_clip_keyframe 返回结果。"
+          },
+          "propertyId": {
+            "type": "string",
+            "description": "关键帧场景下的属性 ID。必须与用户要修改的动画属性一致；不能传 visual.position.x 这类静态字段，应先用 describe_item_property(propertyIds=[\"visual.position.x\"], usage='keyframe_edit') 解析，再用 read_clip_keyframe 确认当前属性和值形态。"
+          },
+          "keyframes": {
+            "type": "array",
+            "description": "写入后的完整目标关键帧数组。不是增量；会作为该属性的完整状态整体替换。time 使用时间轴绝对时间码 HH:MM:SS+FF。",
+            "items": {
+              "type": "object",
+              "properties": {
+                "time": {
+                  "type": "string",
+                  "description": "时间轴绝对时间码，格式 HH:MM:SS+FF。"
+                },
+                "value": {
+                  "description": "关键帧值。必须直接使用 read_clip_keyframe 返回的 value 形态填写，不要自行改成其他包装结构。"
+                },
+                "easing": {
+                  "type": "object",
+                  "description": "可选 easing；当前仅支持 linear",
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "description": "当前仅支持 linear"
+                    }
+                  },
+                  "required": ["type"]
+                }
+              },
+              "required": ["time", "value"]
+            }
+          },
+          "options": {
+            "type": "object",
+            "description": "可选写入选项。不确定时可省略，让工具使用默认 absolute frameMode 与 entire-channel replaceMode。",
+            "properties": {
+              "frameMode": {
+                "type": "string",
+                "description": "帧模式，第一版仅支持 absolute"
+              },
+              "replaceMode": {
+                "type": "string",
+                "description": "替换模式，第一版仅支持 entire-channel"
+              },
+              "atomic": {
+                "type": "boolean",
+                "description": "是否按原子语义整体写入"
+              },
+              "normalizeBeforeApply": {
+                "type": "boolean",
+                "description": "写入前是否自动排序、去重、归一化"
+              }
+            }
+          }
+        },
+        "required": ["clipId", "propertyId", "keyframes"]
+      }
+    },
+    {
+      "name": "patch_clip_keyframe",
+      "description": "What It Does\n-------------\n局部替换一个连续关键帧片段。\n\nUse When\n---------\n- 需要局部精修已有动画\n- 只需要替换某个连续关键帧片段，保留其他关键帧\n- 已先通过 describe_item_property(propertyIds=[\"visual.position.x\"], usage='keyframe_edit') 解析出正确的 propertyId\n\nDo NOT Use When\n---------------\n- 需要重写整条动画曲线，应使用 write_clip_keyframe\n- 只要修改静态属性，应使用 update_item\n- 未读取当前关键帧，无法准确填写 match\n\nExamples\n--------\n当前关键帧状态（来自 read_clip_keyframe）：\n{\n  \"clipId\": \"clip_123\",\n  \"propertyId\": \"visual.rotation\",\n  \"keyframes\": [\n    { \"time\": \"00:00:00+00\", \"value\": 0 },\n    { \"time\": \"00:00:01+00\", \"value\": 15 },\n    { \"time\": \"00:00:02+00\", \"value\": 30 },\n    { \"time\": \"00:00:03+00\", \"value\": 45 }\n  ]\n}\n\n如果需要在首帧前插入一帧：\n{\n  \"clipId\": \"clip_123\",\n  \"propertyId\": \"visual.rotation\",\n  \"match\": [\n    { \"time\": \"00:00:01+00\", \"value\": 15 }\n  ],\n  \"apply\": [\n    { \"time\": \"00:00:00+10\", \"value\": 8 },\n    { \"time\": \"00:00:01+00\", \"value\": 15 }\n  ]\n}\n\n如果需要在中间插入一帧：\n{\n  \"clipId\": \"clip_123\",\n  \"propertyId\": \"visual.rotation\",\n  \"match\": [\n    { \"time\": \"00:00:01+00\", \"value\": 15 },\n    { \"time\": \"00:00:02+00\", \"value\": 30 }\n  ],\n  \"apply\": [\n    { \"time\": \"00:00:01+00\", \"value\": 15 },\n    { \"time\": \"00:00:01+15\", \"value\": 22 },\n    { \"time\": \"00:00:02+00\", \"value\": 30 }\n  ]\n}\n\n如果需要在尾帧后插入一帧：\n{\n  \"clipId\": \"clip_123\",\n  \"propertyId\": \"visual.rotation\",\n  \"match\": [\n    { \"time\": \"00:00:02+00\", \"value\": 30 }\n  ],\n  \"apply\": [\n    { \"time\": \"00:00:02+00\", \"value\": 30 },\n    { \"time\": \"00:00:03+20\", \"value\": 60 }\n  ]\n}\n\n如果需要修改某一帧：\n{\n  \"clipId\": \"clip_123\",\n  \"propertyId\": \"visual.rotation\",\n  \"match\": [\n    { \"time\": \"00:00:02+00\", \"value\": 30 }\n  ],\n  \"apply\": [\n    { \"time\": \"00:00:02+00\", \"value\": 28 }\n  ]\n}\n\n如果需要删除中间连续的一段关键帧（例如 00:00:01+00 和 00:00:02+00）：\n{\n  \"clipId\": \"clip_123\",\n  \"propertyId\": \"visual.rotation\",\n  \"match\": [\n    { \"time\": \"00:00:01+00\", \"value\": 15 },\n    { \"time\": \"00:00:02+00\", \"value\": 30 }\n  ],\n  \"apply\": []\n}\n\nReturns\n--------\n{\n  \"tool\": \"patch_clip_keyframe\",          // 工具名\n  \"clipId\": \"<clipId>\",                   // 被修改的片段 ID\n  \"propertyId\": \"<propertyId>\",           // 被修改的可动画属性 ID\n  \"before\": [                             // 修改前关键帧；与本次 patch 无关的片段用 ... 省略\n    ...,\n    { \"time\": \"<timecode>\", \"value\": \"<value>\" },\n    { \"time\": \"<timecode>\", \"value\": \"<value>\" },\n    ...\n  ],\n  \"after\": [                              // 修改后关键帧\n    ...,\n    { \"time\": \"<timecode>\", \"value\": \"<value>\" },\n    { \"time\": \"<timecode>\", \"value\": \"<value>\" },\n    ...\n  ]\n}\n\n{\n  \"tool\": \"patch_clip_keyframe\",          // 工具名\n  \"error\": \"<errorMessage>\"               // 错误说明\n}\n\nLimitations\n-----------\n只支持一个连续关键帧片段 patch，不支持多片段混合补丁。\nmatch 必须非空，其首尾时间共同定义本次替换片段。只有当前该片段内的关键帧与 match 完全匹配时，才会应用 apply。",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "clipId": {
+            "type": "string",
+            "description": "时间轴片段 ID，也就是 clipId。"
+          },
+          "propertyId": {
+            "type": "string",
+            "description": "关键帧场景下的属性 ID。必须与用户要修改的动画属性一致；不能传 visual.position.x 这类静态字段，应先用 describe_item_property(propertyIds=[\"visual.position.x\"], usage='keyframe_edit') 解析，再用 read_clip_keyframe 确认当前属性和值形态。"
+          },
+          "match": {
+            "type": "array",
+            "description": "要匹配的旧关键帧片段。必须来自最近一次 read_clip_keyframe 的当前结果；不要凭空编造。",
+            "items": {
+              "type": "object",
+              "properties": {
+                "time": {
+                  "type": "string",
+                  "description": "时间轴绝对时间码，格式 HH:MM:SS+FF。"
+                },
+                "value": {
+                  "description": "旧关键帧值。必须直接使用最近一次 read_clip_keyframe 返回的 value，不要自行改写结构。"
+                }
+              },
+              "required": ["time", "value"]
+            },
+            "minItems": 1
+          },
+          "apply": {
+            "type": "array",
+            "description": "替换后的新关键帧片段。会整体替换 match 所定义片段内的旧内容；片段外关键帧保持不变。",
+            "items": {
+              "type": "object",
+              "properties": {
+                "time": {
+                  "type": "string",
+                  "description": "时间轴绝对时间码，格式 HH:MM:SS+FF。"
+                },
+                "value": {
+                  "description": "新关键帧值。结构必须与当前属性的 read_clip_keyframe 返回 value 形态一致。"
+                }
+              },
+              "required": ["time", "value"]
+            }
+          }
+        },
+        "required": ["clipId", "propertyId", "match", "apply"]
+      }
+    }
+  ]
+}

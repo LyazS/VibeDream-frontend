@@ -11,7 +11,6 @@
       </template>
       <!-- <n-tab name="ai-generate" :tab="t('aiPanel.aiGenerate')"> </n-tab> -->
       <n-tab name="agent" :tab="t('aiPanel.agent')"> </n-tab>
-      <n-tab v-if="showSingleTurnTest" name="single-turn-test" tab="单轮对话测试"> </n-tab>
       <n-tab v-if="showItemPropertyTest" name="item-property-test" tab="属性描述"> </n-tab>
       <n-tab v-if="showMediaSearchTest" name="media-search-test" tab="素材搜索测试"> </n-tab>
       <n-tab v-if="showTransitionTest" name="transition-test" tab="转场测试"> </n-tab>
@@ -57,13 +56,6 @@
       <MediaSearchTestPanel />
     </div>
     <div
-      v-if="showSingleTurnTest"
-      v-show="unifiedStore.aiPanelActiveTab === 'single-turn-test'"
-      style="flex: 1; display: flex; flex-direction: column; overflow: hidden; min-height: 0"
-    >
-      <SingleTurnTestPanel />
-    </div>
-    <div
       v-if="showTransitionTest"
       v-show="unifiedStore.aiPanelActiveTab === 'transition-test'"
       style="flex: 1; display: flex; flex-direction: column; overflow: hidden"
@@ -81,7 +73,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref } from 'vue'
 import { NTab, NTabs } from 'naive-ui'
 import { IconComponents } from '@/constants/iconComponents'
 import HoverButton from '@/components/base/HoverButton.vue'
@@ -89,19 +81,15 @@ import AgentPanel from './agent/components/AgentPanel.vue'
 import MediaSearchTestPanel from './agent/components/MediaSearchTestPanel.vue'
 import TransitionTestPanel from './agent/components/TransitionTestPanel.vue'
 import ItemPropertyTestPanel from './agent/components/ItemPropertyTestPanel.vue'
-import SingleTurnTestPanel from './agent/components/SingleTurnTestPanel.vue'
 import GeneratePanel from './aigenerate/GeneratePanel.vue'
 import { useAppI18n } from '@/core/composables/useI18n'
 import { useUnifiedStore } from '@/core/unifiedStore'
-import { SESSION_MANAGER } from '@/aipanel/agent/services'
 
 const { t } = useAppI18n()
 const unifiedStore = useUnifiedStore()
 const showMediaSearchTest = import.meta.env.DEV || import.meta.env.MODE === 'preview'
 const showTransitionTest = import.meta.env.MODE === 'preview'
 const showItemPropertyTest = import.meta.env.DEV || import.meta.env.MODE === 'preview'
-// 单轮测试入口仅在本地开发和 Preview 环境显示。
-const showSingleTurnTest = import.meta.env.DEV || import.meta.env.MODE === 'preview'
 
 // 定义事件
 defineEmits<{
@@ -111,28 +99,9 @@ defineEmits<{
 // 是否显示历史记录面板
 const showHistory = ref(false)
 
-// 组件挂载时不需要额外初始化，SessionManager 构造函数已显示欢迎消息
-onMounted(() => {
-  console.log('聊天面板已挂载')
-})
-
-// 组件卸载时清理资源
-onUnmounted(() => {
-  // 清理进行中的消息请求
-  SESSION_MANAGER.abortCurrentMessage()
-})
-
-// 处理新建聊天 - 只清空消息列表，不创建新会话
-const handleNewChat = async () => {
-  try {
-    // 关闭历史记录面板
-    showHistory.value = false
-    // 只清空当前会话的消息，不创建新会话
-    SESSION_MANAGER.clearCurrentSession()
-    console.log('消息列表已清空，准备开始新对话')
-  } catch (error) {
-    console.error('清空消息列表失败:', error)
-  }
+const handleNewChat = () => {
+  showHistory.value = false
+  unifiedStore.newAgentChat()
 }
 </script>
 

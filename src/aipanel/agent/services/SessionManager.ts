@@ -1,3 +1,4 @@
+/** @deprecated 旧 FastAPI 会话编排，主应用已改用 UnifiedAgentModule；保留供参考。 */
 import { ref } from 'vue'
 import { fetchClient } from '@/utils/fetchClient'
 import { generateAgentMessageId } from '@/core/utils/idGenerator'

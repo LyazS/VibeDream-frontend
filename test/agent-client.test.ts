@@ -43,7 +43,6 @@ class Socket extends EventTarget {
 // 每个用例共用的合法请求模板，特殊场景通过复制并覆盖字段构造。
 const params = {
   turnId: 'turn-1',
-  taskId: 'task-1',
   messages: [
     { role: 'system' as const, content: 'caller prompt' },
     { role: 'user' as const, content: 'hello' },
@@ -105,16 +104,97 @@ afterEach(
 )
 
 describe('project-scoped single-turn client', /** 组织工程范围内单轮客户端的协议和生命周期测试。 */ () => {
+  it('sends text parts unchanged from a snapshot while completed output stays a string', async () => {
+    const c = client()
+    const request = {
+      ...params,
+      messages: [
+        {
+          role: 'user' as const,
+          content: [
+            { type: 'text' as const, text: '第一段 ' },
+            { type: 'text' as const, text: '\n第二段' },
+          ],
+        },
+      ],
+    }
+    const pending = c.stream(request)
+    request.messages[0].content[0].text = '请求后修改'
+    const socket = sockets.at(-1)!
+    socket.open()
+    await flush()
+    expect(JSON.parse(socket.sent[0]).messages).toEqual([
+      {
+        role: 'user',
+        content: [
+          { type: 'text', text: '第一段 ' },
+          { type: 'text', text: '\n第二段' },
+        ],
+      },
+    ])
+    socket.frame('turn.started')
+    const stream = await pending
+    complete(socket)
+    expect((await stream.finalCompletion()).message.content).toBe('hello world')
+  })
+  it.each(['turn.completed', 'turn.failed', 'turn.cancelled', 'close', 'dispose'])(
+    'waits for slot release on %s without sending another request',
+    async (terminal) => {
+      const c = client()
+      await c.waitForIdle()
+      const controller = new AbortController()
+      const stream = await started(c, controller.signal)
+      const idle = c.waitForIdle()
+      expect(c.waitForIdle()).toBe(idle)
+      const finished = vi.fn()
+      void idle.then(finished)
+      controller.abort()
+      await expect(stream.finalCompletion()).rejects.toThrow('TURN_CANCELLED')
+      expect(finished).not.toHaveBeenCalled()
+      expect(() => c.stream(params)).toThrow('MODEL_CALL_BUSY')
+      if (terminal === 'turn.completed') complete(sockets[0])
+      else if (terminal === 'close') c.close()
+      else if (terminal === 'dispose') c.dispose()
+      else sockets[0].frame(terminal, { code: 'TEST_END' })
+      await idle
+      expect(finished).toHaveBeenCalledOnce()
+      await c.waitForIdle()
+      expect(sockets[0].sent.filter((frame) => frame.includes('turn.start'))).toHaveLength(1)
+    },
+  )
+  it('forwards complete definitions and returns an empty-text tool completion only at terminal', async () => {
+    const c = client()
+    const tools = [{ name: 'read', description: 'original', parameters: { type: 'object' } }]
+    const promise = c.stream({ ...params, tools })
+    tools[0].description = 'mutated after call'
+    sockets[0].open()
+    await flush()
+    expect(JSON.parse(sockets[0].sent[0]).tools[0].description).toBe('original')
+    sockets[0].frame('turn.started')
+    const stream = await promise
+    const message = {
+      role: 'assistant',
+      content: '',
+      tool_calls: [{ id: 'c1', name: 'read', args: { nested: { value: 1 } } }],
+    }
+    sockets[0].frame('turn.completed', { message, usage: null })
+    const chunks = []
+    for await (const chunk of stream) chunks.push(chunk)
+    expect(chunks).toEqual([])
+    expect((await stream.finalCompletion()).message).toEqual(message)
+  })
   it('forwards caller messages without a separate project context', /** 验证传输层原样发送调用方消息，工程只用于路由。 */ async () => {
     const c = client()
     await started(c)
     const frame = JSON.parse(sockets[0].sent[0])
     expect(frame).toMatchObject({
-      protocol_version: 'agent-text-v2',
+      protocol_version: 'agent-tools-v1',
       project_id: 'project-1',
       messages: params.messages,
+      tools: [],
     })
     expect(frame).not.toHaveProperty('context')
+    expect(frame).not.toHaveProperty('task_id')
     complete(sockets[0])
   })
   it('reserves the slot synchronously and buffers deltas before iteration', /** 验证同步占用槽位、提前到达增量的缓存及单消费者约束。 */ async () => {
@@ -140,7 +220,6 @@ describe('project-scoped single-turn client', /** 组织工程范围内单轮客
     expect(JSON.parse(sockets[0].sent[0])).toMatchObject({
       project_id: 'project-1',
       turn_id: 'turn-1',
-      task_id: 'task-1',
     })
   })
   it('returns the stream on acceptance and waits for the terminal result', /** 验证受理后可读取流，完整结果仍须等待成功终态。 */ async () => {
@@ -321,10 +400,12 @@ describe('project-scoped single-turn client', /** 组织工程范围内单轮客
     const c = client()
     const controller = new AbortController()
     const stream = await started(c, controller.signal)
+    const idle = c.waitForIdle()
     controller.abort()
     await expect(stream.finalCompletion()).rejects.toThrow('TURN_CANCELLED')
     await vi.advanceTimersByTimeAsync(15000)
     expect(c.connectionState.closeReason).toBe('CANCEL_TIMEOUT')
+    await idle
   })
   it('rejects malformed successful results and duplicate status without replaying a reply', /** 验证异常成功结果被拒绝，重复状态不会重放旧回复。 */ async () => {
     const c = client()

@@ -10,14 +10,16 @@
 
 <script setup lang="ts">
 import type { AgentMessage } from '@/aipanel/agent/types'
-import { getMessageTextParts } from '@/aipanel/agent/types'
+import { MessagePartType } from '@/aipanel/agent/types'
+import type { DeepReadonly } from 'vue'
 
 const props = defineProps<{
-  message: AgentMessage
+  message: DeepReadonly<AgentMessage>
 }>()
 
 const getMessageText = () => {
-  return getMessageTextParts(props.message)
+  return props.message.parts
+    .filter((item) => item.type === MessagePartType.TEXT)
     .map((item) => item.text)
     .join('')
 }

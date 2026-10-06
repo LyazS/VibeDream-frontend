@@ -16,7 +16,7 @@ import { createUnifiedUserModule } from '@/core/modules/UnifiedUserModule'
 import { createUnifiedDirectoryModule } from '@/core/modules/UnifiedDirectoryModule'
 import { createUnifiedMediaBunnyModule } from '@/core/modules/UnifiedMediaBunnyModule'
 import { createUnifiedUIModule } from '@/core/modules/UnifiedUIModule'
-import { createUnifiedAgentTestModule } from '@/core/modules/UnifiedAgentTestModule'
+import { createUnifiedAgentModule } from '@/core/modules/UnifiedAgentModule'
 import {
   AI_GENERATED_MEDIA_RESOURCE_TYPE,
   createAIGeneratedMediaRequest,
@@ -152,9 +152,8 @@ export const useUnifiedStore = defineStore('unified', () => {
 
   const unifiedUIModule = createUnifiedUIModule(registry)
   registry.register(MODULE_NAMES.UI, unifiedUIModule)
-  // Store 唯一拥有的 Agent 测试模块，独立提供测试连接、轮次状态及清理入口。
-  const unifiedAgentTestModule = createUnifiedAgentTestModule(registry)
-  registry.register(MODULE_NAMES.AGENT_TEST, unifiedAgentTestModule)
+  const unifiedAgentModule = createUnifiedAgentModule(registry)
+  registry.register(MODULE_NAMES.AGENT, unifiedAgentModule)
 
   const jobRuntime = createJobRuntime()
   jobRuntime.registerResolver(createMediaFileAvailableResolver(unifiedMediaModule))
@@ -514,13 +513,26 @@ export const useUnifiedStore = defineStore('unified', () => {
   // ==================== 导出接口 ====================
 
   return {
-    agentTestReady: unifiedAgentTestModule.ready,
-    agentTestConnection: unifiedAgentTestModule.connection,
-    agentTestSingleTurn: unifiedAgentTestModule.test,
-    runAgentTestSingleTurn: unifiedAgentTestModule.runSingleTurn,
-    stopAgentTestSingleTurn: unifiedAgentTestModule.stopTest,
-    clearAgentTestSingleTurn: unifiedAgentTestModule.clearTest,
-    leaveAgentTestProject: unifiedAgentTestModule.leaveProject,
+    agentReady: unifiedAgentModule.ready,
+    agentRunning: unifiedAgentModule.running,
+    agentBusy: unifiedAgentModule.busy,
+    agentActiveSessionId: unifiedAgentModule.activeSessionId,
+    agentSessionHistory: unifiedAgentModule.sessionHistory,
+    agentHistoryLoading: unifiedAgentModule.historyLoading,
+    agentStorageError: unifiedAgentModule.storageError,
+    agentSessionId: unifiedAgentModule.currentSessionId,
+    agentMessages: unifiedAgentModule.currentMessages,
+    agentTurn: unifiedAgentModule.latestTurn,
+    agentToolExecutions: unifiedAgentModule.toolExecutions,
+    agentPendingInteraction: unifiedAgentModule.pendingInteraction,
+    answerAgentQuestion: unifiedAgentModule.answerQuestion,
+    agentConnection: unifiedAgentModule.connection,
+    sendAgentMessage: unifiedAgentModule.send,
+    stopAgent: unifiedAgentModule.stop,
+    newAgentChat: unifiedAgentModule.newChat,
+    selectAgentSession: unifiedAgentModule.selectSession,
+    deleteAgentSession: unifiedAgentModule.deleteSession,
+    leaveAgentProject: unifiedAgentModule.leaveProject,
     // ==================== 历史记录包装方法导出 ====================
 
     // 时间轴项目历史记录方法

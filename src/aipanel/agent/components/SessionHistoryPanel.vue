@@ -36,32 +36,41 @@
       <div v-else-if="error" class="empty-state">
         <component :is="IconComponents.WARNING" size="48px" />
         <p>{{ error }}</p>
-        <HoverButton @click="loadSessions" variant="default" class="retry-button">
-          {{ t('common.retry') }}
-        </HoverButton>
       </div>
 
       <!-- 会话列表 -->
       <div v-else>
         <div
           v-for="session in filteredSessions"
-          :key="session.session_id"
+          :key="session.id"
           class="history-item"
-          @click="loadHistory(session.session_id)"
+          :class="{ 'history-item--selected': session.id === store.agentSessionId }"
+          tabindex="0"
+          role="button"
+          @click="loadHistory(session.id)"
+          @keydown.enter.self="loadHistory(session.id)"
+          @keydown.space.self.prevent="loadHistory(session.id)"
         >
           <div class="history-preview">
-            {{ getPreviewText(session) }}
+            {{ session.preview || t('common.chat.new') }}
           </div>
 
           <div class="history-meta">
             <span class="history-time">
-              {{ formatTime(session.updated_at) }}
+              {{ formatTime(session.updatedAt) }}
             </span>
+            <span v-if="session.running" class="history-status">{{
+              t('aiPanel.agentStatus.running')
+            }}</span>
+            <span v-else-if="session.waiting" class="history-status">{{
+              t('aiPanel.agentStatus.waiting')
+            }}</span>
 
             <!-- 操作按钮 -->
             <div class="history-actions">
               <HoverButton
-                @click.stop="deleteHistory(session.session_id)"
+                @click.stop="deleteHistory(session.id)"
+                :disabled="session.running"
                 variant="default"
                 :title="t('common.delete')"
                 class="action-button"
@@ -85,14 +94,14 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed } from 'vue'
 import { IconComponents } from '@/constants/iconComponents'
 import HoverButton from '@/components/base/HoverButton.vue'
 import { useAppI18n } from '@/core/composables/useI18n'
-import { SESSION_MANAGER } from '@/aipanel/agent/services'
-import type { SessionSummary } from '@/aipanel/agent/types'
+import { useUnifiedStore } from '@/core/unifiedStore'
 
 const { t } = useAppI18n()
+const store = useUnifiedStore()
 
 // 定义事件
 const emit = defineEmits<{
@@ -103,45 +112,21 @@ const emit = defineEmits<{
 const searchQuery = ref('')
 
 // 加载状态
-const isLoading = ref(false)
-const error = ref<string | null>(null)
-
-// 会话列表数据
-const sessions = ref<SessionSummary[]>([])
-
-// 组件挂载时加载会话列表
-onMounted(async () => {
-  await loadSessions()
-})
-
-// 加载会话列表
-const loadSessions = async () => {
-  try {
-    isLoading.value = true
-    error.value = null
-    sessions.value = await SESSION_MANAGER.getAllSessions()
-  } catch (err) {
-    error.value = err instanceof Error ? err.message : '加载会话列表失败'
-    console.error('加载会话列表失败:', err)
-  } finally {
-    isLoading.value = false
-  }
-}
+const isLoading = computed(() => store.agentHistoryLoading)
+const deleteError = ref<string | null>(null)
+const error = computed(() => deleteError.value || store.agentStorageError)
 
 // 过滤后的会话列表
 const filteredSessions = computed(() => {
   if (!searchQuery.value) {
-    return sessions.value
+    return store.agentSessionHistory
   }
 
   const query = searchQuery.value.toLowerCase()
-  return sessions.value.filter((session) => session.preview_text.toLowerCase().includes(query))
+  return store.agentSessionHistory.filter((session) =>
+    session.preview.toLowerCase().includes(query),
+  )
 })
-
-// 获取预览文本（现在直接从后端获取）
-const getPreviewText = (session: SessionSummary): string => {
-  return session.preview_text || '无消息内容'
-}
 
 // 格式化时间显示
 const formatTime = (dateString: string): string => {
@@ -162,24 +147,17 @@ const formatTime = (dateString: string): string => {
 }
 
 // 加载历史记录
-const loadHistory = async (sessionId: string) => {
-  try {
-    await SESSION_MANAGER.restoreSession(sessionId)
-    emit('close')
-  } catch (err) {
-    error.value = err instanceof Error ? err.message : '加载会话失败'
-    console.error('加载会话失败:', err)
-  }
+const loadHistory = (sessionId: string) => {
+  if (store.selectAgentSession(sessionId)) emit('close')
 }
 
 // 删除历史记录
 const deleteHistory = async (sessionId: string) => {
   try {
-    await SESSION_MANAGER.deleteSession(sessionId)
-    // 重新加载会话列表
-    await loadSessions()
+    deleteError.value = null
+    await store.deleteAgentSession(sessionId)
   } catch (err) {
-    error.value = err instanceof Error ? err.message : '删除会话失败'
+    deleteError.value = err instanceof Error ? err.message : '删除会话失败'
     console.error('删除会话失败:', err)
   }
 }
@@ -248,7 +226,7 @@ const handleBack = () => {
   border: none;
   margin-bottom: var(--spacing-sm);
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: background-color 0.2s ease;
   background: var(--color-bg-secondary);
 }
 
@@ -257,7 +235,27 @@ const handleBack = () => {
   border-width: 2px;
   background: var(--color-bg-hover);
   box-shadow: var(--shadow-sm);
-  transform: translateY(-1px);
+}
+
+.history-item--selected {
+  box-shadow: inset 3px 0 0 var(--color-accent-primary);
+}
+
+/* hover 阴影与选中竖条叠加，避免 hover 规则优先级覆盖选中标记。 */
+.history-item--selected:hover {
+  box-shadow:
+    inset 3px 0 0 var(--color-accent-primary),
+    var(--shadow-sm);
+}
+
+.history-preview {
+  overflow-wrap: anywhere;
+}
+
+.history-status {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+  white-space: nowrap;
 }
 
 .history-time {

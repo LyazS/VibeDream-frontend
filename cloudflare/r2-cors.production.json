@@ -3,7 +3,15 @@
     {
       "id": "pages-model-assets",
       "allowed": {
-        "origins": ["https://lightcut-editor.pages.dev", "https://preview.lightcut-editor.pages.dev", "http://localhost:5173", "http://localhost:8788"],
+        "origins": [
+          "https://lightcut-editor.pages.dev",
+          "https://preview.lightcut-editor.pages.dev",
+          "http://localhost:4173",
+          "http://localhost:4174",
+          "http://localhost:5173",
+          "http://localhost:5174",
+          "http://localhost:8788"
+        ],
         "methods": ["GET", "HEAD"],
         "headers": ["Range", "Content-Type", "Origin"]
       },

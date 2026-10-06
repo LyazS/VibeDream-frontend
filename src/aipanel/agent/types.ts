@@ -117,6 +117,7 @@ export interface SessionHistory {
   updatedAt: string
 }
 
+/** @deprecated 以下 session/run API 类型属于旧 FastAPI 编排，保留供参考。 */
 export interface RunInput {
   parts: Array<TextPart | ImagePart | BackgroundContextPart>
 }

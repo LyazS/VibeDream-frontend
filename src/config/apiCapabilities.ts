@@ -75,6 +75,7 @@ export function getApiPath(url: string): string | undefined {
 export function getApiCapability(path: string): ApiCapability {
   if (path === '/api/agent/tools/describe-item-property') return 'item-properties'
   if (path === '/api/transitions/test-search') return 'transition-search'
+  if (path === '/api/effect-templates/transitions/search') return 'transition-search'
   if (
     path === '/api/media/upload-policies' ||
     path === '/api/media/tasks/indexing' ||

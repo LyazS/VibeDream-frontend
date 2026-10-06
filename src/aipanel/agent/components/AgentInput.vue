@@ -1,5 +1,5 @@
 <template>
-  <div v-if="!pendingAskUserArgs" class="chat-input-wrapper">
+  <div class="chat-input-wrapper">
     <div class="chat-input-shell">
       <div class="chat-input-main">
         <textarea
@@ -8,24 +8,22 @@
           :placeholder="inputPlaceholder"
           :style="textareaStyle"
           autocomplete="off"
+          :disabled="!store.agentReady || (store.agentBusy && !store.agentRunning)"
           @input="adjustTextareaHeight"
           @keydown.enter="handleEnterKey"
           @compositionstart="isComposing = true"
           @compositionend="isComposing = false"
         />
         <ChatSendButton
-          :disabled="hasProcessingMessage ? false : !inputMessage.trim()"
+          :disabled="
+            hasProcessingMessage
+              ? false
+              : !store.agentReady || store.agentBusy || !inputMessage.trim()
+          "
           :title="hasProcessingMessage ? t('common.chat.stop') : t('common.chat.send')"
           :icon="hasProcessingMessage ? IconComponents.STOP : IconComponents.SEND"
           @click="hasProcessingMessage ? handleStop() : handleSend()"
         />
-      </div>
-    </div>
-  </div>
-  <div v-else class="chat-input-wrapper chat-input-wrapper--paused">
-    <div class="chat-input-shell chat-input-shell--paused">
-      <div class="paused-note">
-        {{ t('aiPanel.interaction.pausedNote') }}
       </div>
     </div>
   </div>
@@ -35,10 +33,11 @@
 import { ref, computed, nextTick } from 'vue'
 import { IconComponents } from '@/constants/iconComponents'
 import ChatSendButton from '@/components/base/ChatSendButton.vue'
-import { SESSION_MANAGER } from '@/aipanel/agent/services'
+import { useUnifiedStore } from '@/core/unifiedStore'
 import { useAppI18n } from '@/core/composables/useI18n'
 
 const { t } = useAppI18n()
+const store = useUnifiedStore()
 
 // AgentInput 现在完全自主，不需要发射任何事件
 
@@ -47,9 +46,7 @@ const isComposing = ref(false) // 跟踪输入法 composition 状态
 const textareaHeight = ref(72) // 初始高度 72px (3行 × 24px)
 
 // 检查是否有进行中的消息（使用响应式计算属性）
-const hasProcessingMessage = computed(() => SESSION_MANAGER.isSending.value)
-const pendingInteraction = computed(() => SESSION_MANAGER.pendingInteraction.value)
-const pendingAskUserArgs = computed(() => pendingInteraction.value)
+const hasProcessingMessage = computed(() => store.agentRunning)
 
 // 基础行高（字体大小 + 行间距）
 const LINE_HEIGHT = 24 // px
@@ -66,7 +63,7 @@ const textareaStyle = computed(() => ({
 }))
 
 const inputPlaceholder = computed(() => {
-  return pendingAskUserArgs.value?.prompt || t('common.chat.inputPlaceholder')
+  return t('common.chat.inputPlaceholder')
 })
 
 const adjustTextareaHeight = () => {
@@ -101,7 +98,7 @@ const handleEnterKey = (event: KeyboardEvent) => {
 }
 
 const handleSend = async () => {
-  if (!inputMessage.value.trim()) return
+  if (!store.agentReady || store.agentBusy || !inputMessage.value.trim()) return
 
   const message = inputMessage.value.trim()
 
@@ -109,20 +106,13 @@ const handleSend = async () => {
   inputMessage.value = ''
   textareaHeight.value = MIN_LINES * LINE_HEIGHT // 重置为最小高度(3行)
 
-  // 使用 SessionManager 处理消息发送（回调函数现在是可选的）
-  try {
-    await SESSION_MANAGER.handleSendMessage(message)
-  } catch {
-    inputMessage.value = message
-    adjustTextareaHeight()
-  }
+  await store.sendAgentMessage(message)
 }
 
 // 停止当前进行中的消息
 const handleStop = () => {
   // 中止当前进行中的消息请求
-  SESSION_MANAGER.abortCurrentMessage()
-  console.log('已停止当前进行中的消息')
+  store.stopAgent()
 }
 </script>
 
@@ -158,8 +148,11 @@ const handleStop = () => {
   min-height: 88px;
   padding: 10px 58px 10px 12px;
   border-radius: 10px;
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.03) 0%, rgba(255, 255, 255, 0.018) 100%);
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.03) 0%,
+    rgba(255, 255, 255, 0.018) 100%
+  );
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.04),
     0 4px 10px rgba(0, 0, 0, 0.08);
@@ -170,8 +163,11 @@ const handleStop = () => {
 }
 
 .chat-input-main:focus-within {
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.04) 0%, rgba(255, 255, 255, 0.022) 100%);
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.04) 0%,
+    rgba(255, 255, 255, 0.022) 100%
+  );
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.06),
     0 18px 34px rgba(0, 0, 0, 0.2),

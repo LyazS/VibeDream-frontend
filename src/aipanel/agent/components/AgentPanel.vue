@@ -1,10 +1,8 @@
 <template>
-  <template v-if="!showHistory">
-    <MessageList />
-    <AgentInput />
-  </template>
+  <SessionHistoryPanel v-if="showHistory" @close="$emit('update:showHistory', false)" />
   <template v-else>
-    <SessionHistoryPanel @close="emit('update:showHistory', false)" />
+    <MessageList :key="store.agentSessionId" />
+    <AgentInput v-if="!store.agentPendingInteraction" :key="store.agentSessionId" />
   </template>
 </template>
 
@@ -12,6 +10,9 @@
 import MessageList from './MessageList.vue'
 import AgentInput from './AgentInput.vue'
 import SessionHistoryPanel from './SessionHistoryPanel.vue'
+import { useUnifiedStore } from '@/core/unifiedStore'
+
+const store = useUnifiedStore()
 
 // 定义 props
 defineProps<{
@@ -19,7 +20,7 @@ defineProps<{
 }>()
 
 // 定义事件
-const emit = defineEmits<{
+defineEmits<{
   'update:showHistory': [value: boolean]
 }>()
 </script>

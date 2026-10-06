@@ -4,6 +4,17 @@
     "agent": "Agent",
     "tools": {
       "unknown": "Unknown Tool",
+      "ask_user": "Ask User",
+      "read_project_info": "Read Project Info",
+      "modify_project_info": "Modify Project Info",
+      "create_folder": "Create Folder",
+      "rename_library_item": "Rename Library Item",
+      "move_library_items": "Move Library Items",
+      "delete_empty_folder": "Delete Empty Folder",
+      "describe_item_property": "Describe Item Property",
+      "search_transitions": "Search Transitions",
+      "apply_transition": "Apply Transition",
+      "remove_item": "Remove Item",
       "add_track": "Add Track",
       "create_subtitle_clip": "Create Subtitle Clip",
       "insert_clip": "Insert Clip",
@@ -53,6 +64,8 @@
     },
     "agentStatus": {
       "thinking": "Thinking",
+      "running": "Running",
+      "waiting": "Awaiting answer",
       "completed": "Completed"
     },
     "indexAllMediaSuccess": "Submitted indexing tasks for {count} media items",

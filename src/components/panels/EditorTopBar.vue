@@ -9,7 +9,7 @@
         <div class="status-left">
           <HoverButton @click="goBack" :title="t('editor.backToProject')">
             <template #icon>
-              <img src="/icon/favicon.ico" alt="back" style="width: 18px; height: 18px;" />
+              <img src="/icon/favicon.ico" alt="back" style="width: 18px; height: 18px" />
             </template>
             {{ t('editor.back') }}
           </HoverButton>
@@ -52,9 +52,21 @@
               @click="toggleChatPanel"
               :title="t('editor.toggleChatPanel')"
               :active="unifiedStore.isChatPanelVisible"
+              :class="unifiedStore.agentConnection.status === 'connected' ? 'agent-connected' : ''"
             >
               <template #icon>
-                <component :is="IconComponents.CHAT_AI" size="16px" />
+                <span
+                  class="agent-icon"
+                  :class="{ 'agent-icon--running': unifiedStore.agentBusy }"
+                  aria-hidden="true"
+                >
+                  <component
+                    :is="IconComponents.CHAT_AI_LINE"
+                    size="16px"
+                    class="agent-icon-line"
+                  />
+                  <component :is="IconComponents.CHAT_AI" size="16px" class="agent-icon-fill" />
+                </span>
               </template>
             </HoverButton>
 
@@ -116,11 +128,7 @@
   />
 
   <!-- Provider配置对话框 -->
-  <ProviderConfigModal
-    :show="showProviderConfigDialog"
-    @close="showProviderConfigDialog = false"
-  />
-
+  <ProviderConfigModal :show="showProviderConfigDialog" @close="showProviderConfigDialog = false" />
 </template>
 
 <script setup lang="ts">
@@ -232,7 +240,7 @@ async function handleExportWithSettings(settings: {
         if (cancelExport) {
           cancelExport()
         }
-      }
+      },
     })
 
     // 使用可取消的导出函数
@@ -253,7 +261,7 @@ async function handleExportWithSettings(settings: {
           // 更新进度
           loading.update({
             progress: Math.max(0, Math.min(100, progress)),
-            details: details || ''
+            details: details || '',
           })
         },
       },
@@ -278,7 +286,7 @@ async function handleExportWithSettings(settings: {
         loading.close()
         cancelExport = null
         unifiedStore.messageInfo(t('editor.exportCancelled'))
-      }
+      },
     )
   } catch (error) {
     console.error('导出项目失败:', error)
@@ -361,6 +369,54 @@ defineExpose({
 </script>
 
 <style scoped>
+.status-right .agent-connected,
+.status-right .agent-connected:hover {
+  color: var(--color-success);
+  background-color: var(--color-success-alpha);
+}
+
+.agent-icon {
+  position: relative;
+  display: inline-flex;
+  width: 16px;
+  height: 16px;
+}
+
+.agent-icon-line,
+.agent-icon-fill {
+  position: absolute;
+  inset: 0;
+}
+
+.agent-icon-line {
+  opacity: 0;
+}
+
+.agent-icon--running .agent-icon-fill {
+  animation: agent-heartbeat 1.6s ease-in-out infinite;
+}
+
+.agent-icon--running .agent-icon-line {
+  animation: agent-heartbeat 1.6s ease-in-out -0.8s infinite;
+}
+
+@keyframes agent-heartbeat {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .agent-icon--running .agent-icon-line,
+  .agent-icon--running .agent-icon-fill {
+    animation: none;
+  }
+}
+
 .status-bar-container {
   padding: var(--spacing-sm) var(--spacing-sm) 0 var(--spacing-sm);
   flex-shrink: 0;
