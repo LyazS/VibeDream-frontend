@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "npm run validate:money-configs && vite",
-    "dev:local": "npm run validate:money-configs && vite --mode development",
+    "dev:local": "npm run validate:money-configs && vite --mode development --port 5173 --strictPort",
     "dev:preview": "npm run build:preview && wrangler pages dev dist --port 8788 --compatibility-date 2026-09-14 --service API=lightcut-api-preview",
     "build": "npm run validate:money-configs && run-p \"type-check:no-generate {@}\" \"build-only {@}\" --",
     "build:preview": "npm run validate:money-configs && run-p \"type-check:no-generate {@}\" \"build-only:preview {@}\" --",

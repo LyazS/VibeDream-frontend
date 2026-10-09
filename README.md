@@ -3,6 +3,12 @@
 ![alt text](docs/image.png)
 一个基于Web技术的AI视频编辑器，支持本地文件和远程网络素材的处理与编辑。
 
+## 本地完整联调
+
+先启动 `cloudflare-backend` 的 `npm run dev:local`，再在本目录执行 `npm run dev:local`，
+编辑器入口为 `http://localhost:5173`。开发环境连接本地 API，模型资源来自共享 R2，
+转场资源来自独立的 local R2。资源初始化和 Secret 配置见[本地完整联调](../docs/cloudflare-development-workflow.md#日常开发local)。
+
 ## 项目简介
 
 本菌梦是一个现代化的视频编辑平台，采用前后端分离架构，前端使用Vue 3和TypeScript构建，后端使用Python FastAPI提供API服务。项目实现了统一异步源架构，支持多种媒体格式的处理和编辑。
