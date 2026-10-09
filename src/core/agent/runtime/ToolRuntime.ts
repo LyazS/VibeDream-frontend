@@ -1,12 +1,11 @@
 import Ajv from 'ajv'
-import definitions from './toolDefinitions.json'
-import type { ModelTool, ToolCall } from '../transport/AgentClient'
+import { agentTools, toolContractVersion } from './toolDefinitions'
+import type { ToolCall } from '../transport/AgentClient'
 import type { ToolExecutionContext, ToolResult } from '../tools/types'
 import { describeItemProperties, type ItemPropertyRequest } from '../services/itemPropertyService'
 
 /** 前端维护的公开工具契约，模型和本地校验共享同一份 schema。 */
-export const agentTools: ModelTool[] = definitions.tools
-export const toolContractVersion = definitions.contractVersion
+export { agentTools, toolContractVersion }
 
 /** 创建工具运行时，执行器按需加载。 */
 export function createToolRuntime() {
