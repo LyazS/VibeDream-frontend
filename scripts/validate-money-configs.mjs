@@ -3,7 +3,7 @@ import path from 'node:path'
 
 const PROJECT_ROOT = process.cwd()
 const TARGET_DIRS = [
-  'src/aipanel/aigenerate/configs',
+  'src/components/ai-generation/configs',
   'src/core/datasource/providers/bizyair/configs',
 ]
 const MONEY_KEYS = new Set(['cost', 'real_cost', 'add_cost', 'add_real_cost'])

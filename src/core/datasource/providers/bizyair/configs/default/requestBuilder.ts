@@ -12,9 +12,9 @@ import { BizyAirRequestBuilder } from '../../BizyAirRequestBuilder'
 export const BUILDER_ID = 'default'
 
 export function buildRequestData(
-  taskConfig: Record<string, any>,
-  appConfig: BizyAirAppConfig
-): Record<string, any> {
+  taskConfig: Record<string, unknown>,
+  appConfig: BizyAirAppConfig,
+): Record<string, unknown> {
   /**
    * 默认配置组的请求构建器
    *

@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createUnifiedUserModule } from '../src/core/modules/UnifiedUserModule'
 import { ModuleRegistry, MODULE_NAMES } from '../src/core/modules/ModuleRegistry'
 import { fetchClient } from '../src/utils/fetchClient'
-import { describeItemProperties } from '../src/aipanel/agent/services/itemPropertyService'
+import { describeItemProperties } from '../src/core/agent/services/itemPropertyService'
 
 vi.mock('../src/core/composables/useI18n', () => ({
   useAppI18n: () => ({ t: (key: string) => key }),

@@ -7,7 +7,12 @@
  * @module BizyAirAPIClient
  */
 
-import type { BizyAirTaskDetail, SubmitTaskResponse, TaskDetailResponse, TaskResultResponse } from './types'
+import type {
+  BizyAirTaskDetail,
+  SubmitTaskResponse,
+  TaskDetailResponse,
+  TaskResultResponse,
+} from './types'
 
 // ==================== 常量定义 ====================
 
@@ -177,7 +182,7 @@ export class BizyAirAPIClient {
    * ```
    */
   static async submitAsyncTask(
-    requestData: Record<string, any>,
+    requestData: Record<string, unknown>,
     apiKey: string,
     signal?: AbortSignal,
   ): Promise<string> {

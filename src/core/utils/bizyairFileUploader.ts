@@ -95,7 +95,7 @@ interface BizyAirUploadStrategy {
    * @returns 上传凭证
    */
   getUploadToken(fileName: string, apiKey?: string): Promise<UploadCredentials>
-  
+
   /**
    * 提交资源
    * @param fileName 文件名
@@ -186,7 +186,7 @@ class DirectUploadStrategy implements BizyAirUploadStrategy {
     if (!apiKey || apiKey.trim().length === 0) {
       throw new Error('直接模式需要提供 BizyAir API Key')
     }
-    
+
     const url = new URL(`${this.apiUrl}/x/v1/upload/token`)
     url.searchParams.append('file_name', fileName)
     url.searchParams.append('file_type', 'inputs')
@@ -194,7 +194,7 @@ class DirectUploadStrategy implements BizyAirUploadStrategy {
     const response = await fetch(url.toString(), {
       method: 'GET',
       headers: {
-        'Authorization': `Bearer ${apiKey}`,
+        Authorization: `Bearer ${apiKey}`,
       },
     })
 
@@ -225,11 +225,11 @@ class DirectUploadStrategy implements BizyAirUploadStrategy {
     if (!apiKey || apiKey.trim().length === 0) {
       throw new Error('直接模式需要提供 BizyAir API Key')
     }
-    
+
     const response = await fetch(`${this.apiUrl}/x/v1/input_resource/commit`, {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${apiKey}`,
+        Authorization: `Bearer ${apiKey}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
@@ -462,12 +462,7 @@ export class BizyairFileUploader {
 
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       try {
-        return await this.uploadFile(
-          fileData, 
-          getMediaItem, 
-          getTimelineItem, 
-          onProgress
-        )
+        return await this.uploadFile(fileData, getMediaItem, getTimelineItem, onProgress)
       } catch (error) {
         lastError = error as Error
         console.warn(`上传失败(尝试 ${attempt}/${maxRetries}):`, error)
@@ -488,12 +483,12 @@ export class BizyairFileUploader {
    * 管道函数：处理配置中的文件上传
    */
   static async processConfigUploads(
-    config: Record<string, any>,
+    config: Record<string, unknown>,
     getMediaItem: (id: string | null) => UnifiedMediaItemData | undefined,
     getTimelineItem: (id: string) => UnifiedTimelineItemData<MediaType> | undefined,
     onProgress?: (fileIndex: number, stage: string, progress: number) => void,
     onSuccess?: () => void,
-  ): Promise<Record<string, any>> {
+  ): Promise<Record<string, unknown>> {
     const newConfig = cloneDeep(config)
     const filesToUpload: FileData[] = []
 

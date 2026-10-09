@@ -3,7 +3,10 @@
  * 基于新架构从零开始实现
  */
 
-import type { FileInputConfig, MultiFileData } from '@/core/datasource/providers/ai-generation/types'
+import type {
+  FileInputConfig,
+  MultiFileData,
+} from '@/core/datasource/providers/ai-generation/types'
 import type { AssetKind, EffectType } from '@/core/asset/types'
 import type { AnyEffectPackagePayload } from '@/core/effect-package/types'
 import type { MediaTypeOrUnknown } from '@/core/mediaitem/types'
@@ -205,7 +208,7 @@ export interface DragPreviewData {
  */
 export interface DropResult {
   success: boolean
-  data?: any // 可选的返回数据
+  data?: unknown // 可选的返回数据
   error?: string // 错误信息
 }
 

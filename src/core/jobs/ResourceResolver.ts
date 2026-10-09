@@ -1,4 +1,9 @@
-import type { ResourceDomainEvent, ResourceNode, ResourceRequest, ResourceType } from './ResourceTypes'
+import type {
+  ResourceDomainEvent,
+  ResourceNode,
+  ResourceRequest,
+  ResourceType,
+} from './ResourceTypes'
 
 /**
  * isSatisfied() 使用的轻量上下文。
@@ -51,7 +56,7 @@ export interface ResourceResolver<TInput = unknown, TResult = unknown> {
   cancel?(ctx: ResolveContext<TInput>): Promise<void>
 }
 
-type AnyResourceResolver = ResourceResolver<any, any>
+type AnyResourceResolver = ResourceResolver
 
 /**
  * resolver 注册表。
@@ -62,7 +67,7 @@ export class ResourceResolverRegistry {
   private resolvers = new Map<ResourceType, AnyResourceResolver>()
 
   /** 同一个 type 只能注册一次，避免运行时出现资源解释歧义。 */
-  register(resolver: AnyResourceResolver): void {
+  register<TInput, TResult>(resolver: ResourceResolver<TInput, TResult>): void {
     if (this.resolvers.has(resolver.type)) {
       throw new Error(`Resource resolver already registered: ${resolver.type}`)
     }

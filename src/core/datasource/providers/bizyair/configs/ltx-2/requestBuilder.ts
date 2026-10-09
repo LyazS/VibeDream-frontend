@@ -1,6 +1,6 @@
 /**
  * ltx-2 配置组的请求构建器
- * 
+ *
  * 处理 aspect_ratio 参数，将其转换为 width 和 height。
  * 支持比例：16:9, 9:16, 1:1, 4:3, 3:4, 21:9
  */
@@ -22,9 +22,9 @@ const ASPECT_RATIO_MAP: Record<string, [number, number]> = {
 }
 
 export function buildRequestData(
-  taskConfig: Record<string, any>,
-  appConfig: BizyAirAppConfig
-): Record<string, any> {
+  taskConfig: Record<string, unknown>,
+  appConfig: BizyAirAppConfig,
+): Record<string, unknown> {
   /**
    * ltx-2 配置组的请求构建器
    *
@@ -36,7 +36,7 @@ export function buildRequestData(
    * @returns 请求数据字典
    */
   // 1. 处理 aspect_ratio 参数，转换为 width 和 height
-  const aspectRatio = taskConfig.aspect_ratio || '16:9'
+  const aspectRatio = String(taskConfig.aspect_ratio || '16:9')
 
   let width: number, height: number
   if (aspectRatio in ASPECT_RATIO_MAP) {

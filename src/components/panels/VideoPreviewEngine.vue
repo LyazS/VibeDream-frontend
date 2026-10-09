@@ -77,7 +77,7 @@ import AssetLibraryPanel from '@/components/panels/AssetLibraryPanel.vue'
 import UnifiedTimeline from '@/components/timeline/UnifiedTimeline.vue'
 import UnifiedClipManagementToolbar from '@/components/timeline/UnifiedClipManagementToolbar.vue'
 import UnifiedPropertiesPanel from '@/components/panels/UnifiedPropertiesPanel.vue'
-import AIPanel from '@/aipanel/AIPanel.vue'
+import AIPanel from '@/components/panels/AIPanel.vue'
 import { useKeyboardShortcuts } from '@/core/composables'
 
 // 定义props和emit

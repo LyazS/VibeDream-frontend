@@ -6,19 +6,21 @@ import { formatMoneyForDisplay } from '@/utils/money'
  */
 export function buildTaskErrorMessage(
   errorCode: TaskSubmitErrorCode,
-  errorDetails: Record<string, any>,
-  t: (key: string, params?: any) => string = (key) => key
+  errorDetails: Record<string, unknown>,
+  t: (key: string, params?: Record<string, unknown>) => string = (key) => key,
 ): string {
   switch (errorCode) {
     case TaskSubmitErrorCode.INSUFFICIENT_BALANCE:
       return t('media.error.insufficientBalance', {
         current: formatMoneyForDisplay((errorDetails.current_balance as string | undefined) ?? '0'),
-        required: formatMoneyForDisplay((errorDetails.required_amount as string | undefined) ?? '0'),
+        required: formatMoneyForDisplay(
+          (errorDetails.required_amount as string | undefined) ?? '0',
+        ),
         shortage: formatMoneyForDisplay((errorDetails.shortage as string | undefined) ?? '0'),
       })
 
     case TaskSubmitErrorCode.INVALID_CONFIG:
-      if (errorDetails.missing_fields?.length > 0) {
+      if (Array.isArray(errorDetails.missing_fields) && errorDetails.missing_fields.length > 0) {
         return t('media.error.invalidConfigMissingFields', {
           fields: errorDetails.missing_fields.join(', '),
         })
@@ -69,8 +71,7 @@ export function shouldShowRechargePrompt(errorCode: TaskSubmitErrorCode): boolea
  * 判断是否可以重试
  */
 export function isRetryableError(errorCode: TaskSubmitErrorCode): boolean {
-  return [
-    TaskSubmitErrorCode.DATABASE_ERROR,
-    TaskSubmitErrorCode.INTERNAL_ERROR,
-  ].includes(errorCode)
+  return [TaskSubmitErrorCode.DATABASE_ERROR, TaskSubmitErrorCode.INTERNAL_ERROR].includes(
+    errorCode,
+  )
 }

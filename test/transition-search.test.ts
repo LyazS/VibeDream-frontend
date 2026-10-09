@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { assertApiCapabilityEnabled } from '@/config/apiCapabilities'
-import { searchTransitions } from '@/aipanel/agent/services/transitionSearchService'
+import { searchTransitions } from '@/core/agent/services/transitionSearchService'
 
 afterEach(() => vi.unstubAllGlobals())
 

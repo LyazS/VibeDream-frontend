@@ -3,7 +3,7 @@ import {
   AgentClient,
   AGENT_PROTOCOL_VERSION,
   type CompletionStream,
-} from '../src/aipanel/agent/transport/AgentClient'
+} from '../src/core/agent/transport/AgentClient'
 
 class Socket extends EventTarget {
   // 模拟原生连接状态，供客户端判断握手是否完成或连接是否已关闭。

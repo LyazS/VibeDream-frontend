@@ -62,7 +62,7 @@ export class RunningHubFileUploaderStd {
     const response = await fetch(`${BASE_URL}/openapi/v2/media/upload/binary`, {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${API_KEY}`,
+        Authorization: `Bearer ${API_KEY}`,
       },
       body: formData,
     })
@@ -277,12 +277,12 @@ export class RunningHubFileUploaderStd {
    * @returns 新配置对象
    */
   static async processConfigUploads(
-    config: Record<string, any>,
+    config: Record<string, unknown>,
     getMediaItem: (id: string | null) => UnifiedMediaItemData | undefined,
     getTimelineItem: (id: string) => UnifiedTimelineItemData<MediaType> | undefined,
     onProgress?: (fileIndex: number, stage: string, progress: number) => void,
     onSuccess?: () => void,
-  ): Promise<Record<string, any>> {
+  ): Promise<Record<string, unknown>> {
     // 1. 深度克隆配置，避免修改原对象
     const newConfig = cloneDeep(config)
 

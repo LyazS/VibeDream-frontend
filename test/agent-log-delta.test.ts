@@ -1,12 +1,12 @@
 import { expect, it } from 'vitest'
 import { createHash } from 'node:crypto'
-import { logBytes, type LogSpan } from '../src/aipanel/agent/telemetry/agent-log'
+import { logBytes, type LogSpan } from '../src/core/agent/telemetry/agent-log'
 import {
   encodeLogInput,
   logInputDigest,
   restoreLogInput,
   validLogInputDelta,
-} from '../src/aipanel/agent/telemetry/agent-log-delta'
+} from '../src/core/agent/telemetry/agent-log-delta'
 
 const input = {
   messages: [

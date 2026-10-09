@@ -28,7 +28,7 @@ for (const config of configs) {
 
 export const SELECTOR_ID = 'wan-2.2-i2v'
 
-export function selectConfig(taskConfig: Record<string, any>): BizyAirAppConfig {
+export function selectConfig(taskConfig: Record<string, unknown>): BizyAirAppConfig {
   /**
    * wan-2.2-i2v 配置组选择器
    *
@@ -50,7 +50,7 @@ export function selectConfig(taskConfig: Record<string, any>): BizyAirAppConfig 
 
   // 验证 variant 是否有效
   const validVariants = ['official', 'smoothv1', 'smoothv2']
-  if (!validVariants.includes(variant)) {
+  if (typeof variant !== 'string' || !validVariants.includes(variant)) {
     console.warn(`无效的 variant 值: ${variant}，使用默认值 smoothv2`)
     const fallbackVariant = 'smoothv2'
     if (!(fallbackVariant in configCache)) {

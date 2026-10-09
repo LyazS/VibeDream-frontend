@@ -44,7 +44,7 @@
           <div ref="optionsListRef">
             <div
               v-for="(option, index) in filteredOptions"
-              :key="getOptionValue(option)"
+              :key="getOptionKey(option, index)"
               class="option-item"
               :class="{
                 'is-selected': isSelected(option),
@@ -72,16 +72,16 @@
   </div>
 </template>
 
-<script setup lang="ts">
+<script setup lang="ts" generic="TOption, TValue">
 import { ref, computed, watch, nextTick, onMounted, onBeforeUnmount } from 'vue'
 import { NScrollbar } from 'naive-ui'
 import { RiArrowDownSLine } from '@remixicon/vue'
 
 interface Props {
   /** 当前选中的值 */
-  modelValue: any
+  modelValue: TValue
   /** 选项列表 */
-  options: any[]
+  options: TOption[]
   /** 是否可搜索 */
   searchable?: boolean
   /** 是否禁用 */
@@ -99,12 +99,12 @@ interface Props {
   /** 下拉菜单最大高度 */
   maxHeight?: number
   /** 自定义过滤函数 */
-  filterMethod?: (option: any, query: string) => boolean
+  filterMethod?: (option: TOption, query: string) => boolean
 }
 
 interface Emits {
-  (e: 'update:modelValue', value: any): void
-  (e: 'change', value: any): void
+  (e: 'update:modelValue', value: TValue): void
+  (e: 'change', value: TValue): void
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -132,17 +132,24 @@ const searchQuery = ref('')
 const highlightedIndex = ref(0)
 
 // 获取选项的值
-const getOptionValue = (option: any): any => {
+const getOptionValue = (option: TOption): unknown => {
   if (typeof option === 'object' && option !== null) {
-    return option[props.valueKey]
+    return Reflect.get(option, props.valueKey)
   }
   return option
 }
 
+const getOptionKey = (option: TOption, index: number): PropertyKey => {
+  const value = getOptionValue(option)
+  return typeof value === 'string' || typeof value === 'number' || typeof value === 'symbol'
+    ? value
+    : index
+}
+
 // 获取选项的标签
-const getOptionLabel = (option: any): string => {
+const getOptionLabel = (option: TOption): string => {
   if (typeof option === 'object' && option !== null) {
-    return option[props.labelKey] || String(option[props.valueKey])
+    return String(Reflect.get(option, props.labelKey) || Reflect.get(option, props.valueKey))
   }
   return String(option)
 }
@@ -178,9 +185,8 @@ const filteredOptions = computed(() => {
   })
 })
 
-
 // 判断选项是否被选中
-const isSelected = (option: any): boolean => {
+const isSelected = (option: TOption): boolean => {
   return getOptionValue(option) === props.modelValue
 }
 
@@ -221,8 +227,8 @@ const closeDropdown = () => {
 }
 
 // 选择选项
-const selectOption = (option: any) => {
-  const value = getOptionValue(option)
+const selectOption = (option: TOption) => {
+  const value = getOptionValue(option) as TValue
   emit('update:modelValue', value)
   emit('change', value)
   closeDropdown()
@@ -260,9 +266,7 @@ const scrollToHighlighted = () => {
   nextTick(() => {
     if (!optionsListRef.value) return
 
-    const highlightedElement = optionsListRef.value.children[
-      highlightedIndex.value
-    ] as HTMLElement
+    const highlightedElement = optionsListRef.value.children[highlightedIndex.value] as HTMLElement
     if (highlightedElement) {
       highlightedElement.scrollIntoView({
         block: 'nearest',
@@ -278,7 +282,7 @@ const scrollToSelected = () => {
     if (!optionsListRef.value || !selectedOption.value) return
 
     const selectedIndex = filteredOptions.value.findIndex(
-      (option) => getOptionValue(option) === props.modelValue
+      (option) => getOptionValue(option) === props.modelValue,
     )
 
     if (selectedIndex !== -1) {

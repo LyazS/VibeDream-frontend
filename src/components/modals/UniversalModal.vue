@@ -74,7 +74,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, type CSSProperties } from 'vue'
 import { IconComponents } from '@/constants/iconComponents'
 import HoverButton from '@/components/base/HoverButton.vue'
 import ModalOverlay from './ModalOverlay.vue'
@@ -103,7 +103,7 @@ interface Props {
   confirmText?: string
   cancelText?: string
   customClass?: string
-  customStyle?: Record<string, any>
+  customStyle?: CSSProperties
 }
 
 const props = withDefaults(defineProps<Props>(), {

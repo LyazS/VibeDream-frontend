@@ -5,7 +5,7 @@ import { ref, reactive, computed, watch, onMounted, onUnmounted, nextTick } from
 export interface TagItem {
   label: string
   color: string
-  [key: string]: any // 支持任意其他可选字段
+  [key: string]: unknown // 支持任意其他可选字段
 }
 
 // Props 定义
@@ -43,8 +43,8 @@ const menuPosition = reactive({ top: 0, left: 0 })
 
 // 计算属性：过滤标签
 const filteredTags = computed(() => {
-  return props.availableTags.filter(tag =>
-    tag.label.toLowerCase().includes(filterText.value.toLowerCase())
+  return props.availableTags.filter((tag) =>
+    tag.label.toLowerCase().includes(filterText.value.toLowerCase()),
   )
 })
 
@@ -162,7 +162,8 @@ const handleKeyDown = (e: KeyboardEvent) => {
       selectedIndex.value = (selectedIndex.value + 1) % filteredTags.value.length
     } else if (e.key === 'ArrowUp') {
       e.preventDefault()
-      selectedIndex.value = (selectedIndex.value - 1 + filteredTags.value.length) % filteredTags.value.length
+      selectedIndex.value =
+        (selectedIndex.value - 1 + filteredTags.value.length) % filteredTags.value.length
     } else if (e.key === 'Enter') {
       e.preventDefault()
       const selectedTag = filteredTags.value[selectedIndex.value]
@@ -301,7 +302,7 @@ watch(
       }
     })
   },
-  { immediate: true } // 立即执行，确保初始化时同步
+  { immediate: true }, // 立即执行，确保初始化时同步
 )
 
 // 暴露方法给父组件
@@ -357,15 +358,12 @@ onUnmounted(() => {
             :key="index"
             :class="[
               'tag-input-menu-item',
-              index === selectedIndex ? 'tag-input-menu-item-selected' : ''
+              index === selectedIndex ? 'tag-input-menu-item-selected' : '',
             ]"
             @mouseenter="selectedIndex = index"
             @click="insertTag(tag)"
           >
-            <span
-              class="tag-input-menu-tag"
-              :style="{ backgroundColor: tag.color }"
-            >
+            <span class="tag-input-menu-tag" :style="{ backgroundColor: tag.color }">
               {{ tag.label }}
             </span>
             <span v-if="index === selectedIndex" class="tag-input-menu-hint">Enter</span>

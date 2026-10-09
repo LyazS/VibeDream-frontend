@@ -17,7 +17,11 @@ export class MediaStatusManager {
    * @param context 上下文信息（可选）
    * @returns 是否转换成功
    */
-  transitionTo(mediaItem: UnifiedMediaItemData, newStatus: MediaStatus, context?: any): boolean {
+  transitionTo(
+    mediaItem: UnifiedMediaItemData,
+    newStatus: MediaStatus,
+    context?: unknown,
+  ): boolean {
     if (!this.validateTransition(mediaItem.mediaStatus, newStatus)) {
       console.warn(
         `⚠️ [MediaStatusManager] 无效状态转换: ${mediaItem.name} ${mediaItem.mediaStatus} → ${newStatus}`,

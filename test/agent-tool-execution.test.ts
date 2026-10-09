@@ -1,17 +1,17 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { ToolExecutionContext } from '../src/aipanel/agent/composables/core/toolTypes'
+import type { ToolExecutionContext } from '../src/core/agent/tools/types'
 import {
   executeReadMedia,
   useReadMediaExecutionState,
-} from '../src/aipanel/agent/composables/tools/readMedia'
+} from '../src/core/agent/tools/readMedia'
 import {
   executeSearchMedia,
   useSearchMediaExecutionState,
-} from '../src/aipanel/agent/composables/tools/searchMedia'
+} from '../src/core/agent/tools/searchMedia'
 import {
   cancelToolExecution,
   hasToolCancellationHook,
-} from '../src/aipanel/agent/composables/tools/cancellation'
+} from '../src/core/agent/tools/cancellation'
 
 const mocks = vi.hoisted(() => ({
   search: vi.fn(),
@@ -27,7 +27,7 @@ vi.mock('../src/core/unifiedStore', () => ({
     jobRuntime: { onResourceEvent: mocks.subscribe },
   }),
 }))
-vi.mock('../src/aipanel/agent/services/mediaIndexService', () => ({ searchMedia: mocks.search }))
+vi.mock('../src/core/agent/services/mediaIndexService', () => ({ searchMedia: mocks.search }))
 
 function context(signal: AbortSignal): ToolExecutionContext {
   return {

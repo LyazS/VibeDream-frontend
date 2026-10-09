@@ -29,7 +29,7 @@ for (const loadedConfig of configs) {
 
 export const SELECTOR_ID = 'default'
 
-export function selectConfig(taskConfig: Record<string, any>): BizyAirAppConfig {
+export function selectConfig(taskConfig: Record<string, unknown>): BizyAirAppConfig {
   /**
    * 默认配置组的选择器
    *
@@ -47,10 +47,10 @@ export function selectConfig(taskConfig: Record<string, any>): BizyAirAppConfig 
   const configId = taskConfig['id']
   const configVar = taskConfig['variant']
 
-  const configsForId = configCache[configId]
+  const configsForId = typeof configId === 'string' ? configCache[configId] : undefined
   if (configsForId) {
     if (configVar) {
-      const config = configsForId[configVar]
+      const config = configsForId[String(configVar)]
       if (config) {
         return config
       } else {

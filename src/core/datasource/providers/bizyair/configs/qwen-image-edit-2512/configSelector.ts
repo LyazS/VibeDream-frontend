@@ -25,7 +25,7 @@ for (const config of configs) {
 
 export const SELECTOR_ID = 'qwen-image-edit-2512'
 
-export function selectConfig(taskConfig: Record<string, any>): BizyAirAppConfig {
+export function selectConfig(taskConfig: Record<string, unknown>): BizyAirAppConfig {
   /**
    * qwen-image-edit-2512 配置组选择器
    *
@@ -45,7 +45,7 @@ export function selectConfig(taskConfig: Record<string, any>): BizyAirAppConfig 
 
   // 获取参考图片数量
   const refImages = taskConfig['ref_images'] || []
-  const refCount = refImages.length
+  const refCount = Array.isArray(refImages) || typeof refImages === 'string' ? refImages.length : 0
 
   // 根据参考图片数量选择变种
   let variant: string

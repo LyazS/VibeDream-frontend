@@ -1,11 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { agentTools, createToolRuntime } from '../src/aipanel/agent/runtime/ToolRuntime'
-import type { ToolExecutionContext } from '../src/aipanel/agent/composables/core/toolTypes'
-import systemPrompt from '../src/aipanel/agent/prompts/system-prompt.txt?raw'
+import { agentTools, createToolRuntime } from '../src/core/agent/runtime/ToolRuntime'
+import type { ToolExecutionContext } from '../src/core/agent/tools/types'
+import systemPrompt from '../src/core/agent/prompts/system-prompt.txt?raw'
 
 const mocks = vi.hoisted(() => ({ execute: vi.fn(), describe: vi.fn() }))
-vi.mock('../src/aipanel/agent/composables/tools', () => ({ executeTool: mocks.execute }))
-vi.mock('../src/aipanel/agent/services/itemPropertyService', () => ({
+vi.mock('../src/core/agent/tools', () => ({ executeTool: mocks.execute }))
+vi.mock('../src/core/agent/services/itemPropertyService', () => ({
   describeItemProperties: mocks.describe,
 }))
 beforeEach(() => vi.clearAllMocks())

@@ -25,14 +25,14 @@ import { BizyAirRequestBuilder } from './BizyAirRequestBuilder'
  * 使用 Vite 的 import.meta.glob API 在构建时静态分析并导入所有匹配的模块
  */
 const selectorModules = import.meta.glob('./configs/*/configSelector.ts', {
-  eager: true
+  eager: true,
 })
 
 /**
  * 动态加载所有请求构建器
  */
 const builderModules = import.meta.glob('./configs/*/requestBuilder.ts', {
-  eager: true
+  eager: true,
 })
 
 type SelectorModule = {
@@ -71,15 +71,15 @@ import { selectConfig as defaultSelectConfig } from './configs/default/configSel
 /**
  * 配置选择器函数类型
  */
-type ConfigSelector = (taskConfig: Record<string, any>) => BizyAirAppConfig
+type ConfigSelector = (taskConfig: Record<string, unknown>) => BizyAirAppConfig
 
 /**
  * 请求构建器函数类型
  */
 type RequestBuilder = (
-  taskConfig: Record<string, any>,
-  appConfig: BizyAirAppConfig
-) => Record<string, any>
+  taskConfig: Record<string, unknown>,
+  appConfig: BizyAirAppConfig,
+) => Record<string, unknown>
 
 /**
  * 默认请求构建器
@@ -87,9 +87,9 @@ type RequestBuilder = (
  * 使用 BizyAirRequestBuilder 类的 build 方法
  */
 const defaultRequestBuilder: RequestBuilder = (
-  taskConfig: Record<string, any>,
-  appConfig: BizyAirAppConfig
-): Record<string, any> => {
+  taskConfig: Record<string, unknown>,
+  appConfig: BizyAirAppConfig,
+): Record<string, unknown> => {
   return BizyAirRequestBuilder.build(taskConfig, appConfig)
 }
 
@@ -120,7 +120,7 @@ export class BizyAirConfigManager {
       }
 
       return map
-    })()
+    })(),
   )
 
   /**
@@ -149,7 +149,7 @@ export class BizyAirConfigManager {
       }
 
       return map
-    })()
+    })(),
   )
 
   /**
@@ -199,7 +199,7 @@ export class BizyAirConfigManager {
    * @returns BizyAir 应用配置
    * @throws Error 如果选择器抛出错误
    */
-  static getConfig(taskConfig: Record<string, any>): BizyAirAppConfig {
+  static getConfig(taskConfig: Record<string, unknown>): BizyAirAppConfig {
     if (!BizyAirConfigManager.initialized) {
       console.warn('[BizyAirConfigManager] 未初始化，尝试自动初始化')
       BizyAirConfigManager.initialize().catch((err) => {
@@ -209,7 +209,7 @@ export class BizyAirConfigManager {
 
     const configId = taskConfig['id']
 
-    if (!configId) {
+    if (typeof configId !== 'string' || !configId) {
       console.warn('[BizyAirConfigManager] task_config 中缺少 id 字段，使用默认选择器')
       return BizyAirConfigManager.defaultSelector(taskConfig)
     }
@@ -228,9 +228,7 @@ export class BizyAirConfigManager {
     }
 
     // 找不到匹配的选择器，使用默认选择器
-    console.warn(
-      `[BizyAirConfigManager] 未找到配置组 ${configId}，使用默认选择器`
-    )
+    console.warn(`[BizyAirConfigManager] 未找到配置组 ${configId}，使用默认选择器`)
     return BizyAirConfigManager.defaultSelector(taskConfig)
   }
 
@@ -243,7 +241,7 @@ export class BizyAirConfigManager {
    * @param taskConfig - 任务配置，必须包含 'id' 字段
    * @returns 请求构建器函数，永远不会返回 null
    */
-  static getRequestBuilder(taskConfig: Record<string, any>): RequestBuilder {
+  static getRequestBuilder(taskConfig: Record<string, unknown>): RequestBuilder {
     if (!BizyAirConfigManager.initialized) {
       console.warn('[BizyAirConfigManager] 未初始化，尝试自动初始化')
       BizyAirConfigManager.initialize().catch((err) => {
@@ -253,7 +251,7 @@ export class BizyAirConfigManager {
 
     const configId = taskConfig['id']
 
-    if (!configId) {
+    if (typeof configId !== 'string' || !configId) {
       console.warn('[BizyAirConfigManager] task_config 中缺少 id 字段，使用默认构建器')
       return BizyAirConfigManager.defaultBuilder
     }
@@ -267,9 +265,7 @@ export class BizyAirConfigManager {
     }
 
     // 找不到匹配的构建器，使用默认构建器
-    console.warn(
-      `[BizyAirConfigManager] 未找到构建器 ${configId}，使用默认构建器`
-    )
+    console.warn(`[BizyAirConfigManager] 未找到构建器 ${configId}，使用默认构建器`)
     return BizyAirConfigManager.defaultBuilder
   }
 

@@ -25,8 +25,9 @@ import {
 import { filterTemplateCatalogService } from '@/core/effect-template/FilterTemplateCatalogService'
 import { transitionTemplateCatalogService } from '@/core/effect-template/TransitionTemplateCatalogService'
 
-type CatalogItemByType<T extends CommonEffectType> =
-  T extends 'transition' ? TransitionTemplateSummary : FilterTemplateSummary
+type CatalogItemByType<T extends CommonEffectType> = T extends 'transition'
+  ? TransitionTemplateSummary
+  : FilterTemplateSummary
 
 type CatalogItem = TransitionTemplateSummary | FilterTemplateSummary
 const CATALOG_VERSION_CHECK_TTL_MS = 5 * 60 * 1000
@@ -69,10 +70,7 @@ function toLocalizedTagList(value: unknown): { zh: string[]; en: string[] } {
   return { zh: [], en: [] }
 }
 
-function toCategory(
-  value: unknown,
-  fallbackKey = 'uncategorized',
-): EffectTemplateCategory {
+function toCategory(value: unknown, fallbackKey = 'uncategorized'): EffectTemplateCategory {
   if (isRecord(value)) {
     const key = String(value.key ?? fallbackKey).trim() || fallbackKey
     return {
@@ -108,7 +106,9 @@ function normalizeProgress(phase: EffectInstallPhase): number {
 export class EffectTemplateRegistry {
   readonly packageStates = reactive(new Map<string, CommonEffectTemplateState>())
 
-  private readonly catalogs = reactive(new Map<CommonEffectType, CommonEffectCatalog<any>>())
+  private readonly catalogs = reactive(
+    new Map<CommonEffectType, CommonEffectCatalog<CatalogItem>>(),
+  )
   private readonly activeInstalls = new Map<string, Promise<void>>()
   private initialized = false
 
@@ -137,9 +137,10 @@ export class EffectTemplateRegistry {
     }
 
     try {
-      const versionResponse = effectType === 'transition'
-        ? await transitionTemplateCatalogService.getCatalogVersion()
-        : await filterTemplateCatalogService.getCatalogVersion()
+      const versionResponse =
+        effectType === 'transition'
+          ? await transitionTemplateCatalogService.getCatalogVersion()
+          : await filterTemplateCatalogService.getCatalogVersion()
       const remoteCatalogVersion = assertCatalogVersion(versionResponse.catalog_version)
       const checkedAt = new Date().toISOString()
 
@@ -153,9 +154,10 @@ export class EffectTemplateRegistry {
         return refreshedCatalog
       }
 
-      const response = effectType === 'transition'
-        ? await transitionTemplateCatalogService.getTemplateSummaries()
-        : await filterTemplateCatalogService.getTemplateSummaries()
+      const response =
+        effectType === 'transition'
+          ? await transitionTemplateCatalogService.getTemplateSummaries()
+          : await filterTemplateCatalogService.getTemplateSummaries()
       const catalogVersion = assertCatalogVersion(response.catalog_version)
       const catalog: CommonEffectCatalog<CatalogItemByType<T>> = {
         effectType,
@@ -181,7 +183,12 @@ export class EffectTemplateRegistry {
     if (!item) {
       throw new Error(`效果模板不存在: ${effectType}/${templateId}`)
     }
-    return this.installTemplate(effectType, templateId, item.package_version, catalog.catalogVersion)
+    return this.installTemplate(
+      effectType,
+      templateId,
+      item.package_version,
+      catalog.catalogVersion,
+    )
   }
 
   async installTemplate(
@@ -195,32 +202,43 @@ export class EffectTemplateRegistry {
     const existingTask = this.activeInstalls.get(identity.effectPackageId)
     if (existingTask) {
       await existingTask
-      if (this.packageStates.get(identity.effectPackageId)?.catalogVersion === identity.catalogVersion) return
+      if (
+        this.packageStates.get(identity.effectPackageId)?.catalogVersion === identity.catalogVersion
+      )
+        return
       return this.installTemplate(effectType, templateId, packageVersion, catalogVersion)
     }
 
-    const task = this.installTemplateInternal(identity)
-      .finally(() => {
-        this.activeInstalls.delete(identity.effectPackageId)
-      })
+    const task = this.installTemplateInternal(identity).finally(() => {
+      this.activeInstalls.delete(identity.effectPackageId)
+    })
     this.activeInstalls.set(identity.effectPackageId, task)
     return task
   }
 
   async ensureReady(identityOrEffectPackageId: EffectPackageIdentity | string): Promise<void> {
     await this.initialize()
-    const identity = typeof identityOrEffectPackageId === 'string'
-      ? parseEffectPackageId(identityOrEffectPackageId)
-      : identityOrEffectPackageId
+    const identity =
+      typeof identityOrEffectPackageId === 'string'
+        ? parseEffectPackageId(identityOrEffectPackageId)
+        : identityOrEffectPackageId
     const readyPackage = effectPackageRegistry.getPackage(identity.effectPackageId)
-    if (readyPackage && this.packageStates.get(identity.effectPackageId)?.status === 'ready' &&
-      (!identity.catalogVersion || this.packageStates.get(identity.effectPackageId)?.catalogVersion === identity.catalogVersion)) {
+    if (
+      readyPackage &&
+      this.packageStates.get(identity.effectPackageId)?.status === 'ready' &&
+      (!identity.catalogVersion ||
+        this.packageStates.get(identity.effectPackageId)?.catalogVersion ===
+          identity.catalogVersion)
+    ) {
       return
     }
 
     const currentState = this.packageStates.get(identity.effectPackageId)
-    if (currentState?.status === 'ready' && currentState.packagePath &&
-      (!identity.catalogVersion || currentState.catalogVersion === identity.catalogVersion)) {
+    if (
+      currentState?.status === 'ready' &&
+      currentState.packagePath &&
+      (!identity.catalogVersion || currentState.catalogVersion === identity.catalogVersion)
+    ) {
       await this.loadInstalledPackage(identity, currentState.packagePath)
       return
     }
@@ -236,14 +254,15 @@ export class EffectTemplateRegistry {
 
     const resolvedIdentity = await this.resolveInstallIdentity(identity)
     if (!resolvedIdentity) {
-      const fallbackIdentity = currentState && !identity.catalogVersion
-        ? this.createIdentity(
-            currentState.effectType,
-            currentState.templateId,
-            currentState.packageVersion,
-            currentState.catalogVersion,
-          )
-        : identity
+      const fallbackIdentity =
+        currentState && !identity.catalogVersion
+          ? this.createIdentity(
+              currentState.effectType,
+              currentState.templateId,
+              currentState.packageVersion,
+              currentState.catalogVersion,
+            )
+          : identity
       this.setState(fallbackIdentity, {
         status: 'missing',
         phase: 'error',
@@ -298,9 +317,8 @@ export class EffectTemplateRegistry {
     installedAt: string,
   ): CommonEffectTemplateMeta {
     const transitionDurationFrames = 'duration_frames' in item ? item.duration_frames : undefined
-    const supportedMediaTypes = 'supported_media_types' in item
-      ? [...item.supported_media_types]
-      : undefined
+    const supportedMediaTypes =
+      'supported_media_types' in item ? [...item.supported_media_types] : undefined
 
     return {
       effectPackageId: identity.effectPackageId,
@@ -367,15 +385,16 @@ export class EffectTemplateRegistry {
     })
 
     try {
-      const download = identity.effectType === 'transition'
-        ? await transitionTemplateCatalogService.downloadTemplatePackage(
-            identity.templateId,
-            identity.catalogVersion,
-          )
-        : await filterTemplateCatalogService.downloadTemplatePackage(
-            identity.templateId,
-            identity.catalogVersion,
-          )
+      const download =
+        identity.effectType === 'transition'
+          ? await transitionTemplateCatalogService.downloadTemplatePackage(
+              identity.templateId,
+              identity.catalogVersion,
+            )
+          : await filterTemplateCatalogService.downloadTemplatePackage(
+              identity.templateId,
+              identity.catalogVersion,
+            )
 
       const downloadCatalogVersion = assertCatalogVersion(download.catalog_version)
       if (downloadCatalogVersion !== identity.catalogVersion) {
@@ -397,7 +416,9 @@ export class EffectTemplateRegistry {
         progress: normalizeProgress('writing'),
       })
 
-      const packageDirExists = await fileSystemService.directoryExists(packagePath).catch(() => false)
+      const packageDirExists = await fileSystemService
+        .directoryExists(packagePath)
+        .catch(() => false)
       if (packageDirExists) {
         await fileSystemService.deleteDirectory(packagePath, true)
       }
@@ -454,7 +475,10 @@ export class EffectTemplateRegistry {
     }
   }
 
-  private async cleanupFailedInstall(identity: EffectPackageIdentity, packagePath: string): Promise<void> {
+  private async cleanupFailedInstall(
+    identity: EffectPackageIdentity,
+    packagePath: string,
+  ): Promise<void> {
     effectPackageRegistry.removePackage(identity.effectPackageId)
     const packageDirExists = await fileSystemService.directoryExists(packagePath).catch(() => false)
     if (packageDirExists) {
@@ -465,10 +489,7 @@ export class EffectTemplateRegistry {
   private async ensureBaseDirectories(): Promise<void> {
     const commonEffectsDir = fileSystemService.paths.getCommonEffectsDirPath()
     const catalogDir = fileSystemService.paths.getEffectCatalogDirPath()
-    const packageRootDir = fileSystemService.paths.join(
-      commonEffectsDir,
-      'packages',
-    )
+    const packageRootDir = fileSystemService.paths.join(commonEffectsDir, 'packages')
 
     if (!(await fileSystemService.directoryExists(commonEffectsDir).catch(() => false))) {
       await fileSystemService.createDirectory(commonEffectsDir)
@@ -495,9 +516,12 @@ export class EffectTemplateRegistry {
         return null
       }
 
-      const rawEffectType = raw.effectType === 'filter' ? 'filter' : raw.effectType === 'transition'
-        ? 'transition'
-        : null
+      const rawEffectType =
+        raw.effectType === 'filter'
+          ? 'filter'
+          : raw.effectType === 'transition'
+            ? 'transition'
+            : null
       if (rawEffectType !== effectType) {
         return null
       }
@@ -505,9 +529,8 @@ export class EffectTemplateRegistry {
       return {
         effectType,
         catalogVersion: assertCatalogVersion(String(raw.catalogVersion ?? '')),
-        checkedAt: typeof raw.checkedAt === 'string' && raw.checkedAt.trim()
-          ? raw.checkedAt
-          : undefined,
+        checkedAt:
+          typeof raw.checkedAt === 'string' && raw.checkedAt.trim() ? raw.checkedAt : undefined,
         items: raw.items as CatalogItemByType<T>[],
       }
     } catch (error) {
@@ -603,7 +626,12 @@ export class EffectTemplateRegistry {
           )
           const meta = await this.readMetaFile(metaIdentity).catch(() => null)
           const identity = meta
-            ? this.createIdentity(effectType, meta.templateId, meta.packageVersion, meta.catalogVersion)
+            ? this.createIdentity(
+                effectType,
+                meta.templateId,
+                meta.packageVersion,
+                meta.catalogVersion,
+              )
             : metaIdentity
           const manifestPath = fileSystemService.paths.join(versionDir.path, 'manifest.json')
           const hasManifest = await fileSystemService.fileExists(manifestPath).catch(() => false)
@@ -620,7 +648,9 @@ export class EffectTemplateRegistry {
     }
   }
 
-  private async readMetaFile(identity: EffectPackageIdentity): Promise<CommonEffectTemplateMeta | null> {
+  private async readMetaFile(
+    identity: EffectPackageIdentity,
+  ): Promise<CommonEffectTemplateMeta | null> {
     const metaPath = fileSystemService.paths.getEffectPackageMetaPath(
       identity.effectType,
       identity.templateId,
@@ -645,13 +675,12 @@ export class EffectTemplateRegistry {
       tags: toLocalizedTagList(raw.tags),
       coverUrl: String(raw.coverUrl ?? ''),
       installedAt: String(raw.installedAt ?? ''),
-      transitionDurationFrames: typeof raw.transitionDurationFrames === 'number'
-        ? raw.transitionDurationFrames
-        : undefined,
+      transitionDurationFrames:
+        typeof raw.transitionDurationFrames === 'number' ? raw.transitionDurationFrames : undefined,
       supportedMediaTypes: Array.isArray(raw.supportedMediaTypes)
         ? raw.supportedMediaTypes
-          .map((item) => String(item))
-          .filter((item): item is 'video' | 'image' => item === 'video' || item === 'image')
+            .map((item) => String(item))
+            .filter((item): item is 'video' | 'image' => item === 'video' || item === 'image')
         : undefined,
     }
   }
@@ -676,9 +705,7 @@ export class EffectTemplateRegistry {
           packageVersion: String(entry.packageVersion ?? ''),
           catalogVersion: String(entry.catalogVersion ?? ''),
           status:
-            entry.status === 'error'
-            || entry.status === 'missing'
-            || entry.status === 'installed'
+            entry.status === 'error' || entry.status === 'missing' || entry.status === 'installed'
               ? entry.status
               : 'ready',
           packagePath: String(entry.packagePath ?? ''),
@@ -697,28 +724,32 @@ export class EffectTemplateRegistry {
       version: '1.0.0',
       packages: Array.from(this.packageStates.values())
         .filter((state) => state.status !== 'remote')
-        .map((state): CommonEffectIndexEntry => ({
-          effectPackageId: state.effectPackageId,
-          effectType: state.effectType,
-          templateId: state.templateId,
-          packageVersion: state.packageVersion,
-          catalogVersion: state.catalogVersion,
-          status:
-            state.status === 'ready'
-              ? 'ready'
-              : state.status === 'installed' || state.status === 'loading'
-                ? 'installed'
-                : state.status === 'missing'
-                  ? 'missing'
-                  : 'error',
-          packagePath: state.packagePath ?? fileSystemService.paths.getEffectPackageDirPath(
-            state.effectType,
-            state.templateId,
-            state.packageVersion,
-          ),
-          installedAt: state.meta?.installedAt,
-          errorMessage: state.errorMessage,
-        })),
+        .map(
+          (state): CommonEffectIndexEntry => ({
+            effectPackageId: state.effectPackageId,
+            effectType: state.effectType,
+            templateId: state.templateId,
+            packageVersion: state.packageVersion,
+            catalogVersion: state.catalogVersion,
+            status:
+              state.status === 'ready'
+                ? 'ready'
+                : state.status === 'installed' || state.status === 'loading'
+                  ? 'installed'
+                  : state.status === 'missing'
+                    ? 'missing'
+                    : 'error',
+            packagePath:
+              state.packagePath ??
+              fileSystemService.paths.getEffectPackageDirPath(
+                state.effectType,
+                state.templateId,
+                state.packageVersion,
+              ),
+            installedAt: state.meta?.installedAt,
+            errorMessage: state.errorMessage,
+          }),
+        ),
     }
 
     await fileSystemService.writeFile(
@@ -730,32 +761,48 @@ export class EffectTemplateRegistry {
   private async resolveCatalogItem(identity: EffectPackageIdentity): Promise<CatalogItem | null> {
     const currentCatalog = this.catalogs.get(identity.effectType)
     if (currentCatalog?.catalogVersion === identity.catalogVersion) {
-      return currentCatalog.items.find((item) =>
-        item.id === identity.templateId && item.package_version === identity.packageVersion,
-      ) ?? null
+      return (
+        currentCatalog.items.find(
+          (item) =>
+            item.id === identity.templateId && item.package_version === identity.packageVersion,
+        ) ?? null
+      )
     }
 
     if (identity.effectType === 'transition' && identity.catalogVersion) {
-      const versioned = await transitionTemplateCatalogService.getTemplateSummaries(identity.catalogVersion)
+      const versioned = await transitionTemplateCatalogService.getTemplateSummaries(
+        identity.catalogVersion,
+      )
       if (versioned.catalog_version !== identity.catalogVersion) return null
-      return versioned.items.find((item) =>
-        item.id === identity.templateId && item.package_version === identity.packageVersion,
-      ) ?? null
+      return (
+        versioned.items.find(
+          (item) =>
+            item.id === identity.templateId && item.package_version === identity.packageVersion,
+        ) ?? null
+      )
     }
 
     const loadedCatalog = await this.loadCatalog(identity.effectType)
     if (loadedCatalog.catalogVersion !== identity.catalogVersion) {
       return null
     }
-    return loadedCatalog.items.find((item) =>
-      item.id === identity.templateId && item.package_version === identity.packageVersion,
-    ) ?? null
+    return (
+      loadedCatalog.items.find(
+        (item) =>
+          item.id === identity.templateId && item.package_version === identity.packageVersion,
+      ) ?? null
+    )
   }
 
-  private async resolveInstallIdentity(identity: EffectPackageIdentity): Promise<EffectPackageIdentity | null> {
+  private async resolveInstallIdentity(
+    identity: EffectPackageIdentity,
+  ): Promise<EffectPackageIdentity | null> {
     const currentState = this.packageStates.get(identity.effectPackageId)
-    if (currentState?.catalogVersion && currentState.catalogVersion !== 'local-only' &&
-      (!identity.catalogVersion || currentState.catalogVersion === identity.catalogVersion)) {
+    if (
+      currentState?.catalogVersion &&
+      currentState.catalogVersion !== 'local-only' &&
+      (!identity.catalogVersion || currentState.catalogVersion === identity.catalogVersion)
+    ) {
       return this.createIdentity(
         currentState.effectType,
         currentState.templateId,
@@ -765,12 +812,13 @@ export class EffectTemplateRegistry {
     }
 
     if (identity.effectType === 'transition' && identity.catalogVersion) {
-      return await this.resolveCatalogItem(identity) ? identity : null
+      return (await this.resolveCatalogItem(identity)) ? identity : null
     }
 
     const catalog = await this.loadCatalog(identity.effectType)
-    const item = catalog.items.find((entry) =>
-      entry.id === identity.templateId && entry.package_version === identity.packageVersion,
+    const item = catalog.items.find(
+      (entry) =>
+        entry.id === identity.templateId && entry.package_version === identity.packageVersion,
     )
     if (!item) {
       return null
@@ -802,7 +850,12 @@ export class EffectTemplateRegistry {
     }
 
     for (const item of items) {
-      const identity = this.createIdentity(effectType, item.id, item.package_version, catalogVersion)
+      const identity = this.createIdentity(
+        effectType,
+        item.id,
+        item.package_version,
+        catalogVersion,
+      )
       const previous = this.packageStates.get(identity.effectPackageId)
       const displayMeta = this.createMetaFromCatalogItem(
         identity,
@@ -830,7 +883,10 @@ export class EffectTemplateRegistry {
     }
   }
 
-  private async loadInstalledPackage(identity: EffectPackageIdentity, packagePath: string): Promise<void> {
+  private async loadInstalledPackage(
+    identity: EffectPackageIdentity,
+    packagePath: string,
+  ): Promise<void> {
     this.setState(identity, {
       status: 'loading',
       phase: 'validating',

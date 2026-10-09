@@ -13,9 +13,9 @@ import { BizyAirRequestBuilder } from '../../BizyAirRequestBuilder'
 export const BUILDER_ID = 'qwen-image-edit-2512'
 
 export function buildRequestData(
-  taskConfig: Record<string, any>,
-  appConfig: BizyAirAppConfig
-): Record<string, any> {
+  taskConfig: Record<string, unknown>,
+  appConfig: BizyAirAppConfig,
+): Record<string, unknown> {
   /**
    * qwen-image-edit-2512 请求构建器
    *

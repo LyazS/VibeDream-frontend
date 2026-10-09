@@ -172,7 +172,7 @@ export function createUnifiedUseNaiveUIModule() {
     onNegativeClick?: () => void
     closable?: boolean
     maskClosable?: boolean
-    [key: string]: any
+    [key: string]: unknown
   }
 
   /**
@@ -185,19 +185,25 @@ export function createUnifiedUseNaiveUIModule() {
     }
     createModal({
       title: options.title || t('dialog.success'),
-      content: typeof options.content === 'function'
-        ? options.content
-        : options.content
-          ? () => h('div', {
-              style: {
-                padding: '10px 0',
-                color: 'var(--color-text-primary)',
-                whiteSpace: 'pre-wrap',
-                wordBreak: 'break-word',
-                lineHeight: '1.6'
-              }
-            }, options.content as string)
-          : undefined,
+      content:
+        typeof options.content === 'function'
+          ? options.content
+          : options.content
+            ? () =>
+                h(
+                  'div',
+                  {
+                    style: {
+                      padding: '10px 0',
+                      color: 'var(--color-text-primary)',
+                      whiteSpace: 'pre-wrap',
+                      wordBreak: 'break-word',
+                      lineHeight: '1.6',
+                    },
+                  },
+                  options.content as string,
+                )
+            : undefined,
       confirmText: options.positiveText || t('dialog.confirm'),
       cancelText: options.negativeText || t('dialog.cancel'),
       showCancel: !!options.negativeText,
@@ -218,19 +224,25 @@ export function createUnifiedUseNaiveUIModule() {
     }
     createModal({
       title: options.title || t('dialog.error'),
-      content: typeof options.content === 'function'
-        ? options.content
-        : options.content
-          ? () => h('div', {
-              style: {
-                padding: '10px 0',
-                color: '#ff6b6b',
-                whiteSpace: 'pre-wrap',
-                wordBreak: 'break-word',
-                lineHeight: '1.6'
-              }
-            }, options.content as string)
-          : undefined,
+      content:
+        typeof options.content === 'function'
+          ? options.content
+          : options.content
+            ? () =>
+                h(
+                  'div',
+                  {
+                    style: {
+                      padding: '10px 0',
+                      color: '#ff6b6b',
+                      whiteSpace: 'pre-wrap',
+                      wordBreak: 'break-word',
+                      lineHeight: '1.6',
+                    },
+                  },
+                  options.content as string,
+                )
+            : undefined,
       confirmText: options.positiveText || t('dialog.confirm'),
       cancelText: options.negativeText || t('dialog.cancel'),
       showCancel: !!options.negativeText,
@@ -251,19 +263,25 @@ export function createUnifiedUseNaiveUIModule() {
     }
     createModal({
       title: options.title || t('dialog.warning'),
-      content: typeof options.content === 'function'
-        ? options.content
-        : options.content
-          ? () => h('div', {
-              style: {
-                padding: '10px 0',
-                color: 'var(--color-text-primary)',
-                whiteSpace: 'pre-wrap',
-                wordBreak: 'break-word',
-                lineHeight: '1.6'
-              }
-            }, options.content as string)
-          : undefined,
+      content:
+        typeof options.content === 'function'
+          ? options.content
+          : options.content
+            ? () =>
+                h(
+                  'div',
+                  {
+                    style: {
+                      padding: '10px 0',
+                      color: 'var(--color-text-primary)',
+                      whiteSpace: 'pre-wrap',
+                      wordBreak: 'break-word',
+                      lineHeight: '1.6',
+                    },
+                  },
+                  options.content as string,
+                )
+            : undefined,
       confirmText: options.positiveText || t('dialog.confirm'),
       cancelText: options.negativeText || t('dialog.cancel'),
       showCancel: !!options.negativeText,
@@ -284,19 +302,25 @@ export function createUnifiedUseNaiveUIModule() {
     }
     createModal({
       title: options.title || t('dialog.info'),
-      content: typeof options.content === 'function'
-        ? options.content
-        : options.content
-          ? () => h('div', {
-              style: {
-                padding: '10px 0',
-                color: 'var(--color-text-primary)',
-                whiteSpace: 'pre-wrap',
-                wordBreak: 'break-word',
-                lineHeight: '1.6'
-              }
-            }, options.content as string)
-          : undefined,
+      content:
+        typeof options.content === 'function'
+          ? options.content
+          : options.content
+            ? () =>
+                h(
+                  'div',
+                  {
+                    style: {
+                      padding: '10px 0',
+                      color: 'var(--color-text-primary)',
+                      whiteSpace: 'pre-wrap',
+                      wordBreak: 'break-word',
+                      lineHeight: '1.6',
+                    },
+                  },
+                  options.content as string,
+                )
+            : undefined,
       confirmText: options.positiveText || t('dialog.confirm'),
       cancelText: options.negativeText || t('dialog.cancel'),
       showCancel: !!options.negativeText,
@@ -362,39 +386,41 @@ export function createUnifiedUseNaiveUIModule() {
 
     // 使用 watchEffect 来响应式地更新 VNode
     watchEffect(() => {
-      const vnode = createVNode(UniversalModal, {
-        show: show.value,
-        title: options.title,
-        width: options.width,
-        maxWidth: options.maxWidth,
-        maxHeight: options.maxHeight,
-        showClose: options.showClose !== false,
-        showFooter: options.showFooter !== false,
-        showCancel: options.showCancel !== false,
-        showConfirm: options.showConfirm !== false,
-        confirmText: options.confirmText || '确定',
-        cancelText: options.cancelText || '取消',
-        confirmDisabled: options.confirmDisabled,
-        loading: options.loading,
-        closable: options.closable !== false,
-        maskClosable: options.maskClosable !== false,
-        escClosable: options.escClosable !== false,
-        zIndex: currentZIndex,
-        onConfirm: handleConfirm,
-        onCancel: handleCancel,
-        onClose: handleClose,
-        'onUpdate:show': (value: boolean) => {
-          if (!value) {
-            destroy()
-          }
+      const vnode = createVNode(
+        UniversalModal,
+        {
+          show: show.value,
+          title: options.title,
+          width: options.width,
+          maxWidth: options.maxWidth,
+          maxHeight: options.maxHeight,
+          showClose: options.showClose !== false,
+          showFooter: options.showFooter !== false,
+          showCancel: options.showCancel !== false,
+          showConfirm: options.showConfirm !== false,
+          confirmText: options.confirmText || '确定',
+          cancelText: options.cancelText || '取消',
+          confirmDisabled: options.confirmDisabled,
+          loading: options.loading,
+          closable: options.closable !== false,
+          maskClosable: options.maskClosable !== false,
+          escClosable: options.escClosable !== false,
+          zIndex: currentZIndex,
+          onConfirm: handleConfirm,
+          onCancel: handleCancel,
+          onClose: handleClose,
+          'onUpdate:show': (value: boolean) => {
+            if (!value) {
+              destroy()
+            }
+          },
         },
-      },
-      // 默认插槽：内容
-      typeof options.content === 'function'
-        ? { default: options.content }
-        : options.content
-          ? { default: () => options.content }
-          : undefined
+        // 默认插槽：内容
+        typeof options.content === 'function'
+          ? { default: options.content }
+          : options.content
+            ? { default: () => options.content }
+            : undefined,
       )
 
       // 渲染
@@ -534,14 +560,16 @@ export function createUnifiedUseNaiveUIModule() {
       try {
         console.warn(`${TEMP_FOCUS_DEBUG_PREFIX} requestPermission about to run`, {
           title,
-          documentVisibility: typeof document !== 'undefined' ? document.visibilityState : 'unknown',
+          documentVisibility:
+            typeof document !== 'undefined' ? document.visibilityState : 'unknown',
           hasFocus: typeof document !== 'undefined' ? document.hasFocus() : false,
         })
         permission = await Notification.requestPermission()
         console.warn(`${TEMP_FOCUS_DEBUG_PREFIX} requestPermission resolved`, {
           title,
           permission,
-          documentVisibility: typeof document !== 'undefined' ? document.visibilityState : 'unknown',
+          documentVisibility:
+            typeof document !== 'undefined' ? document.visibilityState : 'unknown',
           hasFocus: typeof document !== 'undefined' ? document.hasFocus() : false,
         })
       } catch (error) {
@@ -559,8 +587,8 @@ export function createUnifiedUseNaiveUIModule() {
       // 创建通知
       const notification = new Notification(title, {
         body: body,
-        silent: true,  // 静默推送，不发出声音
-        icon: '/logo-ok/favicon-96x96.png',  // 使用应用图标
+        silent: true, // 静默推送，不发出声音
+        icon: '/logo-ok/favicon-96x96.png', // 使用应用图标
       })
 
       console.log(`${TEMP_FOCUS_DEBUG_PREFIX} notification created`, {
@@ -573,7 +601,8 @@ export function createUnifiedUseNaiveUIModule() {
       notification.onclick = () => {
         console.warn(`${TEMP_FOCUS_DEBUG_PREFIX} notification onclick -> window.focus()`, {
           title,
-          documentVisibility: typeof document !== 'undefined' ? document.visibilityState : 'unknown',
+          documentVisibility:
+            typeof document !== 'undefined' ? document.visibilityState : 'unknown',
           hasFocusBeforeFocusCall: typeof document !== 'undefined' ? document.hasFocus() : false,
           timestamp: new Date().toISOString(),
         })
@@ -588,10 +617,7 @@ export function createUnifiedUseNaiveUIModule() {
     }
   }
 
-  function initApi(api: {
-    message: ReturnType<typeof useMessage>
-    t?: (key: string) => string
-  }) {
+  function initApi(api: { message: ReturnType<typeof useMessage>; t?: (key: string) => string }) {
     naiveUIMessage = api.message
     if (api.t) {
       t = api.t

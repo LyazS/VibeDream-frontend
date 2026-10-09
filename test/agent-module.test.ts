@@ -2,12 +2,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { effectScope, ref, toRaw, type EffectScope } from 'vue'
 import { IDBFactory } from 'fake-indexeddb'
 import { indexedDBService } from '../src/core/storage/IndexedDBService'
-import { AgentSessionStore } from '../src/aipanel/agent/runtime/AgentSessionStore'
+import { AgentSessionStore } from '../src/core/agent/runtime/AgentSessionStore'
 import { ModuleRegistry } from '../src/core/modules/ModuleRegistry'
 import { createUnifiedAgentModule } from '../src/core/modules/UnifiedAgentModule'
-import type { Completion, StreamParams } from '../src/aipanel/agent/transport/AgentClient'
-import { createToolRuntime, agentTools } from '../src/aipanel/agent/runtime/ToolRuntime'
-import { MessagePartType, type AgentMessagePart } from '../src/aipanel/agent/types'
+import type { Completion, StreamParams } from '../src/core/agent/transport/AgentClient'
+import { createToolRuntime, agentTools } from '../src/core/agent/runtime/ToolRuntime'
+import { MessagePartType, type AgentMessagePart } from '../src/core/agent/types'
 
 const transport = vi.hoisted(() => ({
   calls: vi.fn(),
@@ -18,8 +18,8 @@ const transport = vi.hoisted(() => ({
   idle: vi.fn(),
 }))
 const toolExecution = vi.hoisted(() => vi.fn())
-vi.mock('../src/aipanel/agent/composables/tools', () => ({ executeTool: toolExecution }))
-vi.mock('../src/aipanel/agent/transport/AgentClient', () => ({
+vi.mock('../src/core/agent/tools', () => ({ executeTool: toolExecution }))
+vi.mock('../src/core/agent/transport/AgentClient', () => ({
   AgentClient: class {
     constructor() {
       transport.created()

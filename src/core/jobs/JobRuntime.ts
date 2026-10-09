@@ -66,7 +66,7 @@ export class JobRuntime {
     this.scheduler = options.scheduler ?? new DagScheduler(options.schedulerOptions)
   }
 
-  registerResolver(resolver: ResourceResolver<any, any>): void {
+  registerResolver<TInput, TResult>(resolver: ResourceResolver<TInput, TResult>): void {
     this.registry.register(resolver)
   }
 

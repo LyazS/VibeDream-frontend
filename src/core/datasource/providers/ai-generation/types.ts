@@ -68,7 +68,7 @@ export enum TaskStreamEventType {
 export interface MediaGenerationRequest {
   ai_task_type: AITaskType
   content_type: ContentType
-  task_config: Record<string, any>
+  task_config: Record<string, unknown>
   sub_ai_task_type?: string // 子任务类型（可选），用于区分同一服务提供商的不同API类型
 }
 
@@ -114,7 +114,7 @@ export interface ProgressUpdateEvent extends BaseTaskStreamEvent {
   status: TaskStatus
   progress: number
   message: string
-  metadata?: Record<string, any>
+  metadata?: Record<string, unknown>
 }
 
 /**
@@ -371,7 +371,7 @@ export interface AIGenerateConfig {
  * 字段包装器类型
  * 用于 aiConfig 中的字段，包含类型信息和实际值
  */
-export interface FieldWrapper<T = any> {
+export interface FieldWrapper<T = unknown> {
   type: FieldType
   value: T
 }
@@ -384,7 +384,7 @@ export type AIConfigField =
   | FieldWrapper<boolean>
   | FieldWrapper<string>
   | FieldWrapper<number>
-  | FieldWrapper<any[]>
+  | FieldWrapper<unknown[]>
 
 /**
  * AI 配置类型（带包装器）
@@ -396,4 +396,4 @@ export type AIConfigWithWrapper = Record<string, AIConfigField>
  * AI 配置类型（扁平化）
  * 提交到后端时使用的配置结构
  */
-export type AIConfigFlattened = Record<string, any>
+export type AIConfigFlattened = Record<string, unknown>

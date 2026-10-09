@@ -22,7 +22,7 @@ configCache[t2iConfig.variant] = t2iConfig
 
 export const SELECTOR_ID = 'nano-banana-2'
 
-export function selectConfig(taskConfig: Record<string, any>): BizyAirAppConfig {
+export function selectConfig(taskConfig: Record<string, unknown>): BizyAirAppConfig {
   /**
    * nano-banana-2 配置组选择器
    *

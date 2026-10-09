@@ -1,6 +1,6 @@
 /**
  * ltx-2 配置组选择器
- * 
+ *
  * 根据是否有参考图片选择变体：
  * - 如果有 ref_images 参数且不为空，使用 i2v 变种（图片转视频）
  * - 如果没有 ref_images 或为空，使用 t2v 变种（文本转视频）
@@ -22,7 +22,7 @@ configCache[t2vConfig.variant] = t2vConfig
 
 export const SELECTOR_ID = 'ltx-2'
 
-export function selectConfig(taskConfig: Record<string, any>): BizyAirAppConfig {
+export function selectConfig(taskConfig: Record<string, unknown>): BizyAirAppConfig {
   /**
    * ltx-2 配置组选择器
    *
@@ -39,7 +39,8 @@ export function selectConfig(taskConfig: Record<string, any>): BizyAirAppConfig 
 
   // 检查是否有参考图片
   const refImages = taskConfig.ref_images || []
-  const hasImages = refImages && refImages.length > 0
+  const hasImages =
+    (Array.isArray(refImages) || typeof refImages === 'string') && refImages.length > 0
 
   // 根据是否有图片选择变种
   let variant: string

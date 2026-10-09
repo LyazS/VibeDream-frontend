@@ -1,20 +1,18 @@
 import { computed, onScopeDispose, readonly, ref, watch } from 'vue'
 import { API_BASE_URL } from '@/config/runtimeConfig'
 import { FRAME_RATE } from '@/constants/TimeConstants'
-import { buildTextMessages } from '@/aipanel/agent/prompts/textMessages'
-import { agentTools, createToolRuntime } from '@/aipanel/agent/runtime/ToolRuntime'
-import { AgentSessionStore } from '@/aipanel/agent/runtime/AgentSessionStore'
-import { AgentTelemetry, newLogSource } from '@/aipanel/agent/runtime/AgentTelemetry'
-import { toolLogMetadata } from '@/aipanel/agent/telemetry/agent-log'
-import type { ToolResult } from '@/aipanel/agent/composables/core/toolTypes'
+import { buildTextMessages } from '@/core/agent/prompts/textMessages'
+import { agentTools, createToolRuntime } from '@/core/agent/runtime/ToolRuntime'
+import { AgentSessionStore } from '@/core/agent/runtime/AgentSessionStore'
+import { AgentTelemetry, newLogSource } from '@/core/agent/runtime/AgentTelemetry'
+import { toolLogMetadata } from '@/core/agent/telemetry/agent-log'
+import type { ToolResult } from '@/core/agent/tools/types'
 import {
   AgentClient,
-  type Completion,
   type ConnectionState,
   type StreamParams,
   type ModelMessage,
-  type ToolCall,
-} from '@/aipanel/agent/transport/AgentClient'
+} from '@/core/agent/transport/AgentClient'
 import {
   AgentMessageRole,
   MessagePartType,
@@ -23,49 +21,11 @@ import {
   ToolCallStatus,
   type ToolCallPart,
   type InteractionSubmittedVia,
-} from '@/aipanel/agent/types'
+  type AgentSession,
+  type ModelCall,
+  type ToolExecution,
+} from '@/core/agent/types'
 import { MODULE_NAMES, type ModuleMap, type ModuleRegistry } from './ModuleRegistry'
-
-/** 一次未完成工具执行的归属和提交状态；结果写入消息后从执行字典移除。 */
-export type ToolExecution = {
-  startedAt?: string
-  resultSpanId?: string
-  userId: string
-  projectId: string
-  sessionId: string
-  modelCallId: string
-  // 工具结果提交和 UI 进度投影对应的助手消息，不依赖最近一次 modelCall。
-  assistantMessageId: string
-  call: ToolCall
-  status: 'pending' | 'completed' | 'failed' | 'cancelled'
-  result: ToolResult | null
-}
-/** 一次模型调用的快照与终态；工具执行及后续调用不属于这一 modelCall。 */
-type ModelCall = {
-  id: string
-  status: 'running' | 'completed' | 'cancelled' | 'failed'
-  sessionId: string
-  userId: string
-  projectId: string
-  // 触发本轮的用户消息或工具结果消息 ID，每次续轮都重新关联输入。
-  inputMessageId: string
-  assistantMessageId: string
-  request: StreamParams
-  completion: Completion | null
-  error: string | null
-}
-
-/** 一个本地会话的实际内容；运行控制器不落盘，也不随展示选择迁移。 */
-export type AgentSession = {
-  id: string
-  userId: string
-  projectId: string
-  createdAt: string
-  updatedAt: string
-  messages: AgentMessage[]
-  latestModelCall: ModelCall | null
-  toolExecutions: Record<string, ToolExecution>
-}
 
 /** 创建工程级 Agent 模块，管理本地会话、模型调用及生命周期，并导出只读状态和操作。 */
 export function createUnifiedAgentModule(registry: ModuleRegistry) {

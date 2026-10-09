@@ -14,7 +14,7 @@
  * - 任何业务逻辑（完全自定义的内容）
  */
 
-import { computed } from 'vue'
+import { computed, type CSSProperties } from 'vue'
 
 interface BaseModalProps {
   /** 尺寸控制 */
@@ -28,7 +28,7 @@ interface BaseModalProps {
 
   /** 样式控制 */
   className?: string
-  customStyle?: Record<string, any>
+  customStyle?: CSSProperties
 }
 
 const props = withDefaults(defineProps<BaseModalProps>(), {
@@ -44,7 +44,7 @@ const props = withDefaults(defineProps<BaseModalProps>(), {
  * 计算样式 - 处理尺寸单位转换
  */
 const computedStyle = computed(() => {
-  const style: Record<string, any> = { ...props.customStyle }
+  const style: CSSProperties = { ...props.customStyle }
 
   // 处理 width
   if (props.width !== undefined) {

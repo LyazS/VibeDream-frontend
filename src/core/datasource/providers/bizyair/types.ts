@@ -44,7 +44,7 @@ export interface BaseBizyAirSourceData {
 export interface BizyAirMediaGenerationRequest {
   ai_task_type: string // 必须是 'bizyair_generate_media'
   content_type: string // 'image' | 'video' | 'audio'
-  task_config: Record<string, any> // 任务配置
+  task_config: Record<string, unknown> // 任务配置
   sub_ai_task_type?: string // 子任务类型（可选），用于区分不同的 BizyAir 模型
 }
 
@@ -97,7 +97,7 @@ export interface InputMappingItem {
   /** 字段类型 */
   type: string
   /** 默认值 */
-  default?: any
+  default?: unknown
   /** 验证规则 */
   validation?: {
     required?: boolean
@@ -118,7 +118,7 @@ export interface InputMappingItem {
 
 /**
  * 数组类型参数映射配置
- * 
+ *
  * 对应后端的 ArrayMappingConfig
  */
 export interface ArrayMappingItem {
@@ -130,7 +130,7 @@ export interface ArrayMappingItem {
 
 /**
  * URL 数组类型参数映射配置
- * 
+ *
  * 对应后端的 ArrayUrlMappingConfig
  */
 export interface ArrayUrlMappingItem {
@@ -169,7 +169,7 @@ export interface ConfigSelector {
    * @param taskConfig 任务配置
    * @returns BizyAir 应用配置
    */
-  selectConfig(taskConfig: Record<string, any>): BizyAirAppConfig
+  selectConfig(taskConfig: Record<string, unknown>): BizyAirAppConfig
 }
 
 /**
@@ -185,9 +185,9 @@ export interface RequestBuilder {
    * @returns API 请求数据
    */
   buildRequestData(
-    taskConfig: Record<string, any>,
-    appConfig: BizyAirAppConfig
-  ): Record<string, any>
+    taskConfig: Record<string, unknown>,
+    appConfig: BizyAirAppConfig,
+  ): Record<string, unknown>
 }
 
 // ==================== 任务详情接口 ====================

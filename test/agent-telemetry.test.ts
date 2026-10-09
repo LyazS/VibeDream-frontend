@@ -5,7 +5,7 @@ import {
   AgentTelemetry,
   newLogSource,
   type LocalAgentLog,
-} from '../src/aipanel/agent/runtime/AgentTelemetry'
+} from '../src/core/agent/runtime/AgentTelemetry'
 import {
   LOG_OWNER_HEADER,
   LOG_RETENTION_MS,
@@ -14,7 +14,7 @@ import {
   logBytes,
   toolLogMetadata,
   type LogBatch,
-} from '../src/aipanel/agent/telemetry/agent-log'
+} from '../src/core/agent/telemetry/agent-log'
 
 const session = { id: 'chat-1', userId: 'u1', projectId: 'p1' }
 const instances: AgentTelemetry[] = []

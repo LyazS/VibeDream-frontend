@@ -16,7 +16,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onUnmounted, watch, nextTick } from 'vue'
+import { computed, onUnmounted, watch, nextTick, type CSSProperties } from 'vue'
 
 /**
  * ModalOverlay 组件 Props
@@ -27,17 +27,17 @@ interface ModalOverlayProps {
   show: boolean
 
   // 关闭行为
-  closable?: boolean          // 是否可关闭（默认 true）
-  maskClosable?: boolean      // 点击遮罩关闭（默认 true）
-  escClosable?: boolean       // ESC 键关闭（默认 true）
+  closable?: boolean // 是否可关闭（默认 true）
+  maskClosable?: boolean // 点击遮罩关闭（默认 true）
+  escClosable?: boolean // ESC 键关闭（默认 true）
 
   // 样式控制
-  zIndex?: number            // z-index（默认 1000）
-  overlayClass?: string      // 自定义遮罩类名
-  overlayStyle?: Record<string, any>  // 自定义遮罩样式
+  zIndex?: number // z-index（默认 1000）
+  overlayClass?: string // 自定义遮罩类名
+  overlayStyle?: CSSProperties // 自定义遮罩样式
 
   // 动画控制
-  transitionName?: string    // 过渡动画名称（默认 'modal-fade'）
+  transitionName?: string // 过渡动画名称（默认 'modal-fade'）
 }
 
 const props = withDefaults(defineProps<ModalOverlayProps>(), {
@@ -55,9 +55,9 @@ const props = withDefaults(defineProps<ModalOverlayProps>(), {
  */
 interface ModalOverlayEmits {
   'update:show': [value: boolean]
-  'close': []
-  'open': []
-  'overlay-click': []  // 点击遮罩时触发
+  close: []
+  open: []
+  'overlay-click': [] // 点击遮罩时触发
 }
 
 const emit = defineEmits<ModalOverlayEmits>()
@@ -70,12 +70,7 @@ const computedOverlayStyle = computed(() => ({
 
 // 键盘事件处理
 const handleKeydown = (event: KeyboardEvent) => {
-  if (
-    event.key === 'Escape' &&
-    props.escClosable &&
-    props.closable &&
-    props.show
-  ) {
+  if (event.key === 'Escape' && props.escClosable && props.closable && props.show) {
     handleClose()
   }
 }
@@ -110,7 +105,7 @@ watch(
       document.body.style.overflow = ''
     }
   },
-  { immediate: true }
+  { immediate: true },
 )
 
 // 生命周期 - 全局键盘事件监听

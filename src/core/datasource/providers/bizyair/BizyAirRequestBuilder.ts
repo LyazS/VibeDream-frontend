@@ -7,7 +7,13 @@
  * @module BizyAirRequestBuilder
  */
 
-import type { BizyAirAppConfig, InputMappingItem, ArrayMappingItem, ArrayUrlMappingItem } from './types'
+import type {
+  BizyAirAppConfig,
+  InputMappingItem,
+  ArrayMappingItem,
+  ArrayUrlMappingItem,
+} from './types'
+import { isRecord } from '@/utils/typeGuards'
 
 /**
  * 扩展的映射项接口，支持更多配置选项
@@ -79,11 +85,11 @@ export class BizyAirRequestBuilder {
    * ```
    */
   static build(
-    taskConfig: Record<string, any>,
-    appConfig: BizyAirAppConfig
-  ): Record<string, any> {
+    taskConfig: Record<string, unknown>,
+    appConfig: BizyAirAppConfig,
+  ): Record<string, unknown> {
     const inputMapping = appConfig.input_mapping as ExtendedInputMapping
-    const inputValues: Record<string, any> = {}
+    const inputValues: Record<string, unknown> = {}
 
     // 遍历 input_mapping 中的每个字段
     for (const [userParam, mappingConfig] of Object.entries(inputMapping)) {
@@ -133,7 +139,7 @@ export class BizyAirRequestBuilder {
         }
 
         // 获取值：优先使用用户提供的值，其次使用默认值
-        let value: any
+        let value: unknown
         if (userValue !== undefined) {
           value = userValue
         } else if (itemConfig.default !== undefined) {
@@ -145,7 +151,7 @@ export class BizyAirRequestBuilder {
         }
 
         // 根据类型处理值
-        let processedValue: any
+        let processedValue: unknown
         switch (itemConfig.type) {
           case 'arrayurl':
             if ('separator' in itemConfig) {
@@ -217,7 +223,7 @@ export class BizyAirRequestBuilder {
    * // }
    * ```
    */
-  private static setNestedValue(obj: any, path: string, value: any): void {
+  private static setNestedValue(obj: Record<string, unknown>, path: string, value: unknown): void {
     const parts = path.split('.')
     if (parts.length < 2) {
       console.error(`无效的路径格式: ${path}，期望格式: "nodeId:NodeClass.field"`)
@@ -238,7 +244,7 @@ export class BizyAirRequestBuilder {
     const [nodeId, nodeClass] = nodeParts
 
     // 初始化节点对象（如果不存在）
-    if (!obj[nodeId]) {
+    if (!isRecord(obj[nodeId])) {
       obj[nodeId] = {
         class_type: nodeClass,
         inputs: {},
@@ -246,13 +252,15 @@ export class BizyAirRequestBuilder {
     }
 
     // 设置嵌套字段值
-    let current = obj[nodeId].inputs
+    const node = obj[nodeId] as Record<string, unknown>
+    if (!isRecord(node.inputs)) node.inputs = {}
+    let current = node.inputs as Record<string, unknown>
     for (let i = 0; i < fieldPath.length - 1; i++) {
       const field = fieldPath[i]
-      if (!current[field]) {
+      if (!isRecord(current[field])) {
         current[field] = {}
       }
-      current = current[field]
+      current = current[field] as Record<string, unknown>
     }
 
     // 设置最终值
@@ -279,17 +287,14 @@ export class BizyAirRequestBuilder {
    * // 结果: [1280, 720]
    * ```
    */
-  private static processArrayType(
-    value: any,
-    inputDef: InputMappingItem[]
-  ): any[] | null {
+  private static processArrayType(value: unknown, inputDef: InputMappingItem[]): unknown[] | null {
     if (!Array.isArray(value)) {
       console.error(`期望数组类型，实际类型: ${typeof value}`)
       return null
     }
 
     // 处理数组元素
-    const processedArray: any[] = []
+    const processedArray: unknown[] = []
     for (let i = 0; i < value.length; i++) {
       const itemValue = value[i]
       const itemConfig = inputDef[i]
@@ -300,7 +305,7 @@ export class BizyAirRequestBuilder {
       }
 
       // 根据元素类型处理值
-      let processedValue: any
+      let processedValue: unknown
       switch (itemConfig.type) {
         case 'string':
         case 'number':
@@ -341,10 +346,7 @@ export class BizyAirRequestBuilder {
    * // 结果: "https://example.com/img1.jpg\nhttps://example.com/img2.jpg"
    * ```
    */
-  private static processArrayUrlType(
-    value: any,
-    inputDef: ArrayUrlMappingItem
-  ): string | null {
+  private static processArrayUrlType(value: unknown, inputDef: ArrayUrlMappingItem): string | null {
     // 验证是否为数组
     if (!Array.isArray(value)) {
       console.error(`参数期望数组类型，实际类型: ${typeof value}`)
@@ -356,9 +358,7 @@ export class BizyAirRequestBuilder {
 
     // 拼接 URL
     const result = value.join(separator)
-    console.debug(
-      `参数: 拼接了 ${value.length} 个URL，分隔符: ${JSON.stringify(separator)}`
-    )
+    console.debug(`参数: 拼接了 ${value.length} 个URL，分隔符: ${JSON.stringify(separator)}`)
 
     return result
   }
@@ -385,8 +385,8 @@ export class BizyAirRequestBuilder {
  * ```
  */
 export function buildRequestData(
-  taskConfig: Record<string, any>,
-  appConfig: BizyAirAppConfig
-): Record<string, any> {
+  taskConfig: Record<string, unknown>,
+  appConfig: BizyAirAppConfig,
+): Record<string, unknown> {
   return BizyAirRequestBuilder.build(taskConfig, appConfig)
 }

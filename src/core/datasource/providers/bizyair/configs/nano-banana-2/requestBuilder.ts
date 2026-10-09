@@ -11,9 +11,9 @@ import { BizyAirRequestBuilder } from '../../BizyAirRequestBuilder'
 export const BUILDER_ID = 'nano-banana-2'
 
 export function buildRequestData(
-  taskConfig: Record<string, any>,
-  appConfig: BizyAirAppConfig
-): Record<string, any> {
+  taskConfig: Record<string, unknown>,
+  appConfig: BizyAirAppConfig,
+): Record<string, unknown> {
   /**
    * nano-banana-2 配置组的请求构建器
    *

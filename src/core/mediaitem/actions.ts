@@ -16,7 +16,7 @@ export { MediaItemQueries as MediaItemQueries } from './queries'
  */
 export const UnifiedMediaItemActions = {
   // 状态转换
-  transitionTo(item: UnifiedMediaItemData, newStatus: MediaStatus, _context?: any): boolean {
+  transitionTo(item: UnifiedMediaItemData, newStatus: MediaStatus, _context?: unknown): boolean {
     if (!MediaItemQueries.canTransitionTo(item, newStatus)) {
       console.warn(`无效状态转换: ${item.mediaStatus} → ${newStatus}`)
       return false
