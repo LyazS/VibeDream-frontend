@@ -1,3 +1,4 @@
+import type { LogIdentity } from '../telemetry/agent-log'
 // 单轮文本及工具协议，客户端与服务端必须使用同一版本。
 export const AGENT_PROTOCOL_VERSION = 'agent-model-calls-v1'
 export type Acceptance = 'not_accepted' | 'accepted' | 'unknown'
@@ -46,6 +47,8 @@ export type Completion = {
   usage: { inputTokens: number; outputTokens: number; totalTokens: number } | null
 }
 export type StreamParams = {
+  /** 关联浏览器与服务端日志的身份；本地日志不可用时仍允许正常发起模型调用。 */
+  telemetry?: LogIdentity
   modelCallId: string
   messages: ModelMessage[]
   tools?: ModelTool[]
@@ -324,6 +327,7 @@ export class AgentClient {
       project_id: params.projectId,
       messages: params.messages,
       tools: params.tools ?? [],
+      ...(params.telemetry ? { telemetry: params.telemetry } : {}),
     })
     call.sent = true
     this.socket!.send(frame)

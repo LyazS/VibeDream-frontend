@@ -4,6 +4,8 @@ import { FRAME_RATE } from '@/constants/TimeConstants'
 import { buildTextMessages } from '@/aipanel/agent/prompts/textMessages'
 import { agentTools, createToolRuntime } from '@/aipanel/agent/runtime/ToolRuntime'
 import { AgentSessionStore } from '@/aipanel/agent/runtime/AgentSessionStore'
+import { AgentTelemetry, newLogSource } from '@/aipanel/agent/runtime/AgentTelemetry'
+import { toolLogMetadata } from '@/aipanel/agent/telemetry/agent-log'
 import type { ToolResult } from '@/aipanel/agent/composables/core/toolTypes'
 import {
   AgentClient,
@@ -26,6 +28,8 @@ import { MODULE_NAMES, type ModuleMap, type ModuleRegistry } from './ModuleRegis
 
 /** 一次未完成工具执行的归属和提交状态；结果写入消息后从执行字典移除。 */
 export type ToolExecution = {
+  startedAt?: string
+  resultSpanId?: string
   userId: string
   projectId: string
   sessionId: string
@@ -81,6 +85,8 @@ export function createUnifiedAgentModule(registry: ModuleRegistry) {
   const disposed = ref(false)
   // 会话存储和当前账户/工程的内存索引。
   const sessionStore = new AgentSessionStore()
+  // 日志独立于聊天存储；读取实时账号，供后台补传在切号时立即停止。
+  const telemetry = new AgentTelemetry(() => user.currentUser.value?.id)
   // 仅缓存当前账户工程分区；账户变化清空，IndexedDB 中其他分区仍保留。
   const sessions = ref<Record<string, AgentSession>>({})
   // 历史读取完成前阻止发送，避免新输入覆盖尚未加载的会话。
@@ -309,6 +315,7 @@ export function createUnifiedAgentModule(registry: ModuleRegistry) {
     delete sessions.value[id]
     if (currentSessionId.value === id) newChat()
     await sessionStore.delete(session)
+    await telemetry.delete(session)
     return true
   }
 
@@ -405,6 +412,29 @@ export function createUnifiedAgentModule(registry: ModuleRegistry) {
     const content = result.success
       ? result.output
       : result.output || result.error || 'TOOL_EXECUTION_FAILED'
+    const source = newLogSource(execution.status, {
+      name: execution.call.name,
+      args: execution.call.args,
+    })
+    source.started_at = execution.startedAt ?? source.started_at
+    source.ended_at = new Date().toISOString()
+    source.duration_ms = Date.parse(source.ended_at) - Date.parse(source.started_at)
+    source.output = {
+      content,
+      result,
+      ...(assistant.interaction?.result ? { interaction: assistant.interaction.result } : {}),
+    }
+    source.error = result.success ? null : (result.error ?? content)
+    // 工具结果固定使用同一节点 ID；重复提交或恢复执行只更新该节点版本。
+    execution.resultSpanId ??= crypto.randomUUID()
+    void telemetry.record(
+      session,
+      execution.resultSpanId,
+      'tool_result',
+      source,
+      execution.modelCallId,
+      execution.call.id,
+    )
     // 新建独立的 tool 角色消息；其消息 ID 与调用 ID 不同，调用 ID 用于关联原助手的工具调用。
     // ask_user 的回答也走这里，content 已由回答入口构造成 [ASK_RESULT] 正文。
     const message = buildDisplayMessage(crypto.randomUUID(), 'tool', content)
@@ -468,6 +498,21 @@ export function createUnifiedAgentModule(registry: ModuleRegistry) {
     /** 除归属有效外，还要求没有普通停止信号；用于模型调用和自动续轮的推进准入。 */
     const isRunCurrent = () => isRunOwned() && !control.model.signal.aborted
     try {
+      const trigger = session.messages[session.messages.length - 1]!
+      await telemetry.activity(session, session.messages.length > 1)
+      // 回答交互后由工具结果触发续轮，不再把该回答重复记录为用户输入节点。
+      if (trigger.role === AgentMessageRole.USER)
+        await telemetry.record(
+          session,
+          trigger.id,
+          'user_message',
+          newLogSource('completed', {
+            content: getMessageTextParts(trigger).map((part) => ({
+              type: 'text',
+              text: part.text,
+            })),
+          }),
+        )
       // 先保存触发消息（用户输入或回答后的工具对）；运行槽已同步占用，保存期间不能并发发送。
       await persistSession(session, answeredTool)
       while (isRunCurrent()) {
@@ -500,6 +545,18 @@ export function createUnifiedAgentModule(registry: ModuleRegistry) {
           error: null,
         }
         const current = session.latestModelCall
+        // 调用前记录实际请求输入，并把同一日志身份交给服务端关联供应商请求。
+        const logIdentity = await telemetry.record(
+          session,
+          current.id,
+          'model_call',
+          newLogSource('running', {
+            messages: request.messages,
+            tools: request.tools,
+          }),
+          current.id,
+        )
+        if (logIdentity) request.telemetry = logIdentity
         // 请求快照在调用前落盘，modelCall 与原会话关联；切换展示不会改变这一引用。
         await persistSession(session)
         if (!isRunCurrent()) return
@@ -523,6 +580,24 @@ export function createUnifiedAgentModule(registry: ModuleRegistry) {
         assistant.parts = [{ type: MessagePartType.TEXT, text: completion.message.content }]
         current.completion = completion
         current.status = 'completed'
+        // 完成信息更新原模型节点；交互工具的分类只用于日志展示，不改变调用参数。
+        await telemetry.finish(session, current.id, {
+          status: 'completed',
+          output: {
+            message: {
+              ...completion.message,
+              ...(completion.message.tool_calls
+                ? {
+                    tool_calls: completion.message.tool_calls.map((tool) => ({
+                      ...tool,
+                      ...toolLogMetadata(tool.name),
+                    })),
+                  }
+                : {}),
+            },
+            usage: completion.usage,
+          },
+        })
         // 没有工具调用就是最终回复，本次自动推进结束；finally 负责释放运行状态。
         if (!call) {
           await persistSession(session)
@@ -530,6 +605,8 @@ export function createUnifiedAgentModule(registry: ModuleRegistry) {
         }
         // 6. 调用先只保存在执行记录中：普通工具进度由 UI 投影，ask_user 只展示问题卡片。
         session.toolExecutions[assistant.id] = {
+          startedAt: new Date().toISOString(),
+          resultSpanId: crypto.randomUUID(),
           userId,
           projectId,
           sessionId,
@@ -594,6 +671,10 @@ export function createUnifiedAgentModule(registry: ModuleRegistry) {
       // 外层处理模型/传输及循环本身的异常；工具异常已在内层转成结果，不会走到这里。
       // 原会话已经删除或身份清理后，旧循环不能覆盖新运行的 modelCall 或消息。
       if (sessions.value[sessionId] !== session || controller !== control) return
+      const diagnostic = newLogSource('failed', { phase: 'orchestration' })
+      diagnostic.error =
+        error instanceof Error ? { name: error.name, message: error.message } : String(error)
+      await telemetry.record(session, crypto.randomUUID(), 'diagnostic', diagnostic)
       if (session.latestModelCall) {
         session.latestModelCall.error = error instanceof Error ? error.message : String(error)
         session.latestModelCall.status = control.model.signal.aborted ? 'cancelled' : 'failed'
@@ -613,11 +694,48 @@ export function createUnifiedAgentModule(registry: ModuleRegistry) {
         if (cancelledTool) {
           cancelledTool.status = 'cancelled'
           cancelledTool.result = null
+          // 记录工具已取消且结果未提交，便于区分“没有执行结果”和“结果正文缺失”。
+          const source = newLogSource('cancelled', {
+            name: cancelledTool.call.name,
+            args: cancelledTool.call.args,
+          })
+          source.error = { code: 'TOOL_CANCELLED', result_committed: false }
+          cancelledTool.resultSpanId ??= crypto.randomUUID()
+          await telemetry.record(
+            session,
+            cancelledTool.resultSpanId,
+            'tool_result',
+            source,
+            cancelledTool.modelCallId,
+            cancelledTool.call.id,
+          )
           delete session.toolExecutions[cancelledTool.assistantMessageId]
         }
         if (session.latestModelCall) {
           if (session.latestModelCall.status === 'running')
             session.latestModelCall.status = 'cancelled'
+          if (
+            session.latestModelCall.status !== 'completed' &&
+            !session.latestModelCall.completion
+          ) {
+            const call = session.latestModelCall
+            const message = session.messages.find((m) => m.id === call.assistantMessageId)
+            // 失败或取消也保留已接收的部分回复，完成当前节点而非留下永久 running。
+            await telemetry.finish(session, call.id, {
+              status: call.status,
+              error: call.error,
+              output: {
+                message: {
+                  role: 'assistant',
+                  content: message
+                    ? getMessageTextParts(message)
+                        .map((p) => p.text)
+                        .join('')
+                    : '',
+                },
+              },
+            })
+          }
         }
         session.messages = session.messages.filter(
           (message) =>
@@ -628,6 +746,24 @@ export function createUnifiedAgentModule(registry: ModuleRegistry) {
         try {
           await persistSession(session, cancelledTool)
         } finally {
+          // 等待用户回答也是一次发布边界；下一次续轮仍属于同一聊天日志。
+          const last = session.messages[session.messages.length - 1]
+          const status = control.model.signal.aborted
+            ? 'cancelled'
+            : last?.interaction && !last.interaction.result
+              ? 'waiting'
+              : session.latestModelCall?.status === 'failed'
+                ? 'failed'
+                : 'completed'
+          await telemetry.publish(
+            session,
+            status,
+            session.messages
+              .find((m) => m.role === AgentMessageRole.USER)
+              ?.parts.filter((p) => p.type === MessagePartType.TEXT)
+              .map((p) => p.text)
+              .join('') ?? '',
+          )
           // 保存期间也可能删除会话或切换身份，只释放仍由本循环持有的工程槽。
           if (controller === control) {
             controller = undefined
@@ -720,6 +856,7 @@ export function createUnifiedAgentModule(registry: ModuleRegistry) {
           sessions.value[session.id] = session
         }
         newChat()
+        void telemetry.resume(userId, projectId)
       } catch (error) {
         if (current) storageError.value = error instanceof Error ? error.message : String(error)
       } finally {
@@ -738,6 +875,12 @@ export function createUnifiedAgentModule(registry: ModuleRegistry) {
     { flush: 'sync' },
   )
   globalThis.window?.addEventListener('pagehide', leaveProject)
+  // 断网期间的快照已保存在 IndexedDB，网络恢复后仅补传当前账号和工程的数据。
+  const resumeLogs = () => {
+    const userId = user.currentUser.value?.id
+    if (userId && config.projectId.value) void telemetry.resume(userId, config.projectId.value)
+  }
+  globalThis.window?.addEventListener('online', resumeLogs)
   onScopeDispose(
     /** 作用域释放时停止运行，移除所有监听和订阅，最终销毁客户端并禁止发送。 */ () => {
       leaveProject()
@@ -749,6 +892,8 @@ export function createUnifiedAgentModule(registry: ModuleRegistry) {
       unsubscribeConnection()
       globalThis.window?.removeEventListener('pagehide', leaveProject)
       client.dispose()
+      telemetry.dispose()
+      globalThis.window?.removeEventListener('online', resumeLogs)
     },
   )
   return {

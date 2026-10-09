@@ -44,7 +44,8 @@ it('upgrades v3 model-call records without changing messages, tool payloads or f
   })
 
   const db = await indexedDBService.openDB()
-  expect(db.version).toBe(4)
+  expect(db.version).toBe(5)
+  expect(db.objectStoreNames.contains('agentLogs')).toBe(true)
   expect(db.objectStoreNames.contains('agentTurns')).toBe(false)
   const migrated = await indexedDBService.transaction('agentSessions', 'readonly', (store) =>
     store.get('record'),

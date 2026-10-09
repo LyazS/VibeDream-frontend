@@ -41,6 +41,11 @@ function excludeR2HostedModelChunks() {
 
 // https://vite.dev/config/
 export default defineConfig({
+  define: {
+    'import.meta.env.VITE_AGENT_LOG_BUILD': JSON.stringify(
+      process.env.CF_PAGES_COMMIT_SHA || process.env.AGENT_LOG_BUILD || new Date().toISOString(),
+    ),
+  },
   plugins: [
     vue(),
     vueDevTools(),

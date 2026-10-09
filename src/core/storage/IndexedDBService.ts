@@ -7,7 +7,7 @@ export class IndexedDBService {
   private db: IDBDatabase | null = null
 
   private readonly DB_NAME = 'VideoEditorDB'
-  private readonly DB_VERSION = 4
+  private readonly DB_VERSION = 5
 
   // 私有构造函数，确保单例
   private constructor() {}
@@ -32,8 +32,14 @@ export class IndexedDBService {
       const request = indexedDB.open(this.DB_NAME, this.DB_VERSION)
 
       request.onerror = () => reject(request.error)
+      request.onblocked = () => reject(new Error('INDEXED_DB_UPGRADE_BLOCKED'))
       request.onsuccess = () => {
         this.db = request.result
+        const opened = request.result
+        opened.onversionchange = () => {
+          opened.close()
+          if (this.db === opened) this.db = null
+        }
         resolve(request.result)
       }
 
@@ -51,7 +57,7 @@ export class IndexedDBService {
         }
 
         // 会话、模型请求快照和工具日志按账户、工程及工具契约分区。
-        for (const name of ['agentSessions', 'agentModelCalls', 'agentTools']) {
+        for (const name of ['agentSessions', 'agentModelCalls', 'agentTools', 'agentLogs']) {
           if (!db.objectStoreNames.contains(name)) {
             const store = db.createObjectStore(name, { keyPath: 'key' })
             store.createIndex('owner', 'owner')
