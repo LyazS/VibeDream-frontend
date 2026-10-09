@@ -1,7 +1,6 @@
 /**
  * 前端工具注册表
- * 负责工具的注册、查询和执行
- * 新 Agent 通过 ToolRuntime 复用这些执行器和原输出，不初始化旧会话编排。
+ * ToolRuntime 按需加载执行器，保留工具输出和编辑器撤销行为。
  */
 
 import { addTrackTool } from './addTrack'
@@ -13,7 +12,6 @@ import { listMediaTool } from './listMedia'
 import { listTracksTool } from './listTracks'
 import { modifyProjectInfoTool } from './modifyProjectInfo'
 import { insertClipTool } from './insertClip'
-import { inspectTimelineFramesTool } from './inspectTimelineFrames'
 import { moveClipTool } from './moveClip'
 import { moveLibraryItemsTool } from './moveLibraryItems'
 import { moveTrackTool } from './moveTrack'
@@ -39,7 +37,7 @@ const tools = new Map<string, ToolDefinition>()
 function logToolExecution(params: {
   name: string
   args: Record<string, unknown>
-  context?: ToolExecutionContext
+  context: ToolExecutionContext
   success: boolean
   result?: string
   error?: string
@@ -48,7 +46,7 @@ function logToolExecution(params: {
   const lines = [
     `[AgentTool] ${success ? 'execution result' : 'execution failed'}`,
     `tool: ${name}`,
-    `toolCallId: ${context?.toolCallId ?? ''}`,
+    `toolCallId: ${context.toolCallId}`,
     `success: ${success}`,
     `args: ${JSON.stringify(args, null, 2)}`,
   ]
@@ -89,7 +87,6 @@ registerTool(listTracksTool)
 registerTool(readProjectInfoTool)
 registerTool(modifyProjectInfoTool)
 registerTool(insertClipTool)
-registerTool(inspectTimelineFramesTool)
 registerTool(moveClipTool)
 registerTool(moveLibraryItemsTool)
 registerTool(moveTrackTool)
@@ -115,7 +112,7 @@ registerTool(writeClipKeyframeTool)
 export function executeTool(
   name: string,
   args: Record<string, unknown>,
-  context?: ToolExecutionContext,
+  context: ToolExecutionContext,
 ): Promise<ToolResult> {
   const tool = tools.get(name)
   if (!tool) {
@@ -161,58 +158,3 @@ export function executeTool(
     },
   )
 }
-
-/**
- * 检查工具是否存在
- */
-export function hasTool(name: string): boolean {
-  return tools.has(name)
-}
-
-/**
- * 获取工具定义
- */
-export function getTool(name: string): ToolDefinition | undefined {
-  return tools.get(name)
-}
-
-/**
- * 列出所有工具
- */
-export function listTools(): ToolDefinition[] {
-  return Array.from(tools.values())
-}
-
-// 导出工具定义供外部参考
-export {
-  addTrackTool,
-  createSubtitleClipTool,
-  createFolderTool,
-  deleteEmptyFolderTool,
-  patchClipKeyframeTool,
-  listMediaTool,
-  listTracksTool,
-  readProjectInfoTool,
-  modifyProjectInfoTool,
-  insertClipTool,
-  inspectTimelineFramesTool,
-  moveClipTool,
-  moveLibraryItemsTool,
-  moveTrackTool,
-  updateTrackPropertiesTool,
-  readClipKeyframeTool,
-  readMediaTool,
-  renameLibraryItemTool,
-  readTracksTool,
-  readItemTool,
-  updateItemTool,
-  searchTransitionsTool,
-  applyTransitionTool,
-  removeItemTool,
-  removeTrackTool,
-  searchMediaTool,
-  splitClipTool,
-  trimClipTool,
-  writeClipKeyframeTool,
-}
-export type { ToolDefinition, ToolResult }

@@ -33,16 +33,10 @@
       "trim_clip": "Trim Clip",
       "update_item": "Update Item",
       "update_track_properties": "Update Track Properties",
-      "write_clip_keyframe": "Rewrite Clip Keyframe",
-      "inspect_timeline_frames": "Inspect Timeline Frames"
+      "write_clip_keyframe": "Rewrite Clip Keyframe"
     },
     "toolsState": {
       "stop": "Stop",
-      "inspectionCapturing": "Capturing frames",
-      "inspectionUploading": "Uploading frames",
-      "inspectionInspecting": "Inspecting frames",
-      "inspectionStopping": "Stopping frame inspection",
-      "inspectionFrameCount": "{count} frames",
       "indexing": "Indexing",
       "indexingPreparing": "Preparing indexing",
       "indexingRunning": "Backfilling index",

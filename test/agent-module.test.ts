@@ -54,7 +54,7 @@ let project: {
 function output(
   request: StreamParams,
   final = Promise.resolve<Completion>({
-    turnId: request.turnId,
+    modelCallId: request.modelCallId,
     message: { role: 'assistant', content: 'complete reply' },
     usage: null,
   }),
@@ -114,7 +114,7 @@ describe('persisted Agent sessions', () => {
     const id = agent.currentSessionId.value
     const run = agent.send('运行中的会话')
     await vi.waitFor(() => expect(transport.calls).toHaveBeenCalledOnce())
-    const turnId = agent.latestTurn.value!.id
+    const modelCallId = agent.latestModelCall.value!.id
     agent.newChat()
     expect(await agent.deleteSession(id)).toBe(false)
     expect(agent.busy.value).toBe(true)
@@ -122,7 +122,7 @@ describe('persisted Agent sessions', () => {
     expect(agent.selectSession(id)).toBe(true)
     expect(agent.currentMessages.value[0].parts[0]).toEqual({ type: 'text', text: '运行中的会话' })
     expect(transport.calls.mock.calls[0][1].signal.aborted).toBe(false)
-    finish({ turnId, message: { role: 'assistant', content: '正常完成' }, usage: null })
+    finish({ modelCallId, message: { role: 'assistant', content: '正常完成' }, usage: null })
     await run
     expect(await agent.deleteSession(id)).toBe(true)
     expect(await new AgentSessionStore().load('u1', 'p1')).toEqual([])
@@ -144,12 +144,12 @@ describe('persisted Agent sessions', () => {
     )
     const run = agent.send('另一个正在运行')
     await vi.waitFor(() => expect(transport.calls).toHaveBeenCalledTimes(2))
-    const turnId = agent.latestTurn.value!.id
+    const modelCallId = agent.latestModelCall.value!.id
     expect(await agent.deleteSession(idleId)).toBe(true)
     expect(agent.activeSessionId.value).toBe(activeId)
     expect(agent.selectSession(idleId)).toBe(false)
     expect(transport.calls.mock.calls[1][1].signal.aborted).toBe(false)
-    finish({ turnId, message: { role: 'assistant', content: '完成' }, usage: null })
+    finish({ modelCallId, message: { role: 'assistant', content: '完成' }, usage: null })
     await run
   })
   it('queues fixed snapshots so later reactive changes do not change an already submitted write', async () => {
@@ -167,12 +167,12 @@ describe('persisted Agent sessions', () => {
     const saved = (await store.load('u1', 'p1'))[0]
     expect(saved.messages[0].parts[0]).toEqual({ type: 'text', text: '第二份快照' })
   })
-  it('saves complete history, all turn snapshots and completed journal while keeping memory clean', async () => {
+  it('saves complete history, all modelCall snapshots and completed journal while keeping memory clean', async () => {
     transport.calls.mockImplementationOnce(async (request: StreamParams) =>
       output(
         request,
         Promise.resolve({
-          turnId: request.turnId,
+          modelCallId: request.modelCallId,
           usage: null,
           message: {
             role: 'assistant',
@@ -192,11 +192,13 @@ describe('persisted Agent sessions', () => {
       'tool',
       'assistant',
     ])
-    const turns = await indexedDBService.transaction('agentTurns', 'readonly', (store) =>
+    const modelCalls = await indexedDBService.transaction('agentModelCalls', 'readonly', (store) =>
       store.getAll(),
     )
-    expect(turns).toHaveLength(2)
-    expect(turns.some((record) => record.turn.request.messages.at(-1).role === 'tool')).toBe(true)
+    expect(modelCalls).toHaveLength(2)
+    expect(
+      modelCalls.some((record) => record.modelCall.request.messages.at(-1).role === 'tool'),
+    ).toBe(true)
     const tools = await indexedDBService.transaction('agentTools', 'readonly', (store) =>
       store.getAll(),
     )
@@ -220,7 +222,7 @@ describe('persisted Agent sessions', () => {
     await agent.deleteSession(id)
     expect(await new AgentSessionStore().load('u1', 'p1')).toEqual([])
     expect(
-      await indexedDBService.transaction('agentTurns', 'readonly', (store) => store.getAll()),
+      await indexedDBService.transaction('agentModelCalls', 'readonly', (store) => store.getAll()),
     ).toEqual([])
     expect(
       await indexedDBService.transaction('agentTools', 'readonly', (store) => store.getAll()),
@@ -234,7 +236,7 @@ describe('persisted Agent sessions', () => {
         output(
           request,
           Promise.resolve({
-            turnId: request.turnId,
+            modelCallId: request.modelCallId,
             usage: null,
             message: {
               role: 'assistant',
@@ -283,7 +285,7 @@ describe('persisted Agent sessions', () => {
       output(
         request,
         Promise.resolve({
-          turnId: request.turnId,
+          modelCallId: request.modelCallId,
           usage: null,
           message: {
             role: 'assistant',
@@ -335,7 +337,7 @@ describe('persisted Agent sessions', () => {
       output(
         request,
         Promise.resolve({
-          turnId: request.turnId,
+          modelCallId: request.modelCallId,
           usage: null,
           message: {
             role: 'assistant',
@@ -365,26 +367,26 @@ describe('persisted Agent sessions', () => {
     )
     const b = agent.send('B 执行')
     await vi.waitFor(() => expect(transport.calls).toHaveBeenCalledTimes(2))
-    const turnId = agent.latestTurn.value!.id
+    const modelCallId = agent.latestModelCall.value!.id
     agent.selectSession(idA)
     expect(agent.running.value).toBe(false)
     expect(agent.pendingInteraction.value).not.toBeNull()
     expect(await agent.answerQuestion('好')).toBe(false)
     expect(agent.toolExecutions.value).not.toEqual({})
-    finish({ turnId, message: { role: 'assistant', content: 'B 完成' }, usage: null })
+    finish({ modelCallId, message: { role: 'assistant', content: 'B 完成' }, usage: null })
     await b
     expect(await agent.answerQuestion('好')).toBe(true)
   })
 
-  it('isolates users, projects, tool contracts and legacy sessions on load', async () => {
+  it('isolates users, projects and tool contracts without creating legacy storage', async () => {
     await agent.send('u1 p1 历史')
     const id = agent.currentSessionId.value
     const store = new AgentSessionStore()
     expect(await store.load('u2', 'p1')).toEqual([])
     expect(await store.load('u1', 'p2')).toEqual([])
     const db = await indexedDBService.openDB()
-    const tx = db.transaction(['sessions', 'agentSessions'], 'readwrite')
-    tx.objectStore('sessions').put({ sessionId: 'legacy', messages: [] })
+    expect(db.objectStoreNames.contains('sessions')).toBe(false)
+    const tx = db.transaction('agentSessions', 'readwrite')
     tx.objectStore('agentSessions').put({
       key: 'old-contract',
       sessionKey: 'old-contract',
@@ -440,7 +442,7 @@ describe('text Agent orchestration', () => {
       { type: 'text', text: '第二段' },
     ])
   })
-  it('executes successive tools with fresh turn IDs and preserves opaque results in paired history', async () => {
+  it('executes successive tools with fresh modelCall IDs and preserves opaque results in paired history', async () => {
     const replies: Completion['message'][] = [
       {
         role: 'assistant',
@@ -457,14 +459,18 @@ describe('text Agent orchestration', () => {
     transport.calls.mockImplementation(async (request: StreamParams) =>
       output(
         request,
-        Promise.resolve({ turnId: request.turnId, message: replies.shift()!, usage: null }),
+        Promise.resolve({
+          modelCallId: request.modelCallId,
+          message: replies.shift()!,
+          usage: null,
+        }),
       ),
     )
     toolExecution.mockImplementation(async () => {
       expect(agent.running.value).toBe(true)
       expect(await agent.send('concurrent')).toBe(false)
       // 自动续轮时只保留当前执行，上一次工具结果已进入消息历史并清理执行记录。
-      const assistantId = agent.latestTurn.value!.assistantMessageId
+      const assistantId = agent.latestModelCall.value!.assistantMessageId
       expect(Object.keys(agent.toolExecutions.value)).toEqual([assistantId])
       expect(agent.toolExecutions.value[assistantId]).toMatchObject({
         assistantMessageId: assistantId,
@@ -476,7 +482,7 @@ describe('text Agent orchestration', () => {
     await agent.send('read and edit')
     expect(toolExecution).toHaveBeenCalledTimes(2)
     const calls = transport.calls.mock.calls.map((call) => call[0] as StreamParams)
-    expect(new Set(calls.map((call) => call.turnId)).size).toBe(3)
+    expect(new Set(calls.map((call) => call.modelCallId)).size).toBe(3)
     expect(calls[0].tools).toHaveLength(30)
     expect(calls[2].messages.slice(1).map((message) => message.role)).toEqual([
       'user',
@@ -507,7 +513,7 @@ describe('text Agent orchestration', () => {
       userId: 'u1',
       projectId: 'p1',
       sessionId: agent.currentSessionId.value,
-      turnId: calls[0].turnId,
+      modelCallId: calls[0].modelCallId,
       toolCallId: 'call1',
     })
     expect(agent.running.value).toBe(false)
@@ -521,7 +527,7 @@ describe('text Agent orchestration', () => {
         output(
           request,
           Promise.resolve({
-            turnId: request.turnId,
+            modelCallId: request.modelCallId,
             usage: null,
             message: {
               role: 'assistant',
@@ -537,7 +543,7 @@ describe('text Agent orchestration', () => {
           string,
           { assistantMessageId: string }
         >
-        const currentAssistantId = agent.latestTurn.value!.assistantMessageId
+        const currentAssistantId = agent.latestModelCall.value!.assistantMessageId
         const execution = records[currentAssistantId]
         delete records[currentAssistantId]
         execution.assistantMessageId = assistantId
@@ -585,7 +591,7 @@ describe('text Agent orchestration', () => {
         output(
           request,
           Promise.resolve({
-            turnId: request.turnId,
+            modelCallId: request.modelCallId,
             usage: null,
             message: {
               role: 'assistant',
@@ -695,7 +701,11 @@ describe('text Agent orchestration', () => {
       transport.calls.mockImplementation(async (request: StreamParams) =>
         output(
           request,
-          Promise.resolve({ turnId: request.turnId, message: replies.shift()!, usage: null }),
+          Promise.resolve({
+            modelCallId: request.modelCallId,
+            message: replies.shift()!,
+            usage: null,
+          }),
         ),
       )
       toolExecution
@@ -704,7 +714,7 @@ describe('text Agent orchestration', () => {
       await agent.send('修改工程')
       expect(toolExecution).toHaveBeenCalledTimes(2)
       const calls = transport.calls.mock.calls.map(([request]) => request as StreamParams)
-      expect(new Set(calls.map((request) => request.turnId)).size).toBe(3)
+      expect(new Set(calls.map((request) => request.modelCallId)).size).toBe(3)
       expect(calls[1].messages.at(-1)).toEqual({
         role: 'tool',
         tool_call_id: 'bad-canvas',
@@ -717,7 +727,7 @@ describe('text Agent orchestration', () => {
       })
       expect(agent.toolExecutions.value).toEqual({})
       expect(agent.currentMessages.value[1].parts[1]).toMatchObject({ status: 'failed' })
-      expect(agent.latestTurn.value).toMatchObject({ status: 'completed', error: null })
+      expect(agent.latestModelCall.value).toMatchObject({ status: 'completed', error: null })
       expect(agent.running.value).toBe(false)
     },
   )
@@ -743,7 +753,11 @@ describe('text Agent orchestration', () => {
     transport.calls.mockImplementation(async (request: StreamParams) =>
       output(
         request,
-        Promise.resolve({ turnId: request.turnId, message: replies.shift()!, usage: null }),
+        Promise.resolve({
+          modelCallId: request.modelCallId,
+          message: replies.shift()!,
+          usage: null,
+        }),
       ),
     )
     await agent.send('确定片名')
@@ -781,7 +795,7 @@ describe('text Agent orchestration', () => {
       output(
         request,
         Promise.resolve({
-          turnId: request.turnId,
+          modelCallId: request.modelCallId,
           usage: null,
           message: {
             role: 'assistant',
@@ -804,14 +818,14 @@ describe('text Agent orchestration', () => {
     expect(agent.currentMessages.value[1].parts).toContainEqual(
       expect.objectContaining({ type: 'tool_call', tool_call_id: 'throws', status: 'failed' }),
     )
-    expect(agent.latestTurn.value?.status).toBe('completed')
+    expect(agent.latestModelCall.value?.status).toBe('completed')
   })
   it('saves the tool error after stopping without continuing the model loop', async () => {
     transport.calls.mockImplementationOnce(async (request: StreamParams) =>
       output(
         request,
         Promise.resolve({
-          turnId: request.turnId,
+          modelCallId: request.modelCallId,
           usage: null,
           message: {
             role: 'assistant',
@@ -867,12 +881,128 @@ describe('text Agent orchestration', () => {
     ).toThrow('TOOL_ARGUMENTS_INVALID')
     expect(toolExecution).not.toHaveBeenCalled()
   })
-  it('keeps tool progress visible after stopping, commits its result once, and continues only on new input', async () => {
+  it.each([
+    { name: 'read_media', outcome: 'success' },
+    { name: 'read_media', outcome: 'error' },
+    { name: 'search_media', outcome: 'success' },
+    { name: 'search_media', outcome: 'error' },
+  ])('cancels $name on Agent stop and discards its late $outcome', async ({ name, outcome }) => {
     transport.calls.mockImplementationOnce(async (request: StreamParams) =>
       output(
         request,
         Promise.resolve({
-          turnId: request.turnId,
+          modelCallId: request.modelCallId,
+          usage: null,
+          message: {
+            role: 'assistant',
+            content: '正在查找素材',
+            tool_calls: [
+              {
+                id: 'cancelled-media',
+                name,
+                args: name === 'read_media' ? { mediaIds: ['m1'] } : { query: 'city' },
+              },
+            ],
+          },
+        }),
+      ),
+    )
+    let finish!: () => void
+    toolExecution.mockImplementationOnce(
+      () =>
+        new Promise((resolve, reject) => {
+          finish = () => {
+            if (outcome === 'error') reject(new Error('迟到的工具错误'))
+            else resolve({ success: true, output: '迟到的工具结果' })
+          }
+        }),
+    )
+    const id = agent.currentSessionId.value
+    const pending = agent.send('查找素材')
+    await vi.waitFor(() => expect(toolExecution).toHaveBeenCalledOnce())
+    const context = toolExecution.mock.calls[0][2]
+
+    agent.newChat()
+    agent.stop()
+    expect(context.signal.aborted).toBe(false)
+    agent.selectSession(id)
+    agent.stop()
+    agent.stop()
+    expect(context.signal.aborted).toBe(true)
+    expect(context.isCurrent()).toBe(false)
+    expect(agent.running.value).toBe(true)
+    expect(await agent.send('不能并发')).toBe(false)
+    finish()
+    await pending
+
+    expect(transport.calls).toHaveBeenCalledOnce()
+    expect(agent.running.value).toBe(false)
+    expect(agent.toolExecutions.value).toEqual({})
+    expect(agent.currentMessages.value.map((message) => message.role)).toEqual([
+      'user',
+      'assistant',
+    ])
+    expect(agent.currentMessages.value[1].parts).toEqual([{ type: 'text', text: '正在查找素材' }])
+    const journal = await indexedDBService.transaction('agentTools', 'readonly', (store) =>
+      store.getAll(),
+    )
+    expect(journal).toHaveLength(1)
+    expect(journal[0].execution).toMatchObject({ status: 'cancelled', result: null })
+
+    scope.stop()
+    mountAgent()
+    await vi.waitFor(() => expect(agent.ready.value).toBe(true))
+    expect(agent.selectSession(id)).toBe(true)
+    expect(agent.toolExecutions.value).toEqual({})
+    await agent.send('继续')
+    const history = (transport.calls.mock.calls[1][0] as StreamParams).messages.slice(1)
+    expect(history.map((message) => message.role)).toEqual(['user', 'assistant', 'user'])
+    expect(toolExecution).toHaveBeenCalledOnce()
+  })
+  it('clears a stopped media call even when stopping during its pending save', async () => {
+    transport.calls.mockImplementationOnce(async (request: StreamParams) =>
+      output(
+        request,
+        Promise.resolve({
+          modelCallId: request.modelCallId,
+          usage: null,
+          message: {
+            role: 'assistant',
+            content: '',
+            tool_calls: [{ id: 'before-execute', name: 'read_media', args: { mediaIds: ['m1'] } }],
+          },
+        }),
+      ),
+    )
+    const original = AgentSessionStore.prototype.save
+    const save = vi
+      .spyOn(AgentSessionStore.prototype, 'save')
+      .mockImplementation(function (session, settled) {
+        if (Object.keys(session.toolExecutions).length) agent.stop()
+        return original.call(this, session, settled)
+      })
+    try {
+      await agent.send('读取素材')
+      expect(toolExecution).not.toHaveBeenCalled()
+      expect(agent.running.value).toBe(false)
+      expect(agent.toolExecutions.value).toEqual({})
+      expect(agent.currentMessages.value).toHaveLength(1)
+      const saved = await new AgentSessionStore().load('u1', 'p1')
+      expect(saved[0].toolExecutions).toEqual({})
+      const journal = await indexedDBService.transaction('agentTools', 'readonly', (store) =>
+        store.getAll(),
+      )
+      expect(journal[0].execution).toMatchObject({ status: 'cancelled', result: null })
+    } finally {
+      save.mockRestore()
+    }
+  })
+  it('keeps editing tool progress visible after stopping, commits its result once, and continues only on new input', async () => {
+    transport.calls.mockImplementationOnce(async (request: StreamParams) =>
+      output(
+        request,
+        Promise.resolve({
+          modelCallId: request.modelCallId,
           usage: null,
           message: {
             role: 'assistant',
@@ -930,7 +1060,7 @@ describe('text Agent orchestration', () => {
         output(
           request,
           Promise.resolve({
-            turnId: request.turnId,
+            modelCallId: request.modelCallId,
             usage: null,
             message: {
               role: 'assistant',
@@ -983,7 +1113,7 @@ describe('text Agent orchestration', () => {
     await vi.waitFor(() => expect(agent.currentMessages.value).toHaveLength(2))
     agent.stop()
     finish({
-      turnId: agent.latestTurn.value!.id,
+      modelCallId: agent.latestModelCall.value!.id,
       usage: null,
       message: { role: 'assistant', content: '停止后的完整结果' },
     })
@@ -1022,7 +1152,7 @@ describe('text Agent orchestration', () => {
     expect(await agent.send('hello')).toBe(false)
     expect(transport.calls).not.toHaveBeenCalled()
   })
-  it('carries full committed history and fresh turn IDs across successive turns', async () => {
+  it('carries full committed history and fresh modelCall IDs across successive modelCalls', async () => {
     await agent.send('first')
     await agent.send('second')
     const [first, second] = transport.calls.mock.calls.map((call) => call[0] as StreamParams)
@@ -1036,11 +1166,11 @@ describe('text Agent orchestration', () => {
       content: expect.stringContaining('核心规则'),
     })
     expect(first.messages[0].content).toContain('"selected_clip_ids":["clip1"]')
-    expect(second.turnId).not.toBe(first.turnId)
+    expect(second.modelCallId).not.toBe(first.modelCallId)
     expect(first).not.toHaveProperty('taskId')
     expect(second).not.toHaveProperty('taskId')
-    expect(agent.latestTurn.value).toMatchObject({
-      id: second.turnId,
+    expect(agent.latestModelCall.value).toMatchObject({
+      id: second.modelCallId,
       status: 'completed',
       sessionId: agent.currentSessionId.value,
       userId: 'u1',
@@ -1074,7 +1204,7 @@ describe('text Agent orchestration', () => {
     const assistantId = agent.currentMessages.value[1].id
     const request = transport.calls.mock.calls[0][0] as StreamParams
     resolve({
-      turnId: request.turnId,
+      modelCallId: request.modelCallId,
       message: { role: 'assistant', content: 'final text' },
       usage: null,
     })
@@ -1084,8 +1214,8 @@ describe('text Agent orchestration', () => {
       parts: [{ type: 'text', text: 'final text' }],
     })
     expect(agent.currentMessages.value).toHaveLength(2)
-    expect(agent.latestTurn.value).not.toHaveProperty('draft')
-    expect(agent.latestTurn.value?.status).toBe('completed')
+    expect(agent.latestModelCall.value).not.toHaveProperty('draft')
+    expect(agent.latestModelCall.value?.status).toBe('completed')
     expect(agent.running.value).toBe(false)
   })
   it.each(['failed', 'cancelled'] as const)(
@@ -1114,7 +1244,7 @@ describe('text Agent orchestration', () => {
       if (status === 'cancelled') {
         agent.stop()
         resolve({
-          turnId: request.turnId,
+          modelCallId: request.modelCallId,
           message: { role: 'assistant', content: 'late reply after stopping' },
           usage: null,
         })
@@ -1122,7 +1252,7 @@ describe('text Agent orchestration', () => {
         reject(new Error('MODEL_FAILED'))
       }
       await pending
-      expect(agent.latestTurn.value?.status).toBe(status)
+      expect(agent.latestModelCall.value?.status).toBe(status)
       expect(agent.running.value).toBe(false)
       expect(agent.currentMessages.value).toHaveLength(4)
       expect(agent.currentMessages.value[2]).toMatchObject({
@@ -1148,7 +1278,7 @@ describe('text Agent orchestration', () => {
     agent.newChat()
     expect(agent.currentSessionId.value).not.toBe(sessionId)
     expect(agent.currentMessages.value).toEqual([])
-    expect(agent.latestTurn.value).toBeNull()
+    expect(agent.latestModelCall.value).toBeNull()
     await agent.send('new')
     expect(transport.calls.mock.calls[1][0].messages.slice(1)).toEqual([
       { role: 'user', content: [{ type: 'text', text: 'new' }] },
@@ -1172,7 +1302,7 @@ describe('text Agent orchestration', () => {
     expect(await agent.send('blocked input')).toBe(false)
     expect(agent.currentMessages.value).toEqual([])
     completions[0]({
-      turnId: transport.calls.mock.calls[0][0].turnId,
+      modelCallId: transport.calls.mock.calls[0][0].modelCallId,
       message: { role: 'assistant', content: 'old reply' },
       usage: null,
     })
@@ -1184,21 +1314,21 @@ describe('text Agent orchestration', () => {
     agent.selectSession(newSession)
     const newRun = agent.send('new session input')
     await vi.waitFor(() => expect(completions).toHaveLength(2))
-    const newTurnId = agent.latestTurn.value!.id
+    const newModelCallId = agent.latestModelCall.value!.id
     expect(agent.running.value).toBe(true)
-    expect(agent.latestTurn.value).toMatchObject({ id: newTurnId, status: 'running' })
+    expect(agent.latestModelCall.value).toMatchObject({ id: newModelCallId, status: 'running' })
     expect(agent.currentMessages.value[1].parts).toEqual([{ type: 'text', text: 'partial draft' }])
     expect(agent.currentMessages.value[0]).toMatchObject({
       parts: [{ type: 'text', text: 'new session input' }],
     })
     completions[1]({
-      turnId: newTurnId,
+      modelCallId: newModelCallId,
       message: { role: 'assistant', content: 'new reply' },
       usage: null,
     })
     await newRun
     expect(agent.running.value).toBe(false)
-    expect(agent.latestTurn.value?.status).toBe('completed')
+    expect(agent.latestModelCall.value?.status).toBe('completed')
     expect(agent.currentMessages.value[1]).toMatchObject({
       parts: [{ type: 'text', text: 'new reply' }],
     })
@@ -1220,11 +1350,11 @@ describe('text Agent orchestration', () => {
         text: 'partial draft',
       }),
     )
-    const turnId = agent.latestTurn.value!.id
+    const modelCallId = agent.latestModelCall.value!.id
     agent.leaveProject()
-    resolve({ turnId, message: { role: 'assistant', content: 'late reply' }, usage: null })
+    resolve({ modelCallId, message: { role: 'assistant', content: 'late reply' }, usage: null })
     await pending
-    expect(agent.latestTurn.value).toBeNull()
+    expect(agent.latestModelCall.value).toBeNull()
     expect(agent.currentMessages.value).toEqual([])
     expect(agent.running.value).toBe(false)
   })
@@ -1242,7 +1372,7 @@ describe('text Agent orchestration', () => {
     transport.identity!()
     expect(agent.ready.value).toBe(false)
     expect(agent.currentMessages.value).toEqual([])
-    expect(agent.latestTurn.value).toBeNull()
+    expect(agent.latestModelCall.value).toBeNull()
     expect(transport.close).toHaveBeenCalledWith('IDENTITY_INVALID')
     transport.calls.mockClear()
     user.currentUser.value = { id: 'u1', balance: '-0.01' }
@@ -1251,7 +1381,7 @@ describe('text Agent orchestration', () => {
     user.currentUser.value = { id: 'u2', balance: '0' }
     await vi.waitFor(() => expect(agent.ready.value).toBe(true))
     await agent.send('new account')
-    expect(agent.latestTurn.value).toMatchObject({ userId: 'u2', status: 'completed' })
+    expect(agent.latestModelCall.value).toMatchObject({ userId: 'u2', status: 'completed' })
   })
   it('clears messages on pagehide and releases resources with the store scope', async () => {
     await agent.send('first')

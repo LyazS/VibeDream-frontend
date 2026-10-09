@@ -22,10 +22,7 @@ import {
   createRuntimeI18nMessage,
   type IndexingRuntimeState,
 } from './indexingRuntime'
-import {
-  registerToolCancellationHook,
-  unregisterToolCancellationHook,
-} from './cancellation'
+import { registerToolCancellationHook, unregisterToolCancellationHook } from './cancellation'
 
 const MAX_MEDIA_IDS = 10
 const MAX_WAIT_MS = 30 * 60 * 1000
@@ -100,10 +97,7 @@ function startExecutionState(
   }
 }
 
-function updateExecutionState(
-  toolCallId: string,
-  patch: Partial<ReadMediaExecutionState>,
-): void {
+function updateExecutionState(toolCallId: string, patch: Partial<ReadMediaExecutionState>): void {
   const current = activeExecutions[toolCallId]
   if (!current) return
   Object.assign(current, patch)
@@ -187,10 +181,7 @@ function isIndexedFieldReady(mediaItem: UnifiedMediaItemData, field: ReadMediaFi
   return indexStatus === 'completed' || indexStatus === 'partial_failed'
 }
 
-function isMediaResolved(
-  mediaItem: UnifiedMediaItemData,
-  fields: ReadMediaField[],
-): boolean {
+function isMediaResolved(mediaItem: UnifiedMediaItemData, fields: ReadMediaField[]): boolean {
   return fields.every((field) => isIndexedFieldReady(mediaItem, field))
 }
 
@@ -275,7 +266,9 @@ function buildSummaryData(indexing?: UnifiedMediaIndexMetadata): Record<string, 
   }
 }
 
-function buildSegmentsData(indexing?: UnifiedVideoMediaIndexMetadata): Array<Record<string, any>> | null {
+function buildSegmentsData(
+  indexing?: UnifiedVideoMediaIndexMetadata,
+): Array<Record<string, any>> | null {
   const segments = indexing?.segmentSummaries || []
   if (segments.length === 0) {
     return null
@@ -297,8 +290,9 @@ function buildMediaData(
 ): Record<string, any> {
   const { mediaItem, suggestedItem } = context.resolveMediaRequest(controller.requestedId)
   if (!mediaItem) {
-    const message = controller.failureMessage
-      || (controller.suggestedId || suggestedItem?.id
+    const message =
+      controller.failureMessage ||
+      (controller.suggestedId || suggestedItem?.id
         ? `未找到素材，建议使用完整 ID ${controller.suggestedId || suggestedItem?.id}`
         : '未找到素材')
 
@@ -312,7 +306,10 @@ function buildMediaData(
   const indexing = getIndexMetadata(mediaItem)
   const mediaData: Record<string, any> = {
     mediaId: mediaItem.id,
-    status: controller.itemStatus === 'failed' || controller.itemStatus === 'pending' ? 'failed' : 'found',
+    status:
+      controller.itemStatus === 'failed' || controller.itemStatus === 'pending'
+        ? 'failed'
+        : 'found',
     mediaType: mediaItem.mediaType,
   }
 
@@ -321,9 +318,7 @@ function buildMediaData(
   }
 
   if (fields.includes('summary') && fieldSupported(mediaItem, 'summary')) {
-    const summaryData = buildSummaryData(
-      getVideoMetadata(indexing) || getImageMetadata(indexing),
-    )
+    const summaryData = buildSummaryData(getVideoMetadata(indexing) || getImageMetadata(indexing))
     if (summaryData) {
       mediaData.summary = summaryData.summary
     }
@@ -340,9 +335,10 @@ function buildMediaData(
     const videoIndexing = getVideoMetadata(indexing)
     if (mediaItem.mediaType === 'video' && videoIndexing?.indexStatus === 'partial_failed') {
       const failedCount = videoIndexing.failedSegmentCount
-      mediaData.warning = failedCount && failedCount > 0
-        ? `有 ${failedCount} 个分镜分析失败，已返回可用分镜`
-        : '部分分镜分析失败，已返回可用分镜'
+      mediaData.warning =
+        failedCount && failedCount > 0
+          ? `有 ${failedCount} 个分镜分析失败，已返回可用分镜`
+          : '部分分镜分析失败，已返回可用分镜'
     }
   }
 
@@ -379,12 +375,7 @@ function markFailures(
   }
 }
 
-function updateExecutionProgress(
-  toolCallId: string | undefined,
-  controllers: ReadMediaItemController[],
-): void {
-  if (!toolCallId) return
-
+function updateExecutionProgress(toolCallId: string, controllers: ReadMediaItemController[]): void {
   const completedCount = controllers.filter((item) => item.itemStatus === 'success').length
   const failedCount = controllers.filter((item) => item.itemStatus === 'failed').length
   const resolvedCount = completedCount + failedCount
@@ -420,7 +411,8 @@ function createWaitPromise(
   controller: ReadMediaItemController,
   onSettled?: () => void,
 ): Promise<void> {
-  return context.ensureMediaIndexing(mediaId)
+  return context
+    .ensureMediaIndexing(mediaId)
     .then(() => {
       controller.waitError = undefined
     })
@@ -469,9 +461,9 @@ function refreshControllers(
 
     const needsIndex = fields.some(
       (field) =>
-        fieldNeedsIndex(field)
-        && fieldSupported(mediaItem, field)
-        && !isIndexedFieldReady(mediaItem, field),
+        fieldNeedsIndex(field) &&
+        fieldSupported(mediaItem, field) &&
+        !isIndexedFieldReady(mediaItem, field),
     )
 
     if (!needsIndex) {
@@ -481,12 +473,7 @@ function refreshControllers(
 
     if (!controller.waitStarted) {
       controller.waitStarted = true
-      controller.waitPromise = createWaitPromise(
-        context,
-        mediaItem.id,
-        controller,
-        onWaitSettled,
-      )
+      controller.waitPromise = createWaitPromise(context, mediaItem.id, controller, onWaitSettled)
     }
   }
 }
@@ -504,7 +491,7 @@ async function waitForControllersToSettle(params: {
   controllers: ReadMediaItemController[]
   fields: ReadMediaField[]
   context: ReadMediaToolContext
-  toolCallId?: string
+  toolCallId: string
   deadline: number
   isCancelled: () => boolean
   getWakeWaiting: () => (() => void) | null
@@ -521,15 +508,10 @@ async function waitForControllersToSettle(params: {
     setWakeWaiting,
   } = params
 
-  refreshControllers(
-    controllers,
-    fields,
-    context,
-    () => {
-      const wake = getWakeWaiting()
-      wake?.()
-    },
-  )
+  refreshControllers(controllers, fields, context, () => {
+    const wake = getWakeWaiting()
+    wake?.()
+  })
 
   updateExecutionProgress(toolCallId, controllers)
 
@@ -562,13 +544,7 @@ function waitForRelevantReadMediaSignal(params: {
   isCancelled: () => boolean
   setWakeWaiting: (wake: (() => void) | null) => void
 }): Promise<'event' | 'cancelled' | 'timeout'> {
-  const {
-    controllers,
-    context,
-    remainingMs,
-    isCancelled,
-    setWakeWaiting,
-  } = params
+  const { controllers, context, remainingMs, isCancelled, setWakeWaiting } = params
 
   return new Promise((resolve) => {
     let settled = false
@@ -580,9 +556,7 @@ function waitForRelevantReadMediaSignal(params: {
     }
 
     const mediaIdSet = new Set(
-      controllers
-        .filter((item) => item.itemStatus === 'pending')
-        .map((item) => item.requestedId),
+      controllers.filter((item) => item.itemStatus === 'pending').map((item) => item.requestedId),
     )
 
     const unsubscribe = context.onJobResourceEvent((event) => {
@@ -613,11 +587,12 @@ function waitForRelevantReadMediaSignal(params: {
 /**
  * read_media 工具执行函数
  */
-export async function executeReadMedia(
-  args: Record<string, any>,
-  context?: ToolExecutionContext,
-){
+export async function executeReadMedia(args: Record<string, any>, context: ToolExecutionContext) {
+  const { toolCallId, signal } = context
+  let detachAbort = () => {}
   try {
+    signal.throwIfAborted()
+    if (!context.isCurrent()) throw new Error('TOOL_CONTEXT_EXPIRED')
     const mediaIds = normalizeMediaIds(args.mediaIds)
     const includeSegments = normalizeIncludeSegments(args.includeSegments)
     const fields = buildReadFields(includeSegments)
@@ -628,7 +603,6 @@ export async function executeReadMedia(
       ensureMediaIndexing: (mediaId) => unifiedStore.ensureMediaIndexing(mediaId),
       onJobResourceEvent: (listener) => unifiedStore.jobRuntime.onResourceEvent(listener),
     }
-    const toolCallId = context?.toolCallId
     const controllers: ReadMediaItemController[] = mediaIds.map((mediaId) => ({
       requestedId: mediaId,
       itemStatus: 'pending',
@@ -638,19 +612,20 @@ export async function executeReadMedia(
     let cancelled = false
     let wakeWaiting: (() => void) | null = null
 
-    if (toolCallId) {
-      startExecutionState(toolCallId, mediaIds, fields)
-      registerToolCancellationHook('read_media', toolCallId, () => {
-        cancelled = true
-        updateExecutionState(toolCallId, {
-          cancelled: true,
-          canCancel: false,
-          message: '正在停止等待分析…',
-          indexingStatus: createRuntimeI18nMessage('aiPanel.toolsState.indexingStopping'),
-        })
-        wakeWaiting?.()
+    const cancel = () => {
+      cancelled = true
+      updateExecutionState(toolCallId, {
+        cancelled: true,
+        canCancel: false,
+        message: '正在停止等待分析…',
+        indexingStatus: createRuntimeI18nMessage('aiPanel.toolsState.indexingStopping'),
       })
+      wakeWaiting?.()
     }
+    startExecutionState(toolCallId, mediaIds, fields)
+    registerToolCancellationHook('read_media', toolCallId, cancel)
+    signal.addEventListener('abort', cancel, { once: true })
+    detachAbort = () => signal.removeEventListener('abort', cancel)
 
     const deadline = Date.now() + MAX_WAIT_MS
 
@@ -661,7 +636,7 @@ export async function executeReadMedia(
         context: readMediaContext,
         toolCallId,
         deadline,
-        isCancelled: () => cancelled,
+        isCancelled: () => cancelled || !context.isCurrent(),
         getWakeWaiting: () => wakeWaiting,
         setWakeWaiting: (wake) => {
           wakeWaiting = wake
@@ -673,40 +648,26 @@ export async function executeReadMedia(
       }
 
       if (waitReason === 'cancelled') {
-        markFailures(
-          controllers,
-          'user_cancelled_before_completed',
-          '用户取消了本次素材读取',
-        )
+        markFailures(controllers, 'user_cancelled_before_completed', '用户取消了本次素材读取')
         break
       }
 
       if (waitReason === 'timeout') {
-        markFailures(
-          controllers,
-          'indexing_timeout',
-          '等待素材内容分析超时',
-        )
+        markFailures(controllers, 'indexing_timeout', '等待素材内容分析超时')
         break
       }
     }
 
-    const result = buildResultData(
-      controllers,
-      fields,
-      readMediaContext,
-    )
+    const result = buildResultData(controllers, fields, readMediaContext)
 
-    if (toolCallId) {
-      updateExecutionState(toolCallId, {
-        active: false,
-        canCancel: false,
-        message: cancelled ? '素材读取已停止' : '素材读取完成',
-        indexingStatus: createRuntimeI18nMessage(
-          cancelled ? 'aiPanel.toolsState.indexingStopped' : 'aiPanel.toolsState.indexingFinished',
-        ),
-      })
-    }
+    updateExecutionState(toolCallId, {
+      active: false,
+      canCancel: false,
+      message: cancelled ? '素材读取已停止' : '素材读取完成',
+      indexingStatus: createRuntimeI18nMessage(
+        cancelled ? 'aiPanel.toolsState.indexingStopped' : 'aiPanel.toolsState.indexingFinished',
+      ),
+    })
     return buildToolSuccess(
       'read_media',
       result,
@@ -716,10 +677,8 @@ export async function executeReadMedia(
     const message = error instanceof Error ? error.message : String(error)
     return buildToolError('read_media', 'invalid_arguments', message)
   } finally {
-    const toolCallId = context?.toolCallId
-    if (toolCallId) {
-      finishExecutionState(toolCallId)
-    }
+    detachAbort()
+    finishExecutionState(toolCallId)
   }
 }
 

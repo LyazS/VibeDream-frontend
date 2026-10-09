@@ -20,12 +20,12 @@ class Socket extends EventTarget {
     this.dispatchEvent(new Event('open'))
   }
   /** 补齐版本和轮次字段，模拟服务端业务事件。 */
-  frame(type: string, fields: Record<string, unknown> = {}, turnId = 'turn-1') {
+  frame(type: string, fields: Record<string, unknown> = {}, modelCallId = 'turn-1') {
     this.raw(
       JSON.stringify({
         type,
         protocol_version: AGENT_PROTOCOL_VERSION,
-        turn_id: turnId,
+        model_call_id: modelCallId,
         ...fields,
       }),
     )
@@ -42,7 +42,7 @@ class Socket extends EventTarget {
 }
 // 每个用例共用的合法请求模板，特殊场景通过复制并覆盖字段构造。
 const params = {
-  turnId: 'turn-1',
+  modelCallId: 'turn-1',
   messages: [
     { role: 'system' as const, content: 'caller prompt' },
     { role: 'user' as const, content: 'hello' },
@@ -77,15 +77,15 @@ async function started(c: AgentClient, signal?: AbortSignal): Promise<Completion
   const promise = c.stream(params, { signal })
   sockets.at(-1)!.open()
   await flush()
-  sockets.at(-1)!.frame('turn.started')
+  sockets.at(-1)!.frame('model_call.started')
   return promise
 }
 /** 发送正常完成事件，支持指定目标轮次。 */
-function complete(socket: Socket, turnId = 'turn-1') {
+function complete(socket: Socket, modelCallId = 'turn-1') {
   socket.frame(
-    'turn.completed',
+    'model_call.completed',
     { message: { role: 'assistant', content: 'hello world' }, usage: null },
-    turnId,
+    modelCallId,
   )
 }
 beforeEach(
@@ -132,36 +132,39 @@ describe('project-scoped single-turn client', /** 组织工程范围内单轮客
         ],
       },
     ])
-    socket.frame('turn.started')
+    socket.frame('model_call.started')
     const stream = await pending
     complete(socket)
     expect((await stream.finalCompletion()).message.content).toBe('hello world')
   })
-  it.each(['turn.completed', 'turn.failed', 'turn.cancelled', 'close', 'dispose'])(
-    'waits for slot release on %s without sending another request',
-    async (terminal) => {
-      const c = client()
-      await c.waitForIdle()
-      const controller = new AbortController()
-      const stream = await started(c, controller.signal)
-      const idle = c.waitForIdle()
-      expect(c.waitForIdle()).toBe(idle)
-      const finished = vi.fn()
-      void idle.then(finished)
-      controller.abort()
-      await expect(stream.finalCompletion()).rejects.toThrow('TURN_CANCELLED')
-      expect(finished).not.toHaveBeenCalled()
-      expect(() => c.stream(params)).toThrow('MODEL_CALL_BUSY')
-      if (terminal === 'turn.completed') complete(sockets[0])
-      else if (terminal === 'close') c.close()
-      else if (terminal === 'dispose') c.dispose()
-      else sockets[0].frame(terminal, { code: 'TEST_END' })
-      await idle
-      expect(finished).toHaveBeenCalledOnce()
-      await c.waitForIdle()
-      expect(sockets[0].sent.filter((frame) => frame.includes('turn.start'))).toHaveLength(1)
-    },
-  )
+  it.each([
+    'model_call.completed',
+    'model_call.failed',
+    'model_call.cancelled',
+    'close',
+    'dispose',
+  ])('waits for slot release on %s without sending another request', async (terminal) => {
+    const c = client()
+    await c.waitForIdle()
+    const controller = new AbortController()
+    const stream = await started(c, controller.signal)
+    const idle = c.waitForIdle()
+    expect(c.waitForIdle()).toBe(idle)
+    const finished = vi.fn()
+    void idle.then(finished)
+    controller.abort()
+    await expect(stream.finalCompletion()).rejects.toThrow('MODEL_CALL_CANCELLED')
+    expect(finished).not.toHaveBeenCalled()
+    expect(() => c.stream(params)).toThrow('MODEL_CALL_BUSY')
+    if (terminal === 'model_call.completed') complete(sockets[0])
+    else if (terminal === 'close') c.close()
+    else if (terminal === 'dispose') c.dispose()
+    else sockets[0].frame(terminal, { code: 'TEST_END' })
+    await idle
+    expect(finished).toHaveBeenCalledOnce()
+    await c.waitForIdle()
+    expect(sockets[0].sent.filter((frame) => frame.includes('model_call.start'))).toHaveLength(1)
+  })
   it('forwards complete definitions and returns an empty-text tool completion only at terminal', async () => {
     const c = client()
     const tools = [{ name: 'read', description: 'original', parameters: { type: 'object' } }]
@@ -170,14 +173,14 @@ describe('project-scoped single-turn client', /** 组织工程范围内单轮客
     sockets[0].open()
     await flush()
     expect(JSON.parse(sockets[0].sent[0]).tools[0].description).toBe('original')
-    sockets[0].frame('turn.started')
+    sockets[0].frame('model_call.started')
     const stream = await promise
     const message = {
       role: 'assistant',
       content: '',
       tool_calls: [{ id: 'c1', name: 'read', args: { nested: { value: 1 } } }],
     }
-    sockets[0].frame('turn.completed', { message, usage: null })
+    sockets[0].frame('model_call.completed', { message, usage: null })
     const chunks = []
     for await (const chunk of stream) chunks.push(chunk)
     expect(chunks).toEqual([])
@@ -188,7 +191,7 @@ describe('project-scoped single-turn client', /** 组织工程范围内单轮客
     await started(c)
     const frame = JSON.parse(sockets[0].sent[0])
     expect(frame).toMatchObject({
-      protocol_version: 'agent-tools-v1',
+      protocol_version: 'agent-model-calls-v1',
       project_id: 'project-1',
       messages: params.messages,
       tools: [],
@@ -201,11 +204,11 @@ describe('project-scoped single-turn client', /** 组织工程范围内单轮客
     const c = client()
     const promise = c.stream(params)
     expect(
-      /** 尝试第二次调用，验证同步并发拒绝。 */ () => c.stream({ ...params, turnId: 'two' }),
+      /** 尝试第二次调用，验证同步并发拒绝。 */ () => c.stream({ ...params, modelCallId: 'two' }),
     ).toThrow('MODEL_CALL_BUSY')
     sockets[0].open()
     await flush()
-    sockets[0].frame('turn.started')
+    sockets[0].frame('model_call.started')
     sockets[0].frame('text.delta', { delta: 'hello ' })
     sockets[0].frame('text.delta', { delta: 'world' })
     complete(sockets[0])
@@ -219,7 +222,7 @@ describe('project-scoped single-turn client', /** 组织工程范围内单轮客
     ).toThrow('STREAM_ALREADY_CONSUMED')
     expect(JSON.parse(sockets[0].sent[0])).toMatchObject({
       project_id: 'project-1',
-      turn_id: 'turn-1',
+      model_call_id: 'turn-1',
     })
   })
   it('returns the stream on acceptance and waits for the terminal result', /** 验证受理后可读取流，完整结果仍须等待成功终态。 */ async () => {
@@ -227,7 +230,7 @@ describe('project-scoped single-turn client', /** 组织工程范围内单轮客
     const promise = c.stream(params)
     sockets[0].open()
     await flush()
-    sockets[0].frame('turn.started')
+    sockets[0].frame('model_call.started')
     const stream = await promise
     const finished = vi.fn()
     void stream.finalCompletion().then(/** 记录最终结果完成时机。 */ finished)
@@ -237,7 +240,7 @@ describe('project-scoped single-turn client', /** 组织工程范围内单轮客
     expect(finished).not.toHaveBeenCalled()
     complete(sockets[0])
     expect(await stream.finalCompletion()).toMatchObject({
-      turnId: 'turn-1',
+      modelCallId: 'turn-1',
       message: { content: 'hello world' },
     })
     expect(await iterator.next()).toEqual({ value: undefined, done: true })
@@ -249,7 +252,7 @@ describe('project-scoped single-turn client', /** 组织工程范围内单轮客
     expect(
       /** 提交已取消信号的调用，检查同步取消错误。 */ () =>
         c.stream(params, { signal: controller.signal }),
-    ).toThrow('TURN_CANCELLED')
+    ).toThrow('MODEL_CALL_CANCELLED')
     expect(sockets).toHaveLength(0)
   })
   it('cancels before send without cancelling another connection waiter', /** 验证发送前取消旧请求不会影响共享握手中的新请求。 */ async () => {
@@ -257,17 +260,20 @@ describe('project-scoped single-turn client', /** 组织工程范围内单轮客
     const controller = new AbortController()
     const old = c.stream(params, { signal: controller.signal })
     controller.abort()
-    await expect(old).rejects.toMatchObject({ code: 'TURN_CANCELLED', acceptance: 'not_accepted' })
-    const next = c.stream({ ...params, turnId: 'next' })
+    await expect(old).rejects.toMatchObject({
+      code: 'MODEL_CALL_CANCELLED',
+      acceptance: 'not_accepted',
+    })
+    const next = c.stream({ ...params, modelCallId: 'next' })
     expect(sockets).toHaveLength(1)
     sockets[0].open()
     await flush()
     expect(
       sockets[0].sent.filter(
-        /** 筛选启动帧，确认取消请求没有被发送。 */ (s) => s.includes('turn.start'),
+        /** 筛选启动帧，确认取消请求没有被发送。 */ (s) => s.includes('model_call.start'),
       ),
     ).toHaveLength(1)
-    sockets[0].frame('turn.started', {}, 'next')
+    sockets[0].frame('model_call.started', {}, 'next')
     complete(sockets[0], 'next')
     await (await next).finalCompletion()
   })
@@ -278,20 +284,23 @@ describe('project-scoped single-turn client', /** 组织工程范围内单轮客
     sockets[0].open()
     await flush()
     controller.abort()
-    await expect(promise).rejects.toMatchObject({ code: 'TURN_CANCELLED', acceptance: 'unknown' })
-    expect(JSON.parse(sockets[0].sent.at(-1)!)).toMatchObject({ type: 'turn.cancel' })
+    await expect(promise).rejects.toMatchObject({
+      code: 'MODEL_CALL_CANCELLED',
+      acceptance: 'unknown',
+    })
+    expect(JSON.parse(sockets[0].sent.at(-1)!)).toMatchObject({ type: 'model_call.cancel' })
     expect(/** 取消尚未确认时尝试新调用，验证槽位仍被占用。 */ () => c.stream(params)).toThrow(
       'MODEL_CALL_BUSY',
     )
-    sockets[0].frame('turn.started')
-    sockets[0].frame('turn.status', { status: 'cancelling' })
+    sockets[0].frame('model_call.started')
+    sockets[0].frame('model_call.status', { status: 'cancelling' })
     expect(/** 收到取消中的状态后再次验证新调用仍被拒绝。 */ () => c.stream(params)).toThrow(
       'MODEL_CALL_BUSY',
     )
     complete(sockets[0])
-    const next = c.stream({ ...params, turnId: 'next' })
+    const next = c.stream({ ...params, modelCallId: 'next' })
     await flush()
-    sockets[0].frame('turn.started', {}, 'next')
+    sockets[0].frame('model_call.started', {}, 'next')
     complete(sockets[0], 'next')
     await (await next).finalCompletion()
   })
@@ -303,11 +312,11 @@ describe('project-scoped single-turn client', /** 组织工程范围内单轮客
       expect(chunk.delta).toBe('draft')
       break
     }
-    await expect(stream.finalCompletion()).rejects.toMatchObject({ code: 'TURN_CANCELLED' })
-    expect(JSON.parse(sockets[0].sent.at(-1)!)).toMatchObject({ type: 'turn.cancel' })
-    sockets[0].frame('turn.cancelled', { code: 'TURN_CANCELLED' })
+    await expect(stream.finalCompletion()).rejects.toMatchObject({ code: 'MODEL_CALL_CANCELLED' })
+    expect(JSON.parse(sockets[0].sent.at(-1)!)).toMatchObject({ type: 'model_call.cancel' })
+    sockets[0].frame('model_call.cancelled', { code: 'MODEL_CALL_CANCELLED' })
   })
-  it.each(['turn.failed', 'turn.cancelled'])(
+  it.each(['model_call.failed', 'model_call.cancelled'])(
     'rejects iteration and final result on %s',
     /** 验证失败或取消事件同时拒绝增量迭代与最终结果。 */
     async (type) => {
@@ -339,15 +348,15 @@ describe('project-scoped single-turn client', /** 组织工程范围内单轮客
     await stream.finalCompletion()
     c.close()
     const old = sockets[0]
-    const next = c.stream({ ...params, turnId: 'next' })
+    const next = c.stream({ ...params, modelCallId: 'next' })
     sockets[1].open()
     await flush()
-    sockets[1].frame('turn.started', {}, 'next')
+    sockets[1].frame('model_call.started', {}, 'next')
     old.close(1006)
     old.raw('{invalid')
-    sockets[1].frame('turn.failed', { code: 'OLD' })
+    sockets[1].frame('model_call.failed', { code: 'OLD' })
     complete(sockets[1], 'next')
-    expect((await (await next).finalCompletion()).turnId).toBe('next')
+    expect((await (await next).finalCompletion()).modelCallId).toBe('next')
   })
   it('closes after 3 business-idle minutes, ignoring heartbeats, and reconnects on demand', /** 验证心跳不延长业务空闲时间，空闲关闭后可按需重新连接。 */ async () => {
     const c = client()
@@ -364,7 +373,7 @@ describe('project-scoped single-turn client', /** 组织工程范围内单轮客
     const next = c.stream(params)
     sockets[1].open()
     await flush()
-    sockets[1].frame('turn.started')
+    sockets[1].frame('model_call.started')
     complete(sockets[1])
     await (await next).finalCompletion()
   })
@@ -402,7 +411,7 @@ describe('project-scoped single-turn client', /** 组织工程范围内单轮客
     const stream = await started(c, controller.signal)
     const idle = c.waitForIdle()
     controller.abort()
-    await expect(stream.finalCompletion()).rejects.toThrow('TURN_CANCELLED')
+    await expect(stream.finalCompletion()).rejects.toThrow('MODEL_CALL_CANCELLED')
     await vi.advanceTimersByTimeAsync(15000)
     expect(c.connectionState.closeReason).toBe('CANCEL_TIMEOUT')
     await idle
@@ -410,14 +419,14 @@ describe('project-scoped single-turn client', /** 组织工程范围内单轮客
   it('rejects malformed successful results and duplicate status without replaying a reply', /** 验证异常成功结果被拒绝，重复状态不会重放旧回复。 */ async () => {
     const c = client()
     let stream = await started(c)
-    sockets[0].frame('turn.completed', {
+    sockets[0].frame('model_call.completed', {
       message: { role: 'assistant', content: 'partial', extra: true },
       usage: null,
     })
     await expect(stream.finalCompletion()).rejects.toThrow('PROTOCOL_INVALID')
     stream = await started(c)
-    sockets[1].frame('turn.status', { status: 'completed', duplicate: true })
-    await expect(stream.finalCompletion()).rejects.toThrow('TURN_ALREADY_EXISTS')
+    sockets[1].frame('model_call.status', { status: 'completed', duplicate: true })
+    await expect(stream.finalCompletion()).rejects.toThrow('MODEL_CALL_ALREADY_EXISTS')
   })
   it('makes disposal final and exposes immutable connection state', /** 验证连接状态不可修改，客户端销毁后无法再次调用。 */ () => {
     const c = client()

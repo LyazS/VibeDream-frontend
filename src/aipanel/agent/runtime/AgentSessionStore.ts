@@ -2,7 +2,7 @@ import { indexedDBService } from '@/core/storage/IndexedDBService'
 import type { AgentSession, ToolExecution } from '@/core/modules/UnifiedAgentModule'
 import { toolContractVersion } from './ToolRuntime'
 
-const stores = ['agentSessions', 'agentTurns', 'agentTools']
+const stores = ['agentSessions', 'agentModelCalls', 'agentTools']
 
 /** 固定快照：剥离 Vue 代理，排队后不再读取正在变化的响应式对象。 */
 function snapshot<T>(value: T): T {
@@ -32,10 +32,10 @@ export class AgentSessionStore {
     return JSON.stringify([userId, projectId, toolContractVersion])
   }
 
-  /** 将会话和最新 turn、待执行/已完成工具日志一起原子保存。 */
-  save(session: AgentSession, completedTool?: ToolExecution): Promise<void> {
+  /** 将会话和最新 modelCall、待执行/已结束工具日志一起原子保存。 */
+  save(session: AgentSession, settledTool?: ToolExecution): Promise<void> {
     const data = snapshot(session)
-    const completed = completedTool ? snapshot(completedTool) : undefined
+    const settled = settledTool ? snapshot(settledTool) : undefined
     return this.enqueue(async () => {
       const db = await indexedDBService.openDB()
       const owner = this.owner(data.userId, data.projectId)
@@ -45,18 +45,18 @@ export class AgentSessionStore {
         transaction.oncomplete = () => resolve()
         transaction.onerror = transaction.onabort = () => reject(transaction.error)
         transaction.objectStore('agentSessions').put({ key, owner, sessionKey: key, data })
-        if (data.latestTurn) {
-          transaction.objectStore('agentTurns').put({
-            key: JSON.stringify([key, data.latestTurn.id]),
+        if (data.latestModelCall) {
+          transaction.objectStore('agentModelCalls').put({
+            key: JSON.stringify([key, data.latestModelCall.id]),
             owner,
             sessionKey: key,
-            turn: data.latestTurn,
+            modelCall: data.latestModelCall,
           })
         }
         for (const execution of Object.values(data.toolExecutions)) {
           this.journal.write(transaction, key, owner, execution)
         }
-        if (completed) this.journal.write(transaction, key, owner, completed)
+        if (settled) this.journal.write(transaction, key, owner, settled)
       })
     })
   }

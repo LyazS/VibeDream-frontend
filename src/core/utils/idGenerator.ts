@@ -162,13 +162,3 @@ export function generateDirectoryId(): string {
 export function generateTabId(): string {
   return `tab_${nanoid(12)}`
 }
-
-/**
- * 生成 Agent 消息 ID
- * 使用时间戳确保按时间排序
- * @param type 消息类型前缀
- * @returns Agent 消息 ID 字符串
- */
-export function generateAgentMessageId(type: string): string {
-  return `${type}-${Date.now()}`
-}

@@ -14,10 +14,7 @@ import {
   createRuntimeI18nMessage,
   type IndexingRuntimeState,
 } from './indexingRuntime'
-import {
-  registerToolCancellationHook,
-  unregisterToolCancellationHook,
-} from './cancellation'
+import { registerToolCancellationHook, unregisterToolCancellationHook } from './cancellation'
 
 const DEFAULT_TOP_K = 5
 const MIN_TOP_K = 1
@@ -60,10 +57,7 @@ function startExecutionState(toolCallId: string, query: string): void {
   }
 }
 
-function updateExecutionState(
-  toolCallId: string,
-  patch: Partial<SearchMediaExecutionState>,
-): void {
+function updateExecutionState(toolCallId: string, patch: Partial<SearchMediaExecutionState>): void {
   const current = activeExecutions[toolCallId]
   if (!current) return
   Object.assign(current, patch)
@@ -139,13 +133,12 @@ function logSearchMediaResult(result: Record<string, any>) {
   return result
 }
 
-export async function executeSearchMedia(
-  args: Record<string, any>,
-  context?: ToolExecutionContext,
-){
+export async function executeSearchMedia(args: Record<string, any>, context: ToolExecutionContext) {
   const query = typeof args.query === 'string' ? args.query.trim() : ''
   const topK = normalizeTopK(args.top_k)
-  const toolCallId = context?.toolCallId
+  const { toolCallId } = context
+  context.signal.throwIfAborted()
+  if (!context.isCurrent()) throw new Error('TOOL_CONTEXT_EXPIRED')
   if (!query) {
     return logSearchMediaResult(
       buildToolError('search_media', 'invalid_arguments', 'query must be a non-empty string'),
@@ -160,43 +153,36 @@ export async function executeSearchMedia(
     )
   }
 
-  if (toolCallId) {
-    startExecutionState(toolCallId, query)
-  }
+  startExecutionState(toolCallId, query)
 
   try {
-    const abortController = toolCallId ? new AbortController() : null
-    let cancelled = false
+    const abortController = new AbortController()
+    const signal = AbortSignal.any([context.signal, abortController.signal])
     const checkCancelled = () => {
-      if (cancelled) {
-        throw new DOMException('Search media execution aborted', 'AbortError')
-      }
+      signal.throwIfAborted()
+      if (!context.isCurrent()) throw new Error('TOOL_CONTEXT_EXPIRED')
     }
 
-    if (toolCallId && abortController) {
-      registerToolCancellationHook('search_media', toolCallId, () => {
-        cancelled = true
-        abortController.abort()
-        updateExecutionState(toolCallId, {
-          cancelled: true,
-          canCancel: false,
-          active: false,
-          message: '正在停止素材检索…',
-          indexingStatus: createRuntimeI18nMessage('aiPanel.toolsState.indexingStopping'),
-        })
+    registerToolCancellationHook('search_media', toolCallId, () => {
+      abortController.abort()
+      updateExecutionState(toolCallId, {
+        cancelled: true,
+        canCancel: false,
+        active: false,
+        message: '正在停止素材检索…',
+        indexingStatus: createRuntimeI18nMessage('aiPanel.toolsState.indexingStopping'),
       })
-    }
+    })
 
     const { results, error } = await searchMedia({
       query,
-      projectId: unifiedStore.projectId,
+      projectId: context.projectId,
       getMediaItem: (id) => unifiedStore.getMediaItem(id),
       mediaItems: unifiedStore.mediaItems || [],
       ensureMediaIndexing: (id) => unifiedStore.ensureMediaIndexing(id),
       t: (key) => key,
       topK,
       onProgress: (stage, completedSteps, totalSteps) => {
-        if (!toolCallId) return
         const messageByStage: Record<SearchMediaStage, string> = {
           indexing: '正在补齐素材索引…',
           retrieval: '正在召回候选素材…',
@@ -211,28 +197,21 @@ export async function executeSearchMedia(
         })
       },
       onIndexingProgress: (resolvedCount, totalCount, failedCount) => {
-        if (!toolCallId) return
         updateIndexingProgress(toolCallId, resolvedCount, totalCount, failedCount)
       },
-      signal: abortController?.signal,
+      signal,
       checkCancelled,
     })
 
-    if (cancelled) {
-      return logSearchMediaResult(
-        buildToolError('search_media', 'user_cancelled', '用户取消了本次素材检索'),
-      )
-    }
+    checkCancelled()
     const hasMissingValidation = results.some((item) => !item.validation_result)
 
     if (error || hasMissingValidation) {
       return logSearchMediaResult(
-        buildToolError(
-          'search_media',
-          'internal_error',
-          error || '搜索结果缺少校验信息',
-          { query, requestedTopK: topK },
-        ),
+        buildToolError('search_media', 'internal_error', error || '搜索结果缺少校验信息', {
+          query,
+          requestedTopK: topK,
+        }),
       )
     }
 
@@ -256,9 +235,7 @@ export async function executeSearchMedia(
     }
     throw error
   } finally {
-    if (toolCallId) {
-      finishExecutionState(toolCallId)
-    }
+    finishExecutionState(toolCallId)
   }
 }
 

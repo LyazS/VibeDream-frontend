@@ -522,7 +522,7 @@ export const useUnifiedStore = defineStore('unified', () => {
     agentStorageError: unifiedAgentModule.storageError,
     agentSessionId: unifiedAgentModule.currentSessionId,
     agentMessages: unifiedAgentModule.currentMessages,
-    agentTurn: unifiedAgentModule.latestTurn,
+    agentModelCall: unifiedAgentModule.latestModelCall,
     agentToolExecutions: unifiedAgentModule.toolExecutions,
     agentPendingInteraction: unifiedAgentModule.pendingInteraction,
     answerAgentQuestion: unifiedAgentModule.answerQuestion,

@@ -7,8 +7,8 @@
       <InteractionCard v-if="message.interaction" :record="message.interaction" />
     </template>
     <ThinkingIndicator v-if="indicatorStatus" :status="indicatorStatus" />
-    <div v-if="store.agentTurn?.status === 'failed'" class="chat-error" role="alert">
-      {{ store.agentTurn?.error }}
+    <div v-if="store.agentModelCall?.status === 'failed'" class="chat-error" role="alert">
+      {{ store.agentModelCall?.error }}
     </div>
     <div v-if="store.agentStorageError" class="chat-error" role="alert">
       {{ store.agentStorageError }}
@@ -56,7 +56,7 @@ watch(
     clearCompletedIndicatorTimer()
     indicatorStatus.value = sending
       ? 'thinking'
-      : store.agentTurn?.status === 'completed' && !store.agentPendingInteraction
+      : store.agentModelCall?.status === 'completed' && !store.agentPendingInteraction
         ? 'completed'
         : null
     void scrollToBottom()

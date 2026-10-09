@@ -37,10 +37,6 @@
 
     <div v-if="isExpanded" class="tool-params-expanded">
       <IndexingRuntimeCard v-if="progressState" :state="progressState" />
-      <FrameInspectionRuntimeCard
-        v-else-if="frameInspectionExecutionState"
-        :state="frameInspectionExecutionState"
-      />
       <pre>{{ formattedArgs }}</pre>
     </div>
   </div>
@@ -53,10 +49,8 @@ import { useAppI18n } from '@/core/composables/useI18n'
 import { IconComponents } from '@/constants/iconComponents'
 import type { ToolCallPart } from '../types'
 import IndexingRuntimeCard from './IndexingRuntimeCard.vue'
-import FrameInspectionRuntimeCard from './FrameInspectionRuntimeCard.vue'
 import { useReadMediaExecutionState } from '../composables/tools/readMedia'
 import { useSearchMediaExecutionState } from '../composables/tools/searchMedia'
-import { useFrameInspectionExecutionState } from '../composables/tools/inspectTimelineFrames'
 import { cancelToolExecution } from '../composables/tools/cancellation'
 
 const props = defineProps<{
@@ -69,30 +63,17 @@ const isExpanded = ref(false)
 const formattedArgs = computed(() => JSON.stringify(props.item.args || {}, null, 2))
 const readMediaExecutionState = useReadMediaExecutionState(props.item.tool_call_id)
 const searchMediaExecutionState = useSearchMediaExecutionState(props.item.tool_call_id)
-const frameInspectionExecutionState = useFrameInspectionExecutionState(props.item.tool_call_id)
 const progressState = computed(
   () => readMediaExecutionState.value ?? searchMediaExecutionState.value,
 )
-const hasProgressState = computed(
-  () => !!progressState.value || !!frameInspectionExecutionState.value,
-)
-const isProgressActive = computed(
-  () => progressState.value?.active ?? frameInspectionExecutionState.value?.active ?? false,
-)
+const hasProgressState = computed(() => !!progressState.value)
+const isProgressActive = computed(() => progressState.value?.active ?? false)
 
 const canCancelToolExecution = computed(() => {
   if (
     props.item.tool_name === 'read_media' &&
     !!readMediaExecutionState.value?.active &&
     !!readMediaExecutionState.value?.canCancel
-  ) {
-    return true
-  }
-
-  if (
-    props.item.tool_name === 'inspect_timeline_frames' &&
-    !!frameInspectionExecutionState.value?.active &&
-    !!frameInspectionExecutionState.value?.canCancel
   ) {
     return true
   }
@@ -138,11 +119,6 @@ const progressPercent = computed(() => {
     }
 
     return Math.max(12, Math.min(92, ratio * 100))
-  }
-
-  const frameInspectionState = frameInspectionExecutionState.value
-  if (frameInspectionState) {
-    return Math.max(0, Math.min(100, frameInspectionState.progress))
   }
 
   return 0

@@ -15,8 +15,6 @@
     "test:auth": "vitest run --config vitest.auth.config.ts",
     "test:task-progress": "vitest run --config vitest.task-progress.config.ts",
     "test:agent-socket": "vitest run --config vitest.agent.config.ts",
-    "generate:agent-tools": "python3 scripts/export-agent-tools.py",
-    "check:agent-tools": "python3 scripts/export-agent-tools.py --check",
     "test:transitions": "vitest run --config vitest.transitions.config.ts",
     "generate:model-manifest": "npm run download:music-analysis-models && npm run build:music-analysis-wasm && node scripts/generate-model-manifest.mjs",
     "assets:prepare": "node scripts/prepare-model-assets.mjs",

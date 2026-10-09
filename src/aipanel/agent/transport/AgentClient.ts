@@ -1,11 +1,11 @@
 // 单轮文本及工具协议，客户端与服务端必须使用同一版本。
-export const AGENT_PROTOCOL_VERSION = 'agent-tools-v1'
+export const AGENT_PROTOCOL_VERSION = 'agent-model-calls-v1'
 export type Acceptance = 'not_accepted' | 'accepted' | 'unknown'
 export class AgentClientError extends Error {
   /** 携带轮次 ID 与受理状态，便于界面区分未受理、已受理及结果未知。 */
   constructor(
     public readonly code: string,
-    public readonly turnId: string | undefined,
+    public readonly modelCallId: string | undefined,
     public readonly acceptance: Acceptance,
     message = code,
   ) {
@@ -41,12 +41,12 @@ export type ModelTool = {
   parameters: Record<string, unknown>
 }
 export type Completion = {
-  turnId: string
+  modelCallId: string
   message: AssistantMessage
   usage: { inputTokens: number; outputTokens: number; totalTokens: number } | null
 }
 export type StreamParams = {
-  turnId: string
+  modelCallId: string
   messages: ModelMessage[]
   tools?: ModelTool[]
   projectId: string
@@ -132,17 +132,17 @@ type ClientOptions = {
  * 1. client.stream(params, { signal }) 同步检查准入、复制请求、占用调用槽并准备
  *    队列与两个 Promise，通过 makeStream() 创建流对象，再启动 sendStart()。
  * 2. sendStart() -> ensureConnected()，复用已有连接或共享握手 Promise；连接就绪且
- *    本轮仍有效时 socket.send("turn.start")。
- * 3. 当前 WebSocket 的 message 监听器 -> receive()，校验协议版本及 turnId。
- *    turn.started 完成 call.started，使 await client.stream() 返回流对象；
+ *    本轮仍有效时 socket.send("model_call.start")。
+ * 3. 当前 WebSocket 的 message 监听器 -> receive()，校验协议版本及 modelCallId。
+ *    model_call.started 完成 call.started，使 await client.stream() 返回流对象；
  *    text.delta 写入 call.queue 并唤醒迭代器，提前到达的增量也会缓存在队列中。
  * 4. 调用方 for await 消费 makeStream() 的迭代器：队列有片段就 yield，未结束且没有
  *    片段时等待 receive() 唤醒；增量仅用于更新 draft，不作为最终成功结果。
- * 5. 合法 turn.completed 完成 call.final 并唤醒迭代器，release() 释放调用槽。
+ * 5. 合法 model_call.completed 完成 call.final 并唤醒迭代器，release() 释放调用槽。
  *    流排空队列后正常结束；output.finalCompletion() 读取同一 Promise 中的完整回复
  *    和 usage，不再发起模型调用。模块复核账号、工程及调用归属后提交完整结果。
  * 6. 失败、断线或取消通过 fail() 拒绝流与最终结果；signal 取消或提前退出迭代
- *    -> cancel()，已发送时发出 turn.cancel，保留槽位直到服务端终态或连接清理。
+ *    -> cancel()，已发送时发出 model_call.cancel，保留槽位直到服务端终态或连接清理。
  *    release() 只清理本轮资源，WS 继续复用；无活动调用时 scheduleIdle() 计时关闭。
  */
 export class AgentClient {
@@ -205,22 +205,23 @@ export class AgentClient {
   private error(code: string, call = this.active) {
     return new AgentClientError(
       code,
-      call?.params.turnId,
+      call?.params.modelCallId,
       call?.accepted ? 'accepted' : call?.sent ? 'unknown' : 'not_accepted',
     )
   }
 
   /**
    * 调用入口：同步占用槽位、复制参数，通过 makeStream() 准备增量消费和最终结果入口。
-   * sendStart() 按需连接并发送 turn.start；本函数只返回等待受理的 call.started.promise，
-   * receive() 收到 turn.started 后才交付流对象，完整结果由 finalCompletion() 单独读取。
+   * sendStart() 按需连接并发送 model_call.start；本函数只返回等待受理的 call.started.promise，
+   * receive() 收到 model_call.started 后才交付流对象，完整结果由 finalCompletion() 单独读取。
    */
   stream(params: StreamParams, options: { signal?: AbortSignal } = {}): Promise<CompletionStream> {
     // 在等待连接前同步拒绝并发调用，不建立隐式请求队列。
     if (this.state.status === 'disposed') throw this.error('CLIENT_DISPOSED')
-    if (this.active) throw new AgentClientError('MODEL_CALL_BUSY', params.turnId, 'not_accepted')
+    if (this.active)
+      throw new AgentClientError('MODEL_CALL_BUSY', params.modelCallId, 'not_accepted')
     if (options.signal?.aborted)
-      throw new AgentClientError('TURN_CANCELLED', params.turnId, 'not_accepted')
+      throw new AgentClientError('MODEL_CALL_CANCELLED', params.modelCallId, 'not_accepted')
     const snapshot = structuredClone(params)
     clearTimeout(this.idle)
     const call: Call = {
@@ -308,7 +309,7 @@ export class AgentClient {
   }
 
   /**
-   * 由 stream() 启动，先 ensureConnected() 等待连接，再核对槽位和取消状态后发送 turn.start。
+   * 由 stream() 启动，先 ensureConnected() 等待连接，再核对槽位和取消状态后发送 model_call.start。
    * 本轮队列和事件处理已准备好，受理和增量立即返回也不会丢失；发送异常由 stream() 收口。
    */
   private async sendStart(call: Call) {
@@ -317,9 +318,9 @@ export class AgentClient {
     const { params } = call
     // 发送前已安装轮次和缓冲区，受理事件与增量可能立即到达。
     const frame = JSON.stringify({
-      type: 'turn.start',
+      type: 'model_call.start',
       protocol_version: AGENT_PROTOCOL_VERSION,
-      turn_id: params.turnId,
+      model_call_id: params.modelCallId,
       project_id: params.projectId,
       messages: params.messages,
       tools: params.tools ?? [],
@@ -417,8 +418,8 @@ export class AgentClient {
   }
   /**
    * 由当前 WebSocket 的 message 监听器调用，校验版本及轮次，其他轮次事件直接忽略。
-   * turn.started -> 完成受理 Promise；text.delta -> 入队并唤醒 makeStream() 的迭代器；
-   * turn.completed -> 完成最终结果并 release()；失败终态 -> fail() 后 release()。
+   * model_call.started -> 完成受理 Promise；text.delta -> 入队并唤醒 makeStream() 的迭代器；
+   * model_call.completed -> 完成最终结果并 release()；失败终态 -> fail() 后 release()。
    * 协议异常关闭连接，明确身份失效另行通知模块；取消后的迟到成功只结束内部收口。
    */
   private receive(raw: unknown) {
@@ -440,14 +441,14 @@ export class AgentClient {
       this.close('PROTOCOL_VERSION_UNSUPPORTED')
       return
     }
-    if (v.type === 'identity.invalid' && v.turn_id === undefined) {
+    if (v.type === 'identity.invalid' && v.model_call_id === undefined) {
       this.identityInvalid()
       return
     }
     const call = this.active
-    if (!call || v.turn_id !== call.params.turnId) return
+    if (!call || v.model_call_id !== call.params.modelCallId) return
     switch (v.type) {
-      case 'turn.started':
+      case 'model_call.started':
         if (!call.sent) {
           this.close('PROTOCOL_INVALID')
           return
@@ -466,11 +467,11 @@ export class AgentClient {
           call.wake = undefined
         }
         return
-      case 'turn.completed': {
+      case 'model_call.completed': {
         const message = v.message as Record<string, unknown> | null
         const usage = v.usage as Record<string, unknown> | null
 
-        // 1. 必须先收到 turn.started，才能接受成功终态；消息须存在、角色为助手且正文为字符串。
+        // 1. 必须先收到 model_call.started，才能接受成功终态；消息须存在、角色为助手且正文为字符串。
         // 先检查这些基本条件，避免后续对缺失消息或非字符串正文调用 Object.keys / trim。
         const hasInvalidMessageShape =
           !call.accepted ||
@@ -535,7 +536,7 @@ export class AgentClient {
         if (!call.cancelled) {
           call.ended = true
           call.final.resolve({
-            turnId: call.params.turnId,
+            modelCallId: call.params.modelCallId,
             message: message as Completion['message'],
             usage: usage as Completion['usage'],
           })
@@ -549,11 +550,11 @@ export class AgentClient {
           this.close('PROTOCOL_INVALID')
           return
         }
-        this.fail(call, new AgentClientError(v.code, call.params.turnId, 'not_accepted'))
+        this.fail(call, new AgentClientError(v.code, call.params.modelCallId, 'not_accepted'))
         this.release(call)
         return
-      case 'turn.failed':
-      case 'turn.cancelled':
+      case 'model_call.failed':
+      case 'model_call.cancelled':
         if (!call.accepted || typeof v.code !== 'string') {
           this.close('PROTOCOL_INVALID')
           return
@@ -561,12 +562,12 @@ export class AgentClient {
         this.fail(call, this.error(v.code, call))
         this.release(call)
         return
-      case 'turn.status':
+      case 'model_call.status':
         if (
           v.duplicate === true ||
           ['completed', 'failed', 'cancelled', 'not_found'].includes(String(v.status))
         ) {
-          this.fail(call, this.error('TURN_ALREADY_EXISTS', call))
+          this.fail(call, this.error('MODEL_CALL_ALREADY_EXISTS', call))
           this.release(call)
         } else if (!['running', 'cancelling'].includes(String(v.status)))
           this.close('PROTOCOL_INVALID')
@@ -596,7 +597,7 @@ export class AgentClient {
   private cancel(call: Call) {
     if (this.active !== call || call.cancelled || call.ended) return
     call.cancelled = true
-    this.fail(call, this.error('TURN_CANCELLED', call))
+    this.fail(call, this.error('MODEL_CALL_CANCELLED', call))
     if (!call.sent) {
       this.release(call)
       return
@@ -604,9 +605,9 @@ export class AgentClient {
     try {
       this.socket?.send(
         JSON.stringify({
-          type: 'turn.cancel',
+          type: 'model_call.cancel',
           protocol_version: AGENT_PROTOCOL_VERSION,
-          turn_id: call.params.turnId,
+          model_call_id: call.params.modelCallId,
         }),
       )
     } catch {

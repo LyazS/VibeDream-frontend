@@ -20,32 +20,24 @@ import {
   type AgentMessage,
   ToolCallStatus,
   type ToolCallPart,
-  type SessionInteractionRecord,
   type InteractionSubmittedVia,
 } from '@/aipanel/agent/types'
 import { MODULE_NAMES, type ModuleMap, type ModuleRegistry } from './ModuleRegistry'
 
-/** 会话保存的消息；tool 消息供模型读取，用户和助手消息同时用于界面展示。 */
-type SessionMessage = Omit<AgentMessage, 'role'> & {
-  role: AgentMessageRole | 'tool'
-  toolCallId?: string
-  toolName?: string
-  interaction?: SessionInteractionRecord
-}
 /** 一次未完成工具执行的归属和提交状态；结果写入消息后从执行字典移除。 */
 export type ToolExecution = {
   userId: string
   projectId: string
   sessionId: string
-  turnId: string
-  // 工具结果提交和 UI 进度投影对应的助手消息，不依赖最近一次 turn。
+  modelCallId: string
+  // 工具结果提交和 UI 进度投影对应的助手消息，不依赖最近一次 modelCall。
   assistantMessageId: string
   call: ToolCall
-  status: 'pending' | 'completed' | 'failed'
+  status: 'pending' | 'completed' | 'failed' | 'cancelled'
   result: ToolResult | null
 }
-/** 一次模型调用的快照与终态；工具执行及后续调用不属于这一 turn。 */
-type Turn = {
+/** 一次模型调用的快照与终态；工具执行及后续调用不属于这一 modelCall。 */
+type ModelCall = {
   id: string
   status: 'running' | 'completed' | 'cancelled' | 'failed'
   sessionId: string
@@ -66,8 +58,8 @@ export type AgentSession = {
   projectId: string
   createdAt: string
   updatedAt: string
-  messages: SessionMessage[]
-  latestTurn: Turn | null
+  messages: AgentMessage[]
+  latestModelCall: ModelCall | null
   toolExecutions: Record<string, ToolExecution>
 }
 
@@ -87,7 +79,7 @@ export function createUnifiedAgentModule(registry: ModuleRegistry) {
   const enabled = import.meta.env.DEV || import.meta.env.MODE === 'preview'
   // 模块是否已最终释放；释放后即使工程和账户有效，也不能再发送。
   const disposed = ref(false)
-  // 新会话存储和当前账户/工程的内存索引；不使用旧 SessionManager。
+  // 会话存储和当前账户/工程的内存索引。
   const sessionStore = new AgentSessionStore()
   // 仅缓存当前账户工程分区；账户变化清空，IndexedDB 中其他分区仍保留。
   const sessions = ref<Record<string, AgentSession>>({})
@@ -117,7 +109,7 @@ export function createUnifiedAgentModule(registry: ModuleRegistry) {
   // 唯一对话记录：立即保存用户输入和助手增量，工具调用与结果成对写入；中断保留实际收到的文本。
   const currentMessages = computed(() => currentSession.value?.messages ?? [])
   // 当前或最近一次模型调用，保存归属、完整请求快照、终态结果和错误；正文只保存在消息列表。
-  const latestTurn = computed(() => currentSession.value?.latestTurn ?? null)
+  const latestModelCall = computed(() => currentSession.value?.latestModelCall ?? null)
   // 工程运行槽所属会话，空闲/等待问题时为 null，与当前展示 ID 相互独立。
   const activeSessionId = ref<string | null>(null)
   // 工程是否占用运行槽直接从归属 ID 推导，避免维护另一份开关状态。
@@ -137,7 +129,7 @@ export function createUnifiedAgentModule(registry: ModuleRegistry) {
       ? message.interaction.interrupt
       : null
   })
-  // 新适配器复用原工具执行器及撤销命令，不初始化旧会话编排。
+  // 工具运行时调用编辑器执行器及撤销命令。
   const toolRuntime = createToolRuntime()
   // 客户端连接状态的响应式镜像，供顶栏展示连接颜色及读取关闭原因。
   const connection = ref<ConnectionState>({
@@ -145,10 +137,10 @@ export function createUnifiedAgentModule(registry: ModuleRegistry) {
     closeReason: null,
     error: null,
   })
-  // 普通停止只取消模型和续轮；清理会话时也取消工具，避免把旧工程结果写入新会话。
+  // 模型和工具分别取消；停止会取消素材读取/检索，生命周期清理取消所有工具。
   let controller: { model: AbortController; tool: AbortController; sessionId: string } | undefined
 
-  // 按最近更新排序的历史摘要，全部由新会话数据生成，不访问旧会话服务。
+  // 从当前账户工程分区的会话生成按最近更新排序的历史摘要。
   const sessionHistory = computed(() =>
     Object.values(sessions.value)
       .filter((session) => session.messages.length)
@@ -160,7 +152,7 @@ export function createUnifiedAgentModule(registry: ModuleRegistry) {
           session.messages
             .filter((message) => message.role === AgentMessageRole.USER)
             .map((message) =>
-              getMessageTextParts(message as AgentMessage)
+              getMessageTextParts(message)
                 .map((part) => part.text)
                 .join(''),
             )[0] ?? '',
@@ -204,11 +196,7 @@ export function createUnifiedAgentModule(registry: ModuleRegistry) {
   )
 
   /** 将实际对话内容组装为带角色、时间和固定 ID 的消息，不包含运行或提交状态。 */
-  function buildDisplayMessage(
-    id: string,
-    role: SessionMessage['role'],
-    text: string,
-  ): SessionMessage {
+  function buildDisplayMessage(id: string, role: AgentMessage['role'], text: string): AgentMessage {
     return {
       id,
       role,
@@ -217,11 +205,11 @@ export function createUnifiedAgentModule(registry: ModuleRegistry) {
     }
   }
   /** 取得本轮唯一助手消息，首个增量或完整终态到达时才创建，后续始终更新同一个 ID。 */
-  function getAssistantMessage(session: AgentSession, turn: Turn): SessionMessage {
-    let message = session.messages.find((message) => message.id === turn.assistantMessageId)
+  function getAssistantMessage(session: AgentSession, modelCall: ModelCall): AgentMessage {
+    let message = session.messages.find((message) => message.id === modelCall.assistantMessageId)
     if (!message) {
       session.messages.push(
-        buildDisplayMessage(turn.assistantMessageId, AgentMessageRole.ASSISTANT, ''),
+        buildDisplayMessage(modelCall.assistantMessageId, AgentMessageRole.ASSISTANT, ''),
       )
       message = session.messages[session.messages.length - 1]!
     }
@@ -229,8 +217,8 @@ export function createUnifiedAgentModule(registry: ModuleRegistry) {
   }
 
   // UI 隐藏工具结果，仅从执行记录投影普通工具的待执行部件，实际消息历史始终没有未配对调用。
-  const displayMessages = computed<Array<SessionMessage & { role: AgentMessageRole }>>(
-    /** 把普通工具的运行状态投影给原 UI，不向 currentMessages 写入临时工具调用。 */ () => {
+  const displayMessages = computed(
+    /** 把普通工具的运行状态投影给 UI，不向 currentMessages 写入临时工具调用。 */ () => {
       return currentMessages.value
         .filter((message) => message.role !== 'tool')
         .map((message) => {
@@ -249,7 +237,6 @@ export function createUnifiedAgentModule(registry: ModuleRegistry) {
             : message.parts
           return {
             ...message,
-            role: message.role as AgentMessageRole,
             parts: execution
               ? [
                   ...parts,
@@ -267,9 +254,17 @@ export function createUnifiedAgentModule(registry: ModuleRegistry) {
     },
   )
 
-  /** 取消模型调用并阻止续轮，保留部分回复和问题；已开始的普通工具返回结果后再结束运行。 */
+  /** 停止续轮并取消素材读取/检索；其他已开始工具保存实际结果，保留部分回复和问题。 */
   function stop() {
-    if (controller?.sessionId === currentSessionId.value) controller.model.abort()
+    const control = controller
+    if (!control || control.sessionId !== currentSessionId.value) return
+    control.model.abort()
+    const cancellable = Object.values(toolExecutions.value).some(
+      (execution) =>
+        execution.status === 'pending' &&
+        (execution.call.name === 'read_media' || execution.call.name === 'search_media'),
+    )
+    if (cancellable) control.tool.abort()
   }
 
   /** 新建空白会话并切换展示；已有会话及运行继续保留，共享客户端不变。 */
@@ -283,7 +278,7 @@ export function createUnifiedAgentModule(registry: ModuleRegistry) {
       createdAt: now,
       updatedAt: now,
       messages: [],
-      latestTurn: null,
+      latestModelCall: null,
       toolExecutions: {},
     }
     currentSessionId.value = id
@@ -334,9 +329,8 @@ export function createUnifiedAgentModule(registry: ModuleRegistry) {
     const history: ModelMessage[] = []
     for (const message of session.messages) {
       // 只提取 TEXT 部件，逐段复制到 content 数组，保留原有顺序、边界、空格和换行。
-      // 图片、背景上下文、工具进度等部件不会在这里转成正文；当前协议只支持文本及工具消息。
-      // as AgentMessage 仅为复用文本筛选函数，不改变 tool 角色，也不会执行运行时类型校验。
-      const content = getMessageTextParts(message as AgentMessage).map((part) => ({
+      // 工具调用另行映射，进度和交互元数据不转成正文。
+      const content = getMessageTextParts(message).map((part) => ({
         type: 'text' as const,
         text: part.text,
       }))
@@ -378,7 +372,7 @@ export function createUnifiedAgentModule(registry: ModuleRegistry) {
           ],
         })
       } else if (content.some((part) => part.text.trim())) {
-        // 3. 普通用户/助手正文只要不是全空白就进入历史，不根据 turn 成功或中断状态过滤。
+        // 3. 普通用户/助手正文只要不是全空白就进入历史，不根据 modelCall 成功或中断状态过滤。
         // 所以失败前的用户输入、已经收到的部分助手回复都会进入用户下一次提交的请求。
         // 任意一段不是全空白就保留整条消息及全部文本部件；trim() 不修改实际发送的文本。
         history.push({ role: message.role, content })
@@ -396,7 +390,7 @@ export function createUnifiedAgentModule(registry: ModuleRegistry) {
   function commitToolResult(session: AgentSession, execution: ToolExecution, result: ToolResult) {
     // 同一执行记录已有结果就不再提交，避免重复追加工具调用和结果消息；失败结果也算已提交。
     if (execution.result) return
-    // 通过执行记录保存的助手消息 ID 定位原消息，不依赖 latestTurn，避免写到其他轮次的回复中。
+    // 通过执行记录保存的助手消息 ID 定位原消息，不依赖 latestModelCall，避免写到其他轮次的回复中。
     // 原助手消息不存在时无法构成调用与结果的配对，直接抛错，不修改执行记录和消息列表。
     const assistantIndex = session.messages.findIndex(
       (message) => message.id === execution.assistantMessageId,
@@ -445,15 +439,15 @@ export function createUnifiedAgentModule(registry: ModuleRegistry) {
   }
 
   /**
-   * 自动推进：实际消息历史 -> 单次模型调用 -> 保存正文 -> 执行工具 -> 成对保存结果 -> 新 turn。
+   * 自动推进：实际消息历史 -> 单次模型调用 -> 保存正文 -> 执行工具 -> 成对保存结果 -> 新 modelCall。
    * 用户输入和 ask_user 回答都已写入消息列表，不额外传入或重复追加；每轮使用新 ID 和请求快照。
    * 文本增量直接更新本轮唯一助手消息，中断保留已收到内容，只有完整终态才能启动工具。
-   * 普通停止取消模型并阻止续轮，已开始的工具仍保存实际结果；会话失效则取消工具并丢弃旧结果。
+   * 停止取消模型及素材读取/检索并丢弃其结果，其他已开始工具保存结果；会话失效丢弃全部迟到结果。
    * running 覆盖模型、普通工具和客户端取消收口；ask_user 保存问题后退出，不占运行槽等待回答。
    * 工具错误成对返回模型供下一轮修正；模型/传输异常停止，由用户输入新指令继续，不自动重试。
    */
   async function runLoop(session: AgentSession, answeredTool?: ToolExecution) {
-    // 先同步占用运行槽；模型与工具分别取消，普通停止不会丢掉已经开始的工具结果。
+    // 先同步占用运行槽；模型与工具分别取消，执行收口前不允许新运行并发。
     const control = {
       model: new AbortController(),
       tool: new AbortController(),
@@ -482,7 +476,7 @@ export function createUnifiedAgentModule(registry: ModuleRegistry) {
         if (!isRunCurrent()) return
         // 2. 从唯一消息记录生成快照，包括部分回复和已配对工具结果，不再额外追加首次输入。
         const request: StreamParams = {
-          turnId: crypto.randomUUID(),
+          modelCallId: crypto.randomUUID(),
           projectId,
           tools: JSON.parse(JSON.stringify(agentTools)) as StreamParams['tools'],
           messages: buildTextMessages(buildModelHistory(session), {
@@ -492,9 +486,9 @@ export function createUnifiedAgentModule(registry: ModuleRegistry) {
             selectedClipIds: [...selection.selectedClipTimelineItemIds.value],
           }),
         }
-        // 3. 新建 turn，记录用户消息或工具结果的输入 ID；助手消息按固定 ID 逐步保存。
-        session.latestTurn = {
-          id: request.turnId,
+        // 3. 新建 modelCall，记录用户消息或工具结果的输入 ID；助手消息按固定 ID 逐步保存。
+        session.latestModelCall = {
+          id: request.modelCallId,
           status: 'running',
           sessionId,
           userId,
@@ -505,14 +499,14 @@ export function createUnifiedAgentModule(registry: ModuleRegistry) {
           completion: null,
           error: null,
         }
-        const current = session.latestTurn
-        // 请求快照在调用前落盘，turn 与原会话关联；切换展示不会改变这一引用。
+        const current = session.latestModelCall
+        // 请求快照在调用前落盘，modelCall 与原会话关联；切换展示不会改变这一引用。
         await persistSession(session)
         if (!isRunCurrent()) return
         const output = await client.stream(request, { signal: control.model.signal })
         // 4. 增量写入同一条助手消息，停止也不删除；工具参数仍须等待完整终态再处理。
         for await (const chunk of output) {
-          if (!isRunCurrent() || session.latestTurn?.id !== current.id) break
+          if (!isRunCurrent() || session.latestModelCall?.id !== current.id) break
           if (!chunk.delta) continue
           const assistant = getAssistantMessage(session, current)
           const text = assistant.parts.find((part) => part.type === MessagePartType.TEXT)!
@@ -522,7 +516,7 @@ export function createUnifiedAgentModule(registry: ModuleRegistry) {
         }
         const completion = await output.finalCompletion()
         // 等待期间可能已经停止或删除原会话；展示切换不会使原运行失效。
-        if (!isRunCurrent() || session.latestTurn?.id !== current.id) return
+        if (!isRunCurrent() || session.latestModelCall?.id !== current.id) return
         const call = completion.message.tool_calls?.[0]
         // 5. 用完整终态校准正文，不另建消息或提前提交工具调用；模型完成不代表工具成功。
         const assistant = getAssistantMessage(session, current)
@@ -539,7 +533,7 @@ export function createUnifiedAgentModule(registry: ModuleRegistry) {
           userId,
           projectId,
           sessionId,
-          turnId: current.id,
+          modelCallId: current.id,
           assistantMessageId: assistant.id,
           call,
           status: 'pending',
@@ -559,7 +553,6 @@ export function createUnifiedAgentModule(registry: ModuleRegistry) {
             const question = call.args as { question: string; suggested_options: string[] }
             assistant.interaction = {
               interrupt: {
-                type: 'interactive_interrupt',
                 interaction_id: call.id,
                 kind: 'ask_user',
                 prompt: question.question,
@@ -574,34 +567,36 @@ export function createUnifiedAgentModule(registry: ModuleRegistry) {
           }
           // 普通工具使用原执行器；传入取消信号和实时归属检查，适配层在异步准备后再次复核。
           result = await toolRuntime.execute(call, {
+            toolCallId: call.id,
             userId,
             projectId,
             sessionId,
-            turnId: current.id,
+            modelCallId: current.id,
             signal: control.tool.signal,
             isCurrent: () => isRunOwned() && !control.tool.signal.aborted,
           })
         } catch (error) {
-          // 会话失效后不能写入；普通停止仍保存工具真实错误，但不再自动续轮。
+          // 会话失效后不能写入；其他工具的真实错误仍保存，素材工具取消在提交前统一检查。
           if (!isRunOwned()) return
           // 校验异常或执行异常转换为失败结果，保留错误正文；不重放原调用、不自动修改参数。
           const message = error instanceof Error ? error.message : String(error)
           result = { success: false, output: message, error: message }
         }
-        // 7. 工具结束后复核原会话归属，配对保存结果；普通停止/展示切换后仍记录，失效才丢弃。
+        // 7. 停止取消的素材工具不提交结果；其他工具复核归属后成对保存。
         if (!isRunOwned()) return
+        if (control.tool.signal.aborted) return
         commitToolResult(session, execution, result)
         // 内存只保留未完成执行；完成记录与消息对在同一事务中写入独立 ToolJournal。
         await persistSession(session, execution)
-        // 8. 回到 while 顶部；停止后不再进入下一轮，否则用新 turn 和结果继续，由模型决定修正或结束。
+        // 8. 回到 while 顶部；停止后不再进入下一轮，否则用新 modelCall 和结果继续，由模型决定修正或结束。
       }
     } catch (error) {
       // 外层处理模型/传输及循环本身的异常；工具异常已在内层转成结果，不会走到这里。
-      // 原会话已经删除或身份清理后，旧循环不能覆盖新运行的 turn 或消息。
+      // 原会话已经删除或身份清理后，旧循环不能覆盖新运行的 modelCall 或消息。
       if (sessions.value[sessionId] !== session || controller !== control) return
-      if (session.latestTurn) {
-        session.latestTurn.error = error instanceof Error ? error.message : String(error)
-        session.latestTurn.status = control.model.signal.aborted ? 'cancelled' : 'failed'
+      if (session.latestModelCall) {
+        session.latestModelCall.error = error instanceof Error ? error.message : String(error)
+        session.latestModelCall.status = control.model.signal.aborted ? 'cancelled' : 'failed'
       }
     } finally {
       // 本地取消消费后，客户端可能仍等待服务端终态；收口完成前保持运行槽占用。
@@ -609,17 +604,29 @@ export function createUnifiedAgentModule(registry: ModuleRegistry) {
         await client.waitForIdle()
       // 等待期间可能删除会话或切换身份，只清理仍由本次运行持有的状态；普通展示切换不影响。
       if (sessions.value[sessionId] === session && controller === control) {
-        if (session.latestTurn) {
-          if (session.latestTurn.status === 'running') session.latestTurn.status = 'cancelled'
+        // 被停止的素材工具以 cancelled 收口日志，不留下 pending 或未配对的模型历史。
+        const cancelledTool = control.tool.signal.aborted
+          ? Object.values(session.toolExecutions).find(
+              (execution) => execution.modelCallId === session.latestModelCall?.id,
+            )
+          : undefined
+        if (cancelledTool) {
+          cancelledTool.status = 'cancelled'
+          cancelledTool.result = null
+          delete session.toolExecutions[cancelledTool.assistantMessageId]
+        }
+        if (session.latestModelCall) {
+          if (session.latestModelCall.status === 'running')
+            session.latestModelCall.status = 'cancelled'
         }
         session.messages = session.messages.filter(
           (message) =>
-            message.id !== session.latestTurn?.assistantMessageId ||
+            message.id !== session.latestModelCall?.assistantMessageId ||
             message.interaction ||
             message.parts.some((part) => part.type !== MessagePartType.TEXT || part.text.trim()),
         )
         try {
-          await persistSession(session)
+          await persistSession(session, cancelledTool)
         } finally {
           // 保存期间也可能删除会话或切换身份，只释放仍由本循环持有的工程槽。
           if (controller === control) {
@@ -708,7 +715,8 @@ export function createUnifiedAgentModule(registry: ModuleRegistry) {
         if (!current) return
         for (const session of saved) {
           // 不恢复旧任务。普通工具遗留 pending 的异常恢复属于 3.4；ask_user 数据保持可回答。
-          if (session.latestTurn?.status === 'running') session.latestTurn.status = 'cancelled'
+          if (session.latestModelCall?.status === 'running')
+            session.latestModelCall.status = 'cancelled'
           sessions.value[session.id] = session
         }
         newChat()
@@ -753,7 +761,7 @@ export function createUnifiedAgentModule(registry: ModuleRegistry) {
     storageError: readonly(storageError),
     currentSessionId: readonly(currentSessionId),
     currentMessages: readonly(displayMessages),
-    latestTurn: readonly(latestTurn),
+    latestModelCall: readonly(latestModelCall),
     toolExecutions: readonly(toolExecutions),
     pendingInteraction: readonly(pendingInteraction),
     connection: readonly(connection),
