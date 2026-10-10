@@ -6,7 +6,7 @@ import { historyLabels, type HistoryLabel } from '@/core/modules/historyLabel'
 
 type DirectoryMutationResult =
   | { success: true; directory: VirtualDirectory }
-  | { success: false; error: string }
+  | { success: false; error: string; code?: string }
 
 interface DirectoryOperations {
   createDirectory(name: string, parentId: string | null): DirectoryMutationResult
@@ -24,16 +24,19 @@ interface DirectoryOperations {
     folderId: string,
     targetFolderId: string,
     targetIndex?: number,
-  ): { success: boolean; error?: string }
+  ): { success: boolean; error?: string; code?: string }
   getAssetDirectoryId(assetId: string): string | null
   moveAssetsAtomically(
     moves: Array<{ assetId: string; targetDirectoryId: string }>,
-  ): Promise<{ success: boolean; error?: string }>
+  ): Promise<{ success: boolean; error?: string; code?: string }>
 }
 
 interface MediaOperations {
   getAsset(assetId: string): { id: string; name: string } | undefined
-  renameAsset(assetId: string, name: string): Promise<{ success: boolean; error?: string }>
+  renameAsset(
+    assetId: string,
+    name: string,
+  ): Promise<{ success: boolean; error?: string; code?: string }>
 }
 
 function cloneDirectory(directory: VirtualDirectory): VirtualDirectory {
@@ -43,9 +46,14 @@ function cloneDirectory(directory: VirtualDirectory): VirtualDirectory {
   }
 }
 
-function requireSuccess(result: { success: boolean; error?: string }, fallback: string): void {
+function requireSuccess(
+  result: { success: boolean; error?: string; code?: string },
+  fallback: string,
+): void {
   if (!result.success) {
-    throw new HistoryPreconditionError(result.error || fallback)
+    throw Object.assign(new HistoryPreconditionError(result.error || fallback), {
+      toolCode: result.code === 'not_found' ? 'item_not_found' : result.code,
+    })
   }
 }
 
@@ -96,7 +104,9 @@ export class CreateDirectoryCommand extends LibraryCommandBase {
 
     const result = this.directoryModule.createDirectory(this.name, this.parentId)
     if (!result.success) {
-      throw new HistoryPreconditionError(result.error || '无法创建文件夹')
+      throw Object.assign(new HistoryPreconditionError(result.error || '无法创建文件夹'), {
+        toolCode: result.code === 'not_found' ? 'directory_not_found' : result.code,
+      })
     }
     this.directory = cloneDirectory(result.directory)
   }
@@ -232,12 +242,20 @@ export class DeleteEmptyDirectoryCommand extends LibraryCommandBase {
 
   async execute(): Promise<void> {
     const directory = this.directoryModule.getDirectory(this.directoryId)
-    if (
-      !directory ||
-      directory.parentId === null ||
-      !this.directoryModule.isDirectoryEmpty(this.directoryId)
-    ) {
-      throw new HistoryPreconditionError('文件夹不存在、为根目录或不为空，无法删除')
+    if (!directory) {
+      throw Object.assign(new HistoryPreconditionError('文件夹不存在，无法删除'), {
+        toolCode: 'directory_not_found',
+      })
+    }
+    if (directory.parentId === null) {
+      throw Object.assign(new HistoryPreconditionError('不能删除根目录'), {
+        toolCode: 'root_directory_protected',
+      })
+    }
+    if (!this.directoryModule.isDirectoryEmpty(this.directoryId)) {
+      throw Object.assign(new HistoryPreconditionError('文件夹不为空，无法删除'), {
+        toolCode: 'directory_not_empty',
+      })
     }
 
     if (this.snapshot === null) {
@@ -252,7 +270,9 @@ export class DeleteEmptyDirectoryCommand extends LibraryCommandBase {
       directory.name !== this.snapshot.name ||
       directory.type !== this.snapshot.type
     ) {
-      throw new HistoryPreconditionError('文件夹已被修改，无法重做删除')
+      throw Object.assign(new HistoryPreconditionError('文件夹已被修改，无法重做删除'), {
+        toolCode: 'state_mismatch',
+      })
     }
 
     requireSuccess(this.directoryModule.removeEmptyDirectory(this.directoryId), '无法删除空文件夹')
@@ -310,7 +330,7 @@ export class RenameAssetCommand extends LibraryCommandBase {
 }
 
 type MoveDescriptor =
-  | { type: 'directory'; id: string; sourceParentId: string; sourceIndex: number }
+  | { type: 'directory'; id: string; name: string; sourceParentId: string; sourceIndex: number }
   | { type: 'asset'; id: string; sourceParentId: string }
 
 export class MoveLibraryItemsCommand extends LibraryCommandBase {
@@ -354,6 +374,7 @@ export class MoveLibraryItemsCommand extends LibraryCommandBase {
         descriptors.push({
           type: 'directory',
           id: directory.id,
+          name: directory.name,
           sourceParentId: directory.parentId,
           sourceIndex,
         })
@@ -433,6 +454,39 @@ export class MoveLibraryItemsCommand extends LibraryCommandBase {
     }
   }
 
+  private restoreDirectories(
+    descriptors: Array<Extract<MoveDescriptor, { type: 'directory' }>>,
+    restored: Array<Extract<MoveDescriptor, { type: 'directory' }>> = [],
+  ): void {
+    const errors: string[] = []
+    // 同一父目录按原索引升序插回，避免多个同级文件夹恢复后顺序错乱。
+    const ordered = [...descriptors].sort((a, b) =>
+      a.sourceParentId === b.sourceParentId
+        ? a.sourceIndex - b.sourceIndex
+        : a.sourceParentId.localeCompare(b.sourceParentId),
+    )
+    for (const descriptor of ordered) {
+      try {
+        if (this.directoryModule.getDirectory(descriptor.id)?.parentId !== this.targetDirectoryId) {
+          throw new HistoryPreconditionError('文件夹位置已被修改或删除，无法恢复')
+        }
+        this.moveDirectories(
+          [descriptor],
+          () => descriptor.sourceParentId,
+          () => descriptor.sourceIndex,
+        )
+        restored.push(descriptor)
+      } catch (error) {
+        errors.push(error instanceof Error ? error.message : descriptor.id)
+      }
+    }
+    if (errors.length > 0) {
+      throw Object.assign(new HistoryPreconditionError('恢复文件夹失败：' + errors.join('；')), {
+        toolCode: 'rollback_failed',
+      })
+    }
+  }
+
   async execute(): Promise<void> {
     if (!this.directoryModule.getDirectory(this.targetDirectoryId)) {
       throw new HistoryPreconditionError('目标文件夹不存在')
@@ -448,6 +502,7 @@ export class MoveLibraryItemsCommand extends LibraryCommandBase {
         descriptor.type === 'directory',
     )
     const movedDirectories: Array<Extract<MoveDescriptor, { type: 'directory' }>> = []
+    let assetsMoved = false
 
     try {
       for (const descriptor of directoryDescriptors) {
@@ -455,12 +510,42 @@ export class MoveLibraryItemsCommand extends LibraryCommandBase {
         movedDirectories.push(descriptor)
       }
       await this.moveAssets(() => this.targetDirectoryId)
+      assetsMoved = true
+      if (
+        directoryDescriptors.some((descriptor) => {
+          const current = this.directoryModule.getDirectory(descriptor.id)
+          return current?.parentId !== this.targetDirectoryId || current.name !== descriptor.name
+        })
+      ) {
+        throw Object.assign(new HistoryPreconditionError('保存期间文件夹状态发生变化'), {
+          toolCode: 'state_mismatch',
+        })
+      }
     } catch (error) {
-      for (const descriptor of [...movedDirectories].reverse()) {
-        this.moveDirectories(
-          [descriptor],
-          () => descriptor.sourceParentId,
-          () => descriptor.sourceIndex,
+      // 素材已完成时，后续目录复核失败也需要恢复素材。
+      const rollbackErrors: string[] = []
+      if (assetsMoved) {
+        try {
+          await this.moveAssets((descriptor) => descriptor.sourceParentId)
+        } catch (rollbackError) {
+          rollbackErrors.push(
+            rollbackError instanceof Error ? rollbackError.message : '恢复素材失败',
+          )
+        }
+      }
+      try {
+        this.restoreDirectories(movedDirectories)
+      } catch (rollbackError) {
+        rollbackErrors.push(
+          rollbackError instanceof Error ? rollbackError.message : '恢复文件夹失败',
+        )
+      }
+      if (rollbackErrors.length > 0) {
+        throw Object.assign(
+          new HistoryPreconditionError('移动失败且回滚失败：' + rollbackErrors.join('；')),
+          {
+            toolCode: 'rollback_failed',
+          },
         )
       }
       throw error
@@ -479,14 +564,21 @@ export class MoveLibraryItemsCommand extends LibraryCommandBase {
     )
 
     await this.moveAssets((descriptor) => descriptor.sourceParentId)
+    const restoredDirectories: Array<Extract<MoveDescriptor, { type: 'directory' }>> = []
     try {
-      this.moveDirectories(
-        [...directoryDescriptors].reverse(),
-        (descriptor) => descriptor.sourceParentId,
-        (descriptor) => descriptor.sourceIndex,
-      )
+      this.restoreDirectories(directoryDescriptors, restoredDirectories)
     } catch (error) {
-      await this.moveAssets(() => this.targetDirectoryId)
+      try {
+        this.moveDirectories(restoredDirectories, () => this.targetDirectoryId)
+        await this.moveAssets(() => this.targetDirectoryId)
+      } catch (rollbackError) {
+        throw Object.assign(
+          new HistoryPreconditionError(
+            rollbackError instanceof Error ? rollbackError.message : '撤销失败且回滚失败',
+          ),
+          { toolCode: 'rollback_failed' },
+        )
+      }
       throw error
     }
   }

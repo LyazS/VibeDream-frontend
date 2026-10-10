@@ -5,13 +5,9 @@
 
 import { useUnifiedStore } from '@/core/unifiedStore'
 import type { UnifiedMediaItemData, UnifiedMediaIndexMetadata } from '@/core/mediaitem/types'
-import type { VirtualDirectory } from '@/core/directory/types'
 import type { ToolDefinition, ToolResult } from './types'
 import { buildToolError, buildToolSuccess } from './utils/result'
-import {
-  buildCanonicalDirectoryPath as buildCanonicalPath,
-  normalizeDirectoryPath,
-} from './libraryPath'
+import { buildCanonicalDirectoryPath } from './libraryPath'
 
 interface VirtualEntry {
   id: string
@@ -20,14 +16,11 @@ interface VirtualEntry {
   mediaItem?: UnifiedMediaItemData
 }
 
-interface ResolvedDirectoryPath {
-  dirId: string
-  canonicalPath: string
-}
-
 const FALLBACK_MEDIA_TAG = 'media'
 
-function getCompletedIndexingMetadata(mediaItem?: UnifiedMediaItemData): UnifiedMediaIndexMetadata | undefined {
+function getCompletedIndexingMetadata(
+  mediaItem?: UnifiedMediaItemData,
+): UnifiedMediaIndexMetadata | undefined {
   const indexing = mediaItem?.metadata?.indexing
   if (!indexing || indexing.indexStatus !== 'completed') {
     return undefined
@@ -74,146 +67,45 @@ function formatMediaEntry(entry: VirtualEntry): Record<string, unknown> {
   }
 }
 
-function resolveNamedPathToDirId(filePath: string): ResolvedDirectoryPath | null {
-  try {
-    const normalizedPath = normalizeDirectoryPath(filePath)
-    if (!normalizedPath) {
-      return null
-    }
-
-    const store = useUnifiedStore()
-    const directoriesMap = store.directories || new Map<string, VirtualDirectory>()
-    const rootDir = Array.from(directoriesMap.values()).find((dir) => dir.parentId === null)
-    if (!rootDir) {
-      return null
-    }
-
-    if (normalizedPath === '/') {
-      return { dirId: rootDir.id, canonicalPath: '/' }
-    }
-
-    const pathSegments = normalizedPath
-      .replace(/^\//, '')
-      .split('/')
-      .filter(Boolean)
-
-    let currentDir = rootDir
-    let resolvedPath = '/'
-
-    for (const segment of pathSegments) {
-      const childDir = currentDir.childDirIds
-        .map((childId) => directoriesMap.get(childId))
-        .filter((dir): dir is VirtualDirectory => dir !== undefined)
-        .find((dir) => dir.name === segment)
-
-      if (!childDir) {
-        return null
-      }
-
-      currentDir = childDir
-      resolvedPath = resolvedPath === '/' ? `/${segment}/` : `${resolvedPath}${segment}/`
-    }
-
-    return {
-      dirId: currentDir.id,
-      canonicalPath: resolvedPath,
-    }
-  } catch (error) {
-    console.error('resolveNamedPathToDirId error:', error)
-    return null
-  }
-}
-
-function explainPathResolutionFailure(filePath: string): { failedSegment: string | null; resolvedParentPath: string } {
-  const normalizedPath = normalizeDirectoryPath(filePath)
-  if (!normalizedPath || normalizedPath === '/') {
-    return { failedSegment: null, resolvedParentPath: '/' }
-  }
-
-  const store = useUnifiedStore()
-  const directoriesMap = store.directories || new Map<string, VirtualDirectory>()
-  const rootDir = Array.from(directoriesMap.values()).find((dir) => dir.parentId === null)
-  if (!rootDir) {
-    return { failedSegment: null, resolvedParentPath: '/' }
-  }
-
-  const pathSegments = normalizedPath
-    .replace(/^\//, '')
-    .split('/')
-    .filter(Boolean)
-
-  let currentDir = rootDir
-  const resolvedSegments: string[] = []
-
-  for (const segment of pathSegments) {
-    const childDir = currentDir.childDirIds
-      .map((childId) => directoriesMap.get(childId))
-      .filter((dir): dir is VirtualDirectory => dir !== undefined)
-      .find((dir) => dir.name === segment)
-
-    if (!childDir) {
-      return {
-        failedSegment: segment,
-        resolvedParentPath: resolvedSegments.length === 0 ? '/' : `/${resolvedSegments.join('/')}/`,
-      }
-    }
-
-    resolvedSegments.push(segment)
-    currentDir = childDir
-  }
-
-  return {
-    failedSegment: null,
-    resolvedParentPath: resolvedSegments.length === 0 ? '/' : `/${resolvedSegments.join('/')}/`,
-  }
-}
-
 function getDirectoryEntries(dirId: string): VirtualEntry[] {
-  try {
-    const store = useUnifiedStore()
-    const directoriesMap = store.directories || new Map()
-    const mediaItemsArray = store.getAllAssets ? store.getAllAssets() : store.mediaItems || []
-    const mediaItemsMap = new Map<string, UnifiedMediaItemData>(
-      mediaItemsArray
-        .filter(isUnifiedMediaItemData)
-        .map((item) => [item.id, item]),
-    )
+  const store = useUnifiedStore()
+  const directoriesMap = store.directories || new Map()
+  const mediaItemsArray = store.getAllAssets ? store.getAllAssets() : store.mediaItems || []
+  const mediaItemsMap = new Map<string, UnifiedMediaItemData>(
+    mediaItemsArray.filter(isUnifiedMediaItemData).map((item) => [item.id, item]),
+  )
 
-    const dir = directoriesMap.get(dirId)
-    if (!dir) {
-      return []
-    }
-
-    const entries: VirtualEntry[] = []
-
-    for (const childDirId of dir.childDirIds) {
-      const childDir = directoriesMap.get(childDirId)
-      if (childDir) {
-        entries.push({
-          id: childDirId,
-          name: childDir.name,
-          type: 'directory',
-        })
-      }
-    }
-
-    for (const mediaId of store.getAssetIdsInDirectory(dirId)) {
-      const media = mediaItemsMap.get(mediaId)
-      if (media) {
-        entries.push({
-          id: mediaId,
-          name: media.name,
-          type: 'asset',
-          mediaItem: media,
-        })
-      }
-    }
-
-    return entries
-  } catch (error) {
-    console.error('getDirectoryEntries error:', error)
+  const dir = directoriesMap.get(dirId)
+  if (!dir) {
     return []
   }
+
+  const entries: VirtualEntry[] = []
+
+  for (const childDirId of dir.childDirIds) {
+    const childDir = directoriesMap.get(childDirId)
+    if (childDir) {
+      entries.push({
+        id: childDirId,
+        name: childDir.name,
+        type: 'directory',
+      })
+    }
+  }
+
+  for (const mediaId of store.getAssetIdsInDirectory(dirId)) {
+    const media = mediaItemsMap.get(mediaId)
+    if (media) {
+      entries.push({
+        id: mediaId,
+        name: media.name,
+        type: 'asset',
+        mediaItem: media,
+      })
+    }
+  }
+
+  return entries
 }
 
 function logListMediaResult(result: ToolResult): ToolResult {
@@ -222,14 +114,14 @@ function logListMediaResult(result: ToolResult): ToolResult {
 }
 
 export async function executeListMedia(args: Record<string, unknown>): Promise<ToolResult> {
-  const filePath = args.filePath
+  const dirId = args.dirId
   const offset = args.offset ?? 1
   const limit = args.limit ?? 20
 
   try {
-    if (typeof filePath !== 'string' || !filePath.trim()) {
+    if (dirId !== undefined && (typeof dirId !== 'string' || !dirId.trim())) {
       return logListMediaResult(
-        buildToolError('list_media', 'invalid_arguments', 'filePath 是必填项，且必须是字符串。'),
+        buildToolError('list_media', 'invalid_arguments', 'dirId 必须是非空字符串。'),
       )
     }
 
@@ -245,38 +137,42 @@ export async function executeListMedia(args: Record<string, unknown>): Promise<T
       )
     }
 
-    const normalizedPath = normalizeDirectoryPath(filePath)
-    if (!normalizedPath) {
+    const store = useUnifiedStore()
+    const directory =
+      dirId === undefined
+        ? Array.from(store.directories.values()).find((dir) => dir.parentId === null)
+        : store.getDirectory(dirId)
+
+    if (!directory) {
       return logListMediaResult(
         buildToolError(
           'list_media',
-          'invalid_arguments',
-          `路径 ${filePath} 不是有效的目录路径。路径必须以 / 开头。`,
-          { filePath },
+          'directory_not_found',
+          dirId === undefined ? '未找到素材库根目录。' : `未找到目录 ${dirId}。`,
+          dirId === undefined ? undefined : { dirId },
         ),
       )
     }
 
-    const resolved = resolveNamedPathToDirId(normalizedPath)
-
-    if (!resolved) {
-      const resolution = explainPathResolutionFailure(normalizedPath)
+    const path = buildCanonicalDirectoryPath(directory.id)
+    if (path === null) {
       return logListMediaResult(
         buildToolError(
           'list_media',
-          'not_found',
-          `未找到路径 ${normalizedPath} 对应的目录。`,
-          {
-            filePath: normalizedPath,
-            failedSegment: resolution.failedSegment,
-            resolvedParentPath: resolution.resolvedParentPath,
-          },
+          'invalid_directory_structure',
+          '目录父级链存在循环或缺失，无法确定当前位置。',
+          { dirId: directory.id },
         ),
       )
     }
 
-    const entries = getDirectoryEntries(resolved.dirId)
-    entries.sort((a, b) => a.name.localeCompare(b.name, 'zh-CN'))
+    const entries = getDirectoryEntries(directory.id)
+    entries.sort(
+      (a, b) =>
+        a.name.localeCompare(b.name, 'zh-CN') ||
+        (a.type === b.type ? 0 : a.type === 'directory' ? -1 : 1) ||
+        (a.id < b.id ? -1 : a.id > b.id ? 1 : 0),
+    )
 
     const totalEntries = entries.length
     if (offset > totalEntries && totalEntries > 0) {
@@ -297,16 +193,19 @@ export async function executeListMedia(args: Record<string, unknown>): Promise<T
       entry.type === 'directory'
         ? {
             type: 'directory',
+            dirId: entry.id,
             name: entry.name,
           }
         : formatMediaEntry(entry),
     )
 
-    const canonicalPath = buildCanonicalPath(resolved.dirId) || resolved.canonicalPath
     const nextOffset = endIdx < totalEntries ? endIdx + 1 : null
     return logListMediaResult(
       buildToolSuccess('list_media', {
-        path: canonicalPath,
+        dirId: directory.id,
+        name: directory.name,
+        parentDirId: directory.parentId,
+        path,
         entries: normalizedEntries,
         page: {
           offset,

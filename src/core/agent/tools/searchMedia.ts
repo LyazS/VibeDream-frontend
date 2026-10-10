@@ -110,12 +110,12 @@ function getEvidence(item: RetrievalResultItem): string | null {
   return reason || null
 }
 
-function formatResult(item: RetrievalResultItem): Record<string, unknown> {
+function formatResult(item: RetrievalResultItem, mediaName: string): Record<string, unknown> {
   const validationResult = getValidationResult(item)
   return {
     type: item.media_kind,
     mediaId: item.media_item_id,
-    mediaName: item.media_name,
+    mediaName,
     verdict: validationResult?.verdict,
     segment: item.segment
       ? {
@@ -207,7 +207,12 @@ export async function executeSearchMedia(
     })
 
     checkCancelled()
-    const hasMissingValidation = results.some((item) => !item.validation_result)
+    const currentResults = results.flatMap((item) => {
+      const mediaItem = unifiedStore.getMediaItem(item.media_item_id)
+      return mediaItem ? [{ item, mediaName: mediaItem.name }] : []
+    })
+    const removedCount = results.length - currentResults.length
+    const hasMissingValidation = currentResults.some(({ item }) => !item.validation_result)
 
     if (error || hasMissingValidation) {
       return logSearchMediaResult(
@@ -218,7 +223,9 @@ export async function executeSearchMedia(
       )
     }
 
-    const normalizedResults = results.map(formatResult)
+    const normalizedResults = currentResults.map(({ item, mediaName }) =>
+      formatResult(item, mediaName),
+    )
     return logSearchMediaResult(
       buildToolSuccess(
         'search_media',
@@ -226,6 +233,9 @@ export async function executeSearchMedia(
           query,
           requestedTopK: topK,
           results: normalizedResults,
+          ...(removedCount > 0
+            ? { warning: `已剔除 ${removedCount} 个已删除素材的候选结果。` }
+            : {}),
         },
         `找到 ${normalizedResults.length} 个匹配素材。`,
       ),

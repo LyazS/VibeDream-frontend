@@ -1,5 +1,5 @@
 import { indexedDBService } from '@/core/storage/IndexedDBService'
-import type { AgentSession, ToolExecution } from '../types'
+import type { AgentSession, ModelCall, ToolExecution } from '../types'
 import { toolContractVersion } from './ToolRuntime'
 
 const stores = ['agentSessions', 'agentModelCalls', 'agentTools']
@@ -66,12 +66,42 @@ export class AgentSessionStore {
     await this.queue
     const db = await indexedDBService.openDB()
     return new Promise((resolve, reject) => {
-      const transaction = db.transaction('agentSessions', 'readonly')
+      const transaction = db.transaction(['agentSessions', 'agentModelCalls'], 'readonly')
+      let sessions: AgentSession[] = []
+      transaction.oncomplete = () => resolve(sessions)
+      transaction.onerror = transaction.onabort = () => reject(transaction.error)
       const request = transaction
         .objectStore('agentSessions')
         .index('owner')
         .getAll(this.owner(userId, projectId))
-      request.onsuccess = () => resolve(request.result.map((record) => record.data))
+      request.onsuccess = () => {
+        const byKey = new Map<string, AgentSession>()
+        sessions = request.result.map((record) => {
+          const session = record.data as AgentSession
+          session.usageRecords ??= {}
+          byKey.set(record.key, session)
+          return session
+        })
+        // 旧会话只有最新调用在会话快照中，从独立调用存储补齐每一轮的已知用量。
+        const calls = transaction
+          .objectStore('agentModelCalls')
+          .index('owner')
+          .openCursor(this.owner(userId, projectId))
+        calls.onsuccess = () => {
+          const cursor = calls.result
+          if (!cursor) return
+          const record = cursor.value as { sessionKey: string; modelCall: ModelCall }
+          const session = byKey.get(record.sessionKey)
+          if (session) {
+            session.usageRecords![record.modelCall.id] ??= {
+              usage: record.modelCall.completion?.usage ?? null,
+              chargedAmount: record.modelCall.completion?.chargedAmount ?? null,
+              contextWindowTokens: record.modelCall.completion?.contextWindowTokens,
+            }
+          }
+          cursor.continue()
+        }
+      }
       request.onerror = () => reject(request.error)
     })
   }

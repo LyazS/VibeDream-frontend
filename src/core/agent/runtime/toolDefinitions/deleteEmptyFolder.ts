@@ -13,39 +13,45 @@ Use When
 Do NOT Use When
 ---------------
 - 需要删除素材或非空文件夹；这些操作不属于此工具
-- 路径或当前状态不明确时；应先使用 list_media 或 ask_user
+- 目录身份或当前状态不明确时；应先使用 list_media、被动上下文或 ask_user
 
 Returns
 -------
-返回删除前快照、after: null 和历史记录描述。
+{
+  "tool": "delete_empty_folder",
+  "after": null
+}
+
+{
+  "tool": "delete_empty_folder",
+  "error": "<errorMessage>",
+  "code": "<errorCode>"
+}
+
+after: null 表示指定目录已删除，不重复返回已知 ID、名称、父目录或历史记录描述。
+目录不存在返回 directory_not_found，根目录返回 root_directory_protected，非空目录返回 directory_not_empty。
+dirId 必须来自实际读取结果、写工具结果或本轮工程上下文，不自行构造、缩写或补全。
+用户只给出路径时，从根目录逐层读取并选择目录 ID，必要时继续分页。同名目录按 ID 区分。
+
+Examples
+--------
+删除空文件夹：{"dirId":"dir_empty"}
 
 Limitations
 -----------
-不能删除根目录。目录必须没有直属素材且没有子文件夹；match 不一致或目录变为非空时不会执行。`,
+不能删除根目录。执行时目录必须没有直属媒体且没有子文件夹；目录变为非空时不会执行。
+按目录 ID 操作，目录及其祖先改名或移动后仍可删除，不要求名称或父目录匹配。
+只接受目录 ID，不能删除媒体或效果模板。`,
   parameters: {
     type: 'object',
     properties: {
-      path: {
+      dirId: {
         type: 'string',
-        description: '待删除空文件夹的完整规范路径。',
-      },
-      match: {
-        type: 'object',
-        properties: {
-          name: {
-            type: 'string',
-            description: '当前名称。必须与最近一次读取或被动上下文中的值完全一致。',
-          },
-          parentPath: {
-            type: 'string',
-            description: '当前父目录的规范路径。必须与最近一次读取或被动上下文中的值完全一致。',
-          },
-        },
-        required: ['name', 'parentPath'],
-        additionalProperties: false,
+        minLength: 1,
+        description: '待删除的空文件夹的完整原始 ID，填入读取结果中的 dirId。',
       },
     },
-    required: ['path', 'match'],
+    required: ['dirId'],
     additionalProperties: false,
   },
 }

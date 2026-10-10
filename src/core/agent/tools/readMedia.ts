@@ -130,11 +130,10 @@ function normalizeMediaIds(mediaIds: unknown): string[] {
     throw new Error(`Maximum ${MAX_MEDIA_IDS} media IDs per request`)
   }
 
-  const normalized = mediaIds.map((mediaId) => (typeof mediaId === 'string' ? mediaId.trim() : ''))
-  if (normalized.some((mediaId) => !mediaId)) {
+  if (mediaIds.some((mediaId) => typeof mediaId !== 'string' || !mediaId.trim())) {
     throw new Error('mediaIds must only contain non-empty strings')
   }
-  return normalized
+  return mediaIds
 }
 
 function getMediaItemOrSuggestion(mediaId: string, allMediaItems: UnifiedMediaItemData[]) {
@@ -452,7 +451,7 @@ function refreshControllers(
     }
 
     const indexStatus = getIndexStatus(mediaItem)
-    if (indexStatus === 'failed') {
+    if (indexStatus === 'failed' || controller.waitError !== undefined) {
       controller.itemStatus = 'failed'
       controller.failureReason = 'indexing_failed'
       controller.failureMessage = controller.waitError || '素材内容分析失败'

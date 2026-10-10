@@ -29,11 +29,13 @@ export function buildToolError(
   message: string,
   details?: Record<string, unknown>,
 ): ToolResult {
-  void code
-  void details
   return {
     success: false,
-    output: JSON.stringify({ tool, error: message }, null, 2),
+    output: JSON.stringify(
+      { tool, error: message, code, ...(details ? { details } : {}) },
+      null,
+      2,
+    ),
     error: message,
   }
 }

@@ -266,27 +266,41 @@ export function createUnifiedMediaModule(registry: ModuleRegistry) {
   async function renameAsset(
     assetId: string,
     newName: string,
-  ): Promise<{ success: boolean; error?: string }> {
+  ): Promise<{ success: boolean; error?: string; code?: string }> {
     const asset = getAsset(assetId)
     if (!asset) {
-      return { success: false, error: '素材不存在' }
+      return { success: false, error: '素材不存在', code: 'item_not_found' }
     }
 
     const normalizedName = newName.trim()
     if (!normalizedName) {
-      return { success: false, error: '素材名称不能为空' }
+      return { success: false, error: '素材名称不能为空', code: 'invalid_name' }
     }
 
     const previousName = asset.name
     asset.name = normalizedName
-    const persisted = await globalMetaFileManager.saveMetaFile(asset)
+    const persisted = await globalMetaFileManager.saveMetaFile(asset).catch(() => false)
     if (persisted) {
       return { success: true }
     }
 
+    if (getAsset(assetId) !== asset || asset.name !== normalizedName) {
+      return {
+        success: false,
+        error: '保存素材名称失败，素材已变化，无法回滚',
+        code: 'rollback_failed',
+      }
+    }
+
     asset.name = previousName
-    await globalMetaFileManager.saveMetaFile(asset)
-    return { success: false, error: '保存素材名称失败，已恢复原名称' }
+    const rolledBack = await globalMetaFileManager.saveMetaFile(asset).catch(() => false)
+    return rolledBack
+      ? { success: false, error: '保存素材名称失败，已恢复原名称', code: 'persistence_failed' }
+      : {
+          success: false,
+          error: '保存素材名称失败，内存名称已恢复，但 Meta 回滚失败',
+          code: 'rollback_failed',
+        }
   }
 
   /**

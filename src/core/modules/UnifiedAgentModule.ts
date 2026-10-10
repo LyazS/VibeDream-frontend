@@ -4,6 +4,7 @@ import { FRAME_RATE } from '@/constants/TimeConstants'
 import { buildTextMessages } from '@/core/agent/prompts/textMessages'
 import { agentTools, createToolRuntime } from '@/core/agent/runtime/ToolRuntime'
 import { AgentSessionStore } from '@/core/agent/runtime/AgentSessionStore'
+import { getAgentContextUsage, summarizeAgentUsage } from '@/core/agent/runtime/AgentUsage'
 import { AgentTelemetry, newLogSource } from '@/core/agent/runtime/AgentTelemetry'
 import { toolLogMetadata } from '@/core/agent/telemetry/agent-log'
 import type { ToolResult } from '@/core/agent/tools/types'
@@ -76,6 +77,13 @@ export function createUnifiedAgentModule(registry: ModuleRegistry) {
   const currentMessages = computed(() => currentSession.value?.messages ?? [])
   // 当前或最近一次模型调用，保存归属、完整请求快照、终态结果和错误；正文只保存在消息列表。
   const latestModelCall = computed(() => currentSession.value?.latestModelCall ?? null)
+  const usage = computed(() => summarizeAgentUsage(currentSession.value?.usageRecords ?? {}))
+  const contextUsage = computed(() =>
+    getAgentContextUsage(
+      currentSession.value?.usageRecords ?? {},
+      currentSession.value?.latestModelCall?.id,
+    ),
+  )
   // 工程运行槽所属会话，空闲/等待问题时为 null，与当前展示 ID 相互独立。
   const activeSessionId = ref<string | null>(null)
   // 工程是否占用运行槽直接从归属 ID 推导，避免维护另一份开关状态。
@@ -145,6 +153,19 @@ export function createUnifiedAgentModule(registry: ModuleRegistry) {
 
   // 模块唯一持有的工程级客户端，跨轮次和面板显隐复用，模块释放时销毁。
   const client = new AgentClient({
+    onSettlement: (modelCallId, record) => {
+      const session = Object.values(sessions.value).find((session) =>
+        Object.prototype.hasOwnProperty.call(session.usageRecords ?? {}, modelCallId),
+      )
+      if (
+        !session ||
+        session.userId !== user.currentUser.value?.id ||
+        session.projectId !== config.projectId.value
+      )
+        return
+      session.usageRecords![modelCallId] = record
+      void persistSession(session).catch(() => {})
+    },
     /** 连接前检查发送条件，并按当前工程生成 WebSocket 地址。 */
     url: () => {
       if (!ready.value) throw new Error('PROJECT_NOT_READY')
@@ -245,6 +266,7 @@ export function createUnifiedAgentModule(registry: ModuleRegistry) {
       updatedAt: now,
       messages: [],
       latestModelCall: null,
+      usageRecords: {},
       toolExecutions: {},
     }
     currentSessionId.value = id
@@ -505,6 +527,8 @@ export function createUnifiedAgentModule(registry: ModuleRegistry) {
           error: null,
         }
         const current = session.latestModelCall
+        session.usageRecords ??= {}
+        session.usageRecords[current.id] = { usage: null, chargedAmount: null }
         // 调用前记录实际请求输入，并把同一日志身份交给服务端关联供应商请求。
         const logIdentity = await telemetry.record(
           session,
@@ -539,6 +563,11 @@ export function createUnifiedAgentModule(registry: ModuleRegistry) {
         const assistant = getAssistantMessage(session, current)
         assistant.parts = [{ type: MessagePartType.TEXT, text: completion.message.content }]
         current.completion = completion
+        session.usageRecords[current.id] = {
+          usage: completion.usage,
+          chargedAmount: completion.chargedAmount ?? null,
+          contextWindowTokens: completion.contextWindowTokens,
+        }
         current.status = 'completed'
         // 完成信息更新原模型节点；交互工具的分类只用于日志展示，不改变调用参数。
         await telemetry.finish(session, current.id, {
@@ -867,6 +896,8 @@ export function createUnifiedAgentModule(registry: ModuleRegistry) {
     currentSessionId: readonly(currentSessionId),
     currentMessages: readonly(displayMessages),
     latestModelCall: readonly(latestModelCall),
+    usage: readonly(usage),
+    contextUsage: readonly(contextUsage),
     toolExecutions: readonly(toolExecutions),
     pendingInteraction: readonly(pendingInteraction),
     connection: readonly(connection),

@@ -1,4 +1,5 @@
 import type { LogIdentity } from '../telemetry/agent-log'
+import type { AgentTokenUsage, AgentUsageRecord } from '../runtime/AgentUsage'
 // 单轮文本及工具协议，客户端与服务端必须使用同一版本。
 export const AGENT_PROTOCOL_VERSION = 'agent-model-calls-v1'
 export type Acceptance = 'not_accepted' | 'accepted' | 'unknown'
@@ -44,7 +45,9 @@ export type ModelTool = {
 export type Completion = {
   modelCallId: string
   message: AssistantMessage
-  usage: { inputTokens: number; outputTokens: number; totalTokens: number } | null
+  usage: AgentTokenUsage | null
+  chargedAmount?: string | null
+  contextWindowTokens?: number
 }
 export type StreamParams = {
   /** 关联浏览器与服务端日志的身份；本地日志不可用时仍允许正常发起模型调用。 */
@@ -110,6 +113,8 @@ type Call = {
   cancelTimeout?: ReturnType<typeof setTimeout>
 }
 type ClientOptions = {
+  /** 终态结算独立于正文消费；用户取消后仍记录服务端确认的费用。 */
+  onSettlement?: (modelCallId: string, record: AgentUsageRecord) => void
   /** 按需取得当前工程连接地址，避免固定使用旧工程 ID。 */
   url: () => string
   /** 可注入的连接工厂，测试时替换为受控 WebSocket。 */
@@ -519,30 +524,35 @@ export class AgentClient {
 
         // 5. usage 可以显式为 null；否则三个 token 数都必须是非负安全整数，且总量等于输入加输出。
         // undefined（遗漏 usage）、缺字段、负数、小数及总量不一致都会被拒绝。
-        const hasInvalidUsage =
-          usage !== null &&
-          (!usage ||
-            !['inputTokens', 'outputTokens', 'totalTokens'].every(
-              (key) => Number.isSafeInteger(usage[key]) && Number(usage[key]) >= 0,
-            ) ||
-            Number(usage.totalTokens) !== Number(usage.inputTokens) + Number(usage.outputTokens))
+        const hasInvalidUsage = usage === undefined || !this.validTerminalUsage(usage)
+
+        const hasInvalidCharge =
+          !this.validCharge(v.chargedAmount) || !this.validContextWindow(v.contextWindowTokens)
 
         // 任一校验失败都关闭连接并拒绝当前调用，不把异常终态提交为成功回复。
         if (
           isEmptyMessage ||
           hasInvalidToolCalls ||
           hasUnexpectedMessageFields ||
-          hasInvalidUsage
+          hasInvalidUsage ||
+          hasInvalidCharge
         ) {
           this.close('PROTOCOL_INVALID')
           return
         }
+        this.options.onSettlement?.(call.params.modelCallId, {
+          usage: usage as Completion['usage'],
+          chargedAmount: (v.chargedAmount as string | null | undefined) ?? null,
+          contextWindowTokens: v.contextWindowTokens as number | undefined,
+        })
         if (!call.cancelled) {
           call.ended = true
           call.final.resolve({
             modelCallId: call.params.modelCallId,
             message: message as Completion['message'],
             usage: usage as Completion['usage'],
+            chargedAmount: (v.chargedAmount as string | null | undefined) ?? null,
+            contextWindowTokens: v.contextWindowTokens as number | undefined,
           })
           call.wake?.()
         }
@@ -554,15 +564,30 @@ export class AgentClient {
           this.close('PROTOCOL_INVALID')
           return
         }
+        this.options.onSettlement?.(call.params.modelCallId, {
+          usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0, cachedInputTokens: 0 },
+          chargedAmount: '0',
+        })
         this.fail(call, new AgentClientError(v.code, call.params.modelCallId, 'not_accepted'))
         this.release(call)
         return
       case 'model_call.failed':
       case 'model_call.cancelled':
-        if (!call.accepted || typeof v.code !== 'string') {
+        if (
+          !call.accepted ||
+          typeof v.code !== 'string' ||
+          !this.validCharge(v.chargedAmount) ||
+          !this.validContextWindow(v.contextWindowTokens) ||
+          !this.validTerminalUsage(v.usage)
+        ) {
           this.close('PROTOCOL_INVALID')
           return
         }
+        this.options.onSettlement?.(call.params.modelCallId, {
+          usage: (v.usage as AgentTokenUsage | null | undefined) ?? null,
+          chargedAmount: (v.chargedAmount as string | null | undefined) ?? null,
+          contextWindowTokens: v.contextWindowTokens as number | undefined,
+        })
         this.fail(call, this.error(v.code, call))
         this.release(call)
         return
@@ -579,6 +604,34 @@ export class AgentClient {
       default:
         this.close('PROTOCOL_INVALID')
     }
+  }
+
+  private validCharge(value: unknown) {
+    return (
+      value === undefined ||
+      value === null ||
+      (typeof value === 'string' && /^(?:0|[1-9]\d*)(?:\.\d{1,8})?$/.test(value))
+    )
+  }
+
+  private validContextWindow(value: unknown) {
+    return value === undefined || (Number.isSafeInteger(value) && Number(value) > 0)
+  }
+
+  private validTerminalUsage(value: unknown) {
+    if (value === undefined || value === null) return true
+    if (typeof value !== 'object' || Array.isArray(value)) return false
+    const usage = value as Record<string, unknown>
+    return (
+      ['inputTokens', 'outputTokens', 'totalTokens'].every(
+        (key) => Number.isSafeInteger(usage[key]) && Number(usage[key]) >= 0,
+      ) &&
+      Number(usage.totalTokens) === Number(usage.inputTokens) + Number(usage.outputTokens) &&
+      (usage.cachedInputTokens === undefined ||
+        (Number.isSafeInteger(usage.cachedInputTokens) &&
+          Number(usage.cachedInputTokens) >= 0 &&
+          Number(usage.cachedInputTokens) <= Number(usage.inputTokens)))
+    )
   }
 
   /** 关闭失效身份的连接，并通知业务模块阻止后续调用。 */

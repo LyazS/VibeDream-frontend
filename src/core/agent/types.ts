@@ -1,5 +1,6 @@
 import type { Completion, StreamParams, ToolCall } from './transport/AgentClient'
 import type { ToolResult } from './tools/types'
+import type { AgentUsageRecord } from './runtime/AgentUsage'
 
 export enum AgentMessageRole {
   USER = 'user',
@@ -119,6 +120,7 @@ export type AgentSession = {
   updatedAt: string
   messages: AgentMessage[]
   latestModelCall: ModelCall | null
+  usageRecords?: Record<string, AgentUsageRecord>
   toolExecutions: Record<string, ToolExecution>
 }
 

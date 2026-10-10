@@ -22,11 +22,15 @@ Returns
 --------
 {
   "tool": "list_media",                   // 工具名
+  "dirId": "<dirId>",                     // 当前目录完整 ID，也是 entries 的共同父目录 ID
+  "name": "<directoryName>",              // 当前目录名称
+  "parentDirId": "<parentDirId>",         // 当前目录的直接父目录 ID；根目录为 null
   "path": "<path>",                       // 当前返回结果对应的规范目录路径
   "entries": [
     {
       "type": "directory",                // 目录条目
-      "name": "<directoryName>"           // 目录名；可继续拼接到路径中做下一次 list_media
+      "dirId": "<childDirId>",             // 下一次 list_media 使用此完整 ID 进入目录
+      "name": "<directoryName>"           // 目录名
     },
     {
       "type": "media",                    // 素材条目
@@ -47,19 +51,31 @@ Returns
 
 {
   "tool": "list_media",                   // 工具名
-  "error": "<errorMessage>"               // 错误说明
+  "error": "<errorMessage>",              // 错误说明
+  "code": "<errorCode>",                  // 错误码
+  "details": {}                           // 可选；辅助判断失败原因
 }
+
+dirId 必须来自实际读取结果或本轮工程上下文，不自行构造、缩写或补全。
+path 仅用于理解位置；用户只给出路径时，从根目录逐层读取并选择目录 ID，必要时继续分页。
+显式提供不存在的目录 ID 会失败，不会退回根目录。同名目录按 ID 区分。
+分页按名称、类型和 ID 排序；分页期间内容变化仍可能造成跳项。
+
+Examples
+--------
+浏览根目录：{}
+进入已知目录或翻页：{"dirId":"dir_videos","offset":1,"limit":20}
 
 Limitations
 -----------
-只返回当前目录直接子项，不递归。`,
+只返回当前目录直接子项，不递归。省略 dirId 表示素材库根目录，与当前 UI 目录无关。`,
   parameters: {
     type: 'object',
     properties: {
-      filePath: {
+      dirId: {
         type: 'string',
-        description:
-          "要浏览的素材目录名称路径。必须以 '/' 开头，例如 '/'、'/视频/'、'/角色/张三/'。可直接使用用户指定的目录，或基于上一次 list_media 返回的 directory name 继续拼接。",
+        minLength: 1,
+        description: '要浏览的目录 ID；省略时浏览素材库根目录。',
       },
       offset: {
         type: 'integer',
@@ -73,7 +89,7 @@ Limitations
         minimum: 1,
       },
     },
-    required: ['filePath'],
+    required: [],
     additionalProperties: false,
   },
 }

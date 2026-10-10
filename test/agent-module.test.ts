@@ -8,6 +8,7 @@ import { createUnifiedAgentModule } from '../src/core/modules/UnifiedAgentModule
 import type { Completion, StreamParams } from '../src/core/agent/transport/AgentClient'
 import { createToolRuntime, agentTools } from '../src/core/agent/runtime/ToolRuntime'
 import { MessagePartType, type AgentMessagePart } from '../src/core/agent/types'
+import type { AgentUsageRecord } from '../src/core/agent/runtime/AgentUsage'
 
 const transport = vi.hoisted(() => ({
   calls: vi.fn(),
@@ -16,13 +17,15 @@ const transport = vi.hoisted(() => ({
   created: vi.fn(),
   identity: undefined as (() => void) | undefined,
   idle: vi.fn(),
+  settlement: undefined as ((id: string, record: AgentUsageRecord) => void) | undefined,
 }))
 const toolExecution = vi.hoisted(() => vi.fn())
 vi.mock('../src/core/agent/tools', () => ({ executeTool: toolExecution }))
 vi.mock('../src/core/agent/transport/AgentClient', () => ({
   AgentClient: class {
-    constructor() {
+    constructor(options: { onSettlement: typeof transport.settlement }) {
       transport.created()
+      transport.settlement = options.onSettlement
     }
     stream = transport.calls
     close = transport.close
@@ -101,6 +104,108 @@ afterEach(() => {
 })
 
 describe('persisted Agent sessions', () => {
+  it('persists cumulative usage once per call and isolates the selected session', async () => {
+    const usage = { inputTokens: 10, outputTokens: 2, totalTokens: 12, cachedInputTokens: 8 }
+    transport.calls.mockImplementation(async (request: StreamParams) => {
+      const record = { usage, chargedAmount: '0.00000001', contextWindowTokens: 1000000 }
+      transport.settlement?.(request.modelCallId, record)
+      transport.settlement?.(request.modelCallId, record)
+      return output(
+        request,
+        Promise.resolve({
+          modelCallId: request.modelCallId,
+          message: { role: 'assistant', content: 'reply' },
+          ...record,
+        }),
+      )
+    })
+    await agent.send('first')
+    await agent.send('second')
+    expect(agent.usage.value.inputTokens).toEqual({ value: 20, complete: true })
+    expect(agent.usage.value.chargedAmount).toEqual({ value: '0.00000002', complete: true })
+    const id = agent.currentSessionId.value
+    agent.newChat()
+    expect(agent.usage.value.inputTokens.value).toBe(0)
+    scope.stop()
+    mountAgent()
+    await vi.waitFor(() => expect(agent.ready.value).toBe(true))
+    agent.selectSession(id)
+    expect(agent.usage.value.inputTokens.value).toBe(20)
+    expect(agent.usage.value.chargedAmount.value).toBe('0.00000002')
+    expect(agent.contextUsage.value).toEqual({
+      usedTokens: 12,
+      limitTokens: 1000000,
+      ratio: 0.000012,
+    })
+  })
+
+  it('backfills all historical calls without treating absent charges or cache as zero', async () => {
+    transport.calls.mockImplementation(async (request: StreamParams) =>
+      output(
+        request,
+        Promise.resolve({
+          modelCallId: request.modelCallId,
+          message: { role: 'assistant', content: 'old reply' },
+          usage: { inputTokens: 10, outputTokens: 2, totalTokens: 12 },
+        }),
+      ),
+    )
+    await agent.send('first')
+    await agent.send('second')
+    const store = new AgentSessionStore()
+    const session = (await store.load('u1', 'p1'))[0]
+    delete session.usageRecords
+    await store.save(session)
+    scope.stop()
+    mountAgent()
+    await vi.waitFor(() => expect(agent.ready.value).toBe(true))
+    agent.selectSession(session.id)
+    expect(agent.usage.value.inputTokens).toEqual({ value: 20, complete: true })
+    expect(agent.usage.value.cachedInputTokens).toEqual({ value: null, complete: false })
+    expect(agent.usage.value.chargedAmount).toEqual({ value: null, complete: false })
+  })
+
+  it('records a late cancellation settlement on its original session and preserves it on reload', async () => {
+    transport.calls.mockImplementationOnce(
+      async (request: StreamParams, options: { signal: AbortSignal }) => {
+        const final = new Promise<Completion>((_resolve, reject) => {
+          options.signal.addEventListener('abort', () => reject(new Error('cancelled')))
+        })
+        // 与真实客户端一致，在消费者取得 finalCompletion 前接住取消拒绝。
+        void final.catch(() => {})
+        return output(request, final)
+      },
+    )
+    const id = agent.currentSessionId.value
+    const run = agent.send('cancel this request')
+    await vi.waitFor(() => expect(transport.calls).toHaveBeenCalledOnce())
+    const modelCallId = agent.latestModelCall.value!.id
+    agent.stop()
+    await run
+    agent.newChat()
+    const record = {
+      usage: { inputTokens: 10, outputTokens: 2, totalTokens: 12, cachedInputTokens: 8 },
+      chargedAmount: '0.0000156',
+    }
+    transport.settlement?.(modelCallId, record)
+    transport.settlement?.(modelCallId, record)
+    expect(agent.usage.value.inputTokens.value).toBe(0)
+    await vi.waitFor(async () => {
+      const sessions = await new AgentSessionStore().load('u1', 'p1')
+      expect(sessions.find((session) => session.id === id)?.usageRecords?.[modelCallId]).toEqual(
+        record,
+      )
+    })
+    scope.stop()
+    mountAgent()
+    await vi.waitFor(() => expect(agent.ready.value).toBe(true))
+    agent.selectSession(id)
+    expect(agent.usage.value.chargedAmount).toEqual({ value: '0.0000156', complete: true })
+    user.currentUser.value = { id: 'another-user', balance: '0' }
+    transport.settlement?.(modelCallId, record)
+    expect(agent.usage.value.inputTokens.value).toBe(0)
+  })
+
   it('rejects deleting an active model session even while viewing another session', async () => {
     let finish!: (value: Completion) => void
     transport.calls.mockImplementationOnce(async (request: StreamParams) =>

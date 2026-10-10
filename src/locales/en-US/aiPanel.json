@@ -2,6 +2,18 @@
   "aiPanel": {
     "aiGenerate": "AI Generate",
     "agent": "Agent",
+    "usage": {
+      "label": "Token usage and cost",
+      "session": "Session total",
+      "context": "Context utilization",
+      "contextTokens": "Context usage",
+      "unknown": "Not yet measured",
+      "input": "Input tokens",
+      "output": "Output tokens",
+      "cached": "Cached input tokens",
+      "cost": "Cost",
+      "incomplete": "Some usage is unavailable; known totals are shown"
+    },
     "tools": {
       "unknown": "Unknown Tool",
       "ask_user": "Ask User",

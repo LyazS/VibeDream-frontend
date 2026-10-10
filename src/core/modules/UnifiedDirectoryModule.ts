@@ -14,13 +14,13 @@ import type {
   DirectoryCreateOptions,
 } from '@/core/directory/types'
 import { BASE_DIRECTORY_TYPE } from '@/core/directory/types'
-import {
-  AssetLocationIndex,
-  persistAssetDirectoryMove,
-} from '@/core/directory/AssetLocationIndex'
+import { isMediaAsset } from '@/core/asset/types'
+import { AssetLocationIndex } from '@/core/directory/AssetLocationIndex'
 import { ModuleRegistry, MODULE_NAMES } from './ModuleRegistry'
 import type { UnifiedMediaModule } from './UnifiedMediaModule'
 import { globalMetaFileManager } from '@/core/managers/media/globalMetaFileManager'
+
+type MoveMutationResult = { success: boolean; error?: string; code?: string }
 
 /**
  * 统一目录模块（简化版）
@@ -77,7 +77,14 @@ export function createUnifiedDirectoryModule(registry: ModuleRegistry) {
     return directories.value.get(activeTab.value.dirId) || null
   })
 
-  type DirectoryMutationErrorCode = 'invalid_name' | 'duplicate_name' | 'not_found'
+  type DirectoryMutationErrorCode =
+    | 'invalid_name'
+    | 'duplicate_name'
+    | 'not_found'
+    | 'directory_not_found'
+    | 'root_directory_protected'
+    | 'directory_not_empty'
+    | 'invalid_directory_structure'
   type DirectoryMutationResult =
     | { success: true; directory: VirtualDirectory }
     | { success: false; error: string; code: DirectoryMutationErrorCode }
@@ -259,7 +266,15 @@ export function createUnifiedDirectoryModule(registry: ModuleRegistry) {
    */
   function isDirectoryEmpty(dirId: string): boolean {
     const dir = directories.value.get(dirId)
-    return Boolean(dir && dir.childDirIds.length === 0 && getAssetIdsInDirectory(dirId).length === 0)
+    return Boolean(
+      dir &&
+      dir.childDirIds.length === 0 &&
+      getAssetIdsInDirectory(dirId).length === 0 &&
+      getSiblingDirectories(dirId).length === 0 &&
+      !mediaModule
+        .getAllAssets()
+        .some((asset) => isMediaAsset(asset) && asset.parentDirectoryId === dirId),
+    )
   }
 
   function getDirectoryChildIndex(parentId: string, childId: string): number {
@@ -316,13 +331,13 @@ export function createUnifiedDirectoryModule(registry: ModuleRegistry) {
   function removeEmptyDirectory(dirId: string): DirectoryMutationResult {
     const dir = directories.value.get(dirId)
     if (!dir) {
-      return { success: false, error: '目录不存在', code: 'not_found' }
+      return { success: false, error: '目录不存在', code: 'directory_not_found' }
     }
     if (dir.parentId === null) {
-      return { success: false, error: '不能删除根目录', code: 'invalid_name' }
+      return { success: false, error: '不能删除根目录', code: 'root_directory_protected' }
     }
     if (!isDirectoryEmpty(dirId)) {
-      return { success: false, error: '目录不为空', code: 'invalid_name' }
+      return { success: false, error: '目录不为空', code: 'directory_not_empty' }
     }
 
     const parent = directories.value.get(dir.parentId)
@@ -331,9 +346,10 @@ export function createUnifiedDirectoryModule(registry: ModuleRegistry) {
     }
 
     const index = parent.childDirIds.indexOf(dirId)
-    if (index >= 0) {
-      parent.childDirIds.splice(index, 1)
+    if (index < 0) {
+      return { success: false, error: '父目录中缺少此目录', code: 'invalid_directory_structure' }
     }
+    parent.childDirIds.splice(index, 1)
 
     const tabsToClose = openTabs.value.filter((tab) => tab.dirId === dirId).map((tab) => tab.id)
     for (const tabId of tabsToClose) {
@@ -353,38 +369,63 @@ export function createUnifiedDirectoryModule(registry: ModuleRegistry) {
   }
 
   /**
-   * 移动素材。先持久化 Meta，保存失败时恢复内存中的原目录并保持索引不变。
+   * 移动素材。保存失败时补写原归属，恢复成功后才报告已回滚。
    */
   async function moveAssetToDirectory(
     assetId: string,
     targetDirectoryId: string,
-  ): Promise<{ success: boolean; error?: string }> {
+  ): Promise<MoveMutationResult> {
     const asset = mediaModule.getMediaAsset(assetId)
     if (!asset) {
-      return { success: false, error: '素材不存在' }
+      return { success: false, error: '素材不存在', code: 'item_not_found' }
     }
     if (!directories.value.has(targetDirectoryId)) {
-      return { success: false, error: '目标文件夹不存在' }
+      return { success: false, error: '目标文件夹不存在', code: 'directory_not_found' }
     }
 
     const sourceDirectoryId = getAssetDirectoryId(assetId)
     if (!sourceDirectoryId) {
-      return { success: false, error: '素材所属文件夹不存在' }
+      return { success: false, error: '素材所属文件夹不存在', code: 'invalid_location' }
     }
     if (assetLocationIndex.value.getDirectoryId(assetId) !== sourceDirectoryId) {
-      return { success: false, error: '素材目录索引未初始化' }
+      return { success: false, error: '素材目录索引未初始化', code: 'invalid_location' }
     }
     if (sourceDirectoryId === targetDirectoryId) {
       return { success: true }
     }
 
-    const persisted = await persistAssetDirectoryMove(
-      asset,
-      targetDirectoryId,
-      (mediaItem) => globalMetaFileManager.saveMetaFile(mediaItem),
-    )
-    if (!persisted) {
-      return { success: false, error: '保存素材所属文件夹失败，已恢复原位置' }
+    const originalName = asset.name
+    asset.parentDirectoryId = targetDirectoryId
+    const persisted = await globalMetaFileManager.saveMetaFile(asset).catch(() => false)
+    if (
+      mediaModule.getMediaAsset(assetId) !== asset ||
+      asset.parentDirectoryId !== targetDirectoryId
+    ) {
+      return {
+        success: false,
+        error: '保存期间素材被删除或移动，无法恢复原位置',
+        code: 'rollback_failed',
+      }
+    }
+
+    const restore = async (): Promise<boolean> => {
+      if (!directories.value.has(sourceDirectoryId)) return false
+      asset.parentDirectoryId = sourceDirectoryId
+      const saved = await globalMetaFileManager.saveMetaFile(asset).catch(() => false)
+      return (
+        saved &&
+        mediaModule.getMediaAsset(assetId) === asset &&
+        asset.parentDirectoryId === sourceDirectoryId &&
+        directories.value.has(sourceDirectoryId)
+      )
+    }
+    if (!persisted || !directories.value.has(targetDirectoryId) || asset.name !== originalName) {
+      const restored = await restore()
+      return {
+        success: false,
+        error: restored ? '移动失败，已恢复原位置' : '移动失败且无法持久化原位置',
+        code: !restored ? 'rollback_failed' : !persisted ? 'persistence_failed' : 'state_mismatch',
+      }
     }
 
     try {
@@ -392,55 +433,101 @@ export function createUnifiedDirectoryModule(registry: ModuleRegistry) {
       notifyAssetLocationChanged()
       return { success: true }
     } catch (error) {
-      // 索引异常不应让已成功持久化的数据保持错误的内存状态。
-      asset.parentDirectoryId = sourceDirectoryId
-      await globalMetaFileManager.saveMetaFile(asset)
+      const restored = await restore()
+      let indexRestored = false
+      try {
+        assetLocationIndex.value.move(assetId, sourceDirectoryId)
+        notifyAssetLocationChanged()
+        indexRestored = true
+      } catch {
+        // 丢失的索引不能被当作成功回滚。
+      }
       return {
         success: false,
-        error: error instanceof Error ? error.message : '更新素材目录索引失败，已恢复原位置',
+        error: error instanceof Error ? error.message : '更新素材目录索引失败',
+        code: restored && indexRestored ? 'persistence_failed' : 'rollback_failed',
       }
     }
   }
 
   /**
-   * 原子移动多个素材。任何素材持久化失败时，已移动的素材会回滚到原目录。
+   * 批量移动素材。失败时尝试恢复已移动项目，不提供跨文件事务隔离。
    */
   async function moveAssetsAtomically(
     moves: Array<{ assetId: string; targetDirectoryId: string }>,
-  ): Promise<{ success: boolean; error?: string }> {
+  ): Promise<MoveMutationResult> {
     const uniqueAssetIds = new Set<string>()
     const originalDirectoryIds = new Map<string, string>()
+    const originalAssets = new Map<
+      string,
+      NonNullable<ReturnType<typeof mediaModule.getMediaAsset>>
+    >()
+    const originalNames = new Map<string, string>()
 
     for (const move of moves) {
       if (uniqueAssetIds.has(move.assetId)) {
-        return { success: false, error: '移动项目中存在重复素材' }
+        return { success: false, error: '移动项目中存在重复素材', code: 'duplicate_item' }
       }
       uniqueAssetIds.add(move.assetId)
 
       if (!directories.value.has(move.targetDirectoryId)) {
-        return { success: false, error: '目标文件夹不存在' }
+        return { success: false, error: '目标文件夹不存在', code: 'directory_not_found' }
       }
 
       const sourceDirectoryId = getAssetDirectoryId(move.assetId)
-      if (!sourceDirectoryId) {
-        return { success: false, error: '素材所属文件夹不存在' }
+      const asset = mediaModule.getMediaAsset(move.assetId)
+      if (!asset) {
+        return { success: false, error: '素材不存在', code: 'item_not_found' }
+      }
+      if (
+        !sourceDirectoryId ||
+        assetLocationIndex.value.getDirectoryId(move.assetId) !== sourceDirectoryId
+      ) {
+        return { success: false, error: '素材所属文件夹或索引无效', code: 'invalid_location' }
       }
       if (sourceDirectoryId === move.targetDirectoryId) {
-        return { success: false, error: '不能移动到当前文件夹' }
+        return { success: false, error: '不能移动到当前文件夹', code: 'invalid_move' }
       }
       originalDirectoryIds.set(move.assetId, sourceDirectoryId)
+      originalAssets.set(move.assetId, asset)
+      originalNames.set(move.assetId, asset.name)
     }
 
     const movedAssetIds: string[] = []
     for (const move of moves) {
-      const result = await moveAssetToDirectory(move.assetId, move.targetDirectoryId)
+      const unchanged = () =>
+        moves.every((entry) => {
+          const asset = mediaModule.getMediaAsset(entry.assetId)
+          return (
+            asset === originalAssets.get(entry.assetId) &&
+            asset?.name === originalNames.get(entry.assetId) &&
+            asset?.parentDirectoryId ===
+              (movedAssetIds.includes(entry.assetId)
+                ? entry.targetDirectoryId
+                : originalDirectoryIds.get(entry.assetId))
+          )
+        })
+      let result: MoveMutationResult = unchanged()
+        ? await moveAssetToDirectory(move.assetId, move.targetDirectoryId)
+        : { success: false, error: '保存期间批次项目状态发生变化', code: 'state_mismatch' }
       if (result.success) {
         movedAssetIds.push(move.assetId)
-        continue
+        if (unchanged()) continue
+        result = { success: false, error: '保存期间批次项目状态发生变化', code: 'state_mismatch' }
       }
 
       const rollbackErrors: string[] = []
       for (const movedAssetId of [...movedAssetIds].reverse()) {
+        const expectedTarget = moves.find(
+          (entry) => entry.assetId === movedAssetId,
+        )!.targetDirectoryId
+        if (
+          mediaModule.getMediaAsset(movedAssetId) !== originalAssets.get(movedAssetId) ||
+          getAssetDirectoryId(movedAssetId) !== expectedTarget
+        ) {
+          rollbackErrors.push('素材被删除或移动：' + movedAssetId)
+          continue
+        }
         const rollbackResult = await moveAssetToDirectory(
           movedAssetId,
           originalDirectoryIds.get(movedAssetId)!,
@@ -452,6 +539,7 @@ export function createUnifiedDirectoryModule(registry: ModuleRegistry) {
 
       return {
         success: false,
+        code: rollbackErrors.length > 0 ? 'rollback_failed' : result.code,
         error:
           rollbackErrors.length > 0
             ? `移动失败且回滚失败：${rollbackErrors.join('；')}`
@@ -582,8 +670,8 @@ export function createUnifiedDirectoryModule(registry: ModuleRegistry) {
         startedCount++
         return
       }
-
     }
+
 
     // 处理当前目录的资产项
     getAssetIdsInDirectory(dirId).forEach(startAssetIfNeeded)
@@ -682,10 +770,14 @@ export function createUnifiedDirectoryModule(registry: ModuleRegistry) {
    */
   function isDescendantOf(dirA: string, dirB: string): boolean {
     let current = getDirectory(dirA)
+    const visited = new Set<string>()
     while (current) {
+      if (visited.has(current.id)) return true
+      visited.add(current.id)
       if (current.parentId === dirB) return true
       if (!current.parentId) break
       current = getDirectory(current.parentId)
+      if (!current) return true
     }
     return false
   }
@@ -740,30 +832,39 @@ export function createUnifiedDirectoryModule(registry: ModuleRegistry) {
     folderId: string,
     targetFolderId: string,
     targetIndex?: number,
-  ): { success: boolean; error?: string } {
+  ): MoveMutationResult {
     const folder = getDirectory(folderId)
     if (!folder) {
-      return { success: false, error: '源文件夹不存在' }
+      return { success: false, error: '源文件夹不存在', code: 'item_not_found' }
     }
     if (folder.parentId === null) {
-      return { success: false, error: '不能移动根目录' }
+      return { success: false, error: '不能移动根目录', code: 'root_directory_protected' }
     }
     if (folder.parentId === targetFolderId) {
-      return { success: false, error: '不能移动到当前父文件夹' }
+      return { success: false, error: '不能移动到当前父文件夹', code: 'invalid_move' }
     }
     if (!canDragToFolder(folderId, targetFolderId)) {
-      return { success: false, error: '不能将文件夹移动到此位置' }
+      return { success: false, error: '不能将文件夹移动到此位置', code: 'invalid_move' }
     }
 
     const sourceParent = getDirectory(folder.parentId)
     const targetParent = getDirectory(targetFolderId)
     if (!sourceParent || !targetParent) {
-      return { success: false, error: '源文件夹或目标文件夹不存在' }
+      return { success: false, error: '源文件夹或目标文件夹不存在', code: 'directory_not_found' }
+    }
+
+    const validation = validateDirectoryName(folder.name, targetFolderId, folderId)
+    if (!validation.ok) {
+      return { success: false, error: validation.error, code: validation.code }
     }
 
     const sourceIndex = sourceParent.childDirIds.indexOf(folderId)
     if (sourceIndex < 0) {
-      return { success: false, error: '源文件夹目录结构不完整' }
+      return {
+        success: false,
+        error: '源文件夹目录结构不完整',
+        code: 'invalid_directory_structure',
+      }
     }
 
     sourceParent.childDirIds.splice(sourceIndex, 1)

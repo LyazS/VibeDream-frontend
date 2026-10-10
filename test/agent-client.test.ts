@@ -104,6 +104,57 @@ afterEach(
 )
 
 describe('project-scoped single-turn client', /** 组织工程范围内单轮客户端的协议和生命周期测试。 */ () => {
+  it.each(['model_call.completed', 'model_call.cancelled', 'model_call.failed'])(
+    'reports settled usage after local cancellation through %s',
+    async (terminal) => {
+      const onSettlement = vi.fn()
+      const c = client({ onSettlement })
+      const controller = new AbortController()
+      const stream = await started(c, controller.signal)
+      controller.abort()
+      await expect(stream.finalCompletion()).rejects.toThrow('MODEL_CALL_CANCELLED')
+      const record = {
+        usage: { inputTokens: 10, outputTokens: 2, totalTokens: 12, cachedInputTokens: 8 },
+        chargedAmount: '0.0000156',
+        contextWindowTokens: 1000000,
+      }
+      sockets[0].frame(terminal, {
+        ...record,
+        ...(terminal === 'model_call.completed'
+          ? { message: { role: 'assistant', content: 'finished' } }
+          : { code: 'MODEL_CALL_CANCELLED' }),
+      })
+      expect(onSettlement).toHaveBeenCalledExactlyOnceWith('turn-1', record)
+      sockets[0].frame(terminal, record)
+      expect(onSettlement).toHaveBeenCalledOnce()
+      await c.waitForIdle()
+    },
+  )
+
+  it.each([
+    { chargedAmount: -1 },
+    { chargedAmount: '-0.01' },
+    { chargedAmount: '1e-8' },
+    { chargedAmount: '0.000000001' },
+    { contextWindowTokens: 0 },
+    { contextWindowTokens: -1 },
+    { contextWindowTokens: '1000000' },
+    { usage: { inputTokens: 10, outputTokens: 2, totalTokens: 12, cachedInputTokens: 11 } },
+    { usage: { inputTokens: 10, outputTokens: 2, totalTokens: 12, cachedInputTokens: -1 } },
+  ])('rejects invalid settlement fields %j', async (fields) => {
+    const onSettlement = vi.fn()
+    const c = client({ onSettlement })
+    const stream = await started(c)
+    sockets[0].frame('model_call.completed', {
+      message: { role: 'assistant', content: 'reply' },
+      usage: { inputTokens: 10, outputTokens: 2, totalTokens: 12 },
+      chargedAmount: '0.0000268',
+      ...fields,
+    })
+    await expect(stream.finalCompletion()).rejects.toThrow('PROTOCOL_INVALID')
+    expect(onSettlement).not.toHaveBeenCalled()
+  })
+
   it('sends text parts unchanged from a snapshot while completed output stays a string', async () => {
     const c = client()
     const request = {

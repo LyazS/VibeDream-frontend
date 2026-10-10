@@ -37,13 +37,19 @@ Returns
       },
       "evidence": "<reason>"              // 检索校验依据
     }
-  ]
+  ],
+  "warning": "<warningMessage>"           // 仅在剔除已删除素材的候选时返回，包含剔除数量
 }
 
 {
   "tool": "search_media",                 // 工具名
+  "code": "<errorCode>",                  // 错误码
   "error": "<errorMessage>"               // 错误说明
 }
+
+检索结束后按完整 mediaId 回查本地素材，mediaName 使用当前名称；素材改名或移动后仍保留同一 ID。
+已删除的候选会被剔除，并通过顶层 warning 说明候选数量，不替换为同名或相近 ID 的素材。
+同一媒体命中多个分镜时保留各分镜候选，不按 mediaId 合并。
 
 Limitations
 -----------
@@ -55,6 +61,7 @@ evidence 是检索校验依据，不是正式素材摘要；需要素材完整�
     properties: {
       query: {
         type: 'string',
+        minLength: 1,
         description:
           '自然语言检索词。应来自用户对画面、内容、动作、人物、场景或素材类型的描述；不要填目录路径或 mediaId。',
       },
@@ -66,5 +73,6 @@ evidence 是检索校验依据，不是正式素材摘要；需要素材完整�
       },
     },
     required: ['query'],
+    additionalProperties: false,
   },
 }

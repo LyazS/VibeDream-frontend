@@ -17,89 +17,82 @@ Do NOT Use When
 
 Returns
 -------
-返回每个项目移动前后状态、目标路径和历史记录描述。
+{
+  "tool": "move_library_items",
+  "before": [{ "parentDirId": "<sourceDirId>" }],
+  "after": [{ "parentDirId": "<targetDirId>" }]
+}
+
+{
+  "tool": "move_library_items",
+  "error": "<errorMessage>",
+  "code": "<errorCode>",
+  "details": { "current": { "itemId": "<itemId>", "name": "<name>", "parentDirId": "<parentDirId>" } }
+}
+
+before、after 与输入 items 顺序一一对应，仅返回直接父目录 ID；项目 ID 和名称沿用输入值。
+details.current 仅在 state_mismatch 时提供，说明校验失败项目的当前状态。
+来源不存在返回 item_not_found，目标不存在返回 directory_not_found，ID 同时对应文件夹和素材返回 ambiguous_item_id。
+重复来源返回 duplicate_item，同名文件夹冲突返回 duplicate_name，不合法移动返回 invalid_move。
+保存失败并恢复原位置返回 persistence_failed；恢复失败返回 rollback_failed，应重新读取实际状态。
+state_mismatch 后重新读取并判断，不自动覆盖 match 并机械重试。
+itemId、targetDirId 必须来自实际读取结果、写工具结果或本轮工程上下文，不自行构造、缩写或补全。
+用户只给出路径时，从根目录逐层读取并选择目录 ID，必要时继续分页。同名项目按 ID 区分。
+
+Examples
+--------
+混合移动：{"items":[{"itemId":"dir_shots","match":{"name":"镜头","parentDirId":"dir_videos"}},{"itemId":"media_music","match":{"name":"配乐.wav","parentDirId":"dir_root"}}],"targetDirId":"dir_selected"}
 
 Limitations
 -----------
-素材使用 mediaId 和 match.parentPath；文件夹使用完整路径和 match。不能移动根目录、移动到当前父目录、移动到自身/子目录，或同时移动存在父子关系的文件夹。`,
+match.name 和 match.parentDirId 必须与最近读取的值完全一致；祖先目录改名或移动不影响校验，目标目录按 ID 定位。
+不能移动根目录、移动到当前父目录、移动到自身/后代，或同时移动文件夹及其内部文件夹或媒体。
+目标同名文件夹或批次内同名文件夹会被拒绝，不自动合并或编号。媒体允许同名，也可以与文件夹同名。
+效果模板等未支持对象返回 unsupported_item_kind。`,
   parameters: {
     type: 'object',
     properties: {
       items: {
         type: 'array',
         minItems: 1,
-        description: '要移动的素材库项目。每个项目必须提供最新 match 作为状态校验。',
+        description: '全部待移动项目；每项提供最近读取的名称和直接父目录 ID。',
         items: {
-          oneOf: [
-            {
+          type: 'object',
+          properties: {
+            itemId: {
+              type: 'string',
+              minLength: 1,
+              description: '待移动项目的完整原始 ID；文件夹填 dirId 的值，媒体填 mediaId 的值。',
+            },
+            match: {
               type: 'object',
               properties: {
-                type: {
-                  const: 'directory',
-                },
-                path: {
+                name: {
                   type: 'string',
-                  description: '待移动文件夹的完整规范路径。',
+                  minLength: 1,
+                  description: '最近一次读取的当前名称，逐字保留，不自行修剪或改写。',
                 },
-                match: {
-                  type: 'object',
-                  properties: {
-                    name: {
-                      type: 'string',
-                      description: '当前名称。必须与最近一次读取或被动上下文中的值完全一致。',
-                    },
-                    parentPath: {
-                      type: 'string',
-                      description:
-                        '当前父目录的规范路径。必须与最近一次读取或被动上下文中的值完全一致。',
-                    },
-                  },
-                  required: ['name', 'parentPath'],
-                  additionalProperties: false,
+                parentDirId: {
+                  type: 'string',
+                  minLength: 1,
+                  description: '最近一次读取的直接父目录 ID，用于状态校验。',
                 },
               },
-              required: ['type', 'path', 'match'],
+              required: ['name', 'parentDirId'],
               additionalProperties: false,
             },
-            {
-              type: 'object',
-              properties: {
-                type: {
-                  const: 'media',
-                },
-                mediaId: {
-                  type: 'string',
-                  description: '待移动素材的完整 mediaId。',
-                },
-                match: {
-                  type: 'object',
-                  properties: {
-                    name: {
-                      type: 'string',
-                      description: '当前名称。必须与最近一次读取或被动上下文中的值完全一致。',
-                    },
-                    parentPath: {
-                      type: 'string',
-                      description:
-                        '当前父目录的规范路径。必须与最近一次读取或被动上下文中的值完全一致。',
-                    },
-                  },
-                  required: ['name', 'parentPath'],
-                  additionalProperties: false,
-                },
-              },
-              required: ['type', 'mediaId', 'match'],
-              additionalProperties: false,
-            },
-          ],
+          },
+          required: ['itemId', 'match'],
+          additionalProperties: false,
         },
       },
-      targetPath: {
+      targetDirId: {
         type: 'string',
-        description: '目标文件夹的完整规范路径，例如 /整理后/。',
+        minLength: 1,
+        description: '全部待移动项目的目标目录 ID。',
       },
     },
-    required: ['items', 'targetPath'],
+    required: ['items', 'targetDirId'],
     additionalProperties: false,
   },
 }

@@ -4,27 +4,33 @@ import { buildToolSuccess } from './utils/result'
 import {
   buildLibraryToolFailure,
   getLatestHistoryDescription,
-  getLibraryItemSnapshot,
-  requireNonEmptyString,
-  resolveDirectoryByPath,
+  LibraryToolError,
 } from './libraryEditShared'
 
 export async function executeCreateFolder(args: Record<string, unknown>) {
   try {
-    const parent = resolveDirectoryByPath(args.parentPath)
-    const name = requireNonEmptyString(args.name, 'name')
-    const store = useUnifiedStore()
-    const directory = await store.createDirectoryWithHistory(name, parent.directory.id)
-    const after = getLibraryItemSnapshot({ id: directory.id, type: 'directory' })
-
-    if (!after) {
-      throw new Error('创建文件夹后无法读取结果。')
+    const parentDirId = args.parentDirId
+    if (typeof parentDirId !== 'string' || !parentDirId.trim()) {
+      throw new LibraryToolError('invalid_arguments', 'parentDirId 必须是非空字符串。')
     }
+    const store = useUnifiedStore()
+    if (!store.getDirectory(parentDirId)) {
+      throw new LibraryToolError('directory_not_found', `未找到父目录 ${parentDirId}。`)
+    }
+
+    const name = args.name
+    if (typeof name !== 'string') {
+      throw new LibraryToolError('invalid_arguments', 'name 必须是字符串。')
+    }
+    const directory = await store.createDirectoryWithHistory(name, parentDirId)
 
     return buildToolSuccess('create_folder', {
       before: null,
-      after,
-      parentPath: parent.path,
+      after: {
+        itemId: directory.id,
+        name: directory.name,
+        parentDirId: directory.parentId,
+      },
       historyDescription: getLatestHistoryDescription(),
     })
   } catch (error) {

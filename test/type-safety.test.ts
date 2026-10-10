@@ -193,6 +193,29 @@ describe('tool exception responses', () => {
     const result = buildToolException('update_item', error)
     expect(result.success).toBe(false)
     expect(result.error).toBe(message)
-    expect(JSON.parse(result.output)).toEqual({ tool: 'update_item', error: message })
+    expect(JSON.parse(result.output)).toEqual({
+      tool: 'update_item',
+      error: message,
+      code: 'internal_error',
+    })
+  })
+
+  it('preserves a domain error code and details while retaining the error string', () => {
+    const details = {
+      current: { itemId: 'media_take01.mp4', name: '镜头', parentDirId: 'dir_root' },
+    }
+    const error = Object.assign(new Error('项目状态已变化'), {
+      toolCode: 'state_mismatch',
+      toolDetails: details,
+    })
+    const result = buildToolException('rename_library_item', error)
+    expect(result.success).toBe(false)
+    expect(result.error).toBe('项目状态已变化')
+    expect(JSON.parse(result.output)).toEqual({
+      tool: 'rename_library_item',
+      error: '项目状态已变化',
+      code: 'state_mismatch',
+      details,
+    })
   })
 })

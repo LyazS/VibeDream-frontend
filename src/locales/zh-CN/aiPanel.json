@@ -2,6 +2,18 @@
   "aiPanel": {
     "aiGenerate": "AI生成",
     "agent": "智能助手",
+    "usage": {
+      "label": "Token 用量和费用",
+      "session": "会话累计",
+      "context": "上下文占用",
+      "contextTokens": "上下文用量",
+      "unknown": "待统计",
+      "input": "输入 Token",
+      "output": "输出 Token",
+      "cached": "缓存命中 Token",
+      "cost": "费用",
+      "incomplete": "部分用量尚未返回，显示已知累计值"
+    },
     "tools": {
       "unknown": "未知工具",
       "ask_user": "向用户提问",

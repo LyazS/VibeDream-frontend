@@ -14,6 +14,7 @@
           @compositionstart="isComposing = true"
           @compositionend="isComposing = false"
         />
+        <AgentUsageIndicator />
         <ChatSendButton
           :disabled="
             hasProcessingMessage
@@ -33,6 +34,7 @@
 import { ref, computed, nextTick } from 'vue'
 import { IconComponents } from '@/constants/iconComponents'
 import ChatSendButton from '@/components/base/ChatSendButton.vue'
+import AgentUsageIndicator from './AgentUsageIndicator.vue'
 import { useUnifiedStore } from '@/core/unifiedStore'
 import { useAppI18n } from '@/core/composables/useI18n'
 
