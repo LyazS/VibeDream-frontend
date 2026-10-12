@@ -2,10 +2,9 @@ import { API_BASE_URL } from '@/config/runtimeConfig'
 
 export interface TaskProgressUpdate {
   task_id: string
-  capability: string
+  type: string
   status: string
   revision: number
-  origin_tab_id?: string
 }
 
 export interface TaskProgressSubscription<T extends TaskProgressUpdate = TaskProgressUpdate> {
@@ -29,7 +28,6 @@ const HEARTBEAT_PONG = 'task.pong'
 type Subscription = {
   id: string
   taskId: string
-  originTabId: string
   revision: number
   error?: Error
   queue: TaskProgressUpdate[]
@@ -61,19 +59,23 @@ function parseTaskProgressMessage(value: unknown): TaskProgressMessage | null {
   // 先在通用层验证任务协议的最小字段，具体能力再由各自的 type guard 收窄。
   if (
     typeof record.task_id !== 'string' ||
-    typeof record.capability !== 'string' ||
+    typeof record.type !== 'string' ||
     typeof record.status !== 'string' ||
     typeof record.revision !== 'number' ||
     !Number.isSafeInteger(record.revision) ||
     record.revision < 1
   )
     return null
-  return { type: message.type, task: record as unknown as TaskProgressUpdate, heartbeat: message.heartbeat === true }
+  return {
+    type: message.type,
+    task: record as unknown as TaskProgressUpdate,
+    heartbeat: message.heartbeat === true,
+  }
 }
 
 /**
- * 所有媒体能力共用的一条 Cloudflare TaskProgressHub WebSocket。
- * 每个订阅独立保存 taskId、originTabId 和已见 revision；连接断开后会把这些信息重新发送，
+ * 所有 AI 异步任务共用的一条 Cloudflare TaskProgressHub WebSocket。
+ * 每个订阅独立保存 taskId 和已见 revision；连接断开后会把这些信息重新发送，
  * 后端据此返回 D1 快照，因此这里不需要轮询任务状态。
  */
 export class CloudflareTaskProgressClient {
@@ -84,15 +86,17 @@ export class CloudflareTaskProgressClient {
   private reconnectAttempts = 0
   private subscriptions = new Map<string, Subscription>()
 
-  subscribe(taskId: string, originTabId: string): TaskProgressSubscription {
-    if (new Set([...this.subscriptions.values()].map((item) => item.taskId)).size >= MAX_SUBSCRIPTIONS &&
-      ![...this.subscriptions.values()].some((item) => item.taskId === taskId)) {
-      throw new Error('同时订阅的媒体任务超过上限')
+  subscribe(taskId: string): TaskProgressSubscription {
+    if (
+      new Set([...this.subscriptions.values()].map((item) => item.taskId)).size >=
+        MAX_SUBSCRIPTIONS &&
+      ![...this.subscriptions.values()].some((item) => item.taskId === taskId)
+    ) {
+      throw new Error('同时订阅的 AI 任务超过上限')
     }
     const subscription: Subscription = {
       id: crypto.randomUUID(),
       taskId,
-      originTabId,
       revision: 0,
       queue: [],
       waiters: new Set(),
@@ -148,7 +152,13 @@ export class CloudflareTaskProgressClient {
   private startHeartbeat(socket: WebSocket): void {
     if (this.heartbeatInterval) return
     this.heartbeatInterval = setInterval(() => {
-      if (this.socket !== socket || socket.readyState !== WebSocket.OPEN || !this.subscriptions.size || this.heartbeatTimeout) return
+      if (
+        this.socket !== socket ||
+        socket.readyState !== WebSocket.OPEN ||
+        !this.subscriptions.size ||
+        this.heartbeatTimeout
+      )
+        return
       try {
         socket.send(HEARTBEAT_PING)
       } catch {
@@ -157,7 +167,8 @@ export class CloudflareTaskProgressClient {
       }
       this.heartbeatTimeout = setTimeout(() => {
         this.heartbeatTimeout = undefined
-        if (this.socket === socket && socket.readyState === WebSocket.OPEN) socket.close(4000, 'Heartbeat timeout')
+        if (this.socket === socket && socket.readyState === WebSocket.OPEN)
+          socket.close(4000, 'Heartbeat timeout')
       }, HEARTBEAT_TIMEOUT_MS)
     }, HEARTBEAT_INTERVAL_MS)
   }
@@ -188,14 +199,19 @@ export class CloudflareTaskProgressClient {
     if (!this.socket || this.socket.readyState !== WebSocket.OPEN) return
     const revisions: Record<string, number> = {}
     for (const subscription of this.subscriptions.values()) {
-      revisions[subscription.taskId] = Math.max(revisions[subscription.taskId] || 0, subscription.revision)
+      revisions[subscription.taskId] = Math.max(
+        revisions[subscription.taskId] || 0,
+        subscription.revision,
+      )
     }
-    const originTabId = this.subscriptions.values().next().value?.originTabId
-    if (!originTabId) return
-    this.socket.send(JSON.stringify({
-      type: 'task.subscribe', origin_tab_id: originTabId,
-      task_ids: Object.keys(revisions), seen_revisions: revisions,
-    }))
+    if (!Object.keys(revisions).length) return
+    this.socket.send(
+      JSON.stringify({
+        type: 'task.subscribe',
+        task_ids: Object.keys(revisions),
+        seen_revisions: revisions,
+      }),
+    )
   }
 
   private handleMessage(raw: unknown): void {
@@ -209,7 +225,8 @@ export class CloudflareTaskProgressClient {
     if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
       const record = parsed as Record<string, unknown>
       if (record.type === 'task.error') {
-        const error = new Error(typeof record.error === 'string' ? record.error : '任务订阅失败')
+        const code = typeof record.error === 'string' ? record.error : undefined
+        const error = Object.assign(new Error(code ?? '任务订阅失败'), { code })
         for (const subscription of this.subscriptions.values()) {
           if (record.task_id && record.task_id !== subscription.taskId) continue
           subscription.error = error

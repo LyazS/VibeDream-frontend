@@ -8,6 +8,7 @@ export type ApiCapability =
   | 'transition-search'
   | 'item-properties'
   | 'other'
+  | 'ai-tasks'
 
 const capabilityPrefixes: readonly [string, ApiCapability][] = [
   ['/api/auth/', 'auth'],
@@ -17,6 +18,7 @@ const capabilityPrefixes: readonly [string, ApiCapability][] = [
   ['/api/admin/', 'admin'],
   ['/api/media/', 'media'],
   ['/api/agent/', 'agent'],
+  ['/api/ai/tasks', 'ai-tasks'],
 ]
 
 function readEnabledCapabilities(): ReadonlySet<ApiCapability> {
@@ -36,6 +38,7 @@ function readEnabledCapabilities(): ReadonlySet<ApiCapability> {
           'transition-search',
           'item-properties',
           'other',
+          'ai-tasks',
         ].includes(value),
       ),
   )
@@ -75,22 +78,7 @@ export function getApiPath(url: string): string | undefined {
 export function getApiCapability(path: string): ApiCapability {
   if (path === '/api/agent/tools/describe-item-property') return 'item-properties'
   if (path === '/api/transitions/test-search') return 'transition-search'
-  if (path === '/api/effect-templates/transitions/search') return 'transition-search'
-  if (
-    path === '/api/media/upload-policies' ||
-    path === '/api/media/tasks/indexing' ||
-    path === '/api/media/tasks/retrieval' ||
-    path === '/api/media/tasks/rerank' ||
-    path === '/api/media/tasks/validate' ||
-    path === '/api/media/indexing/reconcile'
-  ) {
-    return 'media-indexing'
-  }
-  if (
-    /^\/api\/media\/tasks\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}(?:\/(?:cancel|retry|result))?$/i.test(
-      path,
-    )
-  ) {
+  if (path === '/api/media/upload-policies' || path === '/api/media/indexing/reconcile') {
     return 'media-indexing'
   }
   return capabilityPrefixes.find(([prefix]) => path.startsWith(prefix))?.[1] ?? 'other'

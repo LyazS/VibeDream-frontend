@@ -1,4 +1,4 @@
-import { fetchClient } from '@/utils/fetchClient'
+import { runAiTask } from '@/core/ai-tasks/taskApi'
 import type { LocalizedTagList, LocalizedText } from '@/core/effect-template/catalogTypes'
 
 export interface TransitionSearchResult {
@@ -22,13 +22,12 @@ export interface TransitionSearchResponse {
 export async function searchTransitions(
   query: string,
   topK = 5,
+  options: { signal?: AbortSignal; projectId?: string } = {},
 ): Promise<TransitionSearchResponse> {
-  const response = await fetchClient.post<TransitionSearchResponse>(
-    '/api/effect-templates/transitions/search',
-    {
-      query,
-      top_k: topK,
-    },
+  const { result } = await runAiTask<TransitionSearchResponse>(
+    'transition.search',
+    { query, top_k: topK },
+    options,
   )
-  return response.data
+  return result
 }

@@ -3,11 +3,7 @@ import type { ImageMediaItem, VideoMediaItem } from '@/core/mediaitem/types'
 import type { ResolveCheckContext, ResolveContext, ResourceResolver } from '../ResourceResolver'
 import type { ResourceRequest } from '../ResourceTypes'
 import { CloudflareTemporaryFileUploader } from '@/core/utils/cloudflareTemporaryFileUploader'
-import {
-  createMediaTaskIdempotencyKey,
-  getTaskProgressOriginTabId,
-  submitMediaTask,
-} from './mediaTaskApi'
+import { createAiTaskIdempotencyKey, submitAiTask } from '@/core/ai-tasks/taskApi'
 import type { MediaIndexingTask, MediaIndexingTaskSubmission } from './mediaIndexingTask'
 import {
   canResumeMediaIndexingFromRemote,
@@ -193,7 +189,8 @@ export class MediaIndexTaskSubmitResolver
             stage: 'uploading-image',
             message: `上传打标图片: ${progress}%`,
           })
-        }, ctx.signal,
+        },
+        ctx.signal,
       )
 
       if (!taggingResult.success || !taggingResult.url) {
@@ -215,7 +212,8 @@ export class MediaIndexTaskSubmitResolver
             stage: 'uploading-image',
             message: `上传向量化图片: ${progress}%`,
           })
-        }, ctx.signal,
+        },
+        ctx.signal,
       )
 
       if (!embeddingResult.success || !embeddingResult.url) {
@@ -252,11 +250,10 @@ export class MediaIndexTaskSubmitResolver
     })
 
     // 媒体版本由素材与分片计划计算。后端用它进行活跃任务去重，同一版本不会重复创建任务。
-    const response = await submitMediaTask<MediaIndexingTask, MediaIndexingTaskSubmission>(
-      'indexing',
+    const response = await submitAiTask<MediaIndexingTask, MediaIndexingTaskSubmission>(
+      'media.indexing',
       {
         project_id: this.module.getProjectId(),
-        origin_tab_id: getTaskProgressOriginTabId(),
         input: {
           media_id: mediaItem.id,
           media_version: await createMediaVersion(mediaItem, segments),
@@ -266,11 +263,11 @@ export class MediaIndexTaskSubmitResolver
           segments: providerSegments(segments),
         },
       },
-      createMediaTaskIdempotencyKey('indexing'),
+      createAiTaskIdempotencyKey('indexing'),
       ctx.signal,
     )
 
-    if (response.capability !== 'indexing' || !response.task_id) {
+    if (response.type !== 'media.indexing' || !response.task_id) {
       throw new Error('素材索引任务返回数据无效')
     }
 

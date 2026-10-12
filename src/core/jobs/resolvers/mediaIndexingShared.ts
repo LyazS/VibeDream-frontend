@@ -18,7 +18,7 @@ import { createDefaultTimelineExtraRenderConfig } from '@/core/timelineitem/mode
 import { DEFAULT_BLEND_MODE } from '@/core/timelineitem/model/blendMode'
 import type { UploadFileExportOptions } from '@/core/utils/bizyairFileUploader'
 import type { ResourcePolicy, ResourceRequest } from '../ResourceTypes'
-import { getMediaTaskResult, getTaskProgressOriginTabId } from './mediaTaskApi'
+import { getAiTaskResult } from '@/core/ai-tasks/taskApi'
 import { subscribeToMediaIndexingTask } from './mediaIndexingTask'
 
 export const VIDEO_SCENE_SEGMENTS_RESOURCE_TYPE = 'video-scene-segments'
@@ -498,14 +498,13 @@ export async function waitForMediaIndexTaskCompletion(
   onProgress: (patch: { progress?: number; stage?: string; message?: string }) => void,
   signal: AbortSignal,
 ): Promise<MediaIndexingResult> {
-  const originTabId = getTaskProgressOriginTabId()
-  const subscription = subscribeToMediaIndexingTask(taskId, originTabId)
+  const subscription = subscribeToMediaIndexingTask(taskId)
   try {
     while (true) {
       throwIfAborted(signal)
       const task = await subscription.next(signal)
       if (task.status === 'completed') {
-        const result = await getMediaTaskResult<unknown>(taskId, signal)
+        const result = await getAiTaskResult<unknown>(taskId, signal)
         if (!isMediaIndexingResult(result)) throw new Error('索引任务结果格式无效')
         return result
       }
@@ -528,13 +527,32 @@ export async function waitForMediaIndexTaskCompletion(
         lastIndexTaskId: taskId,
       })
       onProgress({
-        progress: task.status === 'processing'
-          ? 0.45 + Math.max(0, Math.min(100, task.progress ?? 0)) * 0.005
-          : 0.35,
+        progress:
+          task.status === 'processing'
+            ? 0.45 + Math.max(0, Math.min(100, task.progress ?? 0)) * 0.005
+            : 0.35,
         stage: 'waiting-index-task',
-        message: task.status === 'cancelling' ? '正在取消索引任务' : task.progress_message || '正在等待索引任务完成',
+        message:
+          task.status === 'cancelling'
+            ? '正在取消索引任务'
+            : task.progress_message || '正在等待索引任务完成',
       })
     }
+  } catch (error) {
+    // 仅清理仍指向当前任务的恢复状态，避免旧订阅报错覆盖新提交的任务。
+    if (
+      error instanceof Error &&
+      'code' in error &&
+      error.code === 'AI_TASK_NOT_FOUND' &&
+      mediaItem.metadata?.indexing?.lastIndexTaskId === taskId
+    ) {
+      setIndexingMetadata(mediaItem, {
+        indexStatus: 'failed',
+        lastIndexTaskId: undefined,
+      })
+      await persistMediaItem(mediaItem)
+    }
+    throw error
   } finally {
     subscription.close()
   }

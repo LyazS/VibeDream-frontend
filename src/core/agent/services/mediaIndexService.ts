@@ -1,13 +1,5 @@
 import { CloudflareTemporaryFileUploader } from '@/core/utils/cloudflareTemporaryFileUploader'
-import {
-  cancelMediaTask,
-  createMediaTaskIdempotencyKey,
-  getMediaTaskResult,
-  getTaskProgressOriginTabId,
-  submitMediaTask,
-  subscribeToMediaTask,
-} from '@/core/jobs/resolvers/mediaTaskApi'
-import type { TaskProgressUpdate } from '@/core/utils/cloudflareTaskProgressClient'
+import { runAiTask } from '@/core/ai-tasks/taskApi'
 import { exportTimelineItem, exportMediaItem } from '@/core/utils/mediaExporter'
 import { timecodeToFrames } from '@/core/utils/timeUtils'
 import { fetchClient } from '@/utils/fetchClient'
@@ -16,7 +8,11 @@ import type { UnifiedTimelineItemData } from '@/core/timelineitem/model/timeline
 import { createDefaultTimelineExtraRenderConfig } from '@/core/timelineitem/model/timelineItem'
 import { DEFAULT_BLEND_MODE } from '@/core/timelineitem/model/blendMode'
 import { BunnyClip } from '@/core/mediabunny/bunny-clip'
-import { calculateThumbnailSize, createCanvasWithSize, drawImageOnCanvas } from '@/core/bunnyUtils/thumbUtils'
+import {
+  calculateThumbnailSize,
+  createCanvasWithSize,
+  drawImageOnCanvas,
+} from '@/core/bunnyUtils/thumbUtils'
 import { ThumbnailMode } from '@/constants/ThumbnailConstants'
 
 const RETRIEVAL_TOP_K = 30
@@ -94,22 +90,6 @@ export interface ValidationResultItem {
 }
 
 type MediaSearchTaskCapability = 'retrieval' | 'rerank' | 'validate'
-type MediaSearchTaskStatus =
-  | 'pending'
-  | 'processing'
-  | 'cancelling'
-  | 'completed'
-  | 'failed'
-  | 'cancelled'
-  | 'input_expired'
-
-interface MediaSearchTask extends TaskProgressUpdate {
-  capability: MediaSearchTaskCapability
-  status: MediaSearchTaskStatus
-  error?: string
-  message?: string
-}
-
 interface RetrievalTaskResult {
   query: string
   total: number
@@ -137,70 +117,13 @@ type SearchTaskInput =
   | { query: string; top_k: number; retrieval_task_id: string; candidates: SearchCandidateUpload[] }
   | { query: string; top_k: number; rerank_task_id: string; candidates: SearchCandidateUpload[] }
 
-function isMediaSearchTask(
-  capability: MediaSearchTaskCapability,
-  task: TaskProgressUpdate,
-): task is MediaSearchTask {
-  return task.capability === capability && [
-    'pending',
-    'processing',
-    'cancelling',
-    'completed',
-    'failed',
-    'cancelled',
-    'input_expired',
-  ].includes(task.status)
-}
-
 async function submitSearchTask<TResult>(
   capability: MediaSearchTaskCapability,
   projectId: string,
   input: SearchTaskInput,
   signal?: AbortSignal,
 ): Promise<{ taskId: string; result: TResult }> {
-  const task = await submitMediaTask<MediaSearchTask, {
-    project_id: string
-    origin_tab_id: string
-    input: SearchTaskInput
-  }>(
-    capability,
-    {
-      project_id: projectId,
-      origin_tab_id: getTaskProgressOriginTabId(),
-      input,
-    },
-    createMediaTaskIdempotencyKey(capability),
-    signal,
-  )
-  const subscription = subscribeToMediaTask(
-    task.task_id,
-    getTaskProgressOriginTabId(),
-    (update): update is MediaSearchTask => isMediaSearchTask(capability, update),
-  )
-  const waitSignal = signal || new AbortController().signal
-  const cancel = () => {
-    // Abort 只会中止本地等待；显式取消远端任务，以便 Workflow 停止并退款。
-    void cancelMediaTask(task.task_id, capability).catch((error) => {
-      console.warn(`取消 ${capability} 任务失败: ${task.task_id}`, error)
-    })
-  }
-  signal?.addEventListener('abort', cancel, { once: true })
-  if (signal?.aborted) cancel()
-
-  try {
-    while (true) {
-      const update = await subscription.next(waitSignal)
-      if (update.status === 'completed') {
-        return { taskId: task.task_id, result: await getMediaTaskResult<TResult>(task.task_id, waitSignal) }
-      }
-      if (update.status === 'failed' || update.status === 'cancelled' || update.status === 'input_expired') {
-        throw new Error(update.message || update.error || `${capability} 任务失败`)
-      }
-    }
-  } finally {
-    signal?.removeEventListener('abort', cancel)
-    subscription.close()
-  }
+  return runAiTask<TResult>(`media.${capability}`, input, { projectId, signal })
 }
 
 export type SearchMediaStage = 'indexing' | 'retrieval' | 'rerank' | 'validate'
@@ -238,9 +161,11 @@ function buildBoundedExportSize(
   }
 }
 
-function buildSearchVideoExportOptions(
-  mediaItem: UnifiedMediaItemData & { mediaType: 'video' },
-): { frameRate: number; outputWidth?: number; outputHeight?: number } {
+function buildSearchVideoExportOptions(mediaItem: UnifiedMediaItemData & { mediaType: 'video' }): {
+  frameRate: number
+  outputWidth?: number
+  outputHeight?: number
+} {
   const boundedSize = buildBoundedExportSize(
     mediaItem.runtime.bunny?.originalWidth || mediaItem.runtime.bunny?.bunnyMedia?.width,
     mediaItem.runtime.bunny?.originalHeight || mediaItem.runtime.bunny?.bunnyMedia?.height,
@@ -253,9 +178,10 @@ function buildSearchVideoExportOptions(
   }
 }
 
-function buildSearchImageExportOptions(
-  mediaItem: UnifiedMediaItemData & { mediaType: 'image' },
-): { outputWidth?: number; outputHeight?: number } {
+function buildSearchImageExportOptions(mediaItem: UnifiedMediaItemData & { mediaType: 'image' }): {
+  outputWidth?: number
+  outputHeight?: number
+} {
   return buildBoundedExportSize(
     mediaItem.runtime.bunny?.originalWidth,
     mediaItem.runtime.bunny?.originalHeight,
@@ -327,22 +253,18 @@ async function prepareVideoCandidate(
 
   const videoBlob = await exportTimelineItem({
     timelineItem,
-    getMediaItem: (id: string | null) =>
-      id === mediaItem.id ? mediaItem : undefined,
+    getMediaItem: (id: string | null) => (id === mediaItem.id ? mediaItem : undefined),
     ...buildSearchVideoExportOptions(mediaItem as UnifiedMediaItemData & { mediaType: 'video' }),
   })
 
   const fileName = `rerank-${mediaItem.id}-seg-${segment.segment_index}-${Date.now()}.mp4`
-  const uploadResult = await CloudflareTemporaryFileUploader.uploadBlob(
-    videoBlob,
-    {
-      capability: 'rerank',
-      purpose: 'rerank',
-      fileName,
-      projectId,
-      pointId,
-    },
-  )
+  const uploadResult = await CloudflareTemporaryFileUploader.uploadBlob(videoBlob, {
+    capability: 'rerank',
+    purpose: 'rerank',
+    fileName,
+    projectId,
+    pointId,
+  })
 
   if (!uploadResult.success || !uploadResult.uploadRef) {
     console.warn(`视频候选上传失败: ${fileName}`, uploadResult.error)
@@ -365,16 +287,13 @@ async function prepareImageCandidate(
   })
 
   const fileName = `rerank-${mediaItem.id}-${Date.now()}.png`
-  const uploadResult = await CloudflareTemporaryFileUploader.uploadBlob(
-    imageBlob,
-    {
-      capability: 'rerank',
-      purpose: 'rerank',
-      fileName,
-      projectId,
-      pointId,
-    },
-  )
+  const uploadResult = await CloudflareTemporaryFileUploader.uploadBlob(imageBlob, {
+    capability: 'rerank',
+    purpose: 'rerank',
+    fileName,
+    projectId,
+    pointId,
+  })
 
   if (!uploadResult.success || !uploadResult.uploadRef) {
     console.warn(`图片候选上传失败: ${fileName}`, uploadResult.error)
@@ -442,21 +361,21 @@ async function prepareVideoValidationImage(
         boundedSize.outputHeight || SEARCH_VIDEO_EXPORT_MAX_SIDE,
         ThumbnailMode.FIT,
       )
-      const { canvas, ctx } = createCanvasWithSize(sizeInfo.containerWidth, sizeInfo.containerHeight)
+      const { canvas, ctx } = createCanvasWithSize(
+        sizeInfo.containerWidth,
+        sizeInfo.containerHeight,
+      )
       drawImageOnCanvas(ctx, frame, sizeInfo, '#000000', clip.clockwiseRotation)
       const blob = await canvasToPngBlob(canvas)
 
       const fileName = `validate-${mediaItem.id}-seg-${segment.segment_index}-${Date.now()}.png`
-      const uploadResult = await CloudflareTemporaryFileUploader.uploadBlob(
-        blob,
-        {
-          capability: 'validate',
-          purpose: 'validate',
-          fileName,
-          projectId,
-          pointId,
-        },
-      )
+      const uploadResult = await CloudflareTemporaryFileUploader.uploadBlob(blob, {
+        capability: 'validate',
+        purpose: 'validate',
+        fileName,
+        projectId,
+        pointId,
+      })
 
       if (!uploadResult.success || !uploadResult.uploadRef) {
         console.warn(`视频校验图上传失败: ${fileName}`, uploadResult.error)
@@ -483,16 +402,13 @@ async function prepareImageValidationImage(
     ...buildSearchImageExportOptions(mediaItem as UnifiedMediaItemData & { mediaType: 'image' }),
   })
   const fileName = `validate-${mediaItem.id}-${Date.now()}.png`
-  const uploadResult = await CloudflareTemporaryFileUploader.uploadBlob(
-    imageBlob,
-    {
-      capability: 'validate',
-      purpose: 'validate',
-      fileName,
-      projectId,
-      pointId,
-    },
-  )
+  const uploadResult = await CloudflareTemporaryFileUploader.uploadBlob(imageBlob, {
+    capability: 'validate',
+    purpose: 'validate',
+    fileName,
+    projectId,
+    pointId,
+  })
 
   if (!uploadResult.success || !uploadResult.uploadRef) {
     console.warn(`图片校验图上传失败: ${fileName}`, uploadResult.error)
@@ -532,7 +448,12 @@ export async function prepareRerankCandidates(
       let uploadRef: string | null = null
 
       if (candidate.mediaKind === 'video') {
-        uploadRef = await prepareVideoCandidate(mediaItem, candidate.segment, projectId, candidate.pointId)
+        uploadRef = await prepareVideoCandidate(
+          mediaItem,
+          candidate.segment,
+          projectId,
+          candidate.pointId,
+        )
       } else if (candidate.mediaKind === 'image') {
         uploadRef = await prepareImageCandidate(mediaItem, projectId, candidate.pointId)
       }
@@ -558,10 +479,15 @@ async function callRetrievalApi(
   topK: number,
   signal?: AbortSignal,
 ): Promise<{ taskId: string; result: RetrievalTaskResult }> {
-  return submitSearchTask<RetrievalTaskResult>('retrieval', projectId, {
-    query,
-    top_k: topK,
-  }, signal)
+  return submitSearchTask<RetrievalTaskResult>(
+    'retrieval',
+    projectId,
+    {
+      query,
+      top_k: topK,
+    },
+    signal,
+  )
 }
 
 export async function callRerankApi(
@@ -572,12 +498,17 @@ export async function callRerankApi(
   topK: number = 10,
   signal?: AbortSignal,
 ): Promise<{ taskId: string; result: RerankTaskResult }> {
-  return submitSearchTask<RerankTaskResult>('rerank', projectId, {
-    query,
-    top_k: topK,
-    retrieval_task_id: retrievalTaskId,
-    candidates,
-  }, signal)
+  return submitSearchTask<RerankTaskResult>(
+    'rerank',
+    projectId,
+    {
+      query,
+      top_k: topK,
+      retrieval_task_id: retrievalTaskId,
+      candidates,
+    },
+    signal,
+  )
 }
 
 export async function prepareValidateCandidates(
@@ -636,12 +567,17 @@ export async function callValidateApi(
   topK: number = 10,
   signal?: AbortSignal,
 ): Promise<{ taskId: string; result: ValidateTaskResult }> {
-  return submitSearchTask<ValidateTaskResult>('validate', projectId, {
-    query,
-    top_k: topK,
-    rerank_task_id: rerankTaskId,
-    candidates,
-  }, signal)
+  return submitSearchTask<ValidateTaskResult>(
+    'validate',
+    projectId,
+    {
+      query,
+      top_k: topK,
+      rerank_task_id: rerankTaskId,
+      candidates,
+    },
+    signal,
+  )
 }
 
 interface IndexAllMediaParams {
@@ -671,13 +607,7 @@ export async function reconcileMediaIndexing(
   projectId: string,
   mediaIds: string[],
 ): Promise<ReconcileMediaIndexingResult> {
-  const normalizedMediaIds = Array.from(
-    new Set(
-      mediaIds
-        .map((id) => id.trim())
-        .filter(Boolean),
-    ),
-  )
+  const normalizedMediaIds = Array.from(new Set(mediaIds.map((id) => id.trim()).filter(Boolean)))
 
   const response = await fetchClient.post<ReconcileMediaIndexingResult>(
     '/api/media/indexing/reconcile',
@@ -759,18 +689,20 @@ async function ensureSearchMediaIndexed(params: {
   let failedCount = 0
   onIndexingProgress?.(0, targetIds.length, 0)
 
-  const results = await Promise.allSettled(targetIds.map(async (mediaId) => {
-    checkCancelled?.()
-    try {
-      return await ensureMediaIndexing(mediaId)
-    } catch (error) {
-      failedCount += 1
-      throw error
-    } finally {
-      resolvedCount += 1
-      onIndexingProgress?.(resolvedCount, targetIds.length, failedCount)
-    }
-  }))
+  const results = await Promise.allSettled(
+    targetIds.map(async (mediaId) => {
+      checkCancelled?.()
+      try {
+        return await ensureMediaIndexing(mediaId)
+      } catch (error) {
+        failedCount += 1
+        throw error
+      } finally {
+        resolvedCount += 1
+        onIndexingProgress?.(resolvedCount, targetIds.length, failedCount)
+      }
+    }),
+  )
   const failures = results.filter((result) => result.status === 'rejected')
   if (failures.length > 0) {
     const firstFailure = failures[0]
@@ -906,8 +838,8 @@ export async function searchMedia({
     const validationMap = new Map(validationResults.map((result) => [result.point_id, result]))
     checkCancelled?.()
     if (
-      validationResults.length !== reranked.length
-      || reranked.some((result) => !validationMap.has(result.point_id))
+      validationResults.length !== reranked.length ||
+      reranked.some((result) => !validationMap.has(result.point_id))
     ) {
       return { results: [], error: t('aiPanel.search.validationFailed') }
     }
@@ -920,7 +852,11 @@ export async function searchMedia({
           validation_result: validationMap.get(result.point_id)!,
         }))
         // irrelevant 与模型解析失败不会进入编辑器；uncertain 保留给用户自行判断。
-        .filter((result) => result.validation_result?.verdict !== 'irrelevant' && result.validation_result?.verdict !== 'error'),
+        .filter(
+          (result) =>
+            result.validation_result?.verdict !== 'irrelevant' &&
+            result.validation_result?.verdict !== 'error',
+        ),
       error: '',
     }
   } catch (error) {

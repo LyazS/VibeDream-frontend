@@ -2,7 +2,7 @@ import type {
   TaskProgressSubscription,
   TaskProgressUpdate,
 } from '@/core/utils/cloudflareTaskProgressClient'
-import { subscribeToMediaTask } from './mediaTaskApi'
+import { subscribeToAiTask } from '@/core/ai-tasks/taskApi'
 
 export type MediaIndexingTaskStatus =
   | 'pending'
@@ -15,13 +15,12 @@ export type MediaIndexingTaskStatus =
 
 export interface MediaIndexingTask {
   task_id: string
-  capability: 'indexing'
+  type: 'media.indexing'
   project_id: string
   status: MediaIndexingTaskStatus
   revision: number
   progress?: number
   progress_message?: string
-  origin_tab_id?: string
   result_summary?: unknown
   error?: string
   message?: string
@@ -32,7 +31,6 @@ export interface MediaIndexingTask {
 
 export interface MediaIndexingTaskSubmission {
   project_id: string
-  origin_tab_id: string
   input: {
     media_id: string
     media_version: string
@@ -65,12 +63,11 @@ function isTaskStatus(value: unknown): value is MediaIndexingTaskStatus {
 
 function isMediaIndexingTask(task: TaskProgressUpdate): task is MediaIndexingTask {
   // WebSocket 是多能力共用通道；索引 Resolver 只接受 indexing 的状态机消息。
-  return task.capability === 'indexing' && isTaskStatus(task.status)
+  return task.type === 'media.indexing' && isTaskStatus(task.status)
 }
 
 export function subscribeToMediaIndexingTask(
   taskId: string,
-  originTabId: string,
 ): TaskProgressSubscription<MediaIndexingTask> {
-  return subscribeToMediaTask(taskId, originTabId, isMediaIndexingTask)
+  return subscribeToAiTask(taskId, isMediaIndexingTask)
 }

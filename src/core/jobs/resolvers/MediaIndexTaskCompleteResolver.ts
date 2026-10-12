@@ -1,6 +1,6 @@
 import type { ResolveContext, ResourceResolver } from '../ResourceResolver'
 import type { ResourceRequest } from '../ResourceTypes'
-import { cancelMediaTask } from './mediaTaskApi'
+import { cancelAiTask } from '@/core/ai-tasks/taskApi'
 import {
   canResumeMediaIndexingFromRemote,
   createMediaIndexTaskCompleteRequest,
@@ -102,7 +102,7 @@ export class MediaIndexTaskCompleteResolver
 
     // 先终止本地等待，再请求后端状态机取消；后端 Workflow 会在安全检查点退款并发布最终状态。
     this.abortControllers.get(taskId)?.abort()
-    await cancelMediaTask(taskId, 'indexing')
+    await cancelAiTask(taskId, 'indexing')
 
     if (mediaItem) {
       setIndexingMetadata(mediaItem, {

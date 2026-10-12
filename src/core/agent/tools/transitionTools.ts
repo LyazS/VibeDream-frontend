@@ -4,7 +4,7 @@ import { UpdateTransitionConfigCommand } from '@/core/modules/commands/timelineC
 import { useUnifiedStore } from '@/core/unifiedStore'
 import { historyLabels } from '@/core/modules/historyLabel'
 import { framesToTimecode } from '@/core/utils/timeUtils'
-import type { ToolDefinition } from './types'
+import type { ToolDefinition, ToolExecutionContext } from './types'
 import { createTimelineCommandHelpers } from './timelineEditShared'
 import { isValidAgentToolTimecode, parseAgentToolTimecode } from './utils/timecode'
 import { buildToolError, buildToolException, buildToolSuccess } from './utils/result'
@@ -71,13 +71,23 @@ function requireTransitionTarget(args: Record<string, unknown>) {
   return { left, right, seamFrame }
 }
 
-export async function executeSearchTransitions(args: Record<string, unknown>) {
+export async function executeSearchTransitions(
+  args: Record<string, unknown>,
+  context: ToolExecutionContext,
+) {
+  context.signal.throwIfAborted()
+  if (!context.isCurrent()) throw new Error('TOOL_CONTEXT_EXPIRED')
   if (typeof args.query !== 'string' || !args.query.trim())
     return buildToolError('search_transitions', 'invalid_arguments', 'query 必须是非空字符串。')
   try {
     if (args.topK !== undefined && typeof args.topK !== 'number')
       throw new Error('topK 必须是数字。')
-    const response = await searchTransitions(args.query.trim(), args.topK)
+    const response = await searchTransitions(args.query.trim(), args.topK, {
+      projectId: context.projectId,
+      signal: context.signal,
+    })
+    context.signal.throwIfAborted()
+    if (!context.isCurrent()) throw new Error('TOOL_CONTEXT_EXPIRED')
     return buildToolSuccess('search_transitions', {
       results: response.results.map((item) => ({
         templateId: item.id,
@@ -86,6 +96,8 @@ export async function executeSearchTransitions(args: Record<string, unknown>) {
       })),
     })
   } catch (error) {
+    if (error instanceof DOMException && error.name === 'AbortError')
+      return buildToolError('search_transitions', 'user_cancelled', '用户取消了本次转场检索')
     return buildToolError(
       'search_transitions',
       'search_failed',
