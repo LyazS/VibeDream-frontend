@@ -10,6 +10,8 @@ import type { Completion, StreamParams } from '../src/core/agent/transport/Agent
 import { createToolRuntime, agentTools } from '../src/core/agent/runtime/ToolRuntime'
 import { MessagePartType, type AgentMessagePart } from '../src/core/agent/types'
 import type { AgentUsageRecord } from '../src/core/agent/runtime/AgentUsage'
+import type { VirtualDirectory } from '../src/core/directory/types'
+import systemPrompt from '../src/core/agent/prompts/system-prompt.txt?raw'
 
 const transport = vi.hoisted(() => ({
   calls: vi.fn(),
@@ -54,6 +56,27 @@ let project: {
   isProjectSettingsReady: ReturnType<typeof ref<boolean>>
   isProjectTimelineReady: ReturnType<typeof ref<boolean>>
 }
+let selection: {
+  selectedClipTimelineItemIds: ReturnType<typeof ref<string[]>>
+  selectedLibraryAssetIds: ReturnType<typeof ref<Set<string>>>
+}
+let directories: ReturnType<typeof ref<Map<string, VirtualDirectory>>>
+let currentDirectory: ReturnType<typeof ref<VirtualDirectory | null>>
+let currentFrame: ReturnType<typeof ref<number>>
+let viewport: {
+  TimelineContentWidth: ReturnType<typeof ref<number>>
+  totalDurationFrames: ReturnType<typeof ref<number>>
+  zoomLevel: ReturnType<typeof ref<number>>
+  scrollOffset: ReturnType<typeof ref<number>>
+  maxVisibleDurationFrames: ReturnType<typeof ref<number>>
+}
+
+function userContent(text: string) {
+  return [
+    { type: 'text', text: expect.stringMatching(/^\[BACKGROUND_CONTEXT\]\n/) },
+    { type: 'text', text },
+  ]
+}
 
 function output(
   request: StreamParams,
@@ -78,7 +101,19 @@ function mountAgent() {
   registry.register('user', user)
   registry.register('config', config)
   registry.register('project', project)
-  registry.register('selection', { selectedClipTimelineItemIds: ref(['clip1']) })
+  registry.register('selection', selection)
+  registry.register('directory', {
+    directories,
+    currentDir: currentDirectory,
+    getDirectory: (id: string) => directories.value.get(id),
+    getAssetDirectoryId: (id: string) => (id === 'media1' ? 'dir_video' : null),
+  })
+  registry.register('media', {
+    getAsset: (id: string) =>
+      id === 'media1' ? { id, name: 'Video', assetKind: 'media' } : undefined,
+  })
+  registry.register('playback', { currentFrame })
+  registry.register('viewport', viewport)
   scope = effectScope()
   agent = scope.run(() => createUnifiedAgentModule(registry))!
 }
@@ -92,6 +127,20 @@ beforeEach(async () => {
   user = { currentUser: ref({ id: 'u1', balance: '0' }) }
   config = { projectId: ref('p1'), projectName: ref('Test') }
   project = { isProjectSettingsReady: ref(true), isProjectTimelineReady: ref(true) }
+  selection = {
+    selectedClipTimelineItemIds: ref(['clip1']),
+    selectedLibraryAssetIds: ref(new Set()),
+  }
+  directories = ref(new Map())
+  currentDirectory = ref(null)
+  currentFrame = ref(0)
+  viewport = {
+    TimelineContentWidth: ref(800),
+    totalDurationFrames: ref(1800),
+    zoomLevel: ref(1),
+    scrollOffset: ref(0),
+    maxVisibleDurationFrames: ref(1800),
+  }
   mountAgent()
   transport.calls.mockImplementation(async (request: StreamParams) =>
     output(structuredClone(request)),
@@ -167,7 +216,7 @@ describe('persisted Agent sessions', () => {
     })
   })
 
-  it('backfills all historical calls without treating absent charges or cache as zero', async () => {
+  it('restores session usage without treating absent charges or cache as zero', async () => {
     transport.calls.mockImplementation(async (request: StreamParams) =>
       output(
         request,
@@ -180,10 +229,8 @@ describe('persisted Agent sessions', () => {
     )
     await agent.send('first')
     await agent.send('second')
-    const store = new AgentSessionStore()
-    const session = (await store.load('u1', 'p1'))[0]
-    delete session.usageRecords
-    await store.save(session)
+    const session = (await new AgentSessionStore().load('u1', 'p1'))[0]
+    expect(Object.keys(session.usageRecords)).toHaveLength(2)
     scope.stop()
     mountAgent()
     await vi.waitFor(() => expect(agent.ready.value).toBe(true))
@@ -300,7 +347,60 @@ describe('persisted Agent sessions', () => {
     const saved = (await store.load('u1', 'p1'))[0]
     expect(saved.messages[0].parts[0]).toEqual({ type: 'text', text: '第二份快照' })
   })
-  it('saves complete history, all modelCall snapshots and completed journal while keeping memory clean', async () => {
+  it.each(['running', 'failed'] as const)(
+    'restores a %s call summary without replaying the call',
+    async (status) => {
+      await agent.send('original input')
+      const store = new AgentSessionStore()
+      const session = (await store.load('u1', 'p1'))[0]
+      session.latestModelCall!.status = status
+      session.latestModelCall!.error = status === 'failed' ? 'MODEL_FAILED' : null
+      await store.save(session)
+      scope.stop()
+      mountAgent()
+      await vi.waitFor(() => expect(agent.ready.value).toBe(true))
+      expect(agent.selectSession(session.id)).toBe(true)
+      expect(agent.latestModelCall.value).toEqual({
+        ...session.latestModelCall,
+        status: status === 'running' ? 'cancelled' : 'failed',
+      })
+      expect(agent.busy.value).toBe(false)
+      expect(agent.currentMessages.value).toHaveLength(2)
+      expect(transport.calls).toHaveBeenCalledOnce()
+      await agent.send('continue')
+      expect(transport.calls.mock.calls[1][0].messages.slice(1)).toEqual([
+        { role: 'user', content: userContent('original input') },
+        { role: 'assistant', content: [{ type: 'text', text: 'complete reply' }] },
+        { role: 'user', content: userContent('continue') },
+      ])
+    },
+  )
+  it('preserves complete diagnostic output when saving the completed session fails', async () => {
+    const original = AgentSessionStore.prototype.save
+    let failed = false
+    const save = vi
+      .spyOn(AgentSessionStore.prototype, 'save')
+      .mockImplementation(function (session) {
+        if (!failed && session.latestModelCall?.status === 'completed') {
+          failed = true
+          return Promise.reject(new Error('STORAGE_FAILED'))
+        }
+        return original.call(this, session)
+      })
+    try {
+      await agent.send('hello')
+      expect(agent.storageError.value).toBe('STORAGE_FAILED')
+      const logs = await indexedDBService.transaction('agentLogs', 'readonly', (store) =>
+        store.getAll(),
+      )
+      const call = logs[0].spans.find((span: { kind: string }) => span.kind === 'model_call')
+      expect(call.source.output.message.content).toBe('complete reply')
+      expect(call.source.status).toBe('completed')
+    } finally {
+      save.mockRestore()
+    }
+  })
+  it('restores paired history from one session store and keeps diagnostics in telemetry', async () => {
     transport.calls.mockImplementationOnce(async (request: StreamParams) =>
       output(
         request,
@@ -325,21 +425,36 @@ describe('persisted Agent sessions', () => {
       'tool',
       'assistant',
     ])
-    const modelCalls = await indexedDBService.transaction('agentModelCalls', 'readonly', (store) =>
-      store.getAll(),
-    )
-    expect(modelCalls).toHaveLength(2)
-    expect(
-      modelCalls.some((record) => record.modelCall.request.messages.at(-1).role === 'tool'),
-    ).toBe(true)
-    const tools = await indexedDBService.transaction('agentTools', 'readonly', (store) =>
-      store.getAll(),
-    )
-    expect(tools).toHaveLength(1)
-    expect(tools[0].execution).toMatchObject({
+    expect(saved[0].latestModelCall).toEqual({
+      id: transport.calls.mock.calls[1][0].modelCallId,
       status: 'completed',
-      result: { output: 'original tool output' },
+      inputMessageId: saved[0].messages[2].id,
+      assistantMessageId: saved[0].messages[3].id,
+      error: null,
     })
+    expect(saved[0].toolExecutions).toEqual({})
+    const db = await indexedDBService.openDB()
+    expect(db.objectStoreNames.contains('agentModelCalls')).toBe(false)
+    expect(db.objectStoreNames.contains('agentTools')).toBe(false)
+    const logs = await indexedDBService.transaction('agentLogs', 'readonly', (store) =>
+      store.getAll(),
+    )
+    const spans = logs[0].spans
+    const modelCalls = spans.filter((span: { kind: string }) => span.kind === 'model_call')
+    expect(modelCalls).toHaveLength(2)
+    expect(modelCalls[1].source.input.messages).toEqual(transport.calls.mock.calls[1][0].messages)
+    expect(modelCalls[1].source.output.message.content).toBe('complete reply')
+    expect(spans).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          kind: 'tool_result',
+          source: expect.objectContaining({
+            status: 'completed',
+            output: expect.objectContaining({ content: 'original tool output' }),
+          }),
+        }),
+      ]),
+    )
     scope.stop()
     mountAgent()
     await vi.waitFor(() => expect(agent.ready.value).toBe(true))
@@ -355,10 +470,7 @@ describe('persisted Agent sessions', () => {
     await agent.deleteSession(id)
     expect(await new AgentSessionStore().load('u1', 'p1')).toEqual([])
     expect(
-      await indexedDBService.transaction('agentModelCalls', 'readonly', (store) => store.getAll()),
-    ).toEqual([])
-    expect(
-      await indexedDBService.transaction('agentTools', 'readonly', (store) => store.getAll()),
+      await indexedDBService.transaction('agentLogs', 'readonly', (store) => store.getAll()),
     ).toEqual([])
   })
 
@@ -459,7 +571,7 @@ describe('persisted Agent sessions', () => {
     agent.selectSession(idB)
     await agent.send('B 输入')
     expect(transport.calls.mock.calls[2][0].messages.slice(1)).toEqual([
-      { role: 'user', content: [{ type: 'text', text: 'B 输入' }] },
+      { role: 'user', content: userContent('B 输入') },
     ])
     expect(transport.close).not.toHaveBeenCalled()
     expect(transport.created).toHaveBeenCalledOnce()
@@ -544,6 +656,161 @@ describe('persisted Agent sessions', () => {
 })
 
 describe('text Agent orchestration', () => {
+  it('stores a full background snapshot and sends it as a part of the same user message', async () => {
+    const root: VirtualDirectory = {
+      id: 'dir_root',
+      name: 'Root',
+      type: 'base',
+      parentId: null,
+      createdAt: '2026-10-12T00:00:00Z',
+      childDirIds: ['dir_video'],
+    }
+    const folder: VirtualDirectory = {
+      id: 'dir_video',
+      name: 'Videos',
+      type: 'base',
+      parentId: 'dir_root',
+      createdAt: root.createdAt,
+      childDirIds: [],
+    }
+    directories.value.set(root.id, root)
+    directories.value.set(folder.id, folder)
+    currentDirectory.value = folder
+    selection.selectedLibraryAssetIds.value = new Set(['dir_video', 'media1', 'missing'])
+    currentFrame.value = 315
+    viewport.zoomLevel.value = 2
+    viewport.scrollOffset.value = 400
+
+    await agent.send(' move selected clip ')
+    const request = transport.calls.mock.calls[0][0] as StreamParams
+    const part = agent.currentMessages.value[0].parts[1]
+    expect(part.type).toBe(MessagePartType.BACKGROUND_CONTEXT)
+    if (part.type !== MessagePartType.BACKGROUND_CONTEXT) throw new Error('Missing snapshot')
+    expect(JSON.parse(part.text)).toEqual({
+      captured_at: expect.any(String),
+      project_id: 'p1',
+      project_name: 'Test',
+      fps: 30,
+      current_library_directory: { dir_id: 'dir_video', path: '/Videos/' },
+      selected_library_items: [
+        {
+          type: 'directory',
+          id: 'dir_video',
+          name: 'Videos',
+          parent_dir_id: 'dir_root',
+          parent_path: '/',
+          path: '/Videos/',
+        },
+        {
+          type: 'media',
+          id: 'media1',
+          name: 'Video',
+          parent_dir_id: 'dir_video',
+          parent_path: '/Videos/',
+        },
+        { type: 'unknown', id: 'missing', name: null, parent_dir_id: null, parent_path: null },
+      ],
+      selected_clip_ids: ['clip1'],
+      playhead_time: '00:00:10+15',
+      visible_time_range: { start: '00:00:15+00', end: '00:00:45+00' },
+    })
+    expect(request.messages).toEqual([
+      { role: 'system', content: systemPrompt },
+      {
+        role: 'user',
+        content: [
+          {
+            type: 'text',
+            text: `[BACKGROUND_CONTEXT]\n用户发送时的工程上下文快照：\n${part.text}`,
+          },
+          { type: 'text', text: 'move selected clip' },
+        ],
+      },
+    ])
+    expect(agent.sessionHistory.value[0].preview).toBe('move selected clip')
+  })
+
+  it('keeps per-input snapshots unchanged across state changes and a session reload', async () => {
+    await agent.send('first')
+    const first = structuredClone((transport.calls.mock.calls[0][0] as StreamParams).messages[1])
+    const sessionId = agent.currentSessionId.value
+    config.projectName.value = 'Renamed'
+    selection.selectedClipTimelineItemIds.value = ['clip2']
+    selection.selectedLibraryAssetIds.value.clear()
+    currentFrame.value = 60
+    await agent.send('second')
+    const secondRequest = transport.calls.mock.calls[1][0] as StreamParams
+    expect(secondRequest.messages[1]).toEqual(first)
+    expect(secondRequest.messages[0]).toEqual({ role: 'system', content: systemPrompt })
+    const saved = await new AgentSessionStore().load('u1', 'p1')
+    const part = saved.find((session) => session.id === sessionId)!.messages[2].parts[1]
+    if (part.type !== MessagePartType.BACKGROUND_CONTEXT) throw new Error('Missing snapshot')
+    expect(JSON.parse(part.text)).toMatchObject({
+      project_name: 'Renamed',
+      selected_clip_ids: ['clip2'],
+      selected_library_items: [],
+      playhead_time: '00:00:02+00',
+    })
+    const second = structuredClone(secondRequest.messages[3])
+    scope.stop()
+    selection.selectedClipTimelineItemIds.value = []
+    mountAgent()
+    await vi.waitFor(() => expect(agent.ready.value).toBe(true))
+    agent.selectSession(sessionId)
+    await agent.send('third')
+    const thirdRequest = transport.calls.mock.calls[2][0] as StreamParams
+    expect(thirdRequest.messages[1]).toEqual(first)
+    expect(thirdRequest.messages[3]).toEqual(second)
+    expect(thirdRequest.messages[5].content).toEqual([
+      { type: 'text', text: expect.stringContaining('"selected_clip_ids":[]') },
+      { type: 'text', text: 'third' },
+    ])
+  })
+
+  it('continues legacy history without fabricating background snapshots', async () => {
+    await agent.send('legacy input')
+    const sessionId = agent.currentSessionId.value
+    const store = new AgentSessionStore()
+    const saved = (await store.load('u1', 'p1')).find((session) => session.id === sessionId)!
+    saved.messages[0].parts = [{ type: MessagePartType.TEXT, text: 'legacy input' }]
+    await store.save(saved)
+    scope.stop()
+    mountAgent()
+    await vi.waitFor(() => expect(agent.ready.value).toBe(true))
+    agent.selectSession(sessionId)
+    await agent.send('new input')
+    const request = transport.calls.mock.calls[1][0] as StreamParams
+    expect(request.messages[1]).toEqual({
+      role: 'user',
+      content: [{ type: 'text', text: 'legacy input' }],
+    })
+    expect(request.messages[3].content).toEqual(userContent('new input'))
+    expect(agent.currentMessages.value[0].parts).toEqual([{ type: 'text', text: 'legacy input' }])
+  })
+
+  it('marks unavailable directory paths and invalid timeline positions as null', async () => {
+    const folder: VirtualDirectory = {
+      id: 'dir_broken',
+      name: 'Broken',
+      type: 'base',
+      parentId: 'dir_broken',
+      createdAt: '2026-10-12T00:00:00Z',
+      childDirIds: [],
+    }
+    directories.value.set(folder.id, folder)
+    currentDirectory.value = folder
+    currentFrame.value = NaN
+    viewport.TimelineContentWidth.value = 0
+    await agent.send('hello')
+    const part = agent.currentMessages.value[0].parts[1]
+    if (part.type !== MessagePartType.BACKGROUND_CONTEXT) throw new Error('Missing snapshot')
+    expect(JSON.parse(part.text)).toMatchObject({
+      current_library_directory: { dir_id: 'dir_broken', path: null },
+      playhead_time: null,
+      visible_time_range: null,
+    })
+  })
+
   it('preserves separate text parts and snapshots without sending UI parts or metadata', async () => {
     await agent.send('first')
     // 构造多文本部件的历史，验证请求映射保留分段而非依赖当前流式回复只有一个 TEXT 部件。
@@ -600,6 +867,8 @@ describe('text Agent orchestration', () => {
       ),
     )
     toolExecution.mockImplementation(async () => {
+      selection.selectedClipTimelineItemIds.value = ['changed-during-tool']
+      currentFrame.value = 90
       expect(agent.running.value).toBe(true)
       expect(await agent.send('concurrent')).toBe(false)
       // 自动续轮时只保留当前执行，上一次工具结果已进入消息历史并清理执行记录。
@@ -615,6 +884,8 @@ describe('text Agent orchestration', () => {
     await agent.send('read and edit')
     expect(toolExecution).toHaveBeenCalledTimes(2)
     const calls = transport.calls.mock.calls.map((call) => call[0] as StreamParams)
+    expect(calls[1].messages.slice(0, 2)).toEqual(calls[0].messages)
+    expect(calls[2].messages.slice(0, 2)).toEqual(calls[0].messages)
     expect(new Set(calls.map((call) => call.modelCallId)).size).toBe(3)
     expect(calls[0].tools).toHaveLength(30)
     expect(calls[2].messages.slice(1).map((message) => message.role)).toEqual([
@@ -686,7 +957,7 @@ describe('text Agent orchestration', () => {
       await agent.send('读取工程')
       const history = (transport.calls.mock.calls[2][0] as StreamParams).messages.slice(1)
       expect(history).toEqual([
-        { role: 'user', content: [{ type: 'text', text: '之前的请求' }] },
+        { role: 'user', content: userContent('之前的请求') },
         {
           role: 'assistant',
           content: [{ type: 'text', text: 'complete reply' }],
@@ -698,7 +969,7 @@ describe('text Agent orchestration', () => {
           tool_call_id: 'older-call',
           name: 'read_project_info',
         },
-        { role: 'user', content: [{ type: 'text', text: '读取工程' }] },
+        { role: 'user', content: userContent('读取工程') },
         { role: 'assistant', content: [{ type: 'text', text: '正在读取' }] },
       ])
       expect(agent.currentMessages.value[1].id).toBe(assistantId)
@@ -764,6 +1035,8 @@ describe('text Agent orchestration', () => {
       expect(agent.toolExecutions.value[agent.currentMessages.value[1].id].result).toBeNull()
       expect(Object.keys(agent.toolExecutions.value)).toEqual([agent.currentMessages.value[1].id])
       expect(transport.calls).toHaveBeenCalledTimes(1)
+      selection.selectedClipTimelineItemIds.value = ['changed-while-answering']
+      currentFrame.value = 120
       const resumed = agent.answerQuestion('竖屏', via)
       expect(agent.running.value).toBe(true)
       expect(agent.toolExecutions.value).toEqual({})
@@ -778,6 +1051,7 @@ describe('text Agent orchestration', () => {
         false,
       )
       const request = transport.calls.mock.calls[1][0] as StreamParams
+      expect(request.messages.slice(0, 2)).toEqual(transport.calls.mock.calls[0][0].messages)
       expect(request.messages.slice(1).map((message) => message.role)).toEqual([
         'user',
         'assistant',
@@ -1076,11 +1350,20 @@ describe('text Agent orchestration', () => {
       'assistant',
     ])
     expect(agent.currentMessages.value[1].parts).toEqual([{ type: 'text', text: '正在查找素材' }])
-    const journal = await indexedDBService.transaction('agentTools', 'readonly', (store) =>
+    const logs = await indexedDBService.transaction('agentLogs', 'readonly', (store) =>
       store.getAll(),
     )
-    expect(journal).toHaveLength(1)
-    expect(journal[0].execution).toMatchObject({ status: 'cancelled', result: null })
+    expect(logs[0].spans).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          kind: 'tool_result',
+          source: expect.objectContaining({
+            status: 'cancelled',
+            error: { code: 'TOOL_CANCELLED', result_committed: false },
+          }),
+        }),
+      ]),
+    )
 
     scope.stop()
     mountAgent()
@@ -1110,9 +1393,9 @@ describe('text Agent orchestration', () => {
     const original = AgentSessionStore.prototype.save
     const save = vi
       .spyOn(AgentSessionStore.prototype, 'save')
-      .mockImplementation(function (session, settled) {
+      .mockImplementation(function (session) {
         if (Object.keys(session.toolExecutions).length) agent.stop()
-        return original.call(this, session, settled)
+        return original.call(this, session)
       })
     try {
       await agent.send('读取素材')
@@ -1122,10 +1405,6 @@ describe('text Agent orchestration', () => {
       expect(agent.currentMessages.value).toHaveLength(1)
       const saved = await new AgentSessionStore().load('u1', 'p1')
       expect(saved[0].toolExecutions).toEqual({})
-      const journal = await indexedDBService.transaction('agentTools', 'readonly', (store) =>
-        store.getAll(),
-      )
-      expect(journal[0].execution).toMatchObject({ status: 'cancelled', result: null })
     } finally {
       save.mockRestore()
     }
@@ -1154,6 +1433,9 @@ describe('text Agent orchestration', () => {
     )
     const pending = agent.send('新增轨道')
     await vi.waitFor(() => expect(toolExecution).toHaveBeenCalledOnce())
+    const saved = (await new AgentSessionStore().load('u1', 'p1'))[0]
+    expect(saved.toolExecutions).toEqual({})
+    expect(saved.messages[1].parts).toEqual([{ type: 'text', text: '开始编辑' }])
     const context = toolExecution.mock.calls[0][2]
     expect(agent.currentMessages.value[1].parts).toContainEqual(
       expect.objectContaining({ type: 'tool_call', status: 'requested' }),
@@ -1222,7 +1504,10 @@ describe('text Agent orchestration', () => {
       finish({ success: true, output: '旧结果' })
       await old
       expect(agent.currentMessages.value).toHaveLength(2)
-      expect(agent.currentMessages.value[0].parts).toEqual([{ type: 'text', text: '新任务' }])
+      expect(agent.currentMessages.value[0].parts).toEqual([
+        { type: 'text', text: '新任务' },
+        { type: 'background_context', text: expect.any(String) },
+      ])
       expect(agent.toolExecutions.value).toEqual({})
       expect(agent.running.value).toBe(false)
     },
@@ -1271,8 +1556,8 @@ describe('text Agent orchestration', () => {
     expect(agent.currentMessages.value).toHaveLength(1)
     await agent.send('继续')
     expect((transport.calls.mock.calls[1][0] as StreamParams).messages.slice(1)).toEqual([
-      { role: 'user', content: [{ type: 'text', text: '没有回复的输入' }] },
-      { role: 'user', content: [{ type: 'text', text: '继续' }] },
+      { role: 'user', content: userContent('没有回复的输入') },
+      { role: 'user', content: userContent('继续') },
     ])
   })
   it('creates one client without calling before the project and account are ready', async () => {
@@ -1290,26 +1575,26 @@ describe('text Agent orchestration', () => {
     await agent.send('second')
     const [first, second] = transport.calls.mock.calls.map((call) => call[0] as StreamParams)
     expect(second.messages.slice(1)).toEqual([
-      { role: 'user', content: [{ type: 'text', text: 'first' }] },
+      { role: 'user', content: userContent('first') },
       { role: 'assistant', content: [{ type: 'text', text: 'complete reply' }] },
-      { role: 'user', content: [{ type: 'text', text: 'second' }] },
+      { role: 'user', content: userContent('second') },
     ])
     expect(first.messages[0]).toMatchObject({
       role: 'system',
       content: expect.stringContaining('核心规则'),
     })
-    expect(first.messages[0].content).toContain('"selected_clip_ids":["clip1"]')
+    expect(first.messages[0].content).toBe(systemPrompt)
+    expect(first.messages[1].content).toEqual(userContent('first'))
     expect(second.modelCallId).not.toBe(first.modelCallId)
     expect(first).not.toHaveProperty('taskId')
     expect(second).not.toHaveProperty('taskId')
     expect(agent.latestModelCall.value).toMatchObject({
       id: second.modelCallId,
       status: 'completed',
-      sessionId: agent.currentSessionId.value,
-      userId: 'u1',
-      projectId: 'p1',
-      request: second,
+      error: null,
     })
+    expect(agent.latestModelCall.value).not.toHaveProperty('request')
+    expect(agent.latestModelCall.value).not.toHaveProperty('completion')
     expect(agent.currentMessages.value).toHaveLength(4)
     expect(agent.currentMessages.value.every((message) => !('status' in message))).toBe(true)
     expect(transport.created).toHaveBeenCalledOnce()
@@ -1389,7 +1674,10 @@ describe('text Agent orchestration', () => {
       expect(agent.running.value).toBe(false)
       expect(agent.currentMessages.value).toHaveLength(4)
       expect(agent.currentMessages.value[2]).toMatchObject({
-        parts: [{ type: 'text', text: 'unfinished input' }],
+        parts: [
+          { type: 'text', text: 'unfinished input' },
+          { type: 'background_context', text: expect.any(String) },
+        ],
       })
       expect(agent.currentMessages.value[3].parts).toEqual([
         { type: 'text', text: 'partial draft' },
@@ -1397,11 +1685,11 @@ describe('text Agent orchestration', () => {
 
       await agent.send('next input')
       expect(transport.calls.mock.calls[2][0].messages.slice(1)).toEqual([
-        { role: 'user', content: [{ type: 'text', text: 'completed input' }] },
+        { role: 'user', content: userContent('completed input') },
         { role: 'assistant', content: [{ type: 'text', text: 'complete reply' }] },
-        { role: 'user', content: [{ type: 'text', text: 'unfinished input' }] },
+        { role: 'user', content: userContent('unfinished input') },
         { role: 'assistant', content: [{ type: 'text', text: 'partial draft' }] },
-        { role: 'user', content: [{ type: 'text', text: 'next input' }] },
+        { role: 'user', content: userContent('next input') },
       ])
     },
   )
@@ -1414,7 +1702,7 @@ describe('text Agent orchestration', () => {
     expect(agent.latestModelCall.value).toBeNull()
     await agent.send('new')
     expect(transport.calls.mock.calls[1][0].messages.slice(1)).toEqual([
-      { role: 'user', content: [{ type: 'text', text: 'new' }] },
+      { role: 'user', content: userContent('new') },
     ])
     expect(transport.close).not.toHaveBeenCalled()
     expect(transport.created).toHaveBeenCalledOnce()
@@ -1452,7 +1740,10 @@ describe('text Agent orchestration', () => {
     expect(agent.latestModelCall.value).toMatchObject({ id: newModelCallId, status: 'running' })
     expect(agent.currentMessages.value[1].parts).toEqual([{ type: 'text', text: 'partial draft' }])
     expect(agent.currentMessages.value[0]).toMatchObject({
-      parts: [{ type: 'text', text: 'new session input' }],
+      parts: [
+        { type: 'text', text: 'new session input' },
+        { type: 'background_context', text: expect.any(String) },
+      ],
     })
     completions[1]({
       modelCallId: newModelCallId,
@@ -1514,7 +1805,10 @@ describe('text Agent orchestration', () => {
     user.currentUser.value = { id: 'u2', balance: '0' }
     await vi.waitFor(() => expect(agent.ready.value).toBe(true))
     await agent.send('new account')
-    expect(agent.latestModelCall.value).toMatchObject({ userId: 'u2', status: 'completed' })
+    expect(agent.latestModelCall.value).toMatchObject({ status: 'completed' })
+    const sessions = await new AgentSessionStore().load('u2', 'p1')
+    expect(sessions).toHaveLength(1)
+    expect(sessions[0]).toMatchObject({ id: agent.currentSessionId.value, userId: 'u2' })
   })
   it('clears messages on pagehide and releases resources with the store scope', async () => {
     await agent.send('first')

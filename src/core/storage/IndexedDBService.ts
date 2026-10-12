@@ -7,7 +7,7 @@ export class IndexedDBService {
   private db: IDBDatabase | null = null
 
   private readonly DB_NAME = 'VideoEditorDB'
-  private readonly DB_VERSION = 5
+  private readonly DB_VERSION = 6
 
   // 私有构造函数，确保单例
   private constructor() {}
@@ -44,66 +44,25 @@ export class IndexedDBService {
       }
 
       request.onupgradeneeded = (event) => {
-        const db = (event.target as IDBOpenDBRequest).result
-        const transaction = request.transaction!
+        const db = request.result
 
         // handles store（FileSystemAccessAdapter 使用）
         if (!db.objectStoreNames.contains('handles')) {
           db.createObjectStore('handles')
         }
 
-        if (db.objectStoreNames.contains('agentTurns')) {
-          transaction.objectStore('agentTurns').name = 'agentModelCalls'
+        // 重建聊天存储，清除旧会话及本地调用/工具诊断记录；保留日志补传队列。
+        if (event.oldVersion < 6) {
+          for (const name of ['agentSessions', 'agentTurns', 'agentModelCalls', 'agentTools']) {
+            if (db.objectStoreNames.contains(name)) db.deleteObjectStore(name)
+          }
         }
 
-        // 会话、模型请求快照和工具日志按账户、工程及工具契约分区。
-        for (const name of ['agentSessions', 'agentModelCalls', 'agentTools', 'agentLogs']) {
+        for (const name of ['agentSessions', 'agentLogs']) {
           if (!db.objectStoreNames.contains(name)) {
             const store = db.createObjectStore(name, { keyPath: 'key' })
             store.createIndex('owner', 'owner')
             store.createIndex('session', 'sessionKey')
-          }
-        }
-
-        if (event.oldVersion === 3) {
-          const rename = (record: Record<string, unknown>, from: string, to: string) => {
-            if (from in record) {
-              record[to] = record[from]
-              delete record[from]
-            }
-          }
-          const migrateCall = (value: unknown) => {
-            if (!value || typeof value !== 'object') return
-            const call = value as Record<string, unknown>
-            for (const field of ['request', 'completion']) {
-              const snapshot = call[field]
-              if (snapshot && typeof snapshot === 'object') {
-                rename(snapshot as Record<string, unknown>, 'turnId', 'modelCallId')
-              }
-            }
-          }
-          // Only migrate known persistence fields; tool arguments and output stay opaque.
-          for (const name of ['agentSessions', 'agentModelCalls', 'agentTools']) {
-            const cursorRequest = transaction.objectStore(name).openCursor()
-            cursorRequest.onsuccess = () => {
-              const cursor = cursorRequest.result
-              if (!cursor) return
-              const record = cursor.value
-              if (name === 'agentSessions') {
-                rename(record.data, 'latestTurn', 'latestModelCall')
-                migrateCall(record.data.latestModelCall)
-                for (const execution of Object.values(record.data.toolExecutions)) {
-                  rename(execution as Record<string, unknown>, 'turnId', 'modelCallId')
-                }
-              } else if (name === 'agentModelCalls') {
-                rename(record, 'turn', 'modelCall')
-                migrateCall(record.modelCall)
-              } else {
-                rename(record.execution, 'turnId', 'modelCallId')
-              }
-              cursor.update(record)
-              cursor.continue()
-            }
           }
         }
       }

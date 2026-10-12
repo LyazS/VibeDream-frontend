@@ -1,5 +1,6 @@
 import { useUnifiedStore } from '@/core/unifiedStore'
 import type { VirtualDirectory } from '@/core/directory/types'
+import { buildCanonicalDirectoryPath as buildDirectoryPath } from '@/core/directory/directoryPath'
 
 export interface ResolvedDirectoryPath {
   dirId: string
@@ -29,29 +30,7 @@ export function normalizeDirectoryPath(inputPath: string): string | null {
 }
 
 export function buildCanonicalDirectoryPath(dirId: string): string | null {
-  const directories = getDirectories()
-  const pathParts: string[] = []
-  const visited = new Set<string>()
-  let currentId: string | null = dirId
-
-  while (currentId !== null) {
-    if (visited.has(currentId)) {
-      return null
-    }
-    visited.add(currentId)
-
-    const directory = directories.get(currentId)
-    if (!directory) {
-      return null
-    }
-
-    if (directory.parentId !== null) {
-      pathParts.unshift(directory.name)
-    }
-    currentId = directory.parentId
-  }
-
-  return pathParts.length === 0 ? '/' : `/${pathParts.join('/')}/`
+  return buildDirectoryPath(dirId, getDirectories())
 }
 
 export function resolveDirectoryPath(inputPath: string): ResolvedDirectoryPath | null {
@@ -61,7 +40,9 @@ export function resolveDirectoryPath(inputPath: string): ResolvedDirectoryPath |
   }
 
   const directories = getDirectories()
-  const rootDirectory = Array.from(directories.values()).find((directory) => directory.parentId === null)
+  const rootDirectory = Array.from(directories.values()).find(
+    (directory) => directory.parentId === null,
+  )
   if (!rootDirectory) {
     return null
   }
@@ -70,10 +51,7 @@ export function resolveDirectoryPath(inputPath: string): ResolvedDirectoryPath |
     return { dirId: rootDirectory.id, canonicalPath: '/' }
   }
 
-  const pathSegments = normalizedPath
-    .replace(/^\//, '')
-    .split('/')
-    .filter(Boolean)
+  const pathSegments = normalizedPath.replace(/^\//, '').split('/').filter(Boolean)
   let currentDirectory = rootDirectory
 
   for (const segment of pathSegments) {
@@ -103,15 +81,14 @@ export function explainDirectoryPathResolutionFailure(inputPath: string): {
   }
 
   const directories = getDirectories()
-  const rootDirectory = Array.from(directories.values()).find((directory) => directory.parentId === null)
+  const rootDirectory = Array.from(directories.values()).find(
+    (directory) => directory.parentId === null,
+  )
   if (!rootDirectory) {
     return { failedSegment: null, resolvedParentPath: '/' }
   }
 
-  const pathSegments = normalizedPath
-    .replace(/^\//, '')
-    .split('/')
-    .filter(Boolean)
+  const pathSegments = normalizedPath.replace(/^\//, '').split('/').filter(Boolean)
   let currentDirectory = rootDirectory
 
   for (const segment of pathSegments) {

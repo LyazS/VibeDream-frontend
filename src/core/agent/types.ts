@@ -1,4 +1,4 @@
-import type { Completion, StreamParams, ToolCall } from './transport/AgentClient'
+import type { ToolCall } from './transport/AgentClient'
 import type { ToolResult } from './tools/types'
 import type { AgentUsageRecord } from './runtime/AgentUsage'
 
@@ -96,18 +96,13 @@ export type ToolExecution = {
   result: ToolResult | null
 }
 
-/** 一次模型调用的快照与终态；工具执行及后续调用不属于这一 modelCall。 */
-export type ModelCall = {
+/** 最近一次模型调用的轻量摘要；完整请求和响应由云端诊断日志保存。 */
+export type ModelCallSummary = {
   id: string
   status: 'running' | 'completed' | 'cancelled' | 'failed'
-  sessionId: string
-  userId: string
-  projectId: string
   // 触发本轮的用户消息或工具结果消息 ID，每次续轮都重新关联输入。
   inputMessageId: string
   assistantMessageId: string
-  request: StreamParams
-  completion: Completion | null
   error: string | null
 }
 
@@ -119,8 +114,8 @@ export type AgentSession = {
   createdAt: string
   updatedAt: string
   messages: AgentMessage[]
-  latestModelCall: ModelCall | null
-  usageRecords?: Record<string, AgentUsageRecord>
+  latestModelCall: ModelCallSummary | null
+  usageRecords: Record<string, AgentUsageRecord>
   toolExecutions: Record<string, ToolExecution>
 }
 

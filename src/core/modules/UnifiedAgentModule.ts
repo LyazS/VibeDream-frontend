@@ -1,8 +1,8 @@
 import { computed, onScopeDispose, readonly, ref, watch } from 'vue'
 import { API_BASE_URL } from '@/config/runtimeConfig'
 import { enabledApiCapabilities } from '@/config/apiCapabilities'
-import { FRAME_RATE } from '@/constants/TimeConstants'
 import { buildTextMessages } from '@/core/agent/prompts/textMessages'
+import { captureBackgroundContext } from '@/core/agent/prompts/backgroundContext'
 import { agentTools, createToolRuntime } from '@/core/agent/runtime/ToolRuntime'
 import { AgentSessionStore } from '@/core/agent/runtime/AgentSessionStore'
 import { getAgentContextUsage, summarizeAgentUsage } from '@/core/agent/runtime/AgentUsage'
@@ -24,7 +24,7 @@ import {
   type ToolCallPart,
   type InteractionSubmittedVia,
   type AgentSession,
-  type ModelCall,
+  type ModelCallSummary,
   type ToolExecution,
 } from '@/core/agent/types'
 import { MODULE_NAMES, type ModuleMap, type ModuleRegistry } from './ModuleRegistry'
@@ -37,8 +37,6 @@ export function createUnifiedAgentModule(registry: ModuleRegistry) {
   const config = registry.get<ModuleMap['config']>(MODULE_NAMES.CONFIG)
   // 工程加载状态来源，设置和时间轴均就绪后才允许发送。
   const project = registry.get<ModuleMap['project']>(MODULE_NAMES.PROJECT)
-  // 当前选中片段来源，将选中 ID 复制到本轮工程上下文。
-  const selection = registry.get<ModuleMap['selection']>(MODULE_NAMES.SELECTION)
   // 服务端明确通知身份失效后阻止发送，账户 ID 变化时重置。
   const identityInvalid = ref(false)
   // Agent 发布开关与其他 API 能力共用构建配置。
@@ -76,7 +74,7 @@ export function createUnifiedAgentModule(registry: ModuleRegistry) {
   const currentSession = computed(() => sessions.value[currentSessionId.value])
   // 唯一对话记录：立即保存用户输入和助手增量，工具调用与结果成对写入；中断保留实际收到的文本。
   const currentMessages = computed(() => currentSession.value?.messages ?? [])
-  // 当前或最近一次模型调用，保存归属、完整请求快照、终态结果和错误；正文只保存在消息列表。
+  // 最近一次调用只保存状态及消息关联；完整输入输出交给诊断日志。
   const latestModelCall = computed(() => currentSession.value?.latestModelCall ?? null)
   const usage = computed(() => summarizeAgentUsage(currentSession.value?.usageRecords ?? {}))
   const contextUsage = computed(() =>
@@ -140,10 +138,10 @@ export function createUnifiedAgentModule(registry: ModuleRegistry) {
   )
 
   /** 保存固定会话快照；存储异常阻止新请求，详细恢复策略留待阶段 3.4。 */
-  async function persistSession(session: AgentSession, execution?: ToolExecution) {
+  async function persistSession(session: AgentSession) {
     session.updatedAt = new Date().toISOString()
     try {
-      await sessionStore.save(session, execution)
+      await sessionStore.save(session)
     } catch (error) {
       if (sessions.value[session.id] === session) {
         storageError.value = error instanceof Error ? error.message : String(error)
@@ -164,7 +162,7 @@ export function createUnifiedAgentModule(registry: ModuleRegistry) {
         session.projectId !== config.projectId.value
       )
         return
-      session.usageRecords![modelCallId] = record
+      session.usageRecords[modelCallId] = record
       void persistSession(session).catch(() => {})
     },
     /** 连接前检查发送条件，并按当前工程生成 WebSocket 地址。 */
@@ -193,7 +191,7 @@ export function createUnifiedAgentModule(registry: ModuleRegistry) {
     }
   }
   /** 取得本轮唯一助手消息，首个增量或完整终态到达时才创建，后续始终更新同一个 ID。 */
-  function getAssistantMessage(session: AgentSession, modelCall: ModelCall): AgentMessage {
+  function getAssistantMessage(session: AgentSession, modelCall: ModelCallSummary): AgentMessage {
     let message = session.messages.find((message) => message.id === modelCall.assistantMessageId)
     if (!message) {
       session.messages.push(
@@ -315,15 +313,26 @@ export function createUnifiedAgentModule(registry: ModuleRegistry) {
    */
   function buildModelHistory(session: AgentSession): ModelMessage[] {
     // 每次请求都从运行所属会话重新生成协议消息，保持对话顺序；与 UI 展示选择无关，不缓存第二份历史。
-    // 系统提示词和最新工程上下文由 runLoop 中的 buildTextMessages() 另外添加。
+    // 系统提示词由 buildTextMessages() 添加；背景上下文属于对应用户消息的固定快照。
     const history: ModelMessage[] = []
     for (const message of session.messages) {
       // 只提取 TEXT 部件，逐段复制到 content 数组，保留原有顺序、边界、空格和换行。
-      // 工具调用另行映射，进度和交互元数据不转成正文。
+      // 用户背景快照放在正文之前；工具调用另行映射，进度和交互元数据不转成正文。
       const content = getMessageTextParts(message).map((part) => ({
         type: 'text' as const,
         text: part.text,
       }))
+      if (message.role === AgentMessageRole.USER) {
+        const background = message.parts
+          .filter((part) => part.type === MessagePartType.BACKGROUND_CONTEXT)
+          .filter((part) => part.text.trim())
+        content.unshift(
+          ...background.map((part) => ({
+            type: 'text' as const,
+            text: `[BACKGROUND_CONTEXT]\n用户发送时的工程上下文快照：\n${part.text}`,
+          })),
+        )
+      }
 
       // 1. 工具结果作为独立的 tool 消息返回模型，成功、失败及参数校验错误都走此分支。
       // 文本部件内保存原工具输出或错误正文，不解析为 JSON，也不额外编码工具输出。
@@ -459,7 +468,7 @@ export function createUnifiedAgentModule(registry: ModuleRegistry) {
    * running 覆盖模型、普通工具和客户端取消收口；ask_user 保存问题后退出，不占运行槽等待回答。
    * 工具错误成对返回模型供下一轮修正；模型/传输异常停止，由用户输入新指令继续，不自动重试。
    */
-  async function runLoop(session: AgentSession, answeredTool?: ToolExecution) {
+  async function runLoop(session: AgentSession) {
     // 先同步占用运行槽；模型与工具分别取消，执行收口前不允许新运行并发。
     const control = {
       model: new AbortController(),
@@ -480,6 +489,8 @@ export function createUnifiedAgentModule(registry: ModuleRegistry) {
       config.projectId.value === projectId
     /** 除归属有效外，还要求没有普通停止信号；用于模型调用和自动续轮的推进准入。 */
     const isRunCurrent = () => isRunOwned() && !control.model.signal.aborted
+    // 只跟踪本次运行新建的调用，避免本地错误覆盖旧调用或完整终态的诊断日志。
+    let awaitingCompletion = false
     try {
       const trigger = session.messages[session.messages.length - 1]!
       await telemetry.activity(session, session.messages.length > 1)
@@ -497,7 +508,7 @@ export function createUnifiedAgentModule(registry: ModuleRegistry) {
           }),
         )
       // 先保存触发消息（用户输入或回答后的工具对）；运行槽已同步占用，保存期间不能并发发送。
-      await persistSession(session, answeredTool)
+      await persistSession(session)
       while (isRunCurrent()) {
         // 1. 等待旧模型调用释放槽位，再复核归属；只等待收口，不重放旧请求。
         await client.waitForIdle()
@@ -507,28 +518,18 @@ export function createUnifiedAgentModule(registry: ModuleRegistry) {
           modelCallId: crypto.randomUUID(),
           projectId,
           tools: JSON.parse(JSON.stringify(agentTools)) as StreamParams['tools'],
-          messages: buildTextMessages(buildModelHistory(session), {
-            projectId,
-            projectName: config.projectName.value,
-            fps: FRAME_RATE,
-            selectedClipIds: [...selection.selectedClipTimelineItemIds.value],
-          }),
+          messages: buildTextMessages(buildModelHistory(session)),
         }
         // 3. 新建 modelCall，记录用户消息或工具结果的输入 ID；助手消息按固定 ID 逐步保存。
         session.latestModelCall = {
           id: request.modelCallId,
           status: 'running',
-          sessionId,
-          userId,
-          projectId,
           inputMessageId: session.messages[session.messages.length - 1]!.id,
           assistantMessageId: crypto.randomUUID(),
-          request,
-          completion: null,
           error: null,
         }
         const current = session.latestModelCall
-        session.usageRecords ??= {}
+        awaitingCompletion = true
         session.usageRecords[current.id] = { usage: null, chargedAmount: null }
         // 调用前记录实际请求输入，并把同一日志身份交给服务端关联供应商请求。
         const logIdentity = await telemetry.record(
@@ -542,7 +543,7 @@ export function createUnifiedAgentModule(registry: ModuleRegistry) {
           current.id,
         )
         if (logIdentity) request.telemetry = logIdentity
-        // 请求快照在调用前落盘，modelCall 与原会话关联；切换展示不会改变这一引用。
+        // 调用摘要在发送前落盘；完整请求已经写入诊断日志。
         await persistSession(session)
         if (!isRunCurrent()) return
         const output = await client.stream(request, { signal: control.model.signal })
@@ -563,7 +564,7 @@ export function createUnifiedAgentModule(registry: ModuleRegistry) {
         // 5. 用完整终态校准正文，不另建消息或提前提交工具调用；模型完成不代表工具成功。
         const assistant = getAssistantMessage(session, current)
         assistant.parts = [{ type: MessagePartType.TEXT, text: completion.message.content }]
-        current.completion = completion
+        awaitingCompletion = false
         session.usageRecords[current.id] = {
           usage: completion.usage,
           chargedAmount: completion.chargedAmount ?? null,
@@ -653,8 +654,8 @@ export function createUnifiedAgentModule(registry: ModuleRegistry) {
         if (!isRunOwned()) return
         if (control.tool.signal.aborted) return
         commitToolResult(session, execution, result)
-        // 内存只保留未完成执行；完成记录与消息对在同一事务中写入独立 ToolJournal。
-        await persistSession(session, execution)
+        // 已完成工具只作为配对消息保存，执行详情由诊断日志记录。
+        await persistSession(session)
         // 8. 回到 while 顶部；停止后不再进入下一轮，否则用新 modelCall 和结果继续，由模型决定修正或结束。
       }
     } catch (error) {
@@ -704,10 +705,7 @@ export function createUnifiedAgentModule(registry: ModuleRegistry) {
         if (session.latestModelCall) {
           if (session.latestModelCall.status === 'running')
             session.latestModelCall.status = 'cancelled'
-          if (
-            session.latestModelCall.status !== 'completed' &&
-            !session.latestModelCall.completion
-          ) {
+          if (session.latestModelCall.status !== 'completed' && awaitingCompletion) {
             const call = session.latestModelCall
             const message = session.messages.find((m) => m.id === call.assistantMessageId)
             // 失败或取消也保留已接收的部分回复，完成当前节点而非留下永久 running。
@@ -734,7 +732,7 @@ export function createUnifiedAgentModule(registry: ModuleRegistry) {
             message.parts.some((part) => part.type !== MessagePartType.TEXT || part.text.trim()),
         )
         try {
-          await persistSession(session, cancelledTool)
+          await persistSession(session)
         } finally {
           // 等待用户回答也是一次发布边界；下一次续轮仍属于同一聊天日志。
           const last = session.messages[session.messages.length - 1]
@@ -787,7 +785,7 @@ export function createUnifiedAgentModule(registry: ModuleRegistry) {
     }
     const session = currentSession.value!
     commitToolResult(session, execution, { success: true, output: `[ASK_RESULT]\n${content}` })
-    await runLoop(session, execution)
+    await runLoop(session)
     return true
   }
 
@@ -796,7 +794,9 @@ export function createUnifiedAgentModule(registry: ModuleRegistry) {
     const content = text.trim()
     if (!ready.value || running.value || pendingInteraction.value || !content) return false
     const session = currentSession.value!
-    session.messages.push(buildDisplayMessage(crypto.randomUUID(), AgentMessageRole.USER, content))
+    const message = buildDisplayMessage(crypto.randomUUID(), AgentMessageRole.USER, content)
+    message.parts.push(captureBackgroundContext(registry))
+    session.messages.push(message)
     await runLoop(session)
     return true
   }
@@ -840,7 +840,7 @@ export function createUnifiedAgentModule(registry: ModuleRegistry) {
         const saved = await sessionStore.load(userId, projectId)
         if (!current) return
         for (const session of saved) {
-          // 不恢复旧任务。普通工具遗留 pending 的异常恢复属于 3.4；ask_user 数据保持可回答。
+          // 只恢复聊天数据和待回答问题，不恢复模型或普通工具执行。
           if (session.latestModelCall?.status === 'running')
             session.latestModelCall.status = 'cancelled'
           sessions.value[session.id] = session
