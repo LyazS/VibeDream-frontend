@@ -1,6 +1,6 @@
 /**
  * 编辑器独立维护的日志协议实现，不跨应用引用代码。
- * 对应实现：cloudflare-backend/src/agent/telemetry-protocol/agent-log.ts、admin-frontend/src/types/agentLogProtocol.ts。
+ * 对应实现：cloudflare-backend/src/modules/agent/telemetry/protocol/agent-log.ts、admin-frontend/src/types/agentLogProtocol.ts。
  * 修改协议字段、版本、限制或工具分类时，需核对对应端的兼容性并同步相关变更。
  */
 export const AGENT_LOG_PROTOCOL = 'lightcut-agent-log-v1'

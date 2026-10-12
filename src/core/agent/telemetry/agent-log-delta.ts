@@ -1,5 +1,5 @@
 /**
- * 编辑器独立维护的输入差分协议，对应 cloudflare-backend/src/agent/telemetry-protocol/agent-log-delta.ts。
+ * 编辑器独立维护的输入差分协议，对应 cloudflare-backend/src/modules/agent/telemetry/protocol/agent-log-delta.ts。
  * 修改版本、基准哈希或数组差分规则时，需同步核对另一端的编码和还原逻辑。
  */
 import { canonicalLog, LOG_ID, logBytes, type LogSpan, type LogUploadSpan } from './agent-log'
