@@ -1,5 +1,6 @@
 import { computed, onScopeDispose, readonly, ref, watch } from 'vue'
 import { API_BASE_URL } from '@/config/runtimeConfig'
+import { enabledApiCapabilities } from '@/config/apiCapabilities'
 import { FRAME_RATE } from '@/constants/TimeConstants'
 import { buildTextMessages } from '@/core/agent/prompts/textMessages'
 import { agentTools, createToolRuntime } from '@/core/agent/runtime/ToolRuntime'
@@ -40,8 +41,8 @@ export function createUnifiedAgentModule(registry: ModuleRegistry) {
   const selection = registry.get<ModuleMap['selection']>(MODULE_NAMES.SELECTION)
   // 服务端明确通知身份失效后阻止发送，账户 ID 变化时重置。
   const identityInvalid = ref(false)
-  // 构建环境开关，目前仅在本地开发和 Preview 启用新 Agent。
-  const enabled = import.meta.env.DEV || import.meta.env.MODE === 'preview'
+  // Agent 发布开关与其他 API 能力共用构建配置。
+  const enabled = enabledApiCapabilities.has('agent')
   // 模块是否已最终释放；释放后即使工程和账户有效，也不能再发送。
   const disposed = ref(false)
   // 会话存储和当前账户/工程的内存索引。

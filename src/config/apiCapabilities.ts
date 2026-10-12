@@ -1,14 +1,16 @@
+import { AI_TASK_TYPES, type AiTaskType } from '@/core/ai-tasks/types'
+
 export type ApiCapability =
   | 'auth'
   | 'account'
-  | 'media-indexing'
   | 'media'
   | 'agent'
   | 'admin'
-  | 'transition-search'
   | 'item-properties'
   | 'other'
   | 'ai-tasks'
+  | 'ai-generation'
+  | AiTaskType
 
 const capabilityPrefixes: readonly [string, ApiCapability][] = [
   ['/api/auth/', 'auth'],
@@ -31,14 +33,14 @@ function readEnabledCapabilities(): ReadonlySet<ApiCapability> {
         [
           'auth',
           'account',
-          'media-indexing',
           'media',
           'agent',
           'admin',
-          'transition-search',
           'item-properties',
           'other',
           'ai-tasks',
+          'ai-generation',
+          ...AI_TASK_TYPES,
         ].includes(value),
       ),
   )
@@ -77,10 +79,9 @@ export function getApiPath(url: string): string | undefined {
 
 export function getApiCapability(path: string): ApiCapability {
   if (path === '/api/agent/tools/describe-item-property') return 'item-properties'
-  if (path === '/api/transitions/test-search') return 'transition-search'
-  if (path === '/api/media/upload-policies' || path === '/api/media/indexing/reconcile') {
-    return 'media-indexing'
-  }
+  if (path === '/api/transitions/test-search') return 'transition.search'
+  if (path === '/api/media/upload-policies') return 'ai-tasks'
+  if (path === '/api/media/indexing/reconcile') return 'media.indexing'
   return capabilityPrefixes.find(([prefix]) => path.startsWith(prefix))?.[1] ?? 'other'
 }
 

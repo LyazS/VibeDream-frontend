@@ -1,8 +1,13 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { assertApiCapabilityEnabled } from '@/config/apiCapabilities'
+import {
+  assertApiCapabilityEnabled,
+  enabledApiCapabilities,
+  getApiCapability,
+} from '@/config/apiCapabilities'
 import { searchTransitions } from '@/core/agent/services/transitionSearchService'
 import { cloudflareTaskProgressClient } from '@/core/utils/cloudflareTaskProgressClient'
-import { runAiTask } from '@/core/ai-tasks/taskApi'
+import { runAiTask, submitAiTask } from '@/core/ai-tasks/taskApi'
+import { AI_TASK_TYPES } from '@/core/ai-tasks/types'
 
 vi.mock('@/core/utils/cloudflareTaskProgressClient', () => ({
   cloudflareTaskProgressClient: { subscribe: vi.fn() },
@@ -10,6 +15,7 @@ vi.mock('@/core/utils/cloudflareTaskProgressClient', () => ({
 
 afterEach(() => {
   vi.unstubAllGlobals()
+  vi.restoreAllMocks()
   vi.clearAllMocks()
 })
 
@@ -60,6 +66,65 @@ describe('formal transition search', () => {
 })
 
 describe('shared AI task client', () => {
+  it.each(AI_TASK_TYPES)(
+    'rejects %s before sending a request when its feature is disabled',
+    async (type) => {
+      const fetcher = vi.fn()
+      vi.stubGlobal('fetch', fetcher)
+      vi.spyOn(enabledApiCapabilities, 'has').mockImplementation(
+        (capability) => capability === 'ai-tasks',
+      )
+      await expect(submitAiTask(type, { input: {} }, 'test-key')).rejects.toMatchObject({
+        name: 'ApiCapabilityDisabledError',
+        capability: type,
+        path: '/api/ai/tasks',
+      })
+      expect(fetcher).not.toHaveBeenCalled()
+    },
+  )
+
+  it.each(AI_TASK_TYPES)('enables %s independently using its task type', async (type) => {
+    expect(enabledApiCapabilities.has(type)).toBe(true)
+    const task = { task_id: crypto.randomUUID(), type, status: 'pending' }
+    const fetcher = vi.fn(async () => Response.json(task))
+    vi.stubGlobal('fetch', fetcher)
+    vi.spyOn(enabledApiCapabilities, 'has').mockImplementation(
+      (capability) => capability === 'ai-tasks' || capability === type,
+    )
+
+    await expect(submitAiTask(type, { input: {} }, 'test-key')).resolves.toEqual(task)
+    for (const otherType of AI_TASK_TYPES.filter((value) => value !== type)) {
+      await expect(submitAiTask(otherType, { input: {} }, 'test-key')).rejects.toMatchObject({
+        name: 'ApiCapabilityDisabledError',
+        capability: otherType,
+      })
+    }
+    expect(fetcher).toHaveBeenCalledOnce()
+  })
+
+  it.each([
+    ['/api/media/upload-policies', 'ai-tasks'],
+    ['/api/media/indexing/reconcile', 'media.indexing'],
+    ['/api/transitions/test-search', 'transition.search'],
+  ])('maps support endpoint %s to %s', (path, capability) => {
+    expect(getApiCapability(path)).toBe(capability)
+  })
+
+  it('still requires the shared ai-tasks capability when the feature is enabled', async () => {
+    const fetcher = vi.fn()
+    vi.stubGlobal('fetch', fetcher)
+    vi.spyOn(enabledApiCapabilities, 'has').mockImplementation(
+      (capability) => capability === 'transition.search',
+    )
+    await expect(
+      submitAiTask('transition.search', { input: {} }, 'test-key'),
+    ).rejects.toMatchObject({
+      name: 'ApiCapabilityDisabledError',
+      capability: 'ai-tasks',
+    })
+    expect(fetcher).not.toHaveBeenCalled()
+  })
+
   function setup(status: string, returnedType = 'media.retrieval') {
     const taskId = crypto.randomUUID()
     const close = vi.fn()

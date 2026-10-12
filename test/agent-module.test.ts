@@ -3,6 +3,7 @@ import { effectScope, ref, toRaw, type EffectScope } from 'vue'
 import { IDBFactory } from 'fake-indexeddb'
 import { indexedDBService } from '../src/core/storage/IndexedDBService'
 import { AgentSessionStore } from '../src/core/agent/runtime/AgentSessionStore'
+import { enabledApiCapabilities } from '../src/config/apiCapabilities'
 import { ModuleRegistry } from '../src/core/modules/ModuleRegistry'
 import { createUnifiedAgentModule } from '../src/core/modules/UnifiedAgentModule'
 import type { Completion, StreamParams } from '../src/core/agent/transport/AgentClient'
@@ -104,6 +105,33 @@ afterEach(() => {
 })
 
 describe('persisted Agent sessions', () => {
+  it('blocks sending when the Agent capability is disabled even in development', async () => {
+    scope.stop()
+    const capabilityCheck = vi.spyOn(enabledApiCapabilities, 'has').mockReturnValue(false)
+    try {
+      mountAgent()
+      expect(agent.ready.value).toBe(false)
+      expect(await agent.send('hello')).toBe(false)
+      expect(transport.calls).not.toHaveBeenCalled()
+    } finally {
+      capabilityCheck.mockRestore()
+    }
+  })
+
+  it('allows the Agent capability to enable sending in a production build mode', async () => {
+    scope.stop()
+    vi.stubEnv('DEV', false)
+    vi.stubEnv('MODE', 'production')
+    try {
+      mountAgent()
+      await vi.waitFor(() => expect(agent.ready.value).toBe(true))
+      expect(await agent.send('hello')).toBe(true)
+      expect(transport.calls).toHaveBeenCalledOnce()
+    } finally {
+      vi.unstubAllEnvs()
+    }
+  })
+
   it('persists cumulative usage once per call and isolates the selected session', async () => {
     const usage = { inputTokens: 10, outputTokens: 2, totalTokens: 12, cachedInputTokens: 8 }
     transport.calls.mockImplementation(async (request: StreamParams) => {

@@ -9,14 +9,14 @@
       <template #prefix>
         <component :is="IconComponents.SPARKLING" size="16px" style="padding: 0" />
       </template>
-      <!-- <n-tab name="ai-generate" :tab="t('aiPanel.aiGenerate')"> </n-tab> -->
-      <n-tab name="agent" :tab="t('aiPanel.agent')"> </n-tab>
+      <n-tab v-if="showGeneration" name="ai-generate" :tab="t('aiPanel.aiGenerate')"> </n-tab>
+      <n-tab v-if="showAgent" name="agent" :tab="t('aiPanel.agent')"> </n-tab>
       <n-tab v-if="showItemPropertyTest" name="item-property-test" tab="属性描述"> </n-tab>
       <n-tab v-if="showMediaSearchTest" name="media-search-test" tab="素材搜索测试"> </n-tab>
       <n-tab v-if="showTransitionTest" name="transition-test" tab="转场测试"> </n-tab>
       <template #suffix>
         <div class="header-buttons">
-          <template v-if="unifiedStore.aiPanelActiveTab === 'agent'">
+          <template v-if="showAgent && unifiedStore.aiPanelActiveTab === 'agent'">
             <HoverButton @click="handleNewChat" :title="t('common.chat.new')">
               <template #icon>
                 <component :is="IconComponents.ADD" size="18px" />
@@ -37,12 +37,14 @@
       </template>
     </n-tabs>
     <div
+      v-if="showGeneration"
       v-show="unifiedStore.aiPanelActiveTab === 'ai-generate'"
       style="flex: 1; display: flex; flex-direction: column; overflow: hidden"
     >
       <GeneratePanel />
     </div>
     <div
+      v-if="showAgent"
       v-show="unifiedStore.aiPanelActiveTab === 'agent'"
       style="flex: 1; display: flex; flex-direction: column; overflow: hidden"
     >
@@ -84,12 +86,27 @@ import ItemPropertyTestPanel from '../devtools/ItemPropertyTestPanel.vue'
 import GeneratePanel from '../ai-generation/GeneratePanel.vue'
 import { useAppI18n } from '@/core/composables/useI18n'
 import { useUnifiedStore } from '@/core/unifiedStore'
+import {
+  SHOW_MEDIA_SEARCH_TEST,
+  SHOW_TRANSITION_TEST,
+  SHOW_ITEM_PROPERTY_TEST,
+} from '@/config/runtimeConfig'
+import { enabledApiCapabilities } from '@/config/apiCapabilities'
 
 const { t } = useAppI18n()
 const unifiedStore = useUnifiedStore()
-const showMediaSearchTest = import.meta.env.DEV || import.meta.env.MODE === 'preview'
-const showTransitionTest = import.meta.env.MODE === 'preview'
-const showItemPropertyTest = import.meta.env.DEV || import.meta.env.MODE === 'preview'
+const showAgent = enabledApiCapabilities.has('agent')
+const showGeneration = enabledApiCapabilities.has('ai-generation')
+const showMediaSearchTest =
+  SHOW_MEDIA_SEARCH_TEST &&
+  enabledApiCapabilities.has('ai-tasks') &&
+  enabledApiCapabilities.has('media.indexing') &&
+  enabledApiCapabilities.has('media.retrieval') &&
+  enabledApiCapabilities.has('media.rerank') &&
+  enabledApiCapabilities.has('media.validate')
+const showTransitionTest = SHOW_TRANSITION_TEST && enabledApiCapabilities.has('transition.search')
+const showItemPropertyTest =
+  SHOW_ITEM_PROPERTY_TEST && enabledApiCapabilities.has('item-properties')
 
 // 定义事件
 defineEmits<{

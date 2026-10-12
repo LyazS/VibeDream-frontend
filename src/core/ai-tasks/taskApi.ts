@@ -1,16 +1,13 @@
-export type AiTaskType =
-  | 'media.indexing'
-  | 'media.retrieval'
-  | 'media.rerank'
-  | 'media.validate'
-  | 'transition.search'
-
 import {
   cloudflareTaskProgressClient,
   type TaskProgressSubscription,
   type TaskProgressUpdate,
 } from '@/core/utils/cloudflareTaskProgressClient'
 import { fetchClient } from '@/utils/fetchClient'
+import { ApiCapabilityDisabledError, enabledApiCapabilities } from '@/config/apiCapabilities'
+import type { AiTaskType } from './types'
+
+export type { AiTaskType } from './types'
 
 const AI_TASK_STATUSES = [
   'pending',
@@ -44,6 +41,9 @@ export async function submitAiTask<TTask, TInput extends object>(
   idempotencyKey: string,
   signal?: AbortSignal,
 ): Promise<TTask> {
+  if (!enabledApiCapabilities.has(type)) {
+    throw new ApiCapabilityDisabledError('/api/ai/tasks', type)
+  }
   const response = await fetchClient.post<TTask>(
     '/api/ai/tasks',
     { ...input, type },

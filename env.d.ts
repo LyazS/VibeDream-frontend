@@ -13,6 +13,9 @@ declare module '*.frag?raw' {
 interface ImportMetaEnv {
   readonly VITE_API_BASE_URL?: string
   readonly VITE_API_CAPABILITIES?: string
+  readonly VITE_SHOW_MEDIA_SEARCH_TEST?: string
+  readonly VITE_SHOW_TRANSITION_TEST?: string
+  readonly VITE_SHOW_ITEM_PROPERTY_TEST?: string
   readonly VITE_ASSET_BASE_URL?: string
   readonly VITE_TRANSITION_ASSET_BASE_URL?: string
   readonly VITE_MODEL_MANIFEST_URL?: string
