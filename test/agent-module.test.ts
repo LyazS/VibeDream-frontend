@@ -3,6 +3,7 @@ import { effectScope, ref, toRaw, type EffectScope } from 'vue'
 import { IDBFactory } from 'fake-indexeddb'
 import { indexedDBService } from '../src/core/storage/IndexedDBService'
 import { AgentSessionStore } from '../src/core/agent/runtime/AgentSessionStore'
+import { AgentTelemetry, type LocalAgentLog } from '../src/core/agent/runtime/AgentTelemetry'
 import { enabledApiCapabilities } from '../src/config/apiCapabilities'
 import { ModuleRegistry } from '../src/core/modules/ModuleRegistry'
 import { createUnifiedAgentModule } from '../src/core/modules/UnifiedAgentModule'
@@ -45,6 +46,10 @@ vi.mock('../src/core/agent/transport/AgentClient', () => ({
   },
 }))
 let scope: EffectScope
+let backgroundWrites: Promise<unknown>[]
+const saveSession = AgentSessionStore.prototype.save
+const recordLog = AgentTelemetry.prototype.record
+const finishLog = AgentTelemetry.prototype.finish
 let agent: ReturnType<typeof createUnifiedAgentModule>
 let windowTarget: EventTarget
 let user: { currentUser: ReturnType<typeof ref<{ id: string; balance: string } | null>> }
@@ -76,6 +81,20 @@ function userContent(text: string) {
     { type: 'text', text: expect.stringMatching(/^\[BACKGROUND_CONTEXT\]\n/) },
     { type: 'text', text },
   ]
+}
+
+async function sessionLogs(): Promise<LocalAgentLog[]> {
+  return indexedDBService.transaction('agentLogs', 'readonly', (store) => store.getAll())
+}
+
+function deferred<T = void>() {
+  let resolve!: (value: T | PromiseLike<T>) => void
+  let reject!: (reason?: unknown) => void
+  const promise = new Promise<T>((done, fail) => {
+    resolve = done
+    reject = fail
+  })
+  return { promise, resolve, reject }
 }
 
 function output(
@@ -119,6 +138,21 @@ function mountAgent() {
 }
 beforeEach(async () => {
   vi.clearAllMocks()
+  transport.calls.mockReset()
+  transport.idle.mockReset()
+  toolExecution.mockReset()
+  backgroundWrites = []
+  vi.spyOn(AgentSessionStore.prototype, 'save').mockImplementation(function (session) {
+    const pending = saveSession.call(this, session)
+    backgroundWrites.push(pending)
+    return pending
+  })
+  const publish = AgentTelemetry.prototype.finishAndPublish
+  vi.spyOn(AgentTelemetry.prototype, 'finishAndPublish').mockImplementation(function (...args) {
+    const pending = publish.apply(this, args)
+    backgroundWrites.push(pending)
+    return pending
+  })
   transport.idle.mockResolvedValue(undefined)
   windowTarget = new EventTarget()
   vi.stubGlobal('window', windowTarget)
@@ -148,8 +182,10 @@ beforeEach(async () => {
   toolExecution.mockResolvedValue({ success: true, output: 'original tool output' })
   await vi.waitFor(() => expect(agent.historyLoading.value).toBe(false))
 })
-afterEach(() => {
+afterEach(async () => {
   scope.stop()
+  await Promise.allSettled(backgroundWrites)
+  vi.restoreAllMocks()
   vi.unstubAllGlobals()
 })
 
@@ -376,7 +412,7 @@ describe('persisted Agent sessions', () => {
     },
   )
   it('preserves complete diagnostic output when saving the completed session fails', async () => {
-    const original = AgentSessionStore.prototype.save
+    const original = saveSession
     let failed = false
     const save = vi
       .spyOn(AgentSessionStore.prototype, 'save')
@@ -390,12 +426,11 @@ describe('persisted Agent sessions', () => {
     try {
       await agent.send('hello')
       expect(agent.storageError.value).toBe('STORAGE_FAILED')
-      const logs = await indexedDBService.transaction('agentLogs', 'readonly', (store) =>
-        store.getAll(),
-      )
-      const call = logs[0].spans.find((span: { kind: string }) => span.kind === 'model_call')
-      expect(call.source.output.message.content).toBe('complete reply')
-      expect(call.source.status).toBe('completed')
+      await vi.waitFor(async () => {
+        const call = (await sessionLogs())[0]?.spans.find((span) => span.kind === 'model_call')
+        expect(call?.source.output).toMatchObject({ message: { content: 'complete reply' } })
+        expect(call?.source.status).toBe('completed')
+      })
     } finally {
       save.mockRestore()
     }
@@ -1227,7 +1262,7 @@ describe('text Agent orchestration', () => {
     )
     expect(agent.latestModelCall.value?.status).toBe('completed')
   })
-  it('saves the tool error after stopping without continuing the model loop', async () => {
+  it('discards a tool error after stopping without continuing the model loop', async () => {
     transport.calls.mockImplementationOnce(async (request: StreamParams) =>
       output(
         request,
@@ -1249,21 +1284,13 @@ describe('text Agent orchestration', () => {
     await agent.send('读取工程')
     expect(transport.calls).toHaveBeenCalledTimes(1)
     expect(agent.toolExecutions.value).toEqual({})
-    expect(agent.currentMessages.value[1].parts).toContainEqual(
-      expect.objectContaining({
-        type: 'tool_call',
-        status: 'failed',
-        tool_call_id: 'stopped',
-      }),
-    )
+    expect(agent.currentMessages.value).toHaveLength(1)
     expect(agent.running.value).toBe(false)
     await agent.send('继续')
-    expect((transport.calls.mock.calls[1][0] as StreamParams).messages[3]).toEqual({
-      role: 'tool',
-      name: 'read_project_info',
-      tool_call_id: 'stopped',
-      content: [{ type: 'text', text: '工具已取消' }],
-    })
+    expect((transport.calls.mock.calls[1][0] as StreamParams).messages.slice(1)).toEqual([
+      { role: 'user', content: userContent('读取工程') },
+      { role: 'user', content: userContent('继续') },
+    ])
   })
   it('shares full original schemas and rejects type coercion before executing', () => {
     const runtime = createToolRuntime()
@@ -1337,8 +1364,8 @@ describe('text Agent orchestration', () => {
     agent.stop()
     expect(context.signal.aborted).toBe(true)
     expect(context.isCurrent()).toBe(false)
-    expect(agent.running.value).toBe(true)
-    expect(await agent.send('不能并发')).toBe(false)
+    expect(agent.running.value).toBe(false)
+    expect(agent.toolExecutions.value).toEqual({})
     finish()
     await pending
 
@@ -1350,19 +1377,18 @@ describe('text Agent orchestration', () => {
       'assistant',
     ])
     expect(agent.currentMessages.value[1].parts).toEqual([{ type: 'text', text: '正在查找素材' }])
-    const logs = await indexedDBService.transaction('agentLogs', 'readonly', (store) =>
-      store.getAll(),
-    )
-    expect(logs[0].spans).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          kind: 'tool_result',
-          source: expect.objectContaining({
-            status: 'cancelled',
-            error: { code: 'TOOL_CANCELLED', result_committed: false },
+    await vi.waitFor(async () =>
+      expect((await sessionLogs())[0]?.spans).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            kind: 'tool_result',
+            source: expect.objectContaining({
+              status: 'cancelled',
+              error: { code: 'TOOL_CANCELLED', result_committed: false },
+            }),
           }),
-        }),
-      ]),
+        ]),
+      ),
     )
 
     scope.stop()
@@ -1390,7 +1416,7 @@ describe('text Agent orchestration', () => {
         }),
       ),
     )
-    const original = AgentSessionStore.prototype.save
+    const original = saveSession
     const save = vi
       .spyOn(AgentSessionStore.prototype, 'save')
       .mockImplementation(function (session) {
@@ -1409,7 +1435,7 @@ describe('text Agent orchestration', () => {
       save.mockRestore()
     }
   })
-  it('keeps editing tool progress visible after stopping, commits its result once, and continues only on new input', async () => {
+  it('starts a new model while the stopped editing tool is pending and never commits its result', async () => {
     transport.calls.mockImplementationOnce(async (request: StreamParams) =>
       output(
         request,
@@ -1445,32 +1471,44 @@ describe('text Agent orchestration', () => {
     )
     agent.stop()
     expect(context.signal.aborted).toBe(false)
-    expect(context.isCurrent()).toBe(true)
-    expect(agent.running.value).toBe(true)
-    // 普通停止还在等待工具真实结果保存，此时也不能删除所属会话。
-    expect(await agent.deleteSession(agent.currentSessionId.value)).toBe(false)
-    expect(Object.keys(agent.toolExecutions.value)).toEqual([agent.currentMessages.value[1].id])
-    expect(await agent.send('不能并发')).toBe(false)
-    finish({ success: true, output: '轨道已创建' })
-    await pending
-    expect(transport.calls).toHaveBeenCalledOnce()
+    expect(context.isCurrent()).toBe(false)
     expect(agent.running.value).toBe(false)
     expect(agent.toolExecutions.value).toEqual({})
-    expect(agent.currentMessages.value[1].parts).toContainEqual(
-      expect.objectContaining({ status: 'completed' }),
-    )
+    expect(agent.currentMessages.value[1].parts).toEqual([{ type: 'text', text: '开始编辑' }])
+    expect(agent.latestModelCall.value?.status).toBe('completed')
+    const publish = vi.spyOn(AgentTelemetry.prototype, 'finishAndPublish')
     await agent.send('继续')
+    expect(transport.calls).toHaveBeenCalledTimes(2)
+    const newCall = agent.latestModelCall.value!.id
+    const logsBefore = await new AgentSessionStore().load('u1', 'p1')
+    const savedCalls = vi.spyOn(AgentSessionStore.prototype, 'save')
+    const recorded = vi.spyOn(AgentTelemetry.prototype, 'record')
+    publish.mockClear()
+    savedCalls.mockClear()
+    finish({ success: true, output: '轨道已创建' })
+    await pending
+    expect(agent.running.value).toBe(false)
+    expect(agent.toolExecutions.value).toEqual({})
+    expect(agent.latestModelCall.value?.id).toBe(newCall)
+    expect(publish).not.toHaveBeenCalled()
+    expect(recorded).not.toHaveBeenCalled()
+    expect(savedCalls).not.toHaveBeenCalled()
+    expect(await new AgentSessionStore().load('u1', 'p1')).toEqual(logsBefore)
+    publish.mockRestore()
+    recorded.mockRestore()
+    savedCalls.mockRestore()
     expect(toolExecution).toHaveBeenCalledOnce()
     const history = (transport.calls.mock.calls[1][0] as StreamParams).messages.slice(1)
-    expect(history.map((message) => message.role)).toEqual(['user', 'assistant', 'tool', 'user'])
-    expect(history[2]).toMatchObject({
-      content: [{ type: 'text', text: '轨道已创建' }],
-      tool_call_id: 'edit',
-    })
+    expect(history.map((message) => message.role)).toEqual(['user', 'assistant', 'user'])
   })
-  it.each(['project_leave', 'identity_change'] as const)(
-    'cancels the old tool and isolates its late result after %s',
-    async (change) => {
+  it.each([
+    { change: 'project_leave', stopFirst: false },
+    { change: 'identity_change', stopFirst: false },
+    { change: 'project_leave', stopFirst: true },
+    { change: 'identity_change', stopFirst: true },
+  ])(
+    'cancels the old tool and isolates its late result after $change (already stopped: $stopFirst)',
+    async ({ change, stopFirst }) => {
       transport.calls.mockImplementationOnce(async (request: StreamParams) =>
         output(
           request,
@@ -1495,6 +1533,11 @@ describe('text Agent orchestration', () => {
       const old = agent.send('旧工程任务')
       await vi.waitFor(() => expect(toolExecution).toHaveBeenCalledOnce())
       const context = toolExecution.mock.calls[0][2]
+      if (stopFirst) {
+        agent.stop()
+        expect(context.signal.aborted).toBe(false)
+        expect(agent.busy.value).toBe(false)
+      }
       if (change === 'project_leave') agent.leaveProject()
       else user.currentUser.value = { id: 'u2', balance: '0' }
       expect(context.signal.aborted).toBe(true)
@@ -1512,7 +1555,7 @@ describe('text Agent orchestration', () => {
       expect(agent.running.value).toBe(false)
     },
   )
-  it('keeps running while a cancelled model slot is closing and preserves partial text', async () => {
+  it('releases the active run immediately and waits for the old model slot only before a new request', async () => {
     let release!: () => void
     const idle = new Promise<void>((resolve) => {
       release = resolve
@@ -1530,6 +1573,11 @@ describe('text Agent orchestration', () => {
     const pending = agent.send('第一条')
     await vi.waitFor(() => expect(agent.currentMessages.value).toHaveLength(2))
     agent.stop()
+    expect(agent.running.value).toBe(false)
+    expect(agent.busy.value).toBe(false)
+    const next = agent.send('第二条')
+    expect(agent.running.value).toBe(true)
+    expect(agent.currentMessages.value).toHaveLength(3)
     finish({
       modelCallId: agent.latestModelCall.value!.id,
       usage: null,
@@ -1537,12 +1585,345 @@ describe('text Agent orchestration', () => {
     })
     await vi.waitFor(() => expect(transport.idle).toHaveBeenCalledTimes(2))
     expect(agent.running.value).toBe(true)
-    expect(await agent.send('并发')).toBe(false)
-    release()
+    expect(transport.calls).toHaveBeenCalledOnce()
     await pending
+    expect(agent.running.value).toBe(true)
+    release()
+    await next
+    expect(transport.calls).toHaveBeenCalledTimes(2)
+    expect(transport.idle).toHaveBeenCalledTimes(2)
     expect(agent.running.value).toBe(false)
     expect(agent.currentMessages.value[1].parts).toEqual([{ type: 'text', text: 'partial draft' }])
   })
+  it('saves and publishes cancellation before the backend terminal arrives, independently of chat storage failure', async () => {
+    const completion = deferred<Completion>()
+    const failedSave = deferred<void>()
+    transport.calls.mockImplementationOnce(async (request: StreamParams) =>
+      output(request, completion.promise),
+    )
+    const pending = agent.send('cancel while waiting')
+    await vi.waitFor(() => expect(agent.currentMessages.value).toHaveLength(2))
+    const id = agent.currentSessionId.value
+    const callId = agent.latestModelCall.value!.id
+    vi.spyOn(AgentSessionStore.prototype, 'save').mockImplementationOnce(() => failedSave.promise)
+    agent.stop()
+    expect(agent.activeSessionId.value).toBeNull()
+    await vi.waitFor(async () => {
+      const log = (await sessionLogs()).find((log) => log.chat_session_id === id)!
+      expect(log.published?.summary.stop_status).toBe('cancelled')
+      expect(log.published?.spans.find((span) => span.span_id === callId)?.source).toMatchObject({
+        status: 'cancelled',
+        output: { message: { content: 'partial draft' } },
+      })
+    })
+    const idle = deferred()
+    transport.idle.mockReturnValueOnce(idle.promise)
+    const next = agent.send('accepted before storage failure')
+    await vi.waitFor(() => expect(transport.idle).toHaveBeenCalledTimes(2))
+    failedSave.reject(new Error('STOP_SNAPSHOT_FAILED'))
+    await vi.waitFor(() => expect(agent.storageError.value).toBe('STOP_SNAPSHOT_FAILED'))
+    expect(agent.ready.value).toBe(false)
+    idle.resolve()
+    await next
+    expect(transport.calls).toHaveBeenCalledOnce()
+    expect(agent.busy.value).toBe(false)
+    completion.resolve({
+      modelCallId: callId,
+      usage: null,
+      message: { role: 'assistant', content: 'discard me' },
+    })
+    await pending
+    await vi.waitFor(async () => {
+      const saved = (await new AgentSessionStore().load('u1', 'p1')).find((s) => s.id === id)!
+      expect(saved.messages.map((m) => m.role)).toEqual(['user', 'assistant', 'user'])
+      expect(saved.messages[1].parts).toEqual([{ type: 'text', text: 'partial draft' }])
+    })
+  })
+
+  it('keeps a completed model call intact when saving tool preparation fails', async () => {
+    transport.calls.mockImplementationOnce(async (request: StreamParams) =>
+      output(
+        request,
+        Promise.resolve({
+          modelCallId: request.modelCallId,
+          usage: null,
+          message: {
+            role: 'assistant',
+            content: 'model completed',
+            tool_calls: [{ id: 'not-started', name: 'add_track', args: { trackType: 'text' } }],
+          },
+        }),
+      ),
+    )
+    vi.spyOn(AgentSessionStore.prototype, 'save').mockImplementation(function (session) {
+      if (Object.keys(session.toolExecutions).length)
+        return Promise.reject(new Error('TOOL_SAVE_FAILED'))
+      const pending = saveSession.call(this, session)
+      backgroundWrites.push(pending)
+      return pending
+    })
+    await agent.send('prepare tool')
+    expect(agent.latestModelCall.value).toMatchObject({ status: 'completed', error: null })
+    expect(agent.busy.value).toBe(false)
+    expect(agent.storageError.value).toBe('TOOL_SAVE_FAILED')
+    expect(toolExecution).not.toHaveBeenCalled()
+    await vi.waitFor(async () => {
+      const log = (await sessionLogs())[0]
+      expect(log.published?.summary.stop_status).toBe('failed')
+      expect(log.spans.find((span) => span.kind === 'model_call')?.source).toMatchObject({
+        status: 'completed',
+      })
+    })
+  })
+
+  it('only advances the newest run after repeated stops while the old model slot is occupied', async () => {
+    const idle = deferred()
+    const oldCompletion = deferred<Completion>()
+    void oldCompletion.promise.catch(() => {})
+    const newestCompletion = deferred<Completion>()
+    const cancelled = vi.fn()
+    transport.calls
+      .mockImplementationOnce(async (request: StreamParams, options: { signal: AbortSignal }) => {
+        options.signal.addEventListener('abort', cancelled)
+        return output(request, oldCompletion.promise)
+      })
+      .mockImplementationOnce(async (request: StreamParams) =>
+        output(request, newestCompletion.promise),
+      )
+    const old = agent.send('first')
+    await vi.waitFor(() => expect(agent.currentMessages.value).toHaveLength(2))
+    const oldCall = agent.latestModelCall.value!.id
+    transport.idle.mockReturnValue(idle.promise)
+    agent.stop()
+    const skipped = agent.send('second')
+    await vi.waitFor(() => expect(transport.idle).toHaveBeenCalledTimes(2))
+    agent.stop()
+    const newest = agent.send('third')
+    await vi.waitFor(() => expect(transport.idle).toHaveBeenCalledTimes(3))
+    expect(cancelled).toHaveBeenCalledOnce()
+    expect(transport.calls).toHaveBeenCalledOnce()
+    oldCompletion.reject(new Error('cancelled late'))
+    await old
+    expect(agent.running.value).toBe(true)
+    const record = {
+      usage: { inputTokens: 5, outputTokens: 1, totalTokens: 6 },
+      chargedAmount: '0.01',
+    }
+    transport.settlement?.(oldCall, record)
+    idle.resolve()
+    await skipped
+    await vi.waitFor(() => expect(transport.calls).toHaveBeenCalledTimes(2))
+    const newestCall = agent.latestModelCall.value!.id
+    expect(agent.latestModelCall.value?.status).toBe('running')
+    expect(
+      (transport.calls.mock.calls[1][0] as StreamParams).messages.slice(1).map((m) => m.role),
+    ).toEqual(['user', 'assistant', 'user', 'user'])
+    newestCompletion.resolve({
+      modelCallId: newestCall,
+      message: { role: 'assistant', content: 'new reply' },
+      usage: null,
+    })
+    await newest
+    await vi.waitFor(async () => {
+      const saved = (await new AgentSessionStore().load('u1', 'p1'))[0]
+      expect(saved.messages.map((m) => m.role)).toEqual([
+        'user',
+        'assistant',
+        'user',
+        'user',
+        'assistant',
+      ])
+      expect(saved.usageRecords[oldCall]).toEqual(record)
+      expect(saved.latestModelCall?.id).toBe(newestCall)
+      const log = (await sessionLogs()).find((log) => log.chat_session_id === saved.id)!
+      expect(log.spans.filter((s) => s.kind === 'diagnostic')).toEqual([])
+      expect(log.spans.filter((s) => s.kind === 'model_call')).toHaveLength(2)
+    })
+  })
+
+  it.each([
+    'initial_save',
+    'model_log',
+    'model_save',
+    'stream_start',
+    'stream_delta',
+    'tool_preparation',
+    'tool_save',
+  ] as const)('does not advance a stopped run after its pending %s resumes', async (phase) => {
+    const entered = deferred()
+    const release = deferred()
+    let blocked = false
+    const block = async () => {
+      blocked = true
+      entered.resolve()
+      await release.promise
+    }
+    const gateSave = vi
+      .spyOn(AgentSessionStore.prototype, 'save')
+      .mockImplementation(async function (session) {
+        const saved = saveSession.call(this, session)
+        backgroundWrites.push(saved)
+        const target =
+          phase === 'initial_save'
+            ? !session.latestModelCall
+            : phase === 'model_save'
+              ? session.latestModelCall?.status === 'running'
+              : phase === 'tool_save'
+                ? Object.keys(session.toolExecutions).length > 0
+                : false
+        if (!blocked && target) await block()
+        await saved
+      })
+    vi.spyOn(AgentTelemetry.prototype, 'record').mockImplementation(async function (...args) {
+      const recorded = recordLog.apply(this, args)
+      if (phase === 'model_log' && args[2] === 'model_call' && !blocked) await block()
+      return recorded
+    })
+    vi.spyOn(AgentTelemetry.prototype, 'finish').mockImplementation(async function (...args) {
+      const finished = finishLog.apply(this, args)
+      if (phase === 'tool_preparation' && !blocked) await block()
+      await finished
+    })
+    transport.calls.mockImplementationOnce(async (request: StreamParams) => {
+      if (phase === 'stream_start') await block()
+      return {
+        async *[Symbol.asyncIterator]() {
+          yield { delta: 'before stop' }
+          if (phase === 'stream_delta') await block()
+          yield { delta: 'late delta' }
+        },
+        finalCompletion: async () => ({
+          modelCallId: request.modelCallId,
+          usage: null,
+          message: {
+            role: 'assistant' as const,
+            content: 'full output',
+            tool_calls: [
+              {
+                id: 'late-question',
+                name: 'ask_user',
+                args: { question: 'late?', suggested_options: [] },
+              },
+            ],
+          },
+        }),
+      }
+    })
+    const pending = agent.send('first')
+    await entered.promise
+    agent.stop()
+    expect(agent.busy.value).toBe(false)
+    expect(agent.pendingInteraction.value).toBeNull()
+    expect(agent.toolExecutions.value).toEqual({})
+    release.resolve()
+    await pending
+    expect(agent.pendingInteraction.value).toBeNull()
+    expect(toolExecution).not.toHaveBeenCalled()
+    expect(
+      agent.currentMessages.value.some((m) =>
+        m.parts.some((p) => p.type === 'text' && p.text.includes('late delta')),
+      ),
+    ).toBe(false)
+    expect(transport.calls).toHaveBeenCalledTimes(
+      ['initial_save', 'model_log', 'model_save'].includes(phase) ? 0 : 1,
+    )
+    gateSave.mockRestore()
+  })
+
+  it.each(['completed', 'failed', 'waiting'] as const)(
+    'releases a %s run before its final chat save completes',
+    async (outcome) => {
+      const release = deferred()
+      const entered = deferred()
+      if (outcome === 'failed') transport.calls.mockRejectedValueOnce(new Error('MODEL_FAILED'))
+      if (outcome === 'waiting')
+        transport.calls.mockImplementationOnce(async (request: StreamParams) =>
+          output(
+            request,
+            Promise.resolve({
+              modelCallId: request.modelCallId,
+              usage: null,
+              message: {
+                role: 'assistant',
+                content: 'question',
+                tool_calls: [
+                  {
+                    id: 'ask-wait',
+                    name: 'ask_user',
+                    args: { question: 'choose?', suggested_options: ['a', 'b'] },
+                  },
+                ],
+              },
+            }),
+          ),
+        )
+      const save = vi
+        .spyOn(AgentSessionStore.prototype, 'save')
+        .mockImplementation(function (session) {
+          const pending = saveSession.call(this, session)
+          backgroundWrites.push(pending)
+          const final =
+            outcome === 'waiting'
+              ? session.messages.some((m) => m.interaction)
+              : session.latestModelCall?.status === outcome
+          if (final) {
+            entered.resolve()
+            return release.promise.then(() => pending)
+          }
+          return pending
+        })
+      const first = agent.send(outcome)
+      await entered.promise
+      await first
+      expect(agent.busy.value).toBe(false)
+      if (outcome === 'completed')
+        expect(agent.currentMessages.value[1].parts).toEqual([
+          { type: 'text', text: 'complete reply' },
+        ])
+      if (outcome === 'waiting') {
+        expect(agent.pendingInteraction.value?.interaction_id).toBe('ask-wait')
+        expect(await agent.send('blocked by question')).toBe(false)
+      }
+      release.resolve()
+      save.mockRestore()
+    },
+  )
+
+  it('deletes a stopped session before its tool returns and ignores late settlements and tool errors', async () => {
+    const tool = deferred<{ success: boolean; output: string }>()
+    transport.calls.mockImplementationOnce(async (request: StreamParams) =>
+      output(
+        request,
+        Promise.resolve({
+          modelCallId: request.modelCallId,
+          usage: null,
+          message: {
+            role: 'assistant',
+            content: 'editing',
+            tool_calls: [{ id: 'edit-delete', name: 'add_track', args: { trackType: 'text' } }],
+          },
+        }),
+      ),
+    )
+    toolExecution.mockReturnValueOnce(tool.promise)
+    const pending = agent.send('delete after stop')
+    await vi.waitFor(() => expect(toolExecution).toHaveBeenCalledOnce())
+    const id = agent.currentSessionId.value
+    const callId = agent.latestModelCall.value!.id
+    agent.stop()
+    expect(await agent.deleteSession(id)).toBe(true)
+    const save = vi.spyOn(AgentSessionStore.prototype, 'save')
+    save.mockClear()
+    transport.settlement?.(callId, { usage: null, chargedAmount: '0.01' })
+    tool.reject(new Error('late edit error'))
+    await pending
+    expect(save).not.toHaveBeenCalled()
+    expect(agent.selectSession(id)).toBe(false)
+    expect(await new AgentSessionStore().load('u1', 'p1')).toEqual([])
+    expect(await sessionLogs()).toEqual([])
+    expect(agent.currentMessages.value).toEqual([])
+  })
+
   it('removes an empty assistant placeholder after failure but keeps the user input', async () => {
     transport.calls.mockImplementationOnce(async () => ({
       async *[Symbol.asyncIterator]() {

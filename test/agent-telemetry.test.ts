@@ -53,6 +53,91 @@ const repeatedInput = () => ({
   tools: [{ name: 'ask_user', description: 'tool description\n'.repeat(500) }],
 })
 
+it('finishes queued nodes and freezes the handoff before the next run records any logs', async () => {
+  const batches: LogBatch[] = []
+  let release!: (response: Response) => void
+  const t = setup(async (_url, init) => {
+    const batch = body(init)
+    batches.push(batch)
+    if (batches.length === 1)
+      return new Promise((resolve) => {
+        release = resolve
+      })
+    return ack(batch)
+  })
+  void t.record(session, 'm1', 'model_call', newLogSource('running', { messages: ['first'] }), 'm1')
+  const changes = { status: 'cancelled', output: { message: { content: 'partial draft' } } }
+  const handoff = t.finishAndPublish(session, 'cancelled', 'first', [{ id: 'm1', changes }])
+  changes.output.message.content = 'caller mutated after handoff'
+  const next = t.record(session, 'u2', 'user_message', newLogSource('completed', 'next input'))
+  await handoff
+  await next
+  await vi.waitFor(() => expect(batches).toHaveLength(1))
+  const state = await saved()
+  expect(state.spans.map((span) => span.span_id)).toEqual(['m1', 'u2'])
+  expect(state.published?.spans.map((span) => span.span_id)).toEqual(['m1'])
+  expect(state.published?.spans[0]).toMatchObject({
+    revision: 2,
+    source: {
+      status: 'cancelled',
+      output: { message: { content: 'partial draft' } },
+      ended_at: expect.any(String),
+    },
+  })
+  expect(state.published?.summary).toMatchObject({ stop_status: 'cancelled', span_count: 1 })
+  release(ack(batches[0]))
+  await vi.waitFor(async () => expect((await saved()).published).toBeNull())
+  expect(batches).toHaveLength(2)
+  expect(batches.flatMap((batch) => batch.spans.map((span) => span.span_id))).toEqual(['m1'])
+})
+
+it('keeps the newer handoff when the previous summary ACK arrives late', async () => {
+  const batches: LogBatch[] = []
+  let releaseOld!: (response: Response) => void
+  let releaseNew!: (response: Response) => void
+  const t = setup(async (_url, init) => {
+    const batch = body(init)
+    batches.push(batch)
+    if (batch.summary?.revision === 1)
+      return new Promise((resolve) => {
+        releaseOld = resolve
+      })
+    if (batch.spans.some((span) => span.span_id === 'u2'))
+      return new Promise((resolve) => {
+        releaseNew = resolve
+      })
+    return ack(batch)
+  })
+  await t.record(session, 'u1', 'user_message', newLogSource('completed', 'first'))
+  await t.finishAndPublish(session, 'cancelled', 'first')
+  await vi.waitFor(() => expect(releaseOld).toBeTypeOf('function'))
+  await t.record(session, 'u2', 'user_message', newLogSource('completed', 'second'))
+  await t.finishAndPublish(session, 'waiting', 'first')
+  releaseOld(ack(batches[1]))
+  await vi.waitFor(() => expect(releaseNew).toBeTypeOf('function'))
+  expect((await saved()).published?.summary).toMatchObject({ revision: 2, stop_status: 'waiting' })
+  releaseNew(ack(batches[2]))
+  await vi.waitFor(async () => expect((await saved()).published).toBeNull())
+  expect(batches[3].summary?.revision).toBe(2)
+})
+
+it('does not invent a model span when stopped before requesting a model and blocks writes after deletion', async () => {
+  const t = setup(async (_url, init) => ack(body(init)))
+  await t.record(session, 'u1', 'user_message', newLogSource('completed', 'first'))
+  await t.finishAndPublish(session, 'cancelled', 'first', [
+    { id: 'missing-model', changes: { status: 'cancelled' } },
+  ])
+  expect((await saved()).spans.map((span) => span.kind)).toEqual(['user_message'])
+  const deleted = t.delete(session)
+  await Promise.all([
+    deleted,
+    t.finish(session, 'u1', { status: 'failed' }),
+    t.finishAndPublish(session, 'failed', 'late'),
+    t.record(session, 'late', 'diagnostic', newLogSource('failed')),
+  ])
+  expect(await saved()).toBeUndefined()
+})
+
 it('compresses stopped snapshots against ACKed and same-batch nodes, retaining full local inputs', async () => {
   const batches: LogBatch[] = []
   const t = setup(async (_url, init) => {
@@ -143,11 +228,13 @@ it('caps both encoded and expanded batch sizes and restores full baselines after
     batches.push(batch)
     return ack(batch)
   })
+  const flushing = vi.spyOn(t, 'flush')
   const input = { messages: [{ role: 'system', content: 'x'.repeat(90000) }], tools: [] }
   for (let i = 1; i <= 30; i++)
     await t.record(session, `m${i}`, 'model_call', newLogSource('completed', input), `m${i}`)
   await t.publish(session, 'completed', 'title')
-  await vi.waitFor(async () => expect((await saved()).published).toBeNull())
+  await flushing.mock.results.at(-1)!.value
+  expect((await saved()).published).toBeNull()
   const original = await saved()
   const parts = batches.filter((batch) => batch.spans.length)
   expect(parts).toHaveLength(2)
@@ -163,7 +250,8 @@ it('caps both encoded and expanded batch sizes and restores full baselines after
   vi.spyOn(Date, 'now').mockReturnValue(Date.now() + LOG_RETENTION_MS + 1000)
   await t.activity(session)
   await t.publish(session, 'completed', 'title')
-  await vi.waitFor(async () => expect((await saved()).published).toBeNull())
+  await flushing.mock.results.at(-1)!.value
+  expect((await saved()).published).toBeNull()
   const renewed = batches.find((batch) => batch.log_session_id !== original.log_session_id)!
   expect(renewed.spans[0].span_id).toBe('m1')
   expect(renewed.spans[0].input_delta).toBeUndefined()

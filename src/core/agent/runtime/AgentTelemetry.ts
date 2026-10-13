@@ -225,42 +225,48 @@ export class AgentTelemetry {
   }
 
   async finish(session: Owner, id: string, changes: Partial<LogSource>) {
-    const key = this.key(session)
-    return this.operation(async () => {
-      const state = await this.read(key)
+    const snapshot = copy(changes)
+    return this.mutate(session, (state) => {
       const span = state?.spans.find((s) => s.span_id === id)
-      if (!state || !span) return
-      const end = new Date().toISOString()
-      span.source = boundedSource({
-        ...span.source,
-        ...copy(changes),
-        ended_at: end,
-        duration_ms: Date.parse(end) - Date.parse(span.source.started_at),
-      })
-      if (logBytes(state.spans) > MAX_LOCAL_LOG_BYTES * 0.45) {
-        delete span.source.output
-        delete span.source.events
-        span.source.completeness.missing.push('output:LOCAL_QUEUE_LIMIT')
-        state.missing = [...new Set([...state.missing, 'queue:LOCAL_QUEUE_LIMIT'])]
-      }
-      span.revision++
-      await this.save(state)
+      if (span) this.finishSpan(state, span, snapshot, new Date().toISOString())
     })
   }
 
-  private async save(state: LocalAgentLog) {
-    const db = await indexedDBService.openDB()
-    return new Promise<void>((resolve, reject) => {
-      const tx = db.transaction('agentLogs', 'readwrite')
-      tx.objectStore('agentLogs').put(state)
-      tx.oncomplete = () => resolve()
-      tx.onerror = tx.onabort = () => reject(tx.error)
+  private finishSpan(
+    state: LocalAgentLog,
+    span: LogSpan,
+    changes: Partial<LogSource>,
+    end: string,
+  ) {
+    span.source = boundedSource({
+      ...span.source,
+      ...changes,
+      ended_at: end,
+      duration_ms: Date.parse(end) - Date.parse(span.source.started_at),
     })
+    if (logBytes(state.spans) > MAX_LOCAL_LOG_BYTES * 0.45) {
+      delete span.source.output
+      delete span.source.events
+      span.source.completeness.missing.push('output:LOCAL_QUEUE_LIMIT')
+      state.missing = [...new Set([...state.missing, 'queue:LOCAL_QUEUE_LIMIT'])]
+    }
+    span.revision++
   }
 
-  async publish(session: Owner, status: StopStatus, title: string) {
-    // 只发布已停止推进的快照；上传在后台进行，不阻塞本次 Agent 运行结束。
+  /** 同步冻结交接数据并入队，在一次事务内完成节点与上传快照。 */
+  async finishAndPublish(
+    session: Owner,
+    status: StopStatus,
+    title: string,
+    finishes: { id: string; changes: Partial<LogSource> }[] = [],
+  ) {
+    const snapshot = copy(finishes)
+    const end = new Date().toISOString()
     await this.mutate(session, (state) => {
+      for (const { id, changes } of snapshot) {
+        const span = state.spans.find((span) => span.span_id === id)
+        if (span) this.finishSpan(state, span, changes, end)
+      }
       const summary: LogSummary = {
         revision: ++state.summary_revision,
         title: title.slice(0, 300),
@@ -273,6 +279,10 @@ export class AgentTelemetry {
       state.published = { log_session_id: state.log_session_id, spans: copy(state.spans), summary }
     })
     void this.flush(session)
+  }
+
+  publish(session: Owner, status: StopStatus, title: string) {
+    return this.finishAndPublish(session, status, title)
   }
 
   private async batch(session: Owner): Promise<LogBatch | undefined> {
@@ -327,7 +337,13 @@ export class AgentTelemetry {
     try {
       while (!this.disposed && !this.deleted.has(key) && this.currentUser() === session.userId) {
         const batch = await this.batch(session)
-        if (!batch || this.currentUser() !== session.userId) return
+        if (
+          !batch ||
+          this.disposed ||
+          this.deleted.has(key) ||
+          this.currentUser() !== session.userId
+        )
+          return
         const response = await this.send(`${API_BASE_URL}/api/agent/telemetry/batch`, {
           method: 'POST',
           credentials: 'include',

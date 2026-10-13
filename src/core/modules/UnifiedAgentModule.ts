@@ -1,4 +1,4 @@
-import { computed, onScopeDispose, readonly, ref, watch } from 'vue'
+import { computed, onScopeDispose, readonly, ref, shallowRef, watch } from 'vue'
 import { API_BASE_URL } from '@/config/runtimeConfig'
 import { enabledApiCapabilities } from '@/config/apiCapabilities'
 import { buildTextMessages } from '@/core/agent/prompts/textMessages'
@@ -7,7 +7,7 @@ import { agentTools, createToolRuntime } from '@/core/agent/runtime/ToolRuntime'
 import { AgentSessionStore } from '@/core/agent/runtime/AgentSessionStore'
 import { getAgentContextUsage, summarizeAgentUsage } from '@/core/agent/runtime/AgentUsage'
 import { AgentTelemetry, newLogSource } from '@/core/agent/runtime/AgentTelemetry'
-import { toolLogMetadata } from '@/core/agent/telemetry/agent-log'
+import { toolLogMetadata, type LogSource, type StopStatus } from '@/core/agent/telemetry/agent-log'
 import type { ToolResult } from '@/core/agent/tools/types'
 import {
   AgentClient,
@@ -28,6 +28,18 @@ import {
   type ToolExecution,
 } from '@/core/agent/types'
 import { MODULE_NAMES, type ModuleMap, type ModuleRegistry } from './ModuleRegistry'
+
+type AgentRun = {
+  session: AgentSession
+  trigger: AgentMessage
+  model: AbortController
+  tool: AbortController
+  lifecycle: AbortSignal
+  stopped: boolean
+  finalized: boolean
+  modelCall: ModelCallSummary | null
+  awaitingCompletion: boolean
+}
 
 /** 创建工程级 Agent 模块，管理本地会话、模型调用及生命周期，并导出只读状态和操作。 */
 export function createUnifiedAgentModule(registry: ModuleRegistry) {
@@ -84,7 +96,8 @@ export function createUnifiedAgentModule(registry: ModuleRegistry) {
     ),
   )
   // 工程运行槽所属会话，空闲/等待问题时为 null，与当前展示 ID 相互独立。
-  const activeSessionId = ref<string | null>(null)
+  const activeRun = shallowRef<AgentRun | null>(null)
+  const activeSessionId = computed(() => activeRun.value?.session.id ?? null)
   // 工程是否占用运行槽直接从归属 ID 推导，避免维护另一份开关状态。
   const running = computed(() => activeSessionId.value !== null)
   // 当前展示会话是否运行，用于它自己的停止按钮和思考提示；其他会话只受 busy 限制。
@@ -111,7 +124,7 @@ export function createUnifiedAgentModule(registry: ModuleRegistry) {
     error: null,
   })
   // 模型和工具分别取消；停止会取消素材读取/检索，生命周期清理取消所有工具。
-  let controller: { model: AbortController; tool: AbortController; sessionId: string } | undefined
+  let lifecycle = new AbortController()
 
   // 从当前账户工程分区的会话生成按最近更新排序的历史摘要。
   const sessionHistory = computed(() =>
@@ -240,17 +253,19 @@ export function createUnifiedAgentModule(registry: ModuleRegistry) {
     },
   )
 
-  /** 停止续轮并取消素材读取/检索；其他已开始工具保存实际结果，保留部分回复和问题。 */
+  /** 同步撤销推进权限并交接；旧执行器自行结束，全部未提交结果丢弃。 */
   function stop() {
-    const control = controller
-    if (!control || control.sessionId !== currentSessionId.value) return
-    control.model.abort()
-    const cancellable = Object.values(toolExecutions.value).some(
+    const run = activeRun.value
+    if (!run || run.session.id !== currentSessionId.value || run.finalized) return
+    run.stopped = true
+    run.model.abort()
+    const cancellable = Object.values(run.session.toolExecutions).some(
       (execution) =>
         execution.status === 'pending' &&
         (execution.call.name === 'read_media' || execution.call.name === 'search_media'),
     )
-    if (cancellable) control.tool.abort()
+    if (cancellable) run.tool.abort()
+    finalizeRun(run, 'cancelled')
   }
 
   /** 新建空白会话并切换展示；已有会话及运行继续保留，共享客户端不变。 */
@@ -280,23 +295,22 @@ export function createUnifiedAgentModule(registry: ModuleRegistry) {
 
   /** 取消所有旧运行并隔离内存；已经落盘的历史不随页面/账户清理删除。 */
   function clearMemory() {
-    controller?.model.abort()
-    controller?.tool.abort()
-    controller = undefined
+    activeRun.value?.model.abort()
+    lifecycle.abort()
+    lifecycle = new AbortController()
+    activeRun.value = null
     sessions.value = {}
-    activeSessionId.value = null
     newChat()
   }
 
-  /** 删除空闲会话和对应日志；运行及取消收口期间拒绝删除，须先停止并等待结束。 */
+  /** 删除未占活动位的会话；旧保存按队列先完成，迟到回调失去会话归属。 */
   async function deleteSession(id: string) {
     const session = sessions.value[id]
     // 模块入口也检查运行归属，避免绕过界面禁用或点击时状态变化导致删除在途会话。
     if (!session || activeSessionId.value === id) return false
     delete sessions.value[id]
     if (currentSessionId.value === id) newChat()
-    await sessionStore.delete(session)
-    await telemetry.delete(session)
+    await Promise.all([sessionStore.delete(session), telemetry.delete(session)])
     return true
   }
 
@@ -460,43 +474,117 @@ export function createUnifiedAgentModule(registry: ModuleRegistry) {
     delete session.toolExecutions[execution.assistantMessageId]
   }
 
-  /**
-   * 自动推进：实际消息历史 -> 单次模型调用 -> 保存正文 -> 执行工具 -> 成对保存结果 -> 新 modelCall。
-   * 用户输入和 ask_user 回答都已写入消息列表，不额外传入或重复追加；每轮使用新 ID 和请求快照。
-   * 文本增量直接更新本轮唯一助手消息，中断保留已收到内容，只有完整终态才能启动工具。
-   * 停止取消模型及素材读取/检索并丢弃其结果，其他已开始工具保存结果；会话失效丢弃全部迟到结果。
-   * running 覆盖模型、普通工具和客户端取消收口；ask_user 保存问题后退出，不占运行槽等待回答。
-   * 工具错误成对返回模型供下一轮修正；模型/传输异常停止，由用户输入新指令继续，不自动重试。
-   */
+  /** 数据归属不依赖展示选择、活动位或存储就绪状态。 */
+  function ownsSession(run: AgentRun) {
+    const session = run.session
+    return (
+      !run.lifecycle.aborted &&
+      !disposed.value &&
+      !identityInvalid.value &&
+      sessions.value[session.id] === session &&
+      user.currentUser.value?.id === session.userId &&
+      config.projectId.value === session.projectId
+    )
+  }
+
+  /** 入队固定快照后立即释放活动位；原异步调用不能再次发布或提交工具结果。 */
+  function finalizeRun(
+    run: AgentRun,
+    status: StopStatus,
+    finishes: { id: string; changes: Partial<LogSource> }[] = [],
+  ) {
+    if (run.finalized) return
+    run.finalized = true
+    const session = run.session
+    if (ownsSession(run)) {
+      const current = run.modelCall
+      if (current?.status === 'running')
+        current.status = status === 'failed' ? 'failed' : 'cancelled'
+      for (const execution of Object.values(session.toolExecutions)) {
+        if (execution.modelCallId !== current?.id || status === 'waiting') continue
+        const source = newLogSource('cancelled', {
+          name: execution.call.name,
+          args: execution.call.args,
+        })
+        source.started_at = execution.startedAt ?? source.started_at
+        source.ended_at = new Date().toISOString()
+        source.duration_ms = Date.parse(source.ended_at) - Date.parse(source.started_at)
+        source.error = { code: 'TOOL_CANCELLED', result_committed: false }
+        void telemetry.record(
+          session,
+          execution.resultSpanId ?? crypto.randomUUID(),
+          'tool_result',
+          source,
+          execution.modelCallId,
+          execution.call.id,
+        )
+        delete session.toolExecutions[execution.assistantMessageId]
+      }
+      const message = session.messages.find((m) => m.id === current?.assistantMessageId)
+      if (current && run.awaitingCompletion)
+        finishes.push({
+          id: current.id,
+          changes: {
+            status: current.status,
+            error: current.error,
+            output: {
+              message: {
+                role: 'assistant',
+                content: message
+                  ? getMessageTextParts(message)
+                      .map((p) => p.text)
+                      .join('')
+                  : '',
+              },
+            },
+          },
+        })
+      session.messages = session.messages.filter(
+        (message) =>
+          message.id !== current?.assistantMessageId ||
+          message.interaction ||
+          message.parts.some((part) => part.type !== MessagePartType.TEXT || part.text.trim()),
+      )
+      void persistSession(session).catch(() => {})
+      void telemetry.finishAndPublish(
+        session,
+        status,
+        getMessageTextParts(
+          session.messages.find((m) => m.role === AgentMessageRole.USER) ?? run.trigger,
+        )
+          .map((p) => p.text)
+          .join(''),
+        finishes,
+      )
+    }
+    if (activeRun.value === run) activeRun.value = null
+  }
+
+  /** 自动推进只属于活动上下文；退出后保存、日志和取消分别自行收口。 */
   async function runLoop(session: AgentSession) {
-    // 先同步占用运行槽；模型与工具分别取消，执行收口前不允许新运行并发。
-    const control = {
+    const control: AgentRun = {
+      session,
+      trigger: session.messages[session.messages.length - 1]!,
       model: new AbortController(),
       tool: new AbortController(),
-      sessionId: session.id,
+      lifecycle: lifecycle.signal,
+      stopped: false,
+      finalized: false,
+      modelCall: null,
+      awaitingCompletion: false,
     }
-    controller = control
+    activeRun.value = control
     const sessionId = session.id
     const userId = session.userId
     const projectId = session.projectId
-    activeSessionId.value = sessionId
-    /** 检查原会话仍存在且运行归属有效；展示切换、新建不影响，删除/身份/工程失效才隔离。 */
-    const isRunOwned = () =>
-      sessions.value[sessionId] === session &&
-      controller === control &&
-      ready.value &&
-      user.currentUser.value?.id === userId &&
-      config.projectId.value === projectId
-    /** 除归属有效外，还要求没有普通停止信号；用于模型调用和自动续轮的推进准入。 */
-    const isRunCurrent = () => isRunOwned() && !control.model.signal.aborted
-    // 只跟踪本次运行新建的调用，避免本地错误覆盖旧调用或完整终态的诊断日志。
-    let awaitingCompletion = false
+    const isRunCurrent = () =>
+      ownsSession(control) && activeRun.value === control && !control.stopped && ready.value
     try {
-      const trigger = session.messages[session.messages.length - 1]!
-      await telemetry.activity(session, session.messages.length > 1)
+      const trigger = control.trigger
+      void telemetry.activity(session, session.messages.length > 1)
       // 回答交互后由工具结果触发续轮，不再把该回答重复记录为用户输入节点。
       if (trigger.role === AgentMessageRole.USER)
-        await telemetry.record(
+        void telemetry.record(
           session,
           trigger.id,
           'user_message',
@@ -509,6 +597,7 @@ export function createUnifiedAgentModule(registry: ModuleRegistry) {
         )
       // 先保存触发消息（用户输入或回答后的工具对）；运行槽已同步占用，保存期间不能并发发送。
       await persistSession(session)
+      if (!isRunCurrent()) return
       while (isRunCurrent()) {
         // 1. 等待旧模型调用释放槽位，再复核归属；只等待收口，不重放旧请求。
         await client.waitForIdle()
@@ -529,7 +618,8 @@ export function createUnifiedAgentModule(registry: ModuleRegistry) {
           error: null,
         }
         const current = session.latestModelCall
-        awaitingCompletion = true
+        control.modelCall = current
+        control.awaitingCompletion = true
         session.usageRecords[current.id] = { usage: null, chargedAmount: null }
         // 调用前记录实际请求输入，并把同一日志身份交给服务端关联供应商请求。
         const logIdentity = await telemetry.record(
@@ -542,11 +632,13 @@ export function createUnifiedAgentModule(registry: ModuleRegistry) {
           }),
           current.id,
         )
+        if (!isRunCurrent()) return
         if (logIdentity) request.telemetry = logIdentity
         // 调用摘要在发送前落盘；完整请求已经写入诊断日志。
         await persistSession(session)
         if (!isRunCurrent()) return
         const output = await client.stream(request, { signal: control.model.signal })
+        if (!isRunCurrent()) return
         // 4. 增量写入同一条助手消息，停止也不删除；工具参数仍须等待完整终态再处理。
         for await (const chunk of output) {
           if (!isRunCurrent() || session.latestModelCall?.id !== current.id) break
@@ -564,7 +656,7 @@ export function createUnifiedAgentModule(registry: ModuleRegistry) {
         // 5. 用完整终态校准正文，不另建消息或提前提交工具调用；模型完成不代表工具成功。
         const assistant = getAssistantMessage(session, current)
         assistant.parts = [{ type: MessagePartType.TEXT, text: completion.message.content }]
-        awaitingCompletion = false
+        control.awaitingCompletion = false
         session.usageRecords[current.id] = {
           usage: completion.usage,
           chargedAmount: completion.chargedAmount ?? null,
@@ -572,7 +664,7 @@ export function createUnifiedAgentModule(registry: ModuleRegistry) {
         }
         current.status = 'completed'
         // 完成信息更新原模型节点；交互工具的分类只用于日志展示，不改变调用参数。
-        await telemetry.finish(session, current.id, {
+        const modelChanges: Partial<LogSource> = {
           status: 'completed',
           output: {
             message: {
@@ -588,12 +680,14 @@ export function createUnifiedAgentModule(registry: ModuleRegistry) {
             },
             usage: completion.usage,
           },
-        })
-        // 没有工具调用就是最终回复，本次自动推进结束；finally 负责释放运行状态。
+        }
+        // 最终回复同步交接，不等待保存或日志落盘。
         if (!call) {
-          await persistSession(session)
+          finalizeRun(control, 'completed', [{ id: current.id, changes: modelChanges }])
           return
         }
+        await telemetry.finish(session, current.id, modelChanges)
+        if (!isRunCurrent()) return
         // 6. 调用先只保存在执行记录中：普通工具进度由 UI 投影，ask_user 只展示问题卡片。
         session.toolExecutions[assistant.id] = {
           startedAt: new Date().toISOString(),
@@ -617,7 +711,7 @@ export function createUnifiedAgentModule(registry: ModuleRegistry) {
           toolRuntime.validate(call)
           if (call.name === 'ask_user') {
             // ask_user 不立即执行或创建等待 Promise，只在助手消息中保存问题，由计算属性推导等待状态。
-            // 返回后 finally 释放 running；用户回答时由 answerQuestion 提交配对结果，再启动新循环。
+            // 问题交接释放活动位；用户回答时提交配对结果并启动新循环。
             const question = call.args as { question: string; suggested_options: string[] }
             assistant.interaction = {
               interrupt: {
@@ -629,8 +723,8 @@ export function createUnifiedAgentModule(registry: ModuleRegistry) {
               },
               result: null,
             }
-            // 问题和原调用记录一起保存；刷新后仅恢复问题卡片，不恢复旧循环或等待 Promise。
-            await persistSession(session)
+            // 问题建立和释放活动位在同一同步交接内完成。
+            finalizeRun(control, 'waiting')
             return
           }
           // 普通工具使用原执行器；传入取消信号和实时归属检查，适配层在异步准备后再次复核。
@@ -640,19 +734,18 @@ export function createUnifiedAgentModule(registry: ModuleRegistry) {
             projectId,
             sessionId,
             modelCallId: current.id,
-            signal: control.tool.signal,
-            isCurrent: () => isRunOwned() && !control.tool.signal.aborted,
+            signal: AbortSignal.any([control.tool.signal, control.lifecycle]),
+            isCurrent: isRunCurrent,
           })
         } catch (error) {
-          // 会话失效后不能写入；其他工具的真实错误仍保存，素材工具取消在提交前统一检查。
-          if (!isRunOwned()) return
+          // 停止或会话失效后丢弃错误；活动工具的真实错误仍作为结果提交。
+          if (!isRunCurrent()) return
           // 校验异常或执行异常转换为失败结果，保留错误正文；不重放原调用、不自动修改参数。
           const message = error instanceof Error ? error.message : String(error)
           result = { success: false, output: message, error: message }
         }
-        // 7. 停止取消的素材工具不提交结果；其他工具复核归属后成对保存。
-        if (!isRunOwned()) return
-        if (control.tool.signal.aborted) return
+        // 停止后的所有工具结果只被消费，不再写入聊天和日志。
+        if (!isRunCurrent()) return
         commitToolResult(session, execution, result)
         // 已完成工具只作为配对消息保存，执行详情由诊断日志记录。
         await persistSession(session)
@@ -661,104 +754,21 @@ export function createUnifiedAgentModule(registry: ModuleRegistry) {
     } catch (error) {
       // 外层处理模型/传输及循环本身的异常；工具异常已在内层转成结果，不会走到这里。
       // 原会话已经删除或身份清理后，旧循环不能覆盖新运行的 modelCall 或消息。
-      if (sessions.value[sessionId] !== session || controller !== control) return
+      if (!ownsSession(control) || activeRun.value !== control || control.finalized) return
       const diagnostic = newLogSource('failed', { phase: 'orchestration' })
       diagnostic.error =
         error instanceof Error ? { name: error.name, message: error.message } : String(error)
-      await telemetry.record(session, crypto.randomUUID(), 'diagnostic', diagnostic)
-      if (session.latestModelCall) {
-        session.latestModelCall.error = error instanceof Error ? error.message : String(error)
-        session.latestModelCall.status = control.model.signal.aborted ? 'cancelled' : 'failed'
+      void telemetry.record(session, crypto.randomUUID(), 'diagnostic', diagnostic)
+      if (control.modelCall?.status === 'running') {
+        control.modelCall.error = error instanceof Error ? error.message : String(error)
+        control.modelCall.status = 'failed'
       }
+      finalizeRun(control, 'failed')
     } finally {
-      // 本地取消消费后，客户端可能仍等待服务端终态；收口完成前保持运行槽占用。
-      if (sessions.value[sessionId] === session && controller === control)
-        await client.waitForIdle()
-      // 等待期间可能删除会话或切换身份，只清理仍由本次运行持有的状态；普通展示切换不影响。
-      if (sessions.value[sessionId] === session && controller === control) {
-        // 被停止的素材工具以 cancelled 收口日志，不留下 pending 或未配对的模型历史。
-        const cancelledTool = control.tool.signal.aborted
-          ? Object.values(session.toolExecutions).find(
-              (execution) => execution.modelCallId === session.latestModelCall?.id,
-            )
-          : undefined
-        if (cancelledTool) {
-          cancelledTool.status = 'cancelled'
-          cancelledTool.result = null
-          // 记录工具已取消且结果未提交，便于区分“没有执行结果”和“结果正文缺失”。
-          const source = newLogSource('cancelled', {
-            name: cancelledTool.call.name,
-            args: cancelledTool.call.args,
-          })
-          source.error = { code: 'TOOL_CANCELLED', result_committed: false }
-          cancelledTool.resultSpanId ??= crypto.randomUUID()
-          await telemetry.record(
-            session,
-            cancelledTool.resultSpanId,
-            'tool_result',
-            source,
-            cancelledTool.modelCallId,
-            cancelledTool.call.id,
-          )
-          delete session.toolExecutions[cancelledTool.assistantMessageId]
-        }
-        if (session.latestModelCall) {
-          if (session.latestModelCall.status === 'running')
-            session.latestModelCall.status = 'cancelled'
-          if (session.latestModelCall.status !== 'completed' && awaitingCompletion) {
-            const call = session.latestModelCall
-            const message = session.messages.find((m) => m.id === call.assistantMessageId)
-            // 失败或取消也保留已接收的部分回复，完成当前节点而非留下永久 running。
-            await telemetry.finish(session, call.id, {
-              status: call.status,
-              error: call.error,
-              output: {
-                message: {
-                  role: 'assistant',
-                  content: message
-                    ? getMessageTextParts(message)
-                        .map((p) => p.text)
-                        .join('')
-                    : '',
-                },
-              },
-            })
-          }
-        }
-        session.messages = session.messages.filter(
-          (message) =>
-            message.id !== session.latestModelCall?.assistantMessageId ||
-            message.interaction ||
-            message.parts.some((part) => part.type !== MessagePartType.TEXT || part.text.trim()),
-        )
-        try {
-          await persistSession(session)
-        } finally {
-          // 等待用户回答也是一次发布边界；下一次续轮仍属于同一聊天日志。
-          const last = session.messages[session.messages.length - 1]
-          const status = control.model.signal.aborted
-            ? 'cancelled'
-            : last?.interaction && !last.interaction.result
-              ? 'waiting'
-              : session.latestModelCall?.status === 'failed'
-                ? 'failed'
-                : 'completed'
-          await telemetry.publish(
-            session,
-            status,
-            session.messages
-              .find((m) => m.role === AgentMessageRole.USER)
-              ?.parts.filter((p) => p.type === MessagePartType.TEXT)
-              .map((p) => p.text)
-              .join('') ?? '',
-          )
-          // 保存期间也可能删除会话或切换身份，只释放仍由本循环持有的工程槽。
-          if (controller === control) {
-            controller = undefined
-            activeSessionId.value = null
-          }
-        }
-      }
+      finalizeRun(
+        control,
+        control.stopped ? 'cancelled' : storageError.value ? 'failed' : 'completed',
+      )
     }
   }
 
