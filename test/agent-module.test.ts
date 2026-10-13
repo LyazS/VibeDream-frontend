@@ -13,6 +13,8 @@ import { MessagePartType, type AgentMessagePart } from '../src/core/agent/types'
 import type { AgentUsageRecord } from '../src/core/agent/runtime/AgentUsage'
 import type { VirtualDirectory } from '../src/core/directory/types'
 import systemPrompt from '../src/core/agent/prompts/system-prompt.txt?raw'
+import { CloudflareTemporaryFileUploader } from '../src/core/utils/cloudflareTemporaryFileUploader'
+import type { AgentImage, AgentImageRecord } from '../src/core/agent/types'
 
 const transport = vi.hoisted(() => ({
   calls: vi.fn(),
@@ -142,8 +144,8 @@ beforeEach(async () => {
   transport.idle.mockReset()
   toolExecution.mockReset()
   backgroundWrites = []
-  vi.spyOn(AgentSessionStore.prototype, 'save').mockImplementation(function (session) {
-    const pending = saveSession.call(this, session)
+  vi.spyOn(AgentSessionStore.prototype, 'save').mockImplementation(function (session, images) {
+    const pending = saveSession.call(this, session, images)
     backgroundWrites.push(pending)
     return pending
   })
@@ -190,6 +192,252 @@ afterEach(async () => {
 })
 
 describe('persisted Agent sessions', () => {
+  const image = (): AgentImage => ({
+    id: crypto.randomUUID(),
+    blob: new Blob(['image'], { type: 'image/webp' }),
+    mimeType: 'image/webp',
+    width: 100,
+    height: 80,
+  })
+  const uploaded = (suffix = 'test') => ({
+    success: true,
+    url: `oss://dashscope-instant/${suffix}.webp`,
+    expiresAt: new Date(Date.now() + 3600_000).toISOString(),
+  })
+  const storedImages = () =>
+    indexedDBService.transaction<AgentImageRecord[]>('agentImages', 'readonly', (store) =>
+      store.getAll(),
+    )
+
+  it('commits image-only input with its Blob, reuses uploads in later messages and restores images after refresh', async () => {
+    const upload = vi
+      .spyOn(CloudflareTemporaryFileUploader, 'uploadBlob')
+      .mockResolvedValue(uploaded())
+    const attachment = image()
+    const sending = agent.send('', [attachment])
+    expect(agent.running.value).toBe(true)
+    expect(await agent.send('concurrent')).toBe(false)
+    await sending
+    const id = agent.currentSessionId.value
+    expect((await storedImages())[0]?.blob.size).toBe(attachment.blob.size)
+    expect(transport.calls.mock.calls[0]![0].messages[1].content).toEqual([
+      ...userContent(''),
+      { type: 'image_url', image_url: { url: uploaded().url } },
+    ])
+    expect(agent.currentMessages.value[0]?.parts).toContainEqual({
+      type: MessagePartType.IMAGE,
+      imageId: attachment.id,
+    })
+    await agent.send('follow up')
+    expect(upload).toHaveBeenCalledOnce()
+    scope.stop()
+    await Promise.allSettled(backgroundWrites)
+    mountAgent()
+    await vi.waitFor(() => expect(agent.historyLoading.value).toBe(false))
+    expect(agent.currentSessionId.value).not.toBe(id)
+    expect(agent.selectSession(id)).toBe(true)
+    expect((await agent.getImage(attachment.id)).blob.size).toBe(attachment.blob.size)
+    await agent.send('after refresh')
+    expect(upload).toHaveBeenCalledOnce()
+    expect(await agent.deleteSession(id)).toBe(true)
+    expect(await storedImages()).toEqual([])
+  })
+
+  it('retains ordered historical images in tool continuation and renews an expired cache', async () => {
+    const upload = vi
+      .spyOn(CloudflareTemporaryFileUploader, 'uploadBlob')
+      .mockResolvedValue(uploaded())
+    transport.calls.mockImplementation(async (request: StreamParams) =>
+      output(
+        request,
+        Promise.resolve({
+          modelCallId: request.modelCallId,
+          message:
+            transport.calls.mock.calls.length === 1
+              ? {
+                  role: 'assistant',
+                  content: '',
+                  tool_calls: [{ id: 'images-tool', name: 'read_project_info', args: {} }],
+                }
+              : { role: 'assistant', content: 'done' },
+          usage: null,
+        }),
+      ),
+    )
+    await agent.send('compare', [image(), image()])
+    expect(transport.calls).toHaveBeenCalledTimes(2)
+    expect(transport.calls.mock.calls[1]![0].messages[1]).toEqual(
+      transport.calls.mock.calls[0]![0].messages[1],
+    )
+    expect(upload).toHaveBeenCalledTimes(2)
+    const firstImage = agent.currentMessages.value[0]!.parts.find(
+      (part) => part.type === MessagePartType.IMAGE,
+    )!
+    const record = (await storedImages()).find(
+      (record) => firstImage.type === MessagePartType.IMAGE && record.id === firstImage.imageId,
+    )
+    await new AgentSessionStore().updateImageUpload(
+      record!,
+      { url: record!.upload!.url, expiresAt: '2000-01-01T00:00:00Z' },
+      () => true,
+    )
+    upload.mockResolvedValue(uploaded('renewed'))
+    await agent.send('again')
+    expect(upload).toHaveBeenCalledTimes(3)
+    expect(transport.calls.mock.lastCall![0].messages[1].content[2].image_url.url).toBe(
+      uploaded('renewed').url,
+    )
+  })
+
+  it('releases the run on upload failure and preserves the image for a new instruction', async () => {
+    const upload = vi
+      .spyOn(CloudflareTemporaryFileUploader, 'uploadBlob')
+      .mockResolvedValue({ success: false, error: 'offline' })
+    await agent.send('inspect', [image()])
+    expect(agent.running.value).toBe(false)
+    expect(agent.latestModelCall.value?.error).toContain('offline')
+    expect(agent.ready.value).toBe(true)
+    expect(transport.calls).not.toHaveBeenCalled()
+    upload.mockResolvedValue(uploaded())
+    await agent.send('continue')
+    expect(transport.calls).toHaveBeenCalledOnce()
+    expect(agent.currentMessages.value.filter((message) => message.role === 'user')).toHaveLength(2)
+  })
+
+  it('cancels image preparation and never recreates an image after the stopped session is deleted', async () => {
+    const pending = deferred<ReturnType<typeof uploaded>>()
+    const upload = vi
+      .spyOn(CloudflareTemporaryFileUploader, 'uploadBlob')
+      .mockReturnValue(pending.promise)
+    const sending = agent.send('inspect', [image()])
+    const id = agent.currentSessionId.value
+    await vi.waitFor(() => expect(upload).toHaveBeenCalledOnce())
+    agent.stop()
+    expect(agent.busy.value).toBe(false)
+    expect(upload.mock.calls[0]?.[3]?.aborted).toBe(true)
+    await agent.deleteSession(id)
+    await agent.send('new session')
+    pending.resolve(uploaded())
+    await sending
+    expect(transport.calls).toHaveBeenCalledOnce()
+    expect(await storedImages()).toEqual([])
+  })
+
+  it('invalidates expired provider URLs without replaying the failed model call', async () => {
+    const upload = vi
+      .spyOn(CloudflareTemporaryFileUploader, 'uploadBlob')
+      .mockResolvedValue(uploaded())
+    transport.calls.mockRejectedValueOnce(
+      Object.assign(new Error('expired'), { code: 'AGENT_IMAGE_URL_EXPIRED' }),
+    )
+    await agent.send('inspect', [image()])
+    expect((await storedImages())[0]?.upload).toBeUndefined()
+    expect(transport.calls).toHaveBeenCalledOnce()
+    upload.mockResolvedValue(uploaded('new'))
+    await agent.send('continue')
+    expect(upload).toHaveBeenCalledTimes(2)
+    expect(transport.calls).toHaveBeenCalledTimes(2)
+    expect(transport.calls.mock.calls[0]![0].modelCallId).not.toBe(
+      transport.calls.mock.calls[1]![0].modelCallId,
+    )
+  })
+
+  it.each(['readImage', 'updateImageUpload'] as const)(
+    'blocks sending when %s fails during expired image cache cleanup',
+    async (method) => {
+      vi.spyOn(CloudflareTemporaryFileUploader, 'uploadBlob').mockResolvedValue(uploaded())
+      transport.calls.mockImplementationOnce(async () => {
+        vi.spyOn(AgentSessionStore.prototype, method).mockRejectedValueOnce(
+          new Error('CACHE_INVALIDATION_FAILED'),
+        )
+        throw Object.assign(new Error('expired'), { code: 'AGENT_IMAGE_URL_EXPIRED' })
+      })
+      const attachment = image()
+      await agent.send('inspect', [attachment])
+      await Promise.allSettled(backgroundWrites)
+
+      expect(agent.storageError.value).toBe('CACHE_INVALIDATION_FAILED')
+      expect(agent.latestModelCall.value).toMatchObject({ status: 'failed', error: 'expired' })
+      expect(agent.running.value).toBe(false)
+      expect(agent.ready.value).toBe(false)
+      expect((await storedImages())[0]).toMatchObject({
+        id: attachment.id,
+        upload: { url: uploaded().url },
+      })
+      expect(await agent.send('continue')).toBe(false)
+      agent.newChat()
+      expect(await agent.send('new chat')).toBe(false)
+      expect(transport.calls).toHaveBeenCalledOnce()
+    },
+  )
+
+  it('ignores a late cache cleanup failure after the account changes', async () => {
+    vi.spyOn(CloudflareTemporaryFileUploader, 'uploadBlob').mockResolvedValue(uploaded())
+    const pending = deferred()
+    const updateUpload = AgentSessionStore.prototype.updateImageUpload
+    const update = vi
+      .spyOn(AgentSessionStore.prototype, 'updateImageUpload')
+      .mockImplementation(function (image, upload, isCurrent) {
+        return upload ? updateUpload.call(this, image, upload, isCurrent) : pending.promise
+      })
+    transport.calls.mockRejectedValueOnce(
+      Object.assign(new Error('expired'), { code: 'AGENT_IMAGE_URL_EXPIRED' }),
+    )
+    const sending = agent.send('inspect', [image()])
+    await vi.waitFor(() => expect(update).toHaveBeenCalledTimes(2))
+    user.currentUser.value = { id: 'u2', balance: '0' }
+    await vi.waitFor(() => expect(agent.ready.value).toBe(true))
+    pending.reject(new Error('OLD_CACHE_INVALIDATION_FAILED'))
+    await sending
+
+    expect(agent.storageError.value).toBeNull()
+    expect(agent.ready.value).toBe(true)
+    await agent.send('new account')
+    expect(transport.calls).toHaveBeenCalledTimes(2)
+  })
+
+  it.each(['user', 'project'])(
+    'isolates a late image upload after the %s changes',
+    async (owner) => {
+      const pending = deferred<ReturnType<typeof uploaded>>()
+      const upload = vi
+        .spyOn(CloudflareTemporaryFileUploader, 'uploadBlob')
+        .mockReturnValue(pending.promise)
+      const sending = agent.send('old owner', [image()])
+      await vi.waitFor(() => expect(upload).toHaveBeenCalledOnce())
+      if (owner === 'user') user.currentUser.value = { id: 'u2', balance: '0' }
+      else {
+        agent.leaveProject()
+        config.projectId.value = 'p2'
+      }
+      await vi.waitFor(() => expect(agent.ready.value).toBe(true))
+      await agent.send('new owner')
+      pending.resolve(uploaded())
+      await sending
+      const images = await storedImages()
+      expect(images).toHaveLength(1)
+      expect(images[0]?.upload).toBeUndefined()
+      expect(transport.calls).toHaveBeenCalledOnce()
+      expect(agent.currentMessages.value[0]?.parts).toContainEqual({
+        type: MessagePartType.TEXT,
+        text: 'new owner',
+      })
+    },
+  )
+
+  it('keeps pending Blobs for final saves when the first storage commit fails', async () => {
+    const attachment = image()
+    const first = vi
+      .mocked(AgentSessionStore.prototype.save)
+      .mockRejectedValueOnce(new Error('first save failed'))
+    await agent.send('inspect', [attachment])
+    expect(agent.storageError.value).toBe('first save failed')
+    expect(transport.calls).not.toHaveBeenCalled()
+    await Promise.allSettled(backgroundWrites)
+    expect(first.mock.calls.at(-1)?.[1]).toEqual([attachment])
+    expect((await storedImages())[0]?.id).toBe(attachment.id)
+  })
+
   it('blocks sending when the Agent capability is disabled even in development', async () => {
     scope.stop()
     const capabilityCheck = vi.spyOn(enabledApiCapabilities, 'has').mockReturnValue(false)
@@ -856,7 +1104,7 @@ describe('text Agent orchestration', () => {
       { type: MessagePartType.TEXT, text: '第一段 ' },
       { type: MessagePartType.TEXT, text: '\n' },
       { type: MessagePartType.TEXT, text: '第二段' },
-      { type: MessagePartType.IMAGE, url: 'https://example.com/ui-only.png' },
+      { type: MessagePartType.IMAGE, imageId: 'ui-only' },
       { type: MessagePartType.BACKGROUND_CONTEXT, text: '界面上下文' },
     )
     await agent.send('second')

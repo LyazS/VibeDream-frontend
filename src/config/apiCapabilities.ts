@@ -77,20 +77,29 @@ export function getApiPath(url: string): string | undefined {
   return undefined
 }
 
-export function getApiCapability(path: string): ApiCapability {
+export function getApiCapability(path: string, body?: BodyInit | null): ApiCapability {
   if (path === '/api/agent/tools/describe-item-property') return 'item-properties'
   if (path === '/api/transitions/test-search') return 'transition.search'
-  if (path === '/api/media/upload-policies') return 'ai-tasks'
+  if (path === '/api/media/upload-policies') {
+    if (typeof body === 'string') {
+      try {
+        if (JSON.parse(body)?.capability === 'agent') return 'agent'
+      } catch {
+        /* Invalid JSON is rejected by the API. */
+      }
+    }
+    return 'ai-tasks'
+  }
   if (path === '/api/media/indexing/reconcile') return 'media.indexing'
   return capabilityPrefixes.find(([prefix]) => path.startsWith(prefix))?.[1] ?? 'other'
 }
 
 /** Reject disabled API calls before fetch so unmigrated FastAPI routes are never contacted. */
-export function assertApiCapabilityEnabled(url: string): void {
+export function assertApiCapabilityEnabled(url: string, body?: BodyInit | null): void {
   const path = getApiPath(url)
   if (!path) return
 
-  const capability = getApiCapability(path)
+  const capability = getApiCapability(path, body)
   if (!enabledApiCapabilities.has(capability)) {
     throw new ApiCapabilityDisabledError(path, capability)
   }

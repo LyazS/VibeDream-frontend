@@ -7,6 +7,38 @@ afterEach(() => {
   vi.unstubAllGlobals()
 })
 
+it('adds the image table to v6 without removing existing text conversations', async () => {
+  indexedDBService.close()
+  vi.stubGlobal('indexedDB', new IDBFactory())
+  const record = {
+    key: 'text-session',
+    owner: 'owner',
+    sessionKey: 'text-session',
+    data: { messages: [{ role: 'user', content: 'keep me' }] },
+  }
+  await new Promise<void>((resolve, reject) => {
+    const request = indexedDB.open('VideoEditorDB', 6)
+    request.onerror = () => reject(request.error)
+    request.onupgradeneeded = () => {
+      const store = request.result.createObjectStore('agentSessions', { keyPath: 'key' })
+      store.createIndex('owner', 'owner')
+      store.createIndex('session', 'sessionKey')
+      store.put(record)
+    }
+    request.onsuccess = () => {
+      request.result.close()
+      resolve()
+    }
+  })
+  const db = await indexedDBService.openDB()
+  expect(db.objectStoreNames.contains('agentImages')).toBe(true)
+  expect(
+    await indexedDBService.transaction('agentSessions', 'readonly', (store) =>
+      store.get('text-session'),
+    ),
+  ).toEqual(record)
+})
+
 it.each([3, 4, 5])(
   'clears v%s chat history and diagnostic stores while preserving handles and queued logs',
   async (version) => {
@@ -44,7 +76,7 @@ it.each([3, 4, 5])(
     })
 
     const db = await indexedDBService.openDB()
-    expect(db.version).toBe(6)
+    expect(db.version).toBe(7)
     for (const name of ['agentTurns', 'agentModelCalls', 'agentTools'])
       expect(db.objectStoreNames.contains(name)).toBe(false)
     expect(

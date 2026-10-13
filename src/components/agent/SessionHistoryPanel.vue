@@ -52,7 +52,7 @@
           @keydown.space.self.prevent="loadHistory(session.id)"
         >
           <div class="history-preview">
-            {{ session.preview || t('common.chat.new') }}
+            {{ session.preview || t('common.chat.image') }}
           </div>
 
           <div class="history-meta">

@@ -1,5 +1,10 @@
 import { indexedDBService } from '@/core/storage/IndexedDBService'
-import type { AgentSession } from '../types'
+import {
+  MessagePartType,
+  type AgentImage,
+  type AgentImageRecord,
+  type AgentSession,
+} from '../types'
 import { toolContractVersion } from './ToolRuntime'
 
 /** 固定快照：剥离 Vue 代理，排队后不再读取正在变化的响应式对象。 */
@@ -7,7 +12,7 @@ function snapshot<T>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T
 }
 
-/** 聊天历史只保存会话快照；诊断日志由 AgentTelemetry 独立管理。 */
+/** 会话快照与图片原子提交；诊断日志由 AgentTelemetry 独立管理。 */
 export class AgentSessionStore {
   private queue: Promise<void> = Promise.resolve()
 
@@ -17,7 +22,7 @@ export class AgentSessionStore {
   }
 
   /** 固定消息、用量及调用摘要，只保留恢复待回答问题所需的工具记录。 */
-  save(session: AgentSession): Promise<void> {
+  save(session: AgentSession, images: readonly AgentImage[] = []): Promise<void> {
     const data = snapshot({
       ...session,
       toolExecutions: Object.fromEntries(
@@ -34,15 +39,49 @@ export class AgentSessionStore {
         ),
       ),
     })
+    const pending = images.map((image) => ({ ...image }))
     return this.enqueue(async () => {
       const db = await indexedDBService.openDB()
       const owner = this.owner(data.userId, data.projectId)
       const key = JSON.stringify([owner, data.id])
       await new Promise<void>((resolve, reject) => {
-        const transaction = db.transaction('agentSessions', 'readwrite')
+        const transaction = db.transaction(['agentSessions', 'agentImages'], 'readwrite')
         transaction.oncomplete = () => resolve()
-        transaction.onerror = transaction.onabort = () => reject(transaction.error)
+        transaction.onerror = transaction.onabort = () =>
+          reject(transaction.error ?? new Error('对话图片存储事务失败'))
         transaction.objectStore('agentSessions').put({ key, owner, sessionKey: key, data })
+        const imageStore = transaction.objectStore('agentImages')
+        const imageIds = new Set(
+          data.messages
+            .filter((message) => message.role === 'user')
+            .flatMap((message) =>
+              message.parts.flatMap((part) =>
+                part.type === MessagePartType.IMAGE ? [part.imageId] : [],
+              ),
+            ),
+        )
+        for (const image of pending) {
+          if (!imageIds.has(image.id)) continue
+          const imageKey = JSON.stringify([key, image.id])
+          const request = imageStore.getKey(imageKey)
+          request.onsuccess = () => {
+            if (!request.result)
+              imageStore.add({
+                ...image,
+                key: imageKey,
+                owner,
+                sessionKey: key,
+              } satisfies AgentImageRecord)
+          }
+        }
+        // A dangling reference must abort the entire message/image commit.
+        for (const id of imageIds) {
+          if (pending.some((image) => image.id === id)) continue
+          const request = imageStore.getKey(JSON.stringify([key, id]))
+          request.onsuccess = () => {
+            if (!request.result) transaction.abort()
+          }
+        }
       })
     })
   }
@@ -74,10 +113,68 @@ export class AgentSessionStore {
     return this.enqueue(async () => {
       const db = await indexedDBService.openDB()
       await new Promise<void>((resolve, reject) => {
-        const transaction = db.transaction('agentSessions', 'readwrite')
+        const transaction = db.transaction(['agentSessions', 'agentImages'], 'readwrite')
+        transaction.oncomplete = () => resolve()
+        transaction.onerror = transaction.onabort = () =>
+          reject(transaction.error ?? new Error('对话图片存储事务失败'))
+        transaction.objectStore('agentSessions').delete(key)
+        const request = transaction.objectStore('agentImages').index('session').openCursor(key)
+        request.onsuccess = () => {
+          const cursor = request.result
+          if (cursor) {
+            cursor.delete()
+            cursor.continue()
+          }
+        }
+      })
+    })
+  }
+
+  async readImage(
+    session: Pick<AgentSession, 'id' | 'userId' | 'projectId'>,
+    id: string,
+  ): Promise<AgentImageRecord> {
+    await this.queue
+    const db = await indexedDBService.openDB()
+    const owner = this.owner(session.userId, session.projectId)
+    const sessionKey = JSON.stringify([owner, session.id])
+    return new Promise((resolve, reject) => {
+      const transaction = db.transaction('agentImages', 'readonly')
+      const request = transaction.objectStore('agentImages').get(JSON.stringify([sessionKey, id]))
+      transaction.oncomplete = () => {
+        const image = request.result as AgentImageRecord | undefined
+        if (!image || image.owner !== owner || image.sessionKey !== sessionKey)
+          reject(new Error('无法读取对话图片'))
+        else resolve(image)
+      }
+      transaction.onerror = transaction.onabort = () => reject(transaction.error)
+    })
+  }
+
+  updateImageUpload(
+    image: AgentImageRecord,
+    upload: AgentImageRecord['upload'],
+    isCurrent: () => boolean,
+  ): Promise<void> {
+    return this.enqueue(async () => {
+      if (!isCurrent()) return
+      const db = await indexedDBService.openDB()
+      if (!isCurrent()) return
+      await new Promise<void>((resolve, reject) => {
+        const transaction = db.transaction('agentImages', 'readwrite')
+        const store = transaction.objectStore('agentImages')
+        const request = store.get(image.key)
+        request.onsuccess = () => {
+          const existing = request.result as AgentImageRecord | undefined
+          if (
+            isCurrent() &&
+            existing?.owner === image.owner &&
+            existing.sessionKey === image.sessionKey
+          )
+            store.put({ ...existing, upload })
+        }
         transaction.oncomplete = () => resolve()
         transaction.onerror = transaction.onabort = () => reject(transaction.error)
-        transaction.objectStore('agentSessions').delete(key)
       })
     })
   }

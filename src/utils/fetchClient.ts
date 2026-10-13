@@ -133,7 +133,7 @@ export class FetchClient {
   }
 
   private async request<T = unknown>(url: string, config: RequestConfig): Promise<ApiResponse<T>> {
-    assertApiCapabilityEnabled(url)
+    assertApiCapabilityEnabled(url, config.body)
     const notifyUnauthorized = this.captureUnauthorizedHandler()
     const fullUrl = this.buildURL(url, config.params)
     const headers = { ...this.defaultHeaders, ...config.headers }

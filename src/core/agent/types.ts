@@ -27,7 +27,22 @@ export interface TextPart {
 
 export interface ImagePart {
   type: MessagePartType.IMAGE
-  url: string
+  imageId: string
+}
+
+export type AgentImage = {
+  id: string
+  blob: Blob
+  mimeType: string
+  width: number
+  height: number
+}
+
+export type AgentImageRecord = AgentImage & {
+  key: string
+  owner: string
+  sessionKey: string
+  upload?: { url: string; expiresAt: string }
 }
 
 export interface BackgroundContextPart {

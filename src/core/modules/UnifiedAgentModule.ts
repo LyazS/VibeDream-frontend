@@ -5,6 +5,11 @@ import { buildTextMessages } from '@/core/agent/prompts/textMessages'
 import { captureBackgroundContext } from '@/core/agent/prompts/backgroundContext'
 import { agentTools, createToolRuntime } from '@/core/agent/runtime/ToolRuntime'
 import { AgentSessionStore } from '@/core/agent/runtime/AgentSessionStore'
+import {
+  AGENT_IMAGE_LIMITS,
+  prepareAgentImages,
+  invalidateAgentImageUploads,
+} from '@/core/agent/services/agentImageService'
 import { getAgentContextUsage, summarizeAgentUsage } from '@/core/agent/runtime/AgentUsage'
 import { AgentTelemetry, newLogSource } from '@/core/agent/runtime/AgentTelemetry'
 import { toolLogMetadata, type LogSource, type StopStatus } from '@/core/agent/telemetry/agent-log'
@@ -14,6 +19,8 @@ import {
   type ConnectionState,
   type StreamParams,
   type ModelMessage,
+  type ImageContentPart,
+  type TextContentPart,
 } from '@/core/agent/transport/AgentClient'
 import {
   AgentMessageRole,
@@ -26,6 +33,7 @@ import {
   type AgentSession,
   type ModelCallSummary,
   type ToolExecution,
+  type AgentImage,
 } from '@/core/agent/types'
 import { MODULE_NAMES, type ModuleMap, type ModuleRegistry } from './ModuleRegistry'
 
@@ -57,6 +65,7 @@ export function createUnifiedAgentModule(registry: ModuleRegistry) {
   const disposed = ref(false)
   // 会话存储和当前账户/工程的内存索引。
   const sessionStore = new AgentSessionStore()
+  const pendingImages = new Map<string, AgentImage[]>()
   // 日志独立于聊天存储；读取实时账号，供后台补传在切号时立即停止。
   const telemetry = new AgentTelemetry(() => user.currentUser.value?.id)
   // 仅缓存当前账户工程分区；账户变化清空，IndexedDB 中其他分区仍保留。
@@ -150,15 +159,21 @@ export function createUnifiedAgentModule(registry: ModuleRegistry) {
       })),
   )
 
+  function reportStorageError(session: AgentSession, error: unknown) {
+    if (sessions.value[session.id] === session) {
+      storageError.value = error instanceof Error ? error.message : String(error)
+    }
+  }
+
   /** 保存固定会话快照；存储异常阻止新请求，详细恢复策略留待阶段 3.4。 */
   async function persistSession(session: AgentSession) {
     session.updatedAt = new Date().toISOString()
     try {
-      await sessionStore.save(session)
+      const images = pendingImages.get(session.id) ?? []
+      await sessionStore.save(session, images)
+      if (pendingImages.get(session.id) === images) pendingImages.delete(session.id)
     } catch (error) {
-      if (sessions.value[session.id] === session) {
-        storageError.value = error instanceof Error ? error.message : String(error)
-      }
+      reportStorageError(session, error)
       throw error
     }
   }
@@ -300,6 +315,7 @@ export function createUnifiedAgentModule(registry: ModuleRegistry) {
     lifecycle = new AbortController()
     activeRun.value = null
     sessions.value = {}
+    pendingImages.clear()
     newChat()
   }
 
@@ -309,6 +325,7 @@ export function createUnifiedAgentModule(registry: ModuleRegistry) {
     // 模块入口也检查运行归属，避免绕过界面禁用或点击时状态变化导致删除在途会话。
     if (!session || activeSessionId.value === id) return false
     delete sessions.value[id]
+    pendingImages.delete(id)
     if (currentSessionId.value === id) newChat()
     await Promise.all([sessionStore.delete(session), telemetry.delete(session)])
     return true
@@ -325,17 +342,27 @@ export function createUnifiedAgentModule(registry: ModuleRegistry) {
    * 文本部件逐段映射到 content；工具调用只在结果返回后成对提交，空白普通消息不发送。
    * UI 的进度投影和 interaction 不属于模型消息，只有回答后提交的 ask_user 配对进入工具历史。
    */
-  function buildModelHistory(session: AgentSession): ModelMessage[] {
+  function buildModelHistory(
+    session: AgentSession,
+    imageUrls: Map<string, string>,
+  ): ModelMessage[] {
     // 每次请求都从运行所属会话重新生成协议消息，保持对话顺序；与 UI 展示选择无关，不缓存第二份历史。
     // 系统提示词由 buildTextMessages() 添加；背景上下文属于对应用户消息的固定快照。
     const history: ModelMessage[] = []
     for (const message of session.messages) {
-      // 只提取 TEXT 部件，逐段复制到 content 数组，保留原有顺序、边界、空格和换行。
+      // 保留用户图文顺序；其他角色只映射文本。
       // 用户背景快照放在正文之前；工具调用另行映射，进度和交互元数据不转成正文。
-      const content = getMessageTextParts(message).map((part) => ({
-        type: 'text' as const,
-        text: part.text,
-      }))
+      const content: (TextContentPart | ImageContentPart)[] = message.parts.flatMap(
+        (part): (TextContentPart | ImageContentPart)[] => {
+          if (part.type === MessagePartType.TEXT) return [{ type: 'text', text: part.text }]
+          if (part.type === MessagePartType.IMAGE && message.role === AgentMessageRole.USER) {
+            const url = imageUrls.get(part.imageId)
+            if (!url) throw new Error('无法读取对话图片')
+            return [{ type: 'image_url', image_url: { url } }]
+          }
+          return []
+        },
+      )
       if (message.role === AgentMessageRole.USER) {
         const background = message.parts
           .filter((part) => part.type === MessagePartType.BACKGROUND_CONTEXT)
@@ -347,6 +374,7 @@ export function createUnifiedAgentModule(registry: ModuleRegistry) {
           })),
         )
       }
+      const textContent = content.filter((part): part is TextContentPart => part.type === 'text')
 
       // 1. 工具结果作为独立的 tool 消息返回模型，成功、失败及参数校验错误都走此分支。
       // 文本部件内保存原工具输出或错误正文，不解析为 JSON，也不额外编码工具输出。
@@ -354,7 +382,7 @@ export function createUnifiedAgentModule(registry: ModuleRegistry) {
       if (message.role === 'tool') {
         history.push({
           role: 'tool',
-          content,
+          content: textContent,
           // tool_call_id 对应前一条助手消息的调用 ID，name 对应工具名。
           // 非空断言依赖 commitToolResult() 创建结果时填写这两个字段，本函数不再次校验配对。
           tool_call_id: message.toolCallId!,
@@ -373,7 +401,7 @@ export function createUnifiedAgentModule(registry: ModuleRegistry) {
         history.push({
           role: 'assistant',
           // 助手可以只有工具调用而没有正文，因此本分支不按空白文本过滤。
-          content,
+          content: textContent,
           tool_calls: [
             {
               id: call.tool_call_id,
@@ -384,11 +412,15 @@ export function createUnifiedAgentModule(registry: ModuleRegistry) {
             },
           ],
         })
-      } else if (content.some((part) => part.text.trim())) {
+      } else if (content.some((part) => part.type === 'image_url' || part.text.trim())) {
         // 3. 普通用户/助手正文只要不是全空白就进入历史，不根据 modelCall 成功或中断状态过滤。
         // 所以失败前的用户输入、已经收到的部分助手回复都会进入用户下一次提交的请求。
         // 任意一段不是全空白就保留整条消息及全部文本部件；trim() 不修改实际发送的文本。
-        history.push({ role: message.role, content })
+        history.push(
+          message.role === AgentMessageRole.USER
+            ? { role: 'user', content }
+            : { role: message.role, content: textContent },
+        )
       }
       // 三个分支都只挑选模型协议字段，消息 ID、时间和 interaction 等界面元数据不会发送。
     }
@@ -603,15 +635,9 @@ export function createUnifiedAgentModule(registry: ModuleRegistry) {
         await client.waitForIdle()
         if (!isRunCurrent()) return
         // 2. 从唯一消息记录生成快照，包括部分回复和已配对工具结果，不再额外追加首次输入。
-        const request: StreamParams = {
-          modelCallId: crypto.randomUUID(),
-          projectId,
-          tools: JSON.parse(JSON.stringify(agentTools)) as StreamParams['tools'],
-          messages: buildTextMessages(buildModelHistory(session)),
-        }
         // 3. 新建 modelCall，记录用户消息或工具结果的输入 ID；助手消息按固定 ID 逐步保存。
         session.latestModelCall = {
-          id: request.modelCallId,
+          id: crypto.randomUUID(),
           status: 'running',
           inputMessageId: session.messages[session.messages.length - 1]!.id,
           assistantMessageId: crypto.randomUUID(),
@@ -619,6 +645,19 @@ export function createUnifiedAgentModule(registry: ModuleRegistry) {
         }
         const current = session.latestModelCall
         control.modelCall = current
+        const imageUrls = await prepareAgentImages(
+          session,
+          sessionStore,
+          AbortSignal.any([control.model.signal, control.lifecycle]),
+          isRunCurrent,
+        )
+        if (!isRunCurrent()) return
+        const request: StreamParams = {
+          modelCallId: current.id,
+          projectId,
+          tools: JSON.parse(JSON.stringify(agentTools)) as StreamParams['tools'],
+          messages: buildTextMessages(buildModelHistory(session, imageUrls)),
+        }
         control.awaitingCompletion = true
         session.usageRecords[current.id] = { usage: null, chargedAmount: null }
         // 调用前记录实际请求输入，并把同一日志身份交给服务端关联供应商请求。
@@ -755,6 +794,12 @@ export function createUnifiedAgentModule(registry: ModuleRegistry) {
       // 外层处理模型/传输及循环本身的异常；工具异常已在内层转成结果，不会走到这里。
       // 原会话已经删除或身份清理后，旧循环不能覆盖新运行的 modelCall 或消息。
       if (!ownsSession(control) || activeRun.value !== control || control.finalized) return
+      if (error instanceof Error && 'code' in error && error.code === 'AGENT_IMAGE_URL_EXPIRED') {
+        await invalidateAgentImageUploads(session, sessionStore, () => ownsSession(control)).catch(
+          (storageFailure: unknown) => reportStorageError(session, storageFailure),
+        )
+        if (!ownsSession(control) || activeRun.value !== control || control.finalized) return
+      }
       const diagnostic = newLogSource('failed', { phase: 'orchestration' })
       diagnostic.error =
         error instanceof Error ? { name: error.name, message: error.message } : String(error)
@@ -800,15 +845,50 @@ export function createUnifiedAgentModule(registry: ModuleRegistry) {
   }
 
   /** 发送新的用户消息；等待 ask_user 回答时拒绝发送，回答须通过 answerQuestion 单独提交。 */
-  async function send(text: string) {
+  async function send(text: string, images: readonly AgentImage[] = []) {
     const content = text.trim()
-    if (!ready.value || running.value || pendingInteraction.value || !content) return false
+    if (!ready.value || running.value || pendingInteraction.value || (!content && !images.length))
+      return false
+    if (
+      images.length > AGENT_IMAGE_LIMITS.count ||
+      images.some(
+        (image) =>
+          !image.id ||
+          !image.blob.size ||
+          image.blob.size > AGENT_IMAGE_LIMITS.encodedBytes ||
+          !['image/png', 'image/jpeg', 'image/webp'].includes(image.mimeType) ||
+          image.blob.type !== image.mimeType ||
+          !Number.isInteger(image.width) ||
+          !Number.isInteger(image.height) ||
+          image.width <= 0 ||
+          image.height <= 0 ||
+          Math.max(image.width, image.height) > AGENT_IMAGE_LIMITS.edge,
+      )
+    )
+      return false
     const session = currentSession.value!
     const message = buildDisplayMessage(crypto.randomUUID(), AgentMessageRole.USER, content)
+    message.parts.push(
+      ...images.map((image) => ({ type: MessagePartType.IMAGE as const, imageId: image.id })),
+    )
+    if (images.length)
+      pendingImages.set(session.id, [
+        ...(pendingImages.get(session.id) ?? []),
+        ...images.map((image) => ({ ...image })),
+      ])
     message.parts.push(captureBackgroundContext(registry))
     session.messages.push(message)
     await runLoop(session)
     return true
+  }
+
+  async function getImage(id: string): Promise<AgentImage> {
+    const session = currentSession.value
+    if (!session) throw new Error('无法读取对话图片')
+    return (
+      pendingImages.get(session.id)?.find((image) => image.id === id) ??
+      sessionStore.readImage(session, id)
+    )
   }
 
   // 身份失效通知的取消订阅函数，模块释放时移除该监听。
@@ -913,6 +993,7 @@ export function createUnifiedAgentModule(registry: ModuleRegistry) {
     pendingInteraction: readonly(pendingInteraction),
     connection: readonly(connection),
     send,
+    getImage,
     answerQuestion,
     stop,
     newChat,

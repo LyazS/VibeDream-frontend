@@ -161,6 +161,7 @@ export function sanitizeLog(value: unknown): {
       })
     }
     return text
+      .replace(/\boss:\/\/[^\s"'<>]+/gi, () => hide())
       .replace(
         /(["'](?:api[-_]?key|password|access[-_]?token|refresh[-_]?token|signature|secret)["']\s*:\s*["'])[^"']*(["'])/gi,
         (_m, prefix, suffix) => prefix + hide() + suffix,

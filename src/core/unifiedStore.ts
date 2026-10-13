@@ -530,6 +530,7 @@ export const useUnifiedStore = defineStore('unified', () => {
     answerAgentQuestion: unifiedAgentModule.answerQuestion,
     agentConnection: unifiedAgentModule.connection,
     sendAgentMessage: unifiedAgentModule.send,
+    getAgentImage: unifiedAgentModule.getImage,
     stopAgent: unifiedAgentModule.stop,
     newAgentChat: unifiedAgentModule.newChat,
     selectAgentSession: unifiedAgentModule.selectSession,

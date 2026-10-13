@@ -1,9 +1,12 @@
 <template>
   <div class="chat-message user">
     <div class="message-bubble">
-      <div class="message-content">
-        {{ getMessageText() }}
-      </div>
+      <template v-for="(part, index) in message.parts" :key="index">
+        <div v-if="part.type === MessagePartType.TEXT && part.text" class="message-content">
+          {{ part.text }}
+        </div>
+        <AgentImage v-else-if="part.type === MessagePartType.IMAGE" :image-id="part.imageId" />
+      </template>
     </div>
   </div>
 </template>
@@ -12,17 +15,11 @@
 import type { AgentMessage } from '@/core/agent/types'
 import { MessagePartType } from '@/core/agent/types'
 import type { DeepReadonly } from 'vue'
+import AgentImage from './AgentImage.vue'
 
-const props = defineProps<{
+defineProps<{
   message: DeepReadonly<AgentMessage>
 }>()
-
-const getMessageText = () => {
-  return props.message.parts
-    .filter((item) => item.type === MessagePartType.TEXT)
-    .map((item) => item.text)
-    .join('')
-}
 </script>
 
 <style scoped>
@@ -36,6 +33,9 @@ const getMessageText = () => {
 }
 
 .message-bubble {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
   max-width: 70%;
   padding: var(--spacing-sm) var(--spacing-md);
   border-radius: var(--border-radius-large);
@@ -49,6 +49,8 @@ const getMessageText = () => {
 }
 
 .message-content {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
   font-size: var(--font-size-base);
   line-height: 1.4;
 }

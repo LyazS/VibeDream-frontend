@@ -7,7 +7,7 @@ export class IndexedDBService {
   private db: IDBDatabase | null = null
 
   private readonly DB_NAME = 'VideoEditorDB'
-  private readonly DB_VERSION = 6
+  private readonly DB_VERSION = 7
 
   // 私有构造函数，确保单例
   private constructor() {}
@@ -58,7 +58,7 @@ export class IndexedDBService {
           }
         }
 
-        for (const name of ['agentSessions', 'agentLogs']) {
+        for (const name of ['agentSessions', 'agentLogs', 'agentImages']) {
           if (!db.objectStoreNames.contains(name)) {
             const store = db.createObjectStore(name, { keyPath: 'key' })
             store.createIndex('owner', 'owner')

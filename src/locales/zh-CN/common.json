@@ -20,6 +20,10 @@
     "chat": {
       "inputPlaceholder": "输入消息...",
       "send": "发送",
+      "attachImage": "添加图片",
+      "removeImage": "移除图片",
+      "image": "对话图片",
+      "imageCountLimit": "每条消息最多添加 4 张图片",
       "stop": "停止",
       "agent": "智能助手",
       "history": "历史记录",

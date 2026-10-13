@@ -20,6 +20,10 @@
     "chat": {
       "inputPlaceholder": "Type a message...",
       "send": "Send",
+      "attachImage": "Add images",
+      "removeImage": "Remove image",
+      "image": "Conversation image",
+      "imageCountLimit": "Up to 4 images per message",
       "stop": "Stop",
       "agent": "Agent",
       "history": "History",

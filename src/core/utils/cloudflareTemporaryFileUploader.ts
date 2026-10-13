@@ -1,8 +1,8 @@
 import { fetchClient } from '@/utils/fetchClient'
 
 // Worker 只为白名单能力签发 policy。搜索候选额外绑定 point_id，并返回只能在对应任务中使用的 upload_ref。
-export type MediaUploadCapability = 'indexing' | 'rerank' | 'validate'
-export type MediaUploadPurpose = 'tagging' | 'embedding' | 'rerank' | 'validate'
+export type MediaUploadCapability = 'indexing' | 'rerank' | 'validate' | 'agent'
+export type MediaUploadPurpose = 'tagging' | 'embedding' | 'rerank' | 'validate' | 'agent-image'
 
 export interface TemporaryFileUploadRequest {
   capability: MediaUploadCapability
@@ -10,6 +10,10 @@ export interface TemporaryFileUploadRequest {
   fileName: string
   projectId?: string
   pointId?: string
+  mimeType?: string
+  byteSize?: number
+  width?: number
+  height?: number
 }
 
 interface UploadPolicyData {
@@ -46,16 +50,31 @@ export class CloudflareTemporaryFileUploader {
     request: TemporaryFileUploadRequest,
     signal?: AbortSignal,
   ): Promise<UploadPolicyResponse> {
-    if (request.capability !== 'indexing' && (!request.projectId || !request.pointId)) {
+    if (
+      ['rerank', 'validate'].includes(request.capability) &&
+      (!request.projectId || !request.pointId)
+    ) {
       throw new Error('搜索候选上传必须关联项目和索引点')
     }
-    const response = await fetchClient.post<UploadPolicyResponse>('/api/media/upload-policies', {
-      capability: request.capability,
-      purpose: request.purpose,
-      file_name: request.fileName,
-      ...(request.projectId ? { project_id: request.projectId } : {}),
-      ...(request.pointId ? { point_id: request.pointId } : {}),
-    }, { signal })
+    const response = await fetchClient.post<UploadPolicyResponse>(
+      '/api/media/upload-policies',
+      {
+        capability: request.capability,
+        purpose: request.purpose,
+        file_name: request.fileName,
+        ...(request.projectId ? { project_id: request.projectId } : {}),
+        ...(request.pointId ? { point_id: request.pointId } : {}),
+        ...(request.capability === 'agent'
+          ? {
+              mime_type: request.mimeType,
+              byte_size: request.byteSize,
+              width: request.width,
+              height: request.height,
+            }
+          : {}),
+      },
+      { signal },
+    )
     if (!response.data?.data) throw new Error('获取临时上传 policy 返回数据为空')
     return response.data
   }
@@ -86,9 +105,18 @@ export class CloudflareTemporaryFileUploader {
       upload.upload.onprogress = (event) => {
         if (event.lengthComputable) onProgress?.(Math.round((event.loaded / event.total) * 100))
       }
-      upload.onload = () => { finish(); resolve(upload) }
-      upload.onerror = () => { finish(); reject(new Error(`临时文件 OSS 直传失败: HTTP ${upload.status}`)) }
-      upload.onabort = () => { finish(); reject(new DOMException('上传已取消', 'AbortError')) }
+      upload.onload = () => {
+        finish()
+        resolve(upload)
+      }
+      upload.onerror = () => {
+        finish()
+        reject(new Error(`临时文件 OSS 直传失败: HTTP ${upload.status}`))
+      }
+      upload.onabort = () => {
+        finish()
+        reject(new DOMException('上传已取消', 'AbortError'))
+      }
       if (signal?.aborted) {
         finish()
         reject(new DOMException('上传已取消', 'AbortError'))
@@ -116,11 +144,16 @@ export class CloudflareTemporaryFileUploader {
       const policy = policyResponse.data
       signal?.throwIfAborted()
       onProgress?.(20)
-      const url = await this.uploadBlobToOss(blob, policy, (progress) => {
-        onProgress?.(20 + Math.round(progress * 0.8))
-      }, signal)
+      const url = await this.uploadBlobToOss(
+        blob,
+        policy,
+        (progress) => {
+          onProgress?.(20 + Math.round(progress * 0.8))
+        },
+        signal,
+      )
       onProgress?.(100)
-      if (request.capability !== 'indexing' && !policyResponse.upload_ref) {
+      if (['rerank', 'validate'].includes(request.capability) && !policyResponse.upload_ref) {
         throw new Error('搜索候选上传未返回受限引用')
       }
       return {
