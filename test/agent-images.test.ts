@@ -59,13 +59,13 @@ afterEach(() => {
 
 it('inspects actual signatures and dimensions before decoding', async () => {
   expect(inspectAgentImage(png())).toEqual({ mimeType: 'image/png', width: 100, height: 80 })
-  expect(() => inspectAgentImage(new Uint8Array([1, 2, 3]))).toThrow('JPEG')
-  expect(() => inspectAgentImage(png(10000, 10000))).toThrow('4000')
+  expect(() => inspectAgentImage(new Uint8Array([1, 2, 3]))).toThrow('imageInvalid')
+  expect(() => inspectAgentImage(png(10000, 10000))).toThrow('imagePixelLimit')
   const decode = vi.fn()
   vi.stubGlobal('createImageBitmap', decode)
-  await expect(processAgentImage(new Blob([png(10000, 10000)]))).rejects.toThrow('4000')
+  await expect(processAgentImage(new Blob([png(10000, 10000)]))).rejects.toThrow('imagePixelLimit')
   await expect(processAgentImage(new Blob([new Uint8Array(10 * 1024 * 1024 + 1)]))).rejects.toThrow(
-    '10 MiB',
+    'imageOriginalSizeLimit',
   )
   expect(decode).not.toHaveBeenCalled()
 })

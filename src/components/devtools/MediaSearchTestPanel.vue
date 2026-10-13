@@ -1,11 +1,11 @@
 <template>
-  <section class="media-search-test-panel" aria-label="素材搜索测试">
+  <section class="media-search-test-panel" :aria-label="t('aiPanel.devtools.mediaSearch.title')">
     <form class="search-form" @submit.prevent="runSearch">
       <div class="query-row">
         <n-input
           v-model:value="query"
           :disabled="isSearching"
-          placeholder="描述想找的镜头、画面或剪辑用途"
+          :placeholder="t('aiPanel.devtools.mediaSearch.placeholder')"
           clearable
           size="small"
         />
@@ -16,7 +16,7 @@
           :max="10"
           :show-button="true"
           size="small"
-          aria-label="返回条数"
+          :aria-label="t('aiPanel.devtools.resultLimit')"
         />
         <n-button
           type="primary"
@@ -28,57 +28,70 @@
           <template #icon>
             <component :is="IconComponents.SEARCH" size="16px" />
           </template>
-          搜索
+          {{ t('common.search') }}
         </n-button>
         <n-button v-if="isSearching" size="small" secondary @click="cancelSearch">
           <template #icon>
             <component :is="IconComponents.STOP" size="14px" />
           </template>
-          取消
+          {{ t('common.cancel') }}
         </n-button>
       </div>
     </form>
 
-    <p v-if="!unifiedStore.projectId" class="notice">请先打开一个项目后再测试搜索。</p>
+    <p v-if="!unifiedStore.projectId" class="notice">
+      {{ t('aiPanel.devtools.mediaSearch.openProject') }}
+    </p>
     <p v-else-if="isSearching" class="status-line" aria-live="polite">
       <span>{{ stageLabel }}</span>
-      <span v-if="indexingTotal > 0">索引 {{ indexingResolved }}/{{ indexingTotal }}</span>
+      <span v-if="indexingTotal > 0">{{
+        t('aiPanel.devtools.mediaSearch.indexProgress', {
+          resolved: indexingResolved,
+          total: indexingTotal,
+        })
+      }}</span>
       <span>{{ completedSteps }}/{{ totalSteps }}</span>
     </p>
     <div v-if="isSearching" class="progress-track" aria-hidden="true">
       <div class="progress-value" :style="{ width: `${progressPercent}%` }"></div>
     </div>
 
-    <p v-if="error" class="notice error" role="alert">{{ error }}</p>
-    <p v-else-if="wasCancelled" class="notice">搜索已取消。</p>
+    <p v-if="error" class="notice error" role="alert">{{ t(error) }}</p>
+    <p v-else-if="wasCancelled" class="notice">{{ t('aiPanel.devtools.mediaSearch.cancelled') }}</p>
     <p v-else-if="hasSearched && !isSearching && results.length === 0" class="notice">
-      没有找到可用结果。
+      {{ t('aiPanel.devtools.mediaSearch.noResults') }}
     </p>
 
     <div v-if="results.length > 0" class="result-summary">
-      已返回 {{ results.length }} 条可用结果
+      {{ t('aiPanel.devtools.mediaSearch.resultCount', { count: results.length }) }}
     </div>
     <ol v-if="results.length > 0" class="result-list">
       <li v-for="result in results" :key="result.point_id" class="result-item">
         <div class="result-main">
           <div class="result-heading">
             <strong>{{ result.title || result.media_name }}</strong>
-            <span class="media-kind">{{ result.media_kind }}</span>
+            <span class="media-kind">{{ t(`aiPanel.${result.media_kind}`) }}</span>
             <span v-if="result.validation_result?.verdict === 'uncertain'" class="review-state">
-              待人工确认
+              {{ t('aiPanel.devtools.mediaSearch.review') }}
             </span>
           </div>
           <p v-if="result.summary" class="result-summary-text">{{ result.summary }}</p>
           <div class="result-meta">
-            <span>评分 {{ formatScore(result.rerank_score ?? result.score) }}</span>
+            <span>{{
+              t('aiPanel.devtools.mediaSearch.score', {
+                score: formatScore(result.rerank_score ?? result.score),
+              })
+            }}</span>
             <span v-if="result.segment">
               {{ result.segment.start_timecode }} - {{ result.segment.end_timecode }}
             </span>
-            <span v-if="result.validation_result?.reason">{{ result.validation_result.reason }}</span>
+            <span v-if="result.validation_result?.reason">{{
+              result.validation_result.reason
+            }}</span>
           </div>
         </div>
         <n-button size="tiny" quaternary @click="revealInLibrary(result.media_item_id)">
-          在素材库中定位
+          {{ t('aiPanel.devtools.mediaSearch.reveal') }}
         </n-button>
       </li>
     </ol>
@@ -90,6 +103,7 @@ import { computed, onUnmounted, ref } from 'vue'
 import { NButton, NInput, NInputNumber } from 'naive-ui'
 import { IconComponents } from '@/constants/iconComponents'
 import { useAppI18n } from '@/core/composables/useI18n'
+import { getAgentErrorKey } from '@/components/agent/agentErrorMessage'
 import { useUnifiedStore } from '@/core/unifiedStore'
 import {
   searchMedia,
@@ -115,15 +129,9 @@ const indexingTotal = ref(0)
 
 let activeController: AbortController | null = null
 
-const stageLabel = computed(() => {
-  const labels: Record<SearchMediaStage, string> = {
-    indexing: '正在补齐素材索引',
-    retrieval: '正在召回候选素材',
-    rerank: '正在重排候选素材',
-    validate: '正在校验候选素材',
-  }
-  return activeStage.value ? labels[activeStage.value] : '正在准备搜索'
-})
+const stageLabel = computed(() =>
+  t(`aiPanel.devtools.mediaSearch.stages.${activeStage.value ?? 'preparing'}`),
+)
 
 const progressPercent = computed(() => {
   if (totalSteps.value <= 0) return 0
@@ -136,7 +144,7 @@ function formatScore(score: number): string {
 
 function checkCancelled(controller: AbortController): void {
   if (controller.signal.aborted) {
-    throw new DOMException('搜索已取消', 'AbortError')
+    throw new DOMException('SEARCH_CANCELLED', 'AbortError')
   }
 }
 
@@ -180,11 +188,15 @@ async function runSearch(): Promise<void> {
 
     if (!controller.signal.aborted) {
       results.value = response.results
-      error.value = response.error
+      if (response.error) {
+        console.error('Media search failed:', response.error)
+        error.value = getAgentErrorKey(response.error, 'aiPanel.devtools.mediaSearch.searchFailed')
+      }
     }
   } catch (cause) {
     if (!controller.signal.aborted) {
-      error.value = cause instanceof Error ? cause.message : String(cause)
+      console.error('Media search failed:', cause)
+      error.value = getAgentErrorKey(cause, 'aiPanel.devtools.mediaSearch.searchFailed')
     }
   } finally {
     if (activeController === controller) {
@@ -202,7 +214,8 @@ function cancelSearch(): void {
 function revealInLibrary(mediaId: string): void {
   const response = unifiedStore.revealMediaInLibrary(mediaId)
   if (!response.success) {
-    error.value = response.error || '无法定位该素材'
+    console.error('Unable to reveal media:', response.error)
+    error.value = getAgentErrorKey(response.error, 'aiPanel.devtools.mediaSearch.revealFailed')
   }
 }
 

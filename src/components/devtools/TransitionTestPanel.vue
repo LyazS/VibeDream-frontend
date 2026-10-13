@@ -1,16 +1,20 @@
 <template>
-  <section class="transition-test-panel" aria-label="转场测试">
+  <section class="transition-test-panel" :aria-label="t('aiPanel.devtools.transition.title')">
     <div class="catalog-bar">
-      <span v-if="catalogLoading">正在读取转场目录...</span>
-      <span v-else-if="catalog"
-        >目录 {{ catalog.items.length }} 项 · {{ catalog.catalog_version.slice(0, 12) }}</span
-      >
-      <span v-else>目录不可用</span>
+      <span v-if="catalogLoading">{{ t('aiPanel.devtools.transition.catalogLoading') }}</span>
+      <span v-else-if="catalog">{{
+        t('aiPanel.devtools.transition.catalogSummary', {
+          count: catalog.items.length,
+          version: catalog.catalog_version.slice(0, 12),
+        })
+      }}</span>
+      <span v-else>{{ t('aiPanel.devtools.transition.catalogUnavailable') }}</span>
       <n-button
         size="tiny"
         quaternary
         :loading="catalogLoading"
-        title="刷新转场目录"
+        :title="t('aiPanel.devtools.transition.refresh')"
+        :aria-label="t('aiPanel.devtools.transition.refresh')"
         @click="loadCatalog"
       >
         <template #icon><component :is="IconComponents.REFRESH" size="15px" /></template>
@@ -18,14 +22,19 @@
     </div>
 
     <form class="search-form" @submit.prevent="runSearch">
-      <n-input v-model:value="query" clearable size="small" placeholder="描述想要的画面过渡效果" />
+      <n-input
+        v-model:value="query"
+        clearable
+        size="small"
+        :placeholder="t('aiPanel.devtools.transition.placeholder')"
+      />
       <div class="search-actions">
         <n-input-number
           v-model:value="topK"
           :min="1"
           :max="10"
           size="small"
-          aria-label="返回条数"
+          :aria-label="t('aiPanel.devtools.resultLimit')"
         />
         <n-button
           type="primary"
@@ -35,34 +44,49 @@
           :disabled="!query.trim()"
         >
           <template #icon><component :is="IconComponents.SEARCH" size="16px" /></template>
-          搜索
+          {{ t('common.search') }}
         </n-button>
       </div>
     </form>
 
     <div class="target-row">
-      <span>应用位置</span>
+      <span>{{ t('aiPanel.devtools.transition.target') }}</span>
       <n-select
         v-model:value="selectedSeamId"
         size="small"
         :options="seamOptions"
         :disabled="seamOptions.length === 0"
-        :placeholder="seamOptions.length ? '选择视频拼接点' : '当前时间线没有相邻视频片段'"
+        :placeholder="
+          t(
+            seamOptions.length
+              ? 'aiPanel.devtools.transition.selectSeam'
+              : 'aiPanel.devtools.transition.noSeams',
+          )
+        "
       />
     </div>
 
-    <p v-if="error" class="notice error" role="alert">{{ error }}</p>
-    <p v-if="message" class="notice success" role="status">{{ message }}</p>
-    <p v-if="searched && !searching && !results.length && !error" class="notice">未找到转场。</p>
+    <p v-if="error" class="notice error" role="alert">{{ t(error) }}</p>
+    <p v-if="message" class="notice success" role="status">
+      {{
+        t(message.key, {
+          name: nameFor(message.templateId, message.name),
+          target: message.target ?? '',
+        })
+      }}
+    </p>
+    <p v-if="searched && !searching && !results.length && !error" class="notice">
+      {{ t('aiPanel.devtools.transition.noResults') }}
+    </p>
 
     <ol class="result-list">
       <li v-for="hit in results" :key="hit.templateId" class="result-item">
         <div class="result-heading">
-          <strong>{{ summaryFor(hit.templateId)?.name.zh || hit.name }}</strong>
+          <strong>{{ nameFor(hit.templateId, hit.name) }}</strong>
           <span>{{ formatScore(hit.score) }}</span>
         </div>
         <p class="result-description">
-          {{ summaryFor(hit.templateId)?.summary.zh || hit.description }}
+          {{ summaryFor(hit.templateId)?.summary[language] || hit.description }}
         </p>
         <div class="result-meta">
           <span>{{ hit.templateId }}</span>
@@ -79,7 +103,13 @@
             @click="install(hit)"
           >
             <template #icon><component :is="IconComponents.DOWNLOAD" size="15px" /></template>
-            {{ installedIds.includes(hit.templateId) ? '重新检查' : '安装' }}
+            {{
+              t(
+                installedIds.includes(hit.templateId)
+                  ? 'aiPanel.devtools.transition.recheck'
+                  : 'aiPanel.devtools.transition.install',
+              )
+            }}
           </n-button>
           <n-button
             size="small"
@@ -89,7 +119,7 @@
             @click="apply(hit)"
           >
             <template #icon><component :is="IconComponents.PLAY" size="14px" /></template>
-            应用到拼接点
+            {{ t('aiPanel.devtools.transition.apply') }}
           </n-button>
         </div>
       </li>
@@ -101,6 +131,8 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import { NButton, NInput, NInputNumber, NSelect } from 'naive-ui'
 import { IconComponents } from '@/constants/iconComponents'
+import { useAppI18n } from '@/core/composables/useI18n'
+import { getAgentErrorKey } from '@/components/agent/agentErrorMessage'
 import { fetchClient } from '@/utils/fetchClient'
 import { transitionTemplateCatalogService } from '@/core/effect-template/TransitionTemplateCatalogService'
 import type { TransitionTemplateListResponse } from '@/core/effect-template/catalogTypes'
@@ -120,6 +152,8 @@ interface TransitionHit {
 }
 
 const store = useUnifiedStore()
+const { t, locale } = useAppI18n()
+const language = computed(() => (locale.value === 'zh-CN' ? 'zh' : 'en'))
 const query = ref('')
 const topK = ref<number | null>(5)
 const catalog = ref<TransitionTemplateListResponse | null>(null)
@@ -132,7 +166,7 @@ const workingId = ref('')
 const workingAction = ref<'install' | 'apply' | ''>('')
 const installedIds = ref<string[]>([])
 const error = ref('')
-const message = ref('')
+const message = ref<{ key: string; templateId: string; name: string; target?: string } | null>(null)
 
 const seams = computed(() =>
   store.tracks
@@ -174,6 +208,10 @@ function summaryFor(id: string) {
   return catalog.value?.items.find((item) => item.id === id)
 }
 
+function nameFor(id: string, fallback: string) {
+  return summaryFor(id)?.name[language.value] || fallback
+}
+
 function formatScore(score: number): string {
   return Number.isFinite(score) ? score.toFixed(3) : '-'
 }
@@ -186,11 +224,14 @@ async function loadCatalog(): Promise<void> {
     catalog.value = await transitionTemplateCatalogService.getTemplateSummaries(
       current.catalog_version,
     )
-    if (catalog.value.items.length !== current.total)
-      throw new Error('转场目录数量与版本指针不一致')
+    if (catalog.value.items.length !== current.total) throw new Error('TRANSITION_CATALOG_MISMATCH')
   } catch (cause) {
     catalog.value = null
-    error.value = cause instanceof Error ? cause.message : String(cause)
+    console.error('Transition catalog failed:', cause)
+    error.value =
+      cause instanceof Error && cause.message === 'TRANSITION_CATALOG_MISMATCH'
+        ? 'aiPanel.devtools.transition.catalogMismatch'
+        : getAgentErrorKey(cause, 'aiPanel.devtools.transition.catalogFailed')
   } finally {
     catalogLoading.value = false
   }
@@ -201,7 +242,7 @@ async function runSearch(): Promise<void> {
   searching.value = true
   searched.value = true
   error.value = ''
-  message.value = ''
+  message.value = null
   results.value = []
   try {
     const response = await fetchClient.post<{ results: TransitionHit[] }>(
@@ -216,7 +257,8 @@ async function runSearch(): Promise<void> {
       await loadCatalog()
     }
   } catch (cause) {
-    error.value = cause instanceof Error ? cause.message : String(cause)
+    console.error('Transition search failed:', cause)
+    error.value = getAgentErrorKey(cause, 'aiPanel.devtools.transition.searchFailed')
   } finally {
     searching.value = false
   }
@@ -226,13 +268,18 @@ async function install(hit: TransitionHit): Promise<void> {
   workingId.value = hit.templateId
   workingAction.value = 'install'
   error.value = ''
-  message.value = ''
+  message.value = null
   try {
     await resolveTransitionTemplate(hit.templateId, hit.catalog_version)
     if (!installedIds.value.includes(hit.templateId)) installedIds.value.push(hit.templateId)
-    message.value = `${hit.name} 已安装并加载。`
+    message.value = {
+      key: 'aiPanel.devtools.transition.installed',
+      templateId: hit.templateId,
+      name: hit.name,
+    }
   } catch (cause) {
-    error.value = cause instanceof Error ? cause.message : String(cause)
+    console.error('Transition installation failed:', cause)
+    error.value = getAgentErrorKey(cause, 'aiPanel.devtools.transition.installFailed')
   } finally {
     workingId.value = ''
     workingAction.value = ''
@@ -245,7 +292,7 @@ async function apply(hit: TransitionHit): Promise<void> {
   workingId.value = hit.templateId
   workingAction.value = 'apply'
   error.value = ''
-  message.value = ''
+  message.value = null
   try {
     const result = await executeApplyTransition({
       templateId: hit.templateId,
@@ -255,11 +302,17 @@ async function apply(hit: TransitionHit): Promise<void> {
       rightClipId: seam.rightClipId,
       seamTime: framesToTimecode(seam.seamFrame),
     })
-    if (!result.success) throw new Error(result.error || '转场应用失败')
+    if (!result.success) throw new Error(result.error || 'TRANSITION_APPLY_FAILED')
     if (!installedIds.value.includes(hit.templateId)) installedIds.value.push(hit.templateId)
-    message.value = `${hit.name} 已应用到 ${seam.label}。`
+    message.value = {
+      key: 'aiPanel.devtools.transition.applied',
+      templateId: hit.templateId,
+      name: hit.name,
+      target: seam.label,
+    }
   } catch (cause) {
-    error.value = cause instanceof Error ? cause.message : String(cause)
+    console.error('Transition application failed:', cause)
+    error.value = getAgentErrorKey(cause, 'aiPanel.devtools.transition.applyFailed')
   } finally {
     workingId.value = ''
     workingAction.value = ''

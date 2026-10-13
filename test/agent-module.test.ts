@@ -296,6 +296,7 @@ describe('persisted Agent sessions', () => {
     await agent.send('inspect', [image()])
     expect(agent.running.value).toBe(false)
     expect(agent.latestModelCall.value?.error).toContain('offline')
+    expect(agent.latestModelCall.value?.errorCode).toBe('AGENT_IMAGE_UPLOAD_FAILED')
     expect(agent.ready.value).toBe(true)
     expect(transport.calls).not.toHaveBeenCalled()
     upload.mockResolvedValue(uploaded())

@@ -11,6 +11,30 @@ export const AGENT_IMAGE_LIMITS = {
   encodedBytes: 2 * 1024 * 1024,
 } as const
 
+export type AgentImageErrorCode =
+  | 'imageInvalid'
+  | 'imagePixelLimit'
+  | 'imageOriginalSizeLimit'
+  | 'imageProcessingFailed'
+  | 'imageEncodingFailed'
+  | 'imageEncodedSizeLimit'
+
+export class AgentImageProcessingError extends Error {
+  constructor(readonly code: AgentImageErrorCode) {
+    super(code)
+    this.name = 'AgentImageProcessingError'
+  }
+}
+
+export class AgentImageUploadError extends Error {
+  readonly code = 'AGENT_IMAGE_UPLOAD_FAILED'
+
+  constructor(detail?: string) {
+    super(detail || 'Upload service did not return a valid image URL')
+    this.name = 'AgentImageUploadError'
+  }
+}
+
 /** Read dimensions before allocating a decoded bitmap, independently of media import. */
 export function inspectAgentImage(bytes: Uint8Array): {
   mimeType: string
@@ -69,32 +93,36 @@ export function inspectAgentImage(bytes: Uint8Array): {
       offset += length
     }
   }
-  if (!width || !height) throw new Error('请选择有效的 JPEG、PNG 或 WebP 图片')
-  if (width * height > AGENT_IMAGE_LIMITS.pixels) throw new Error('图片不能超过 4000 万像素')
+  if (!width || !height) throw new AgentImageProcessingError('imageInvalid')
+  if (width * height > AGENT_IMAGE_LIMITS.pixels)
+    throw new AgentImageProcessingError('imagePixelLimit')
   return { mimeType, width, height }
 }
 
 export async function processAgentImage(file: Blob): Promise<AgentImage> {
-  if (file.size > AGENT_IMAGE_LIMITS.originalBytes) throw new Error('每张原图不能超过 10 MiB')
+  if (file.size > AGENT_IMAGE_LIMITS.originalBytes)
+    throw new AgentImageProcessingError('imageOriginalSizeLimit')
   const metadata = inspectAgentImage(new Uint8Array(await file.arrayBuffer()))
   const bitmap = await createImageBitmap(new Blob([file], { type: metadata.mimeType }), {
     imageOrientation: 'from-image',
   })
   try {
-    if (!bitmap.width || !bitmap.height || bitmap.width * bitmap.height > AGENT_IMAGE_LIMITS.pixels)
-      throw new Error('图片尺寸无效或超过 4000 万像素')
+    if (!bitmap.width || !bitmap.height) throw new AgentImageProcessingError('imageInvalid')
+    if (bitmap.width * bitmap.height > AGENT_IMAGE_LIMITS.pixels)
+      throw new AgentImageProcessingError('imagePixelLimit')
     const scale = Math.min(1, AGENT_IMAGE_LIMITS.edge / Math.max(bitmap.width, bitmap.height))
     const canvas = document.createElement('canvas')
     canvas.width = Math.max(1, Math.round(bitmap.width * scale))
     canvas.height = Math.max(1, Math.round(bitmap.height * scale))
     const context = canvas.getContext('2d')
-    if (!context) throw new Error('无法处理图片')
+    if (!context) throw new AgentImageProcessingError('imageProcessingFailed')
     for (let attempt = 0; attempt < 8; attempt++) {
       context.clearRect(0, 0, canvas.width, canvas.height)
       context.drawImage(bitmap, 0, 0, canvas.width, canvas.height)
       const blob = await new Promise<Blob>((resolve, reject) => {
         canvas.toBlob(
-          (result) => (result ? resolve(result) : reject(new Error('图片编码失败'))),
+          (result) =>
+            result ? resolve(result) : reject(new AgentImageProcessingError('imageEncodingFailed')),
           'image/webp',
           Math.max(0.55, 0.9 - attempt * 0.1),
         )
@@ -110,7 +138,7 @@ export async function processAgentImage(file: Blob): Promise<AgentImage> {
       canvas.width = Math.max(1, Math.round(canvas.width * 0.8))
       canvas.height = Math.max(1, Math.round(canvas.height * 0.8))
     }
-    throw new Error('处理后的图片超过 2 MiB')
+    throw new AgentImageProcessingError('imageEncodedSizeLimit')
   } finally {
     bitmap.close()
   }
@@ -168,7 +196,7 @@ export async function prepareAgentImages(
       )
       check()
       if (!result.success || !result.url || !result.expiresAt)
-        throw new Error(`对话图片上传失败：${result.error || '上传服务未返回有效地址'}`)
+        throw new AgentImageUploadError(result.error)
       upload = { url: result.url, expiresAt: result.expiresAt }
       await store.updateImageUpload(image, upload, () => !signal.aborted && isCurrent())
       check()

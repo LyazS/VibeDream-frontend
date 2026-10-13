@@ -8,10 +8,10 @@
     </template>
     <ThinkingIndicator v-if="indicatorStatus" :status="indicatorStatus" />
     <div v-if="store.agentModelCall?.status === 'failed'" class="chat-error" role="alert">
-      {{ store.agentModelCall?.error }}
+      {{ t(getAgentErrorKey(store.agentModelCall?.errorCode ?? store.agentModelCall?.error)) }}
     </div>
     <div v-if="store.agentStorageError" class="chat-error" role="alert">
-      {{ store.agentStorageError }}
+      {{ t(getAgentErrorKey(store.agentStorageError, 'aiPanel.errors.storageFailed')) }}
     </div>
   </div>
 </template>
@@ -23,6 +23,7 @@ import UserMessage from './UserMessage.vue'
 import AgentMessage from './AgentMessage.vue'
 import ThinkingIndicator from './ThinkingIndicator.vue'
 import InteractionCard from './InteractionCard.vue'
+import { getAgentErrorKey } from './agentErrorMessage'
 import { AgentMessageRole, MessagePartType } from '@/core/agent/types'
 import { useUnifiedStore } from '@/core/unifiedStore'
 import { useAppI18n } from '@/core/composables/useI18n'

@@ -1,36 +1,45 @@
 <template>
-  <section class="property-panel" aria-label="属性描述">
+  <section class="property-panel" :aria-label="t('aiPanel.devtools.property.title')">
     <form class="query-form" @submit.prevent="runQuery">
       <n-radio-group
         v-model:value="usage"
         class="usage-switch"
         :disabled="loading"
-        aria-label="编辑场景"
+        :aria-label="t('aiPanel.devtools.property.usage')"
       >
-        <n-radio-button value="static_edit">静态</n-radio-button>
-        <n-radio-button value="keyframe_edit">关键帧</n-radio-button>
-        <n-radio-button value="transition_edit">转场</n-radio-button>
+        <n-radio-button value="static_edit">{{
+          t('aiPanel.devtools.property.static')
+        }}</n-radio-button>
+        <n-radio-button value="keyframe_edit">{{
+          t('aiPanel.devtools.property.keyframe')
+        }}</n-radio-button>
+        <n-radio-button value="transition_edit">{{
+          t('aiPanel.devtools.property.transition')
+        }}</n-radio-button>
       </n-radio-group>
 
       <label v-if="usage === 'transition_edit'" class="field">
-        <span>转场模板 ID</span>
+        <span>{{ t('aiPanel.devtools.property.templateId') }}</span>
         <n-input
           v-model:value="templateId"
           :disabled="loading"
           placeholder="gl-bow-tie-with-parameter"
           clearable
-          :input-props="{ 'aria-label': '转场模板 ID' }"
+          :input-props="{ 'aria-label': t('aiPanel.devtools.property.templateId') }"
         />
       </label>
       <label class="field">
-        <span>属性 ID</span>
+        <span>{{ t('aiPanel.devtools.property.propertyId') }}</span>
         <n-input
           v-model:value="propertyText"
           type="textarea"
           :autosize="{ minRows: 3, maxRows: 8 }"
           :disabled="loading"
           placeholder="visual.position.x"
-          :input-props="{ 'aria-label': '属性 ID', spellcheck: false }"
+          :input-props="{
+            'aria-label': t('aiPanel.devtools.property.propertyId'),
+            spellcheck: false,
+          }"
         />
       </label>
       <div class="query-actions">
@@ -38,24 +47,28 @@
           v-model:value="presetId"
           :options="presetOptions"
           :disabled="loading"
-          placeholder="示例"
-          aria-label="属性示例"
+          :placeholder="t('aiPanel.devtools.property.example')"
+          :aria-label="t('aiPanel.devtools.property.examples')"
           @update:value="applyPreset"
         />
         <n-button type="primary" attr-type="submit" :loading="loading" :disabled="!canQuery">
           <template #icon><component :is="IconComponents.SEARCH" size="16px" /></template>
-          查询
+          {{ t('aiPanel.devtools.property.query') }}
         </n-button>
       </div>
     </form>
 
-    <p v-if="error" class="notice error" role="alert">{{ error }}</p>
+    <p v-if="error" class="notice error" role="alert">{{ t(error) }}</p>
     <div v-if="response" class="response-summary" role="status">
       <span>HTTP {{ httpStatus }}</span>
-      <span v-if="!response.error">{{ successCount }} 项成功 / {{ results.length }} 项</span>
+      <span v-if="!response.error">{{
+        t('aiPanel.devtools.property.resultCount', { success: successCount, total: results.length })
+      }}</span>
       <span>{{ elapsedMs }} ms</span>
     </div>
-    <p v-if="response?.error" class="notice error" role="alert">{{ response.error }}</p>
+    <p v-if="response?.error" class="notice error" role="alert">
+      {{ t(getAgentErrorKey(response.error, 'aiPanel.devtools.property.queryFailed')) }}
+    </p>
 
     <ol v-if="results.length" class="result-list">
       <li v-for="item in results" :key="item.requestedPropertyId" class="result-item">
@@ -65,39 +78,41 @@
             :is="item.success ? IconComponents.SUCCESS : IconComponents.ERROR"
             :class="item.success ? 'success' : 'error'"
             size="17px"
-            :aria-label="item.success ? '成功' : '失败'"
+            :aria-label="t(item.success ? 'aiPanel.devtools.success' : 'aiPanel.devtools.failure')"
           />
         </div>
-        <p v-if="!item.success" class="notice error">{{ item.error }}</p>
+        <p v-if="!item.success" class="notice error">
+          {{ t(getAgentErrorKey(item.error, 'aiPanel.devtools.property.lookupFailed')) }}
+        </p>
         <template v-else>
           <dl class="property-details">
-            <dt>解析 ID</dt>
+            <dt>{{ t('aiPanel.devtools.property.resolvedId') }}</dt>
             <dd>
               <code>{{ item.resolvedPropertyId }}</code>
             </dd>
-            <dt>类型</dt>
+            <dt>{{ t('aiPanel.devtools.property.type') }}</dt>
             <dd>{{ item.valueType || '-' }}</dd>
-            <dt>分组</dt>
+            <dt>{{ t('aiPanel.devtools.property.group') }}</dt>
             <dd>{{ item.groupId }}</dd>
-            <dt>可编辑</dt>
-            <dd>{{ item.editable ? '是' : '否' }}</dd>
-            <dt>可动画</dt>
-            <dd>{{ item.animatable ? '是' : '否' }}</dd>
+            <dt>{{ t('aiPanel.devtools.property.editable') }}</dt>
+            <dd>{{ t(item.editable ? 'aiPanel.devtools.yes' : 'aiPanel.devtools.no') }}</dd>
+            <dt>{{ t('aiPanel.devtools.property.animatable') }}</dt>
+            <dd>{{ t(item.animatable ? 'aiPanel.devtools.yes' : 'aiPanel.devtools.no') }}</dd>
             <template v-if="item.componentHint">
-              <dt>分量</dt>
+              <dt>{{ t('aiPanel.devtools.property.component') }}</dt>
               <dd>
                 <code>{{ item.componentHint }}</code>
               </dd>
             </template>
             <template v-if="item.valueShape">
-              <dt>值结构</dt>
+              <dt>{{ t('aiPanel.devtools.property.valueShape') }}</dt>
               <dd>
                 <code>{{ formatValue(item.valueShape) }}</code>
               </dd>
             </template>
             <template v-for="key in parameterKeys" :key="key">
               <template v-if="item[key] !== undefined && item[key] !== null">
-                <dt>{{ parameterLabels[key] }}</dt>
+                <dt>{{ t(`aiPanel.devtools.property.parameters.${key}`) }}</dt>
                 <dd>
                   <code>{{ formatValue(item[key]) }}</code>
                 </dd>
@@ -114,19 +129,26 @@
 
     <div v-if="response" class="raw-section">
       <details>
-        <summary>原始响应</summary>
+        <summary>{{ t('aiPanel.devtools.property.rawResponse') }}</summary>
         <pre>{{ responseJson }}</pre>
       </details>
       <details>
-        <summary>请求参数</summary>
+        <summary>{{ t('aiPanel.devtools.property.request') }}</summary>
         <pre>{{ requestJson }}</pre>
-        <p v-if="requestId" class="request-id">请求 ID：{{ requestId }}</p>
+        <p v-if="requestId" class="request-id">
+          {{ t('aiPanel.devtools.property.requestId', { id: requestId }) }}
+        </p>
       </details>
       <div class="copy-actions">
-        <n-button quaternary title="复制响应" aria-label="复制响应" @click="copyResponse">
+        <n-button
+          quaternary
+          :title="t('aiPanel.devtools.property.copy')"
+          :aria-label="t('aiPanel.devtools.property.copy')"
+          @click="copyResponse"
+        >
           <template #icon><component :is="IconComponents.COPY" size="16px" /></template>
         </n-button>
-        <span v-if="copyMessage" role="status">{{ copyMessage }}</span>
+        <span v-if="copyMessage" role="status">{{ t(copyMessage) }}</span>
       </div>
     </div>
   </section>
@@ -136,6 +158,8 @@
 import { computed, onUnmounted, ref, watch } from 'vue'
 import { NButton, NInput, NRadioButton, NRadioGroup, NSelect } from 'naive-ui'
 import { IconComponents } from '@/constants/iconComponents'
+import { useAppI18n } from '@/core/composables/useI18n'
+import { getAgentErrorKey } from '@/components/agent/agentErrorMessage'
 import {
   describeItemProperties,
   type ItemPropertyRequest,
@@ -143,35 +167,36 @@ import {
   type ItemPropertyUsage,
 } from '@/core/agent/services/itemPropertyService'
 
+const { t } = useAppI18n()
 const presets = {
   static_edit: [
     {
-      label: '位置、旋转、音量',
+      label: 'staticBasic',
       value: 'basic',
       ids: ['visual.position.x', 'visual.rotation', 'audio.volume'],
     },
-    { label: '成功与失败混合', value: 'mixed', ids: ['visual.position.x', 'unknown.property'] },
+    { label: 'mixed', value: 'mixed', ids: ['visual.position.x', 'unknown.property'] },
     {
-      label: '重复 ID 和空白',
+      label: 'normalize',
       value: 'normalize',
       ids: [' visual.position.x ', 'visual.position.x', 'audio.volume'],
     },
   ],
   keyframe_edit: [
     {
-      label: '复合属性分量',
+      label: 'keyframeBasic',
       value: 'basic',
       ids: ['visual.position.y', 'mask.ellipse.size.height', 'audio.volume'],
     },
     {
-      label: '不可动画属性',
+      label: 'nonAnimatable',
       value: 'mixed',
       ids: ['audio.isMuted', 'text.content', 'visual.rotation'],
     },
   ],
   transition_edit: [
     {
-      label: '时间轴与转场参数',
+      label: 'transitionBasic',
       value: 'basic',
       templateId: 'gl-bow-tie-with-parameter',
       ids: [
@@ -182,13 +207,13 @@ const presets = {
       ],
     },
     {
-      label: '隐藏模板',
+      label: 'hidden',
       value: 'hidden',
       templateId: 'parameterized-demo',
       ids: ['timeline.start', 'transition.duration'],
     },
     {
-      label: '不存在的模板',
+      label: 'missing',
       value: 'missing',
       templateId: 'does-not-exist',
       ids: ['timeline.start'],
@@ -216,20 +241,16 @@ const canQuery = computed(
     (usage.value !== 'transition_edit' || !!templateId.value.trim()),
 )
 const presetOptions = computed(() =>
-  presets[usage.value].map(({ label, value }) => ({ label, value })),
+  presets[usage.value].map(({ label, value }) => ({
+    label: t(`aiPanel.devtools.property.presets.${label}`),
+    value,
+  })),
 )
 const results = computed(() => response.value?.propertyDescriptions ?? [])
 const successCount = computed(() => results.value.filter((item) => item.success).length)
 const responseJson = computed(() => JSON.stringify(response.value, null, 2))
 const requestJson = computed(() => JSON.stringify(lastRequest.value, null, 2))
 const parameterKeys = ['default', 'min', 'max', 'step', 'options'] as const
-const parameterLabels = {
-  default: '默认值',
-  min: '最小值',
-  max: '最大值',
-  step: '步长',
-  options: '选项',
-}
 
 function formatValue(value: unknown): string {
   return typeof value === 'string' ? value : JSON.stringify(value)
@@ -275,9 +296,10 @@ async function runQuery(): Promise<void> {
     httpStatus.value = result.status
     requestId.value = result.headers.get('x-request-id') ?? ''
   } catch (cause) {
-    if (timedOut) error.value = '请求超时，请重试。'
+    if (!activeController.signal.aborted || timedOut) console.error('Property query failed:', cause)
+    if (timedOut) error.value = 'aiPanel.devtools.requestTimeout'
     else if (!activeController.signal.aborted)
-      error.value = cause instanceof Error ? cause.message : String(cause)
+      error.value = getAgentErrorKey(cause, 'aiPanel.devtools.property.queryFailed')
   } finally {
     clearTimeout(timeout)
     elapsedMs.value = Math.round(performance.now() - started)
@@ -289,9 +311,9 @@ async function runQuery(): Promise<void> {
 async function copyResponse(): Promise<void> {
   try {
     await navigator.clipboard.writeText(responseJson.value)
-    copyMessage.value = '已复制'
+    copyMessage.value = 'aiPanel.devtools.copied'
   } catch {
-    copyMessage.value = '复制失败'
+    copyMessage.value = 'aiPanel.devtools.copyFailed'
   }
 }
 

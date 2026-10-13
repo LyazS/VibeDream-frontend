@@ -1,12 +1,12 @@
 <template>
   <div class="chat-message user">
-    <div class="message-bubble">
-      <template v-for="(part, index) in message.parts" :key="index">
-        <div v-if="part.type === MessagePartType.TEXT && part.text" class="message-content">
-          {{ part.text }}
-        </div>
-        <AgentImage v-else-if="part.type === MessagePartType.IMAGE" :image-id="part.imageId" />
-      </template>
+    <div v-if="images.length" class="message-images">
+      <AgentImage v-for="image in images" :key="image.imageId" :image-id="image.imageId" />
+    </div>
+    <div v-if="textParts.length" class="message-bubble">
+      <div v-for="(text, index) in textParts" :key="index" class="message-content">
+        {{ text }}
+      </div>
     </div>
   </div>
 </template>
@@ -14,22 +14,39 @@
 <script setup lang="ts">
 import type { AgentMessage } from '@/core/agent/types'
 import { MessagePartType } from '@/core/agent/types'
-import type { DeepReadonly } from 'vue'
+import { computed, type DeepReadonly } from 'vue'
 import AgentImage from './AgentImage.vue'
 
-defineProps<{
+const props = defineProps<{
   message: DeepReadonly<AgentMessage>
 }>()
+
+const images = computed(() =>
+  props.message.parts.filter((part) => part.type === MessagePartType.IMAGE),
+)
+const textParts = computed(() =>
+  props.message.parts.flatMap((part) =>
+    part.type === MessagePartType.TEXT && part.text.trim() ? [part.text] : [],
+  ),
+)
 </script>
 
 <style scoped>
 .chat-message {
   display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+  min-width: 0;
   margin-bottom: var(--spacing-sm);
 }
 
-.chat-message.user {
+.message-images {
+  display: flex;
+  flex-wrap: wrap;
   justify-content: flex-end;
+  gap: 8px;
+  max-width: 100%;
 }
 
 .message-bubble {

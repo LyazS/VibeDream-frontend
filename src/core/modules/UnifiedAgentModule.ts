@@ -806,6 +806,8 @@ export function createUnifiedAgentModule(registry: ModuleRegistry) {
       void telemetry.record(session, crypto.randomUUID(), 'diagnostic', diagnostic)
       if (control.modelCall?.status === 'running') {
         control.modelCall.error = error instanceof Error ? error.message : String(error)
+        if (error instanceof Error && 'code' in error && typeof error.code === 'string')
+          control.modelCall.errorCode = error.code
         control.modelCall.status = 'failed'
       }
       finalizeRun(control, 'failed')

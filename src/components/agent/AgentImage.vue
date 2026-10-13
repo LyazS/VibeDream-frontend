@@ -1,7 +1,7 @@
 <template>
   <div class="agent-image">
     <NImage v-if="url" :src="url" :alt="t('common.chat.image')" object-fit="contain" />
-    <span v-else-if="error" class="image-error" role="alert">{{ error }}</span>
+    <span v-else-if="error" class="image-error" role="alert">{{ t(error) }}</span>
     <span v-else>{{ t('common.loading') }}</span>
   </div>
 </template>
@@ -12,6 +12,7 @@ import { NImage } from 'naive-ui'
 import { createAgentImagePreview } from '@/core/agent/services/agentImageService'
 import { useUnifiedStore } from '@/core/unifiedStore'
 import { useAppI18n } from '@/core/composables/useI18n'
+import { getAgentErrorKey } from './agentErrorMessage'
 
 const props = defineProps<{ imageId: string }>()
 const store = useUnifiedStore()
@@ -37,8 +38,7 @@ watch(
         url.value = preview.url
       })
       .catch((reason: unknown) => {
-        if (current)
-          error.value = reason instanceof Error ? reason.message : t('common.unknownError')
+        if (current) error.value = getAgentErrorKey(reason, 'aiPanel.errors.imageReadFailed')
       })
   },
   { immediate: true },
@@ -50,21 +50,23 @@ onBeforeUnmount(() => {
 
 <style scoped>
 .agent-image {
-  width: 180px;
+  width: 60px;
   max-width: 100%;
-  aspect-ratio: 4 / 3;
+  aspect-ratio: 1;
+  flex: 0 0 auto;
   display: flex;
   align-items: center;
   justify-content: center;
   overflow: hidden;
   border-radius: 6px;
-  background: rgba(0, 0, 0, 0.12);
-  outline: 1px solid rgba(255, 255, 255, 0.1);
 }
 .agent-image :deep(.n-image),
 .agent-image :deep(img) {
   width: 100%;
   height: 100%;
+}
+.agent-image :deep(img) {
+  border-radius: 6px;
 }
 .image-error {
   padding: 8px;

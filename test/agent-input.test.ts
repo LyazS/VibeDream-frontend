@@ -1,7 +1,17 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { createRenderer, nextTick, reactive } from 'vue'
+import { createI18n } from 'vue-i18n'
 import AgentInput from '../src/components/agent/AgentInput.vue'
 import type { AgentImage } from '../src/core/agent/types'
+import { AgentImageProcessingError } from '../src/core/agent/services/agentImageService'
+import en from '../src/locales/en-US/common.json'
+import zh from '../src/locales/zh-CN/common.json'
+
+const i18n = createI18n({
+  legacy: false,
+  locale: 'en-US',
+  messages: { 'en-US': en, 'zh-CN': zh },
+})
 
 const mocks = vi.hoisted(() => ({
   store: {
@@ -15,7 +25,7 @@ const mocks = vi.hoisted(() => ({
   disposePreview: vi.fn(),
 }))
 vi.mock('@/core/unifiedStore', () => ({ useUnifiedStore: () => mocks.store }))
-vi.mock('@/core/composables/useI18n', () => ({ useAppI18n: () => ({ t: (key: string) => key }) }))
+vi.mock('@/core/composables/useI18n', () => ({ useAppI18n: () => ({ t: i18n.global.t }) }))
 vi.mock('@/constants/iconComponents', () => ({
   IconComponents: { CLOSE: 'span', IMAGE_SMALL: 'span', STOP: 'span', SEND: 'span' },
 }))
@@ -23,8 +33,8 @@ vi.mock('naive-ui', () => ({ NImage: { render: () => null } }))
 vi.mock('../src/components/agent/AgentUsageIndicator.vue', () => ({
   default: { render: () => null },
 }))
-vi.mock('@/core/agent/services/agentImageService', () => ({
-  AGENT_IMAGE_LIMITS: { count: 4 },
+vi.mock('@/core/agent/services/agentImageService', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../src/core/agent/services/agentImageService')>()),
   processAgentImage: mocks.processImage,
   createAgentImagePreview: () => ({ url: 'blob:preview', dispose: mocks.disposePreview }),
 }))
@@ -45,8 +55,12 @@ const renderer = createRenderer<HostNode, HostNode>({
   createElement: (type) => new HostNode(type),
   createText: () => new HostNode('#text'),
   createComment: () => new HostNode('#comment'),
-  setText: () => {},
-  setElementText: () => {},
+  setText: (node, text) => {
+    node.value = text
+  },
+  setElementText: (node, text) => {
+    node.value = text
+  },
   patchProp: (node, key, _previous, value) => {
     node.props[key] = value
   },
@@ -119,6 +133,7 @@ function pressEnter() {
 beforeEach(() => {
   vi.clearAllMocks()
   mocks.processImage.mockReset()
+  i18n.global.locale.value = 'en-US'
   mocks.store = reactive({
     ...mocks.store,
     agentReady: true,
@@ -191,3 +206,37 @@ it('keeps stop available while a draft image is processing', async () => {
   await vi.waitFor(() => expect(mocks.processImage).toHaveBeenCalledOnce())
   await nextTick()
 })
+
+it('updates the visible image count warning when the language changes', async () => {
+  mocks.processImage.mockResolvedValue(image('draft'))
+  await selectFiles(5)
+  const alert = findNode((node) => node.props.role === 'alert')
+  expect(alert.value).toBe('Up to 4 images per message')
+  i18n.global.locale.value = 'zh-CN'
+  await nextTick()
+  expect(alert.value).toBe('每条消息最多添加 4 张图片')
+  i18n.global.locale.value = 'en-US'
+  await nextTick()
+  expect(alert.value).toBe('Up to 4 images per message')
+})
+
+it.each([
+  [
+    new AgentImageProcessingError('imageInvalid'),
+    'Choose a valid JPEG, PNG or WebP image',
+    '请选择有效的 JPEG、PNG 或 WebP 图片',
+  ],
+  [new Error('Browser-specific decode failure'), 'Unable to process the image', '无法处理图片'],
+])(
+  'localizes image processing errors and updates them on language changes: %s',
+  async (error, english, chinese) => {
+    mocks.processImage.mockRejectedValue(error)
+    await selectFiles()
+    await vi.waitFor(() => {
+      expect(findNode((node) => node.props.role === 'alert').value).toBe(english)
+    })
+    i18n.global.locale.value = 'zh-CN'
+    await nextTick()
+    expect(findNode((node) => node.props.role === 'alert').value).toBe(chinese)
+  },
+)

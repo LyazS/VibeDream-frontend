@@ -119,6 +119,7 @@ export type ModelCallSummary = {
   inputMessageId: string
   assistantMessageId: string
   error: string | null
+  errorCode?: string
 }
 
 /** 一个本地会话的实际内容；运行控制器不落盘，也不随展示选择迁移。 */

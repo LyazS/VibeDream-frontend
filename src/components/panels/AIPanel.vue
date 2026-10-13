@@ -11,9 +11,24 @@
       </template>
       <n-tab v-if="showGeneration" name="ai-generate" :tab="t('aiPanel.aiGenerate')"> </n-tab>
       <n-tab v-if="showAgent" name="agent" :tab="t('aiPanel.agent')"> </n-tab>
-      <n-tab v-if="showItemPropertyTest" name="item-property-test" tab="属性描述"> </n-tab>
-      <n-tab v-if="showMediaSearchTest" name="media-search-test" tab="素材搜索测试"> </n-tab>
-      <n-tab v-if="showTransitionTest" name="transition-test" tab="转场测试"> </n-tab>
+      <n-tab
+        v-if="showItemPropertyTest"
+        name="item-property-test"
+        :tab="t('aiPanel.devtools.property.title')"
+      >
+      </n-tab>
+      <n-tab
+        v-if="showMediaSearchTest"
+        name="media-search-test"
+        :tab="t('aiPanel.devtools.mediaSearch.title')"
+      >
+      </n-tab>
+      <n-tab
+        v-if="showTransitionTest"
+        name="transition-test"
+        :tab="t('aiPanel.devtools.transition.title')"
+      >
+      </n-tab>
       <template #suffix>
         <div class="header-buttons">
           <template v-if="showAgent && unifiedStore.aiPanelActiveTab === 'agent'">

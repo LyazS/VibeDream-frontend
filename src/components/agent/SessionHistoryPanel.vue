@@ -35,7 +35,7 @@
       <!-- 错误状态 -->
       <div v-else-if="error" class="empty-state">
         <component :is="IconComponents.WARNING" size="48px" />
-        <p>{{ error }}</p>
+        <p>{{ t(error) }}</p>
       </div>
 
       <!-- 会话列表 -->
@@ -99,8 +99,9 @@ import { IconComponents } from '@/constants/iconComponents'
 import HoverButton from '@/components/base/HoverButton.vue'
 import { useAppI18n } from '@/core/composables/useI18n'
 import { useUnifiedStore } from '@/core/unifiedStore'
+import { getAgentErrorKey } from './agentErrorMessage'
 
-const { t } = useAppI18n()
+const { t, locale } = useAppI18n()
 const store = useUnifiedStore()
 
 // 定义事件
@@ -114,7 +115,13 @@ const searchQuery = ref('')
 // 加载状态
 const isLoading = computed(() => store.agentHistoryLoading)
 const deleteError = ref<string | null>(null)
-const error = computed(() => deleteError.value || store.agentStorageError)
+const error = computed(
+  () =>
+    deleteError.value ||
+    (store.agentStorageError
+      ? getAgentErrorKey(store.agentStorageError, 'aiPanel.errors.storageFailed')
+      : null),
+)
 
 // 过滤后的会话列表
 const filteredSessions = computed(() => {
@@ -140,9 +147,9 @@ const formatTime = (dateString: string): string => {
   } else if (diffDays === 2) {
     return t('common.yesterday')
   } else if (diffDays <= 7) {
-    return `${diffDays} ${t('common.daysAgo')}`
+    return t('aiPanel.history.daysAgo', { count: diffDays })
   } else {
-    return date.toLocaleDateString('zh-CN')
+    return date.toLocaleDateString(locale.value)
   }
 }
 
@@ -157,7 +164,7 @@ const deleteHistory = async (sessionId: string) => {
     deleteError.value = null
     await store.deleteAgentSession(sessionId)
   } catch (err) {
-    deleteError.value = err instanceof Error ? err.message : '删除会话失败'
+    deleteError.value = getAgentErrorKey(err, 'aiPanel.errors.deleteSessionFailed')
     console.error('删除会话失败:', err)
   }
 }

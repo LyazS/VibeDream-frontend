@@ -20,7 +20,7 @@
           </button>
         </div>
       </div>
-      <div v-if="imageError" class="image-error" role="alert">{{ imageError }}</div>
+      <div v-if="imageErrorMessage" class="image-error" role="alert">{{ imageErrorMessage }}</div>
       <div class="chat-input-main">
         <textarea
           v-model="inputMessage"
@@ -74,6 +74,8 @@ import { NImage } from 'naive-ui'
 import type { AgentImage } from '@/core/agent/types'
 import {
   AGENT_IMAGE_LIMITS,
+  AgentImageProcessingError,
+  type AgentImageErrorCode,
   processAgentImage,
   createAgentImagePreview,
 } from '@/core/agent/services/agentImageService'
@@ -92,7 +94,10 @@ const inputMessage = ref('')
 const fileInput = ref<HTMLInputElement>()
 type DraftImage = { image: AgentImage; preview: ReturnType<typeof createAgentImagePreview> }
 const draftImages = shallowRef<DraftImage[]>([])
-const imageError = ref('')
+const imageError = ref<AgentImageErrorCode | 'imageCountLimit' | ''>('')
+const imageErrorMessage = computed(() =>
+  imageError.value ? t(`common.chat.${imageError.value}`, { count: AGENT_IMAGE_LIMITS.count }) : '',
+)
 let draftGeneration = 0
 const queuedImages = ref(0)
 let processing = Promise.resolve()
@@ -116,7 +121,7 @@ function addFiles(files: File[]) {
     0,
     AGENT_IMAGE_LIMITS.count - draftImages.value.length - queuedImages.value,
   )
-  if (files.length > available) imageError.value = t('common.chat.imageCountLimit')
+  if (files.length > available) imageError.value = 'imageCountLimit'
   const accepted = files.slice(0, available)
   queuedImages.value += accepted.length
   processing = processing.then(async () => {
@@ -131,7 +136,8 @@ function addFiles(files: File[]) {
         ]
       } catch (error) {
         if (generation === draftGeneration)
-          imageError.value = error instanceof Error ? error.message : t('common.unknownError')
+          imageError.value =
+            error instanceof AgentImageProcessingError ? error.code : 'imageProcessingFailed'
       } finally {
         if (generation === draftGeneration) queuedImages.value--
       }
