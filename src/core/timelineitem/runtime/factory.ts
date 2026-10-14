@@ -221,16 +221,6 @@ export async function buildTimelineItemForDag(
 
     console.log(`🔄 [${logIdentifier}] 开始构建时间轴项目（Ready DAG）...`)
 
-    if (originalTimelineItemData.isPlaceholder) {
-      const newTimelineItem = cloneTimelineItem(originalTimelineItemData)
-      newTimelineItem.runtime.isInitialized = false
-
-      return {
-        timelineItem: newTimelineItem,
-        success: true,
-      }
-    }
-
     if (TimelineItemQueries.isTextTimelineItem(originalTimelineItemData)) {
       const newTimelineItem = cloneTimelineItem(originalTimelineItemData, {
         timelineStatus: 'ready',

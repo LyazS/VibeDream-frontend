@@ -177,22 +177,6 @@ export {
   type RemoteTaskCompletedResult,
 } from './resolvers/AIGeneratedMediaResolver'
 export {
-  ASR_SUBTITLES_RESOURCE_TYPE,
-  ASR_REMOTE_TASK_COMPLETED_RESOURCE_TYPE,
-  ASRSubtitlesResolver,
-  ASRRemoteTaskCompletedResolver,
-  createASRSubtitlesRequest,
-  createASRSubtitlesResolver,
-  createASRRemoteTaskCompletedRequest,
-  createASRRemoteTaskCompletedResolver,
-  submitASRTask,
-  type ASRSubtitlesInput,
-  type ASRSubtitlesResult,
-  type ASRRemoteTaskCompletedInput,
-  type ASRRemoteTaskCompletedResult,
-  type ASRTaskSubmitResponse,
-} from './resolvers/ASRSubtitlesResolver'
-export {
   TIMELINE_ITEM_READY_RESOURCE_TYPE,
   TimelineItemReadyResolver,
   createTimelineItemReadyRequest,

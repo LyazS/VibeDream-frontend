@@ -144,11 +144,10 @@ export class RemoveTrackCommand implements SimpleCommand {
       }
 
       for (const item of newTimelineItems) {
-        if (TimelineItemQueries.isLoading(item) || item.isPlaceholder) {
+        if (TimelineItemQueries.isLoading(item)) {
           console.log('🔗 [RemoveTrackCommand] trigger timeline item resolve', {
             timelineItemId: item.id,
             mediaItemId: item.mediaItemId,
-            isPlaceholder: item.isPlaceholder,
             isInitialized: item.runtime.isInitialized,
             timelineStatus: item.timelineStatus,
           })

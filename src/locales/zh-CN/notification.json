@@ -31,8 +31,6 @@
         "unmuteTrack": "取消静音轨道：{name}",
         "showTrack": "显示轨道：{name}",
         "hideTrack": "隐藏轨道：{name}",
-        "startSpeechRecognition": "发起语音识别",
-        "removeSpeechRecognition": "移除语音识别结果",
         "updateFilter": "更新片段滤镜",
         "removeFilter": "移除片段滤镜",
         "updateTransition": "更新片段转场",

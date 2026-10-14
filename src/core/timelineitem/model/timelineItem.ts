@@ -43,18 +43,6 @@ import type { VisualProps, AudioProps } from './render'
  */
 export type TimelineItemStatus = 'ready' | 'loading' | 'error'
 
-export interface PlaceholderTaskState {
-  kind: 'asr-subtitles'
-  requestId: string
-  remoteTaskId?: string
-  status: 'processing'
-  sourceTimelineItemId: string
-}
-
-export interface TimelineItemProvenance {
-  asrRequestId?: string
-}
-
 // ==================== 配置类型映射 ====================
 
 /**
@@ -195,18 +183,4 @@ export interface UnifiedTimelineItemData<T extends MediaType = MediaType> {
   animation?: GetAnimation<T>
   // ==================== 片段滤镜配置（持久化） ====================
   runtime: UnifiedTimelineItemRuntime<T>
-  // ==================== 占位符标识（可选） ====================
-  /**
-   * 是否为占位符项目
-   * - true: ASR占位符，只在时间轴上占位，不需要渲染
-   * - false/undefined: 正常项目，需要正常的创建/恢复流程
-   *
-   * 占位符项目特点：
-   * 1. 不需要走 timeline item ready 构建流程（因为没有关联的媒体项目）
-   * 2. 不需要调用 setupTimelineItemBunny（因为不需要渲染）
-   * 3. 只需要克隆后直接添加到时间轴
-   */
-  isPlaceholder?: boolean
-  task?: PlaceholderTaskState
-  provenance?: TimelineItemProvenance
 }

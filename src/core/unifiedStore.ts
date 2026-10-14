@@ -23,9 +23,6 @@ import {
   createAIGeneratedMediaResolver,
   createAIInputPreparedResolver,
   createAITaskSubmittedResolver,
-  createASRRemoteTaskCompletedResolver,
-  createASRSubtitlesRequest,
-  createASRSubtitlesResolver,
   createEffectTemplateReadyRequest,
   createEffectTemplateReadyResolver,
   createMediaIndexMetadataWritebackRequest,
@@ -292,16 +289,6 @@ export const useUnifiedStore = defineStore('unified', () => {
       getBizyAirApiKey: async () => unifiedUserModule.getBizyAirApiKey(),
     }),
   )
-  jobRuntime.registerResolver(createASRRemoteTaskCompletedResolver())
-  jobRuntime.registerResolver(
-    createASRSubtitlesResolver({
-      getTimelineItem: unifiedTimelineModule.getTimelineItem,
-      getTimelineItems: () => unifiedTimelineModule.timelineItems.value,
-      addTimelineItem: unifiedTimelineModule.addTimelineItem,
-      removeTimelineItem: unifiedTimelineModule.removeTimelineItem,
-      getTrack: unifiedTrackModule.getTrack,
-    }),
-  )
   jobRuntime.registerResolver(
     createTimelineItemReadyResolver({
       getTimelineItem: unifiedTimelineModule.getTimelineItem,
@@ -381,9 +368,6 @@ export const useUnifiedStore = defineStore('unified', () => {
   function ensureTimelineItemReady(timelineItemId: string) {
     return jobRuntime.ensure(createTimelineItemReadyRequest(timelineItemId))
   }
-  function ensureASRSubtitles(placeholderTimelineItemId: string) {
-    return jobRuntime.ensure(createASRSubtitlesRequest(placeholderTimelineItemId))
-  }
   function ensureEffectTemplateReady(assetId: string) {
     return jobRuntime.ensure(createEffectTemplateReadyRequest(assetId))
   }
@@ -410,10 +394,6 @@ export const useUnifiedStore = defineStore('unified', () => {
     const timelineItem = unifiedTimelineModule.getTimelineItem(timelineItemId)
     if (!timelineItem) {
       return Promise.resolve(null)
-    }
-
-    if (timelineItem.isPlaceholder && timelineItem.task?.kind === 'asr-subtitles') {
-      return ensureASRSubtitles(timelineItem.id)
     }
 
     if (timelineItem.timelineStatus === 'loading') {
@@ -541,7 +521,6 @@ export const useUnifiedStore = defineStore('unified', () => {
     // 时间轴项目历史记录方法
     addTimelineItemWithHistory: historyOperations.addTimelineItemWithHistory,
     removeTimelineItemWithHistory: historyOperations.removeTimelineItemWithHistory,
-    startASRRequestWithHistory: historyOperations.startASRRequestWithHistory,
     moveTimelineItemWithHistory: historyOperations.moveTimelineItemWithHistory,
     updatePlaybackRateWithHistory: historyOperations.updatePlaybackRateWithHistory,
     updateTransitionConfigWithHistory: historyOperations.updateTransitionConfigWithHistory,
@@ -594,7 +573,6 @@ export const useUnifiedStore = defineStore('unified', () => {
     ensureMediaIndexing,
     cancelMusicStructureAnalysis,
     ensureTimelineItemReady,
-    ensureASRSubtitles,
     ensureTimelineItemResolved,
 
     // 媒体项目管理方法

@@ -107,7 +107,6 @@
         "musicSemantic": "Music Semantic Analysis",
         "timelineItemReady": "Preparing Timeline Media",
         "aiGeneratedMedia": "Generating AI Media",
-        "asrSubtitles": "Transcribing Subtitles",
         "effectTemplateReady": "Downloading Effect Template"
       },
       "statuses": {

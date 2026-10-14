@@ -7,5 +7,11 @@ export default defineConfig({
     'import.meta.env.VITE_API_BASE_URL': JSON.stringify(''),
     'import.meta.env.VITE_API_CAPABILITIES': JSON.stringify('ai-tasks'),
   },
-  test: { include: ['test/task-progress.test.ts', 'test/media-indexing-recovery.test.ts'] },
+  test: {
+    include: [
+      'test/task-progress.test.ts',
+      'test/media-indexing-recovery.test.ts',
+      'test/project-timeline-recovery.test.ts',
+    ],
+  },
 })

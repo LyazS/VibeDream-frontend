@@ -94,11 +94,10 @@ export class RemoveTimelineItemCommand implements SimpleCommand {
       await this.timelineModule.addTimelineItem(newTimelineItem)
 
       // 2. 恢复后的项目统一交给 timeline item DAG dispatcher 推进
-      if (TimelineItemQueries.isLoading(newTimelineItem) || newTimelineItem.isPlaceholder) {
+      if (TimelineItemQueries.isLoading(newTimelineItem)) {
         console.log('🔗 [RemoveTimelineItemCommand] trigger timeline item resolve', {
           timelineItemId: newTimelineItem.id,
           mediaItemId: newTimelineItem.mediaItemId,
-          isPlaceholder: newTimelineItem.isPlaceholder,
           isInitialized: newTimelineItem.runtime.isInitialized,
           timelineStatus: newTimelineItem.timelineStatus,
         })

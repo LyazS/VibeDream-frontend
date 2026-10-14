@@ -21,8 +21,6 @@ import type { DisplayItem, VirtualDirectory } from '@/core/directory/types'
 import {
   AddTimelineItemCommand,
   RemoveTimelineItemCommand,
-  RemoveASRRequestCommand,
-  StartASRRequestCommand,
   MoveTimelineItemCommand,
   UpdateTransitionConfigCommand,
   UpdateFilterConfigCommand,
@@ -63,7 +61,6 @@ import {
   areClipFilterConfigsEqual,
   normalizeClipFilterConfig,
 } from '@/core/timelineitem/features/filter'
-import { RENDERER_FPS } from '@/core/mediabunny/constant'
 import type { ChangePlan } from '@/core/property-system'
 import type { AnimationChannelKey } from '@/core/timelineitem/model/render'
 import type { TrimTimelineItemSide } from '@/core/modules/commands/timelineCommands'
@@ -192,21 +189,6 @@ export function useHistoryOperations(
    * @param timelineItemId 要删除的时间轴项目ID
    */
   async function removeTimelineItemWithHistory(timelineItemId: string) {
-    const timelineItem = unifiedTimelineModule.getTimelineItem(timelineItemId)
-    const asrRequestId = getASRRequestIdFromTimelineItem(timelineItem)
-
-    if (asrRequestId) {
-      const command = new RemoveASRRequestCommand(
-        asrRequestId,
-        unifiedTimelineModule,
-        unifiedMediaModule,
-        ensureTimelineItemResolved,
-        () => unifiedTimelineModule.timelineItems.value,
-      )
-      await unifiedHistoryModule.executeCommand(command)
-      return
-    }
-
     const command = new RemoveTimelineItemCommand(
       timelineItemId,
       unifiedTimelineModule,
@@ -214,20 +196,6 @@ export function useHistoryOperations(
       ensureTimelineItemResolved,
     )
     await unifiedHistoryModule.executeCommand(command)
-  }
-
-  function getASRRequestIdFromTimelineItem(
-    timelineItem: UnifiedTimelineItemData<MediaType> | undefined,
-  ): string | null {
-    if (!timelineItem) {
-      return null
-    }
-
-    if (timelineItem.isPlaceholder && timelineItem.task?.kind === 'asr-subtitles') {
-      return timelineItem.task.requestId
-    }
-
-    return null
   }
 
   /**
@@ -782,26 +750,6 @@ export function useHistoryOperations(
     await unifiedHistoryModule.executeCommand(command)
   }
 
-  async function startASRRequestWithHistory(
-    sourceTimelineItem: UnifiedTimelineItemData<MediaType>,
-    estimatedDurationSeconds: number,
-    requestId: string,
-    remoteTaskId: string,
-  ) {
-    const durationFrames = Math.max(1, Math.round(estimatedDurationSeconds * RENDERER_FPS))
-    const command = new StartASRRequestCommand(
-      sourceTimelineItem,
-      durationFrames,
-      requestId,
-      remoteTaskId,
-      unifiedTimelineModule,
-      unifiedTrackModule,
-      unifiedMediaModule,
-      ensureTimelineItemResolved,
-    )
-    await unifiedHistoryModule.executeCommand(command)
-  }
-
   /**
    * 带历史记录的删除轨道方法
    * @param trackId 要删除的轨道ID
@@ -1051,7 +999,6 @@ export function useHistoryOperations(
     moveLibraryItemsWithHistory,
     addTimelineItemWithHistory,
     removeTimelineItemWithHistory,
-    startASRRequestWithHistory,
     moveTimelineItemWithHistory,
     updatePlaybackRateWithHistory,
     updateTransitionConfigWithHistory,

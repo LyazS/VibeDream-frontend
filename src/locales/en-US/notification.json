@@ -31,8 +31,6 @@
         "unmuteTrack": "Unmute track: {name}",
         "showTrack": "Show track: {name}",
         "hideTrack": "Hide track: {name}",
-        "startSpeechRecognition": "Start speech recognition",
-        "removeSpeechRecognition": "Remove speech recognition result",
         "updateFilter": "Update clip filter",
         "removeFilter": "Remove clip filter",
         "updateTransition": "Update clip transition",

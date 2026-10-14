@@ -17,8 +17,6 @@ export type HistoryLabelKey =
   | 'notification.history.command.unmuteTrack'
   | 'notification.history.command.showTrack'
   | 'notification.history.command.hideTrack'
-  | 'notification.history.command.startSpeechRecognition'
-  | 'notification.history.command.removeSpeechRecognition'
   | 'notification.history.command.updateFilter'
   | 'notification.history.command.removeFilter'
   | 'notification.history.command.updateTransition'
@@ -86,8 +84,6 @@ export const historyLabels = {
   unmuteTrack: (name: string) => label('notification.history.command.unmuteTrack', { name }),
   showTrack: (name: string) => label('notification.history.command.showTrack', { name }),
   hideTrack: (name: string) => label('notification.history.command.hideTrack', { name }),
-  startSpeechRecognition: () => label('notification.history.command.startSpeechRecognition'),
-  removeSpeechRecognition: () => label('notification.history.command.removeSpeechRecognition'),
   updateFilter: () => label('notification.history.command.updateFilter'),
   removeFilter: () => label('notification.history.command.removeFilter'),
   updateTransition: () => label('notification.history.command.updateTransition'),

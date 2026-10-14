@@ -350,15 +350,6 @@ function isMediaPersistedSourceData(value: unknown): value is BaseDataSourcePers
         typeof value.taskStatus === 'string' &&
         (value.resultData === undefined || isRecord(value.resultData))
       )
-    case 'asr':
-      return (
-        typeof value.asrTaskId === 'string' &&
-        isRecord(value.requestConfig) &&
-        typeof value.taskStatus === 'string' &&
-        (value.resultData === undefined || isRecord(value.resultData)) &&
-        isOptionalString(value.sourceTimelineItemId) &&
-        isOptionalString(value.placeholderTimelineItemId)
-      )
     default:
       return false
   }

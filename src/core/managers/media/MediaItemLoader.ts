@@ -7,8 +7,6 @@ import type { BaseUserSelectedFileSourceData } from '@/core/datasource/providers
 import type { BaseAIGenerationSourceData } from '@/core/datasource/providers/ai-generation/AIGenerationSource'
 import type { BaseBizyAirSourceData } from '@/core/datasource/providers/bizyair/types'
 import { BizyAirSourceFactory } from '@/core/datasource/providers/bizyair/BizyAirSource'
-import type { BaseASRSourceData } from '@/core/datasource/providers/asr/ASRSource'
-import { ASRSourceFactory } from '@/core/datasource/providers/asr/ASRSource'
 import type { UnifiedLibraryAssetData } from '@/core/asset/types'
 
 /**
@@ -106,12 +104,6 @@ export class MediaItemLoader {
       // BizyAir 数据源（从项目加载）
       source = BizyAirSourceFactory.createBizyAirSource(
         metaData.source as BaseBizyAirSourceData,
-        SourceOrigin.PROJECT_LOAD,
-      )
-    } else if (sourceType === 'asr') {
-      // ASR 数据源（从项目加载）
-      source = ASRSourceFactory.createASRSource(
-        metaData.source as BaseASRSourceData,
         SourceOrigin.PROJECT_LOAD,
       )
     } else {

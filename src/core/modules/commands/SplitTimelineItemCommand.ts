@@ -320,11 +320,10 @@ export class SplitTimelineItemCommand implements SimpleCommand {
       // 2. 添加分割后的所有项目
       for (const item of splitItems) {
         await this.timelineModule.addTimelineItem(item)
-        if (TimelineItemQueries.isLoading(item) || item.isPlaceholder) {
+        if (TimelineItemQueries.isLoading(item)) {
           console.log('🔗 [SplitTimelineItemCommand] trigger timeline item resolve', {
             timelineItemId: item.id,
             mediaItemId: item.mediaItemId,
-            isPlaceholder: item.isPlaceholder,
             isInitialized: item.runtime.isInitialized,
             timelineStatus: item.timelineStatus,
           })
@@ -372,11 +371,10 @@ export class SplitTimelineItemCommand implements SimpleCommand {
 
       // 3. 添加原始项目到时间轴
       await this.timelineModule.addTimelineItem(originalItem)
-      if (TimelineItemQueries.isLoading(originalItem) || originalItem.isPlaceholder) {
+      if (TimelineItemQueries.isLoading(originalItem)) {
         console.log('🔗 [SplitTimelineItemCommand] trigger timeline item resolve', {
           timelineItemId: originalItem.id,
           mediaItemId: originalItem.mediaItemId,
-          isPlaceholder: originalItem.isPlaceholder,
           isInitialized: originalItem.runtime.isInitialized,
           timelineStatus: originalItem.timelineStatus,
         })

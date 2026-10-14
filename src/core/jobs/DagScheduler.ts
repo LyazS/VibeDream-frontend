@@ -26,7 +26,6 @@ export interface DagSchedulerOptions {
  */
 const DEFAULT_CONCURRENCY: Record<ResourceQueue, number> = {
   'ai-remote': 2,
-  asr: 2,
   'local-heavy': 1,
   export: 1,
   background: 2,

@@ -37,7 +37,6 @@ const VISIBLE_ROOT_TYPES = new Set([
   'music-structure-analysis',
   'music-semantic-metadata-writeback',
   'ai-generated-media',
-  'asr-subtitles',
   'effect-template-ready',
 ])
 
@@ -91,8 +90,6 @@ function formatTaskTitle(task: TaskView) {
       return `${t('media.musicAnalysisTaskTitle')}：${name}`
     case 'music-semantic-metadata-writeback':
       return `${t('editor.taskCenter.titles.musicSemantic')}：${name}`
-    case 'asr-subtitles':
-      return `${t('editor.taskCenter.titles.asrSubtitles')}：${name}`
     case 'effect-template-ready':
       return `${t('editor.taskCenter.titles.effectTemplateReady')}：${name}`
     default:
@@ -127,14 +124,6 @@ function resolveTaskObjectName(task: TaskView) {
       return unifiedStore.getMediaItem(key)?.name || key
     case 'effect-template-ready':
       return unifiedStore.getAsset(key)?.name || key
-    case 'asr-subtitles': {
-      const placeholder = unifiedStore.getTimelineItem(key)
-      const sourceTimelineItemId = placeholder?.task?.sourceTimelineItemId
-      if (sourceTimelineItemId) {
-        return resolveTimelineItemName(sourceTimelineItemId) || key
-      }
-      return resolveTimelineItemName(key) || key
-    }
     case 'timeline-item-ready':
       return resolveTimelineItemName(key) || key
     default:

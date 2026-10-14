@@ -44,7 +44,6 @@
         "showBeat1": "Show Beat 1",
         "showBeat1234": "Show Beats 1 2 3 4",
         "clearAIMarks": "Clear Auto Beat Marks",
-        "speechRecognition": "Speech Recognition",
         "duplicateClip": "Duplicate Clip",
         "clearAllMarkers": "Clear All Markers",
         "clearManualMarkers": "Clear Manual Markers",
@@ -114,16 +113,6 @@
       "noCompleteBars": "No complete four-beat bars detected",
       "cancelled": "Auto beat detection cancelled",
       "error": "Auto beat detection failed: {message}"
-    },
-    "speechRecognition": {
-      "title": "Speech Recognition",
-      "extractingAudio": "Extracting audio...",
-      "uploading": "Uploading audio...",
-      "creatingTask": "Creating recognition task...",
-      "processing": "Processing speech recognition...",
-      "success": "Speech recognition completed",
-      "error": "Speech recognition failed: {message}",
-      "cancelled": "Speech recognition cancelled"
     }
   }
 }

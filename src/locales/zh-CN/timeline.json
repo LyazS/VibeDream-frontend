@@ -44,7 +44,6 @@
         "showBeat1": "显示节拍 1",
         "showBeat1234": "显示节拍 1 2 3 4",
         "clearAIMarks": "清除自动节拍",
-        "speechRecognition": "语音识别",
         "duplicateClip": "复制片段",
         "clearAllMarkers": "清除所有标记",
         "clearManualMarkers": "清除手动标记",
@@ -114,16 +113,6 @@
       "noCompleteBars": "未检测到完整四拍",
       "cancelled": "自动节拍已取消",
       "error": "自动节拍失败: {message}"
-    },
-    "speechRecognition": {
-      "title": "语音识别",
-      "extractingAudio": "正在提取音频...",
-      "uploading": "正在上传音频...",
-      "creatingTask": "正在创建识别任务...",
-      "processing": "正在识别语音...",
-      "success": "语音识别任务已提交",
-      "error": "语音识别失败: {message}",
-      "cancelled": "语音识别已取消"
     }
   }
 }

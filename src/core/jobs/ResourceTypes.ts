@@ -2,7 +2,7 @@
  * Resource-first 任务中心的核心类型定义。
  *
  * 这里的“资源”不是 UI 上的一条任务，而是业务真正想要的 ready 状态，
- * 例如 media-ready、ai-generated-media、asr-subtitles。JobRuntime 根据这些
+ * 例如 media-ready、ai-generated-media。JobRuntime 根据这些
  * ResourceRequest 构建运行态 DAG，并把 DAG 投影成任务中心视图。
  */
 
@@ -31,8 +31,6 @@ export type ResourceType =
   | 'ai-task-submitted'
   | 'remote-task-completed'
   | 'ai-generated-media'
-  | 'asr-subtitles'
-  | 'asr-remote-task-completed'
   | 'effect-template-ready'
 
 /**
@@ -48,7 +46,7 @@ export type ResourceStatus = 'idle' | 'queued' | 'running' | 'succeeded' | 'fail
 /**
  * 调度队列。不同资源类型进入不同队列，避免重型本地计算、远程轮询和导出互相抢占。
  */
-export type ResourceQueue = 'ai-remote' | 'asr' | 'local-heavy' | 'export' | 'background'
+export type ResourceQueue = 'ai-remote' | 'local-heavy' | 'export' | 'background'
 
 /**
  * 运行策略，不参与资源身份计算。
