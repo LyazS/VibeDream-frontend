@@ -104,9 +104,7 @@
       "titles": {
         "mediaReady": "准备素材",
         "mediaIndexing": "索引素材",
-        "musicSemantic": "音乐语义分析",
         "timelineItemReady": "准备时间轴素材",
-        "aiGeneratedMedia": "生成 AI 素材",
         "effectTemplateReady": "下载效果素材"
       },
       "statuses": {

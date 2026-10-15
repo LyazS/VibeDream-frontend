@@ -9,7 +9,6 @@ import type {
 } from '@/core/mediaitem/types'
 import type { UnifiedMediaModule } from '@/core/modules/UnifiedMediaModule'
 import { RENDERER_FPS } from '@/core/mediabunny/constant'
-import type { FileData } from '@/core/datasource/providers/ai-generation/types'
 import type {
   UnifiedTimelineItemData,
   VideoMediaConfig,
@@ -55,7 +54,8 @@ export type VideoSegmentExportPlan =
   | {
       exportKind: 'video'
       segment: VideoSceneSegment
-      fileData: FileData
+      fileName: string
+      timelineItemId: string
       exportOptions?: UploadFileExportOptions
     }
   | {
@@ -67,7 +67,8 @@ export type VideoSegmentExportPlan =
         outputWidth?: number
         outputHeight?: number
       }
-      fileData: FileData
+      fileName: string
+      timelineItemId: string
       exportOptions?: UploadFileExportOptions
     }
 

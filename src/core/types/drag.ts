@@ -3,10 +3,6 @@
  * 基于新架构从零开始实现
  */
 
-import type {
-  FileInputConfig,
-  MultiFileData,
-} from '@/core/datasource/providers/ai-generation/types'
 import type { AssetKind, EffectType } from '@/core/asset/types'
 import type { AnyEffectPackagePayload } from '@/core/effect-package/types'
 import type { MediaTypeOrUnknown } from '@/core/mediaitem/types'
@@ -59,7 +55,6 @@ export enum DropTargetType {
   FOLDER = 'folder', // 文件夹
   TAB = 'tab', // 垂直标签页
   TIMELINE_TRACK = 'timeline-track', // 时间轴轨道
-  AI_GENERATION_PANEL = 'ai-generation-panel', // AI生成面板
   CLIP_FILTER_DROPZONE = 'clip-filter-dropzone', // 片段滤镜专用投放区
 }
 
@@ -153,17 +148,6 @@ export interface FolderOrTabDropTargetInfo {
   position?: never // 不允许有position
 }
 
-/**
- * AI生成面板拖拽目标信息
- */
-export interface AIGenerationPanelDropTargetInfo {
-  targetType: DropTargetType.AI_GENERATION_PANEL
-  fieldConfig: FileInputConfig // 字段配置信息
-  targetIndex?: number // 目标槽位索引
-  currentFiles?: MultiFileData // 当前已有文件
-  position?: never
-}
-
 export interface ClipFilterDropTargetInfo {
   targetType: DropTargetType.CLIP_FILTER_DROPZONE
   timelineItemId: string
@@ -176,7 +160,6 @@ export interface ClipFilterDropTargetInfo {
 export type DropTargetInfo =
   | TimelineTrackDropTargetInfo
   | FolderOrTabDropTargetInfo
-  | AIGenerationPanelDropTargetInfo
   | ClipFilterDropTargetInfo
 
 // ==================== 拖拽预览数据（保留现有定义） ====================

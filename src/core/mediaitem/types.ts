@@ -72,7 +72,7 @@ export interface UnifiedMediaItemData {
 
   // ==================== 元数据（状态相关） ====================
   duration?: number // 媒体时长（帧数），可能在不同阶段获得：服务器提供、用户输入、解析等
-  metadata?: UnifiedMediaItemMetadata // AI 生成的元数据
+  metadata?: UnifiedMediaItemMetadata // 素材分析元数据
 }
 
 /**
@@ -83,60 +83,6 @@ export interface UnifiedMediaItemMetadata {
   indexing?: UnifiedMediaIndexMetadata
   /** 本地 All-In-One 音乐结构分析结果 */
   musicAnalysis?: MusicAnalysisMetadata
-  /** Two-stage LLM music facts and locally anchored editing recommendations. */
-  musicSemantic?: MusicSemanticMetadata
-}
-
-export type MusicSemanticStatus =
-  | 'pending'
-  | 'processing'
-  | 'completed'
-  | 'partial_failed'
-  | 'failed'
-
-export interface MusicSemanticMetadata {
-  status: MusicSemanticStatus
-  lastTaskId?: string
-  failedSectionIds?: string[]
-  global?: { genres?: string[]; rhythm?: string; energyArc?: string }
-  sections?: MusicSemanticSection[]
-}
-
-export interface MusicSemanticResult {
-  global?: MusicSemanticMetadata['global']
-  sections: MusicSemanticSection[]
-  status?: 'completed' | 'partial_failed'
-  failedSectionIds?: string[]
-}
-
-export interface MusicSemanticSection {
-  sectionId: string
-  start: number
-  end: number
-  semantic: {
-    lyrics: string
-    rhythm: string
-    energy: string
-    arrangement: string
-    vocal: string
-  }
-  refinement: {
-    status: 'completed' | 'local_fallback'
-    editingNotes: string
-    shotPace: string
-    anchors: MusicSemanticAnchor[]
-  }
-}
-
-export interface MusicSemanticAnchor {
-  anchorId: string
-  time: number
-  eventLabel: string
-  roles: string[]
-  strength: number
-  decision: string
-  recommendedUses: string[]
-  reason: string
 }
 
 export interface MusicAnalysisSegment {

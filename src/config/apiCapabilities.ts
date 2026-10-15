@@ -9,7 +9,6 @@ export type ApiCapability =
   | 'item-properties'
   | 'other'
   | 'ai-tasks'
-  | 'ai-generation'
   | AiTaskType
 
 const capabilityPrefixes: readonly [string, ApiCapability][] = [
@@ -39,7 +38,6 @@ function readEnabledCapabilities(): ReadonlySet<ApiCapability> {
           'item-properties',
           'other',
           'ai-tasks',
-          'ai-generation',
           ...AI_TASK_TYPES,
         ].includes(value),
       ),

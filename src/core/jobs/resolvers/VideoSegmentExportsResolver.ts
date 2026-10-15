@@ -53,13 +53,6 @@ export class VideoSegmentExportsResolver
 
       if (isShortSegment(segment.durationN)) {
         const { frameCount, timestampsMs } = computeFrameTimestampsMs(segment.durationN)
-        const fileData = {
-          __type__: 'FileData' as const,
-          name: buildSegmentFileName(mediaItem.name, segment.segmentIndex),
-          mediaType: 'video' as const,
-          timelineItemId: timelineItem.id,
-          source: 'timeline-item' as const,
-        }
         exportPlans.push({
           exportKind: 'frames',
           segment,
@@ -69,20 +62,16 @@ export class VideoSegmentExportsResolver
             outputWidth: exportSize?.outputWidth,
             outputHeight: exportSize?.outputHeight,
           },
-          fileData,
+          fileName: buildSegmentFileName(mediaItem.name, segment.segmentIndex),
+          timelineItemId: timelineItem.id,
           exportOptions: exportSize,
         })
       } else {
         exportPlans.push({
           exportKind: 'video',
           segment,
-          fileData: {
-            __type__: 'FileData',
-            name: buildSegmentFileName(mediaItem.name, segment.segmentIndex),
-            mediaType: 'video',
-            timelineItemId: timelineItem.id,
-            source: 'timeline-item',
-          },
+          fileName: buildSegmentFileName(mediaItem.name, segment.segmentIndex),
+          timelineItemId: timelineItem.id,
           exportOptions: exportSize,
         })
       }

@@ -9,7 +9,6 @@
       <template #prefix>
         <component :is="IconComponents.SPARKLING" size="16px" style="padding: 0" />
       </template>
-      <n-tab v-if="showGeneration" name="ai-generate" :tab="t('aiPanel.aiGenerate')"> </n-tab>
       <n-tab v-if="showAgent" name="agent" :tab="t('aiPanel.agent')"> </n-tab>
       <n-tab
         v-if="showItemPropertyTest"
@@ -52,13 +51,6 @@
       </template>
     </n-tabs>
     <div
-      v-if="showGeneration"
-      v-show="unifiedStore.aiPanelActiveTab === 'ai-generate'"
-      style="flex: 1; display: flex; flex-direction: column; overflow: hidden"
-    >
-      <GeneratePanel />
-    </div>
-    <div
       v-if="showAgent"
       v-show="unifiedStore.aiPanelActiveTab === 'agent'"
       style="flex: 1; display: flex; flex-direction: column; overflow: hidden"
@@ -98,7 +90,6 @@ import AgentPanel from '../agent/AgentPanel.vue'
 import MediaSearchTestPanel from '../devtools/MediaSearchTestPanel.vue'
 import TransitionTestPanel from '../devtools/TransitionTestPanel.vue'
 import ItemPropertyTestPanel from '../devtools/ItemPropertyTestPanel.vue'
-import GeneratePanel from '../ai-generation/GeneratePanel.vue'
 import { useAppI18n } from '@/core/composables/useI18n'
 import { useUnifiedStore } from '@/core/unifiedStore'
 import {
@@ -111,7 +102,6 @@ import { enabledApiCapabilities } from '@/config/apiCapabilities'
 const { t } = useAppI18n()
 const unifiedStore = useUnifiedStore()
 const showAgent = enabledApiCapabilities.has('agent')
-const showGeneration = enabledApiCapabilities.has('ai-generation')
 const showMediaSearchTest =
   SHOW_MEDIA_SEARCH_TEST &&
   enabledApiCapabilities.has('ai-tasks') &&

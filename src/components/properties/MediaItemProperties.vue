@@ -142,14 +142,6 @@
     <div v-if="showActions" class="properties-section actions-section">
       <h3 class="section-title">{{ t('properties.mediaItem.actions') }}</h3>
 
-      <!-- 重试按钮（error/cancelled 状态，仅 AI 生成类型） -->
-      <n-button v-if="canRetry" type="primary" size="small" @click="handleRetry">
-        <template #icon>
-          <component :is="IconComponents.REFRESH" size="16px" />
-        </template>
-        {{ t('properties.mediaItem.retry') }}
-      </n-button>
-
       <n-button v-if="canCancelMedia" type="error" size="small" @click="handleCancel">
         <template #icon>
           <component :is="IconComponents.CLOSE" size="16px" />
@@ -175,8 +167,6 @@ import { useAppI18n } from '@/core/composables/useI18n'
 import { framesToTimecode } from '@/core/utils/timeUtils'
 import { IconComponents } from '@/constants/iconComponents'
 import type { UnifiedMediaItemData } from '@/core/mediaitem/types'
-import { globalMetaFileManager } from '@/core/managers/media/globalMetaFileManager'
-import { resetAIGeneratedMediaForRetry } from '@/core/jobs'
 import MusicAnalysisPropertiesSection from '@/components/properties/MusicAnalysisPropertiesSection.vue'
 
 interface Props {
@@ -332,13 +322,6 @@ const showActions = computed(() => {
   )
 })
 
-// 是否可以重试（仅 AI 生成类型）
-const canRetry = computed(() => {
-  const status = props.mediaItem.mediaStatus
-  const isAIType = props.mediaItem.source.type === 'ai-generation'
-  return (status === 'error' || status === 'cancelled') && isAIType
-})
-
 const canCancelMedia = computed(() => {
   return (
     ['pending', 'asyncprocessing', 'decoding'].includes(props.mediaItem.mediaStatus) &&
@@ -377,51 +360,6 @@ function getMediaTypeLabel(mediaType: string): string {
       return t('media.text')
     default:
       return t('media.unknown')
-  }
-}
-
-// 重试AI生成素材
-async function retryAIGeneration(mediaItem: UnifiedMediaItemData): Promise<void> {
-  resetAIGeneratedMediaForRetry(mediaItem)
-
-  const saved = await globalMetaFileManager.saveMetaFile(mediaItem)
-  if (!saved) {
-    throw new Error(`保存重试状态失败: ${mediaItem.name}`)
-  }
-
-  void unifiedStore.ensureAIGeneratedMedia(mediaItem.id).catch((error) => {
-    console.error('重试 AI 生成素材失败:', error)
-    unifiedStore.messageError(
-      t('media.retryFailed', {
-        error: error instanceof Error ? error.message : '未知错误',
-      }),
-    )
-  })
-
-  unifiedStore.messageSuccess(t('media.retryStarted', { name: mediaItem.name }))
-}
-
-// 重试操作
-async function handleRetry(): Promise<void> {
-  const mediaItem = props.mediaItem
-  if (!mediaItem) return
-
-  try {
-    // 🌟 只支持 AI 生成类型的重试
-    if (mediaItem.source.type === 'ai-generation') {
-      await retryAIGeneration(mediaItem)
-    } else {
-      // 其他类型不支持重试
-      unifiedStore.messageWarning(t('media.retryNotSupported'))
-      return
-    }
-  } catch (error) {
-    console.error('重试失败:', error)
-    unifiedStore.messageError(
-      t('media.retryFailed', {
-        error: error instanceof Error ? error.message : '未知错误',
-      }),
-    )
   }
 }
 

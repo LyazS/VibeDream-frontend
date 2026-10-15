@@ -48,24 +48,7 @@ export {
   type MusicStructureAnalysisInput,
   type MusicStructureAnalysisResult,
 } from './resolvers/MusicStructureAnalysisResolver'
-export {
-  MUSIC_SEMANTIC_TASK_SUBMIT_RESOURCE_TYPE,
-  MUSIC_SEMANTIC_TASK_COMPLETE_RESOURCE_TYPE,
-  MUSIC_SEMANTIC_METADATA_WRITEBACK_RESOURCE_TYPE,
-  createMusicSemanticTaskSubmitRequest,
-  createMusicSemanticTaskCompleteRequest,
-  createMusicSemanticMetadataWritebackRequest,
-  canResumeMusicSemanticFromRemote,
-  shouldRecoverMusicSemantic,
-  setMusicSemanticMetadata,
-  persistMusicSemantic,
-  type MusicSemanticModule,
-  type MusicSemanticTaskSubmitResult,
-  type MusicSemanticTaskCompleteResult,
-} from './resolvers/musicSemanticShared'
-export { MusicSemanticTaskSubmitResolver, createMusicSemanticTaskSubmitResolver } from './resolvers/MusicSemanticTaskSubmitResolver'
-export { MusicSemanticTaskCompleteResolver, createMusicSemanticTaskCompleteResolver } from './resolvers/MusicSemanticTaskCompleteResolver'
-export { MusicSemanticMetadataWritebackResolver, createMusicSemanticMetadataWritebackResolver } from './resolvers/MusicSemanticMetadataWritebackResolver'
+
 export {
   canResumeMediaIndexingFromRemote,
   createVideoSceneSegmentsRequest,
@@ -146,36 +129,7 @@ export {
   type MediaSourceProcessedInput,
   type MediaSourceProcessedResult,
 } from './resolvers/MediaSourceProcessedResolver'
-export {
-  AI_GENERATED_MEDIA_RESOURCE_TYPE,
-  AI_INPUT_PREPARED_RESOURCE_TYPE,
-  AI_TASK_SUBMITTED_RESOURCE_TYPE,
-  REMOTE_TASK_COMPLETED_RESOURCE_TYPE,
-  AIGeneratedMediaResolver,
-  AIInputPreparedResolver,
-  AITaskSubmittedResolver,
-  RemoteTaskCompletedResolver,
-  createAIGeneratedMediaRequest,
-  createAIGeneratedMediaResolver,
-  createAIInputPreparedRequest,
-  createAIInputPreparedResolver,
-  createAITaskSubmittedRequest,
-  createAITaskSubmittedResolver,
-  createRemoteTaskCompletedRequest,
-  createRemoteTaskCompletedResolver,
-  isAIGeneratedMediaItem,
-  isAIGeneratedMediaRecoverable,
-  resetAIGeneratedMediaForRetry,
-  type AIGeneratedMediaInput,
-  type AIGeneratedMediaProvider,
-  type AIGeneratedMediaResult,
-  type AIInputPreparedInput,
-  type AIInputPreparedResult,
-  type RemoteTaskSubmittedInput,
-  type RemoteTaskSubmittedResult,
-  type RemoteTaskCompletedInput,
-  type RemoteTaskCompletedResult,
-} from './resolvers/AIGeneratedMediaResolver'
+
 export {
   TIMELINE_ITEM_READY_RESOURCE_TYPE,
   TimelineItemReadyResolver,

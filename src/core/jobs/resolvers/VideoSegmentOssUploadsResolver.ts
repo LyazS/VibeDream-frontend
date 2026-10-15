@@ -67,12 +67,12 @@ export class VideoSegmentOssUploadsResolver
       })
 
       if (plan.exportKind === 'frames') {
-        const timelineItem = getTimelineItem(plan.fileData.timelineItemId!)
+        const timelineItem = getTimelineItem(plan.timelineItemId)
         if (!timelineItem) {
-          throw new Error(`找不到时间轴项: ${plan.fileData.timelineItemId}`)
+          throw new Error(`找不到时间轴项: ${plan.timelineItemId}`)
         }
         if (!TimelineItemQueries.isVideoTimelineItem(timelineItem)) {
-          throw new Error(`仅视频时间轴项支持导出帧: ${plan.fileData.timelineItemId}`)
+          throw new Error(`仅视频时间轴项支持导出帧: ${plan.timelineItemId}`)
         }
 
         const videoBlob = await exportTimelineItem({
@@ -85,7 +85,7 @@ export class VideoSegmentOssUploadsResolver
         // 视觉打标改用抽帧，以控制模型输入量并保留关键时间点。
         const embeddingVideoResult = await CloudflareTemporaryFileUploader.uploadBlob(
           videoBlob,
-          { capability: 'indexing', purpose: 'embedding', fileName: plan.fileData.name },
+          { capability: 'indexing', purpose: 'embedding', fileName: plan.fileName },
           (progress) => {
             const normalized =
               (index + progress / 100) / Math.max(1, exportResult.exportPlans.length)
@@ -94,11 +94,12 @@ export class VideoSegmentOssUploadsResolver
               stage: 'uploading-segments',
               message: `上传短视频（向量化） ${index + 1}/${exportResult.exportPlans.length}`,
             })
-          }, ctx.signal,
+          },
+          ctx.signal,
         )
 
         if (!embeddingVideoResult.success || !embeddingVideoResult.url) {
-          throw new Error(embeddingVideoResult.error || `上传短视频分片失败: ${plan.fileData.name}`)
+          throw new Error(embeddingVideoResult.error || `上传短视频分片失败: ${plan.fileName}`)
         }
 
         const frameBlobs = await exportVideoFrames({
@@ -125,7 +126,8 @@ export class VideoSegmentOssUploadsResolver
                 stage: 'uploading-segments',
                 message: `上传帧 ${frameIdx + 1}/${frameBlobs.length} ${index + 1}/${exportResult.exportPlans.length}`,
               })
-            }, ctx.signal,
+            },
+            ctx.signal,
           )
 
           if (!frameUploadResult.success || !frameUploadResult.url) {
@@ -149,9 +151,9 @@ export class VideoSegmentOssUploadsResolver
           embeddingVideoUrl: embeddingVideoResult.url,
         })
       } else {
-        const timelineItem = getTimelineItem(plan.fileData.timelineItemId!)
+        const timelineItem = getTimelineItem(plan.timelineItemId)
         if (!timelineItem) {
-          throw new Error(`找不到时间轴项: ${plan.fileData.timelineItemId}`)
+          throw new Error(`找不到时间轴项: ${plan.timelineItemId}`)
         }
 
         const videoBlob = await exportTimelineItem({
@@ -163,7 +165,7 @@ export class VideoSegmentOssUploadsResolver
         // 两次上传携带不同 purpose，即使媒体内容相同也不能混用模型用途对应的临时资源。
         const taggingResult = await CloudflareTemporaryFileUploader.uploadBlob(
           videoBlob,
-          { capability: 'indexing', purpose: 'tagging', fileName: plan.fileData.name },
+          { capability: 'indexing', purpose: 'tagging', fileName: plan.fileName },
           (progress) => {
             const normalized =
               (index + progress / 200) / Math.max(1, exportResult.exportPlans.length)
@@ -172,16 +174,17 @@ export class VideoSegmentOssUploadsResolver
               stage: 'uploading-segments',
               message: `上传打标视频 ${index + 1}/${exportResult.exportPlans.length}`,
             })
-          }, ctx.signal,
+          },
+          ctx.signal,
         )
 
         if (!taggingResult.success || !taggingResult.url) {
-          throw new Error(taggingResult.error || `上传打标视频分片失败: ${plan.fileData.name}`)
+          throw new Error(taggingResult.error || `上传打标视频分片失败: ${plan.fileName}`)
         }
 
         const embeddingResult = await CloudflareTemporaryFileUploader.uploadBlob(
           videoBlob,
-          { capability: 'indexing', purpose: 'embedding', fileName: plan.fileData.name },
+          { capability: 'indexing', purpose: 'embedding', fileName: plan.fileName },
           (progress) => {
             const normalized =
               (index + 0.5 + progress / 200) / Math.max(1, exportResult.exportPlans.length)
@@ -190,11 +193,12 @@ export class VideoSegmentOssUploadsResolver
               stage: 'uploading-segments',
               message: `上传向量化视频 ${index + 1}/${exportResult.exportPlans.length}`,
             })
-          }, ctx.signal,
+          },
+          ctx.signal,
         )
 
         if (!embeddingResult.success || !embeddingResult.url) {
-          throw new Error(embeddingResult.error || `上传向量化视频分片失败: ${plan.fileData.name}`)
+          throw new Error(embeddingResult.error || `上传向量化视频分片失败: ${plan.fileName}`)
         }
 
         uploadedSegments.push({

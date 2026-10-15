@@ -18,11 +18,6 @@ import { createUnifiedMediaBunnyModule } from '@/core/modules/UnifiedMediaBunnyM
 import { createUnifiedUIModule } from '@/core/modules/UnifiedUIModule'
 import { createUnifiedAgentModule } from '@/core/modules/UnifiedAgentModule'
 import {
-  AI_GENERATED_MEDIA_RESOURCE_TYPE,
-  createAIGeneratedMediaRequest,
-  createAIGeneratedMediaResolver,
-  createAIInputPreparedResolver,
-  createAITaskSubmittedResolver,
   createEffectTemplateReadyRequest,
   createEffectTemplateReadyResolver,
   createMediaIndexMetadataWritebackRequest,
@@ -31,11 +26,6 @@ import {
   createMediaIndexTaskSubmitResolver,
   createMusicStructureAnalysisRequest,
   createMusicStructureAnalysisResolver,
-  createMusicSemanticTaskSubmitResolver,
-  createMusicSemanticTaskCompleteResolver,
-  createMusicSemanticMetadataWritebackResolver,
-  createMusicSemanticMetadataWritebackRequest,
-  MUSIC_SEMANTIC_METADATA_WRITEBACK_RESOURCE_TYPE,
   getResourceId,
   createJobRuntime,
   createMediaDecodedResolver,
@@ -43,7 +33,6 @@ import {
   createMediaReadyRequest,
   createMediaReadyResolver,
   createMediaSourceProcessedResolver,
-  createRemoteTaskCompletedResolver,
   MEDIA_INDEX_METADATA_WRITEBACK_RESOURCE_TYPE,
   MUSIC_STRUCTURE_ANALYSIS_RESOURCE_TYPE,
   MEDIA_READY_RESOURCE_TYPE,
@@ -163,27 +152,6 @@ export const useUnifiedStore = defineStore('unified', () => {
     }),
   )
   jobRuntime.registerResolver(
-    createMusicSemanticTaskSubmitResolver({
-      getMediaItem: unifiedMediaModule.getMediaItem,
-      ensureMediaReady,
-      ensureMusicStructureAnalysis,
-    }),
-  )
-  jobRuntime.registerResolver(
-    createMusicSemanticTaskCompleteResolver({
-      getMediaItem: unifiedMediaModule.getMediaItem,
-      ensureMediaReady,
-      ensureMusicStructureAnalysis,
-    }),
-  )
-  jobRuntime.registerResolver(
-    createMusicSemanticMetadataWritebackResolver({
-      getMediaItem: unifiedMediaModule.getMediaItem,
-      ensureMediaReady,
-      ensureMusicStructureAnalysis,
-    }),
-  )
-  jobRuntime.registerResolver(
     createVideoSceneSegmentsResolver({
       getMediaItem: unifiedMediaModule.getMediaItem,
       ensureMediaReady,
@@ -262,30 +230,6 @@ export const useUnifiedStore = defineStore('unified', () => {
     }),
   )
   jobRuntime.registerResolver(
-    createAIInputPreparedResolver({
-      getMediaItem: unifiedMediaModule.getMediaItem,
-      ensureMediaReady,
-    }),
-  )
-  jobRuntime.registerResolver(
-    createAITaskSubmittedResolver({
-      getMediaItem: unifiedMediaModule.getMediaItem,
-      ensureMediaReady,
-    }),
-  )
-  jobRuntime.registerResolver(
-    createRemoteTaskCompletedResolver({
-      getMediaItem: unifiedMediaModule.getMediaItem,
-      ensureMediaReady,
-    }),
-  )
-  jobRuntime.registerResolver(
-    createAIGeneratedMediaResolver({
-      getMediaItem: unifiedMediaModule.getMediaItem,
-      ensureMediaReady,
-    }),
-  )
-  jobRuntime.registerResolver(
     createTimelineItemReadyResolver({
       getTimelineItem: unifiedTimelineModule.getTimelineItem,
       getMediaItem: unifiedMediaModule.getMediaItem,
@@ -310,9 +254,6 @@ export const useUnifiedStore = defineStore('unified', () => {
 
   function ensureMediaReady(mediaId: string) {
     return jobRuntime.ensure(createMediaReadyRequest(mediaId))
-  }
-  function ensureAIGeneratedMedia(mediaId: string) {
-    return jobRuntime.ensure(createAIGeneratedMediaRequest(mediaId))
   }
   async function ensureMediaIndexing(mediaId: string) {
     const mediaItem = unifiedMediaModule.getMediaItem(mediaId)
@@ -341,23 +282,6 @@ export const useUnifiedStore = defineStore('unified', () => {
   function ensureMusicStructureAnalysis(mediaId: string, force = false) {
     return jobRuntime.ensure(createMusicStructureAnalysisRequest(mediaId, { force }))
   }
-  async function ensureMusicSemanticAnalysis(mediaId: string) {
-    const mediaItem = unifiedMediaModule.getMediaItem(mediaId)
-    if (!mediaItem || (mediaItem.mediaType !== 'audio' && mediaItem.mediaType !== 'video')) {
-      throw new Error('仅音频或视频素材支持音乐语义分析')
-    }
-    const current = mediaItem.metadata?.musicSemantic
-    if (!current || (current.status !== 'pending' && current.status !== 'processing')) {
-      mediaItem.metadata = { ...mediaItem.metadata, musicSemantic: { status: 'pending' } }
-      await persistMediaItem(mediaItem)
-    }
-    return jobRuntime.ensure(createMusicSemanticMetadataWritebackRequest(mediaId))
-  }
-  function cancelMusicSemanticAnalysis(mediaId: string) {
-    const mediaItem = unifiedMediaModule.getMediaItem(mediaId)
-    if (mediaItem?.metadata?.musicSemantic?.status !== 'pending') return Promise.resolve(false)
-    return jobRuntime.cancel(`${MUSIC_SEMANTIC_METADATA_WRITEBACK_RESOURCE_TYPE}:${mediaId}`)
-  }
   function cancelMusicStructureAnalysis(mediaId: string) {
     return jobRuntime.cancel(getResourceId(MUSIC_STRUCTURE_ANALYSIS_RESOURCE_TYPE, mediaId))
   }
@@ -376,7 +300,6 @@ export const useUnifiedStore = defineStore('unified', () => {
   }
   function findMediaProcessingTaskView(mediaId: string) {
     const candidateRootIds = [
-      getResourceId(AI_GENERATED_MEDIA_RESOURCE_TYPE, mediaId),
       getResourceId(MEDIA_READY_RESOURCE_TYPE, mediaId),
       getResourceId(MEDIA_INDEX_METADATA_WRITEBACK_RESOURCE_TYPE, mediaId),
     ]
@@ -399,9 +322,7 @@ export const useUnifiedStore = defineStore('unified', () => {
     return Promise.resolve(null)
   }
   unifiedProjectModule.setMediaReadyEnsurer(ensureMediaReady)
-  unifiedProjectModule.setAIGeneratedMediaEnsurer(ensureAIGeneratedMedia)
   unifiedProjectModule.setMediaIndexingEnsurer(ensureMediaIndexing)
-  unifiedProjectModule.setMusicSemanticEnsurer(ensureMusicSemanticAnalysis)
   unifiedProjectModule.setEffectTemplateReadyEnsurer(ensureEffectTemplateReady)
   unifiedProjectModule.setTimelineItemResolvedEnsurer(ensureTimelineItemResolved)
   unifiedDirectoryModule.setMediaReadyEnsurer(ensureMediaReady)
@@ -563,9 +484,6 @@ export const useUnifiedStore = defineStore('unified', () => {
     findMediaProcessingTaskView,
     ensureMediaReady,
     ensureMusicStructureAnalysis,
-    ensureMusicSemanticAnalysis,
-    cancelMusicSemanticAnalysis,
-    ensureAIGeneratedMedia,
     ensureMediaIndexing,
     cancelMusicStructureAnalysis,
     ensureTimelineItemReady,

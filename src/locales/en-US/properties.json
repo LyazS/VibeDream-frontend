@@ -317,43 +317,9 @@
           "solo": "Solo",
           "verse": "Verse",
           "chorus": "Chorus"
-        },
-        "semantic": {
-          "title": "AI Semantic Summary",
-          "count": "{sections} sections · {anchors} anchors",
-          "analyze": "AI Semantic Analysis",
-          "reanalyze": "Reanalyze Semantics",
-          "retry": "Retry Semantic Analysis",
-          "processing": "Analyzing Semantics",
-          "failed": "Music semantic analysis failed",
-          "anchors": "selected anchors",
-          "genres": "Style",
-          "rhythm": "Rhythm",
-          "energyArc": "Energy arc",
-          "lyrics": "Lyrics",
-          "energy": "Energy",
-          "arrangement": "Arrangement",
-          "vocal": "Vocal",
-          "editingNotes": "Editing note",
-          "shotPace": "Shot pace",
-          "anchorCount": "{count} anchors",
-          "partialFailed": "{count} sections use local fallback",
-          "noValue": "No detail",
-          "shotPaceValues": {
-            "slow": "Slow",
-            "medium": "Medium",
-            "fast": "Fast",
-            "variable": "Variable",
-            "unknown": "Unknown"
-          },
-          "decisions": {
-            "primary": "Primary",
-            "secondary": "Secondary"
-          }
         }
       },
       "actions": "Actions",
-      "retry": "Retry",
       "cancel": "Cancel",
       "errorDetails": "Error Details"
     },

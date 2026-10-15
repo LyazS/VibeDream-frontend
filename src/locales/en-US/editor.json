@@ -104,9 +104,7 @@
       "titles": {
         "mediaReady": "Preparing Media",
         "mediaIndexing": "Indexing Media",
-        "musicSemantic": "Music Semantic Analysis",
         "timelineItemReady": "Preparing Timeline Media",
-        "aiGeneratedMedia": "Generating AI Media",
         "effectTemplateReady": "Downloading Effect Template"
       },
       "statuses": {

@@ -9,7 +9,6 @@ import type {
   MediaTypeOrUnknown,
   MusicAnalysisMetadata,
   MusicAnalysisSegment,
-  MusicSemanticMetadata,
   UnifiedImageMediaIndexMetadata,
   UnifiedVideoIndexSegmentSummary,
   UnifiedMediaItemMetadata,
@@ -212,73 +211,6 @@ function isMusicAnalysisMetadata(value: unknown): value is MusicAnalysisMetadata
   )
 }
 
-function isMusicSemanticMetadata(value: unknown): value is MusicSemanticMetadata {
-  if (!isRecord(value)) return false
-  const statuses = ['pending', 'processing', 'completed', 'partial_failed', 'failed']
-  if (
-    !statuses.includes(String(value.status)) ||
-    !isOptionalString(value.lastTaskId) ||
-    (value.failedSectionIds !== undefined &&
-      (!Array.isArray(value.failedSectionIds) ||
-        !value.failedSectionIds.every((item) => typeof item === 'string')))
-  )
-    return false
-  if (value.global !== undefined) {
-    if (!isRecord(value.global)) return false
-    if (
-      value.global.genres !== undefined &&
-      (!Array.isArray(value.global.genres) ||
-        !value.global.genres.every((item) => typeof item === 'string'))
-    )
-      return false
-    if (!isOptionalString(value.global.rhythm) || !isOptionalString(value.global.energyArc))
-      return false
-  }
-  if (value.sections === undefined) return true
-  if (!Array.isArray(value.sections)) return false
-  return value.sections.every((section) => {
-    if (
-      !isRecord(section) ||
-      typeof section.sectionId !== 'string' ||
-      !isFiniteNumber(section.start) ||
-      !isFiniteNumber(section.end) ||
-      section.end <= section.start
-    )
-      return false
-    if (!isRecord(section.semantic)) return false
-    const semantic = section.semantic
-    if (
-      !['lyrics', 'rhythm', 'energy', 'arrangement', 'vocal'].every(
-        (key) => typeof semantic[key] === 'string',
-      )
-    )
-      return false
-    const refinement = section.refinement
-    if (
-      !isRecord(refinement) ||
-      !['completed', 'local_fallback'].includes(String(refinement.status)) ||
-      typeof refinement.editingNotes !== 'string' ||
-      typeof refinement.shotPace !== 'string' ||
-      !Array.isArray(refinement.anchors)
-    )
-      return false
-    return refinement.anchors.every(
-      (anchor) =>
-        isRecord(anchor) &&
-        typeof anchor.anchorId === 'string' &&
-        isFiniteNumber(anchor.time) &&
-        typeof anchor.eventLabel === 'string' &&
-        Array.isArray(anchor.roles) &&
-        anchor.roles.every((role) => typeof role === 'string') &&
-        isFiniteNumber(anchor.strength) &&
-        typeof anchor.decision === 'string' &&
-        Array.isArray(anchor.recommendedUses) &&
-        anchor.recommendedUses.every((item) => typeof item === 'string') &&
-        typeof anchor.reason === 'string',
-    )
-  })
-}
-
 function isOptionalNumber(value: unknown): value is number | undefined {
   return value === undefined || typeof value === 'number'
 }
@@ -310,8 +242,7 @@ function isUnifiedMediaItemMetadata(value: unknown): value is UnifiedMediaItemMe
 
   return (
     (value.indexing === undefined || isUnifiedMediaIndexMetadata(value.indexing)) &&
-    (value.musicAnalysis === undefined || isMusicAnalysisMetadata(value.musicAnalysis)) &&
-    (value.musicSemantic === undefined || isMusicSemanticMetadata(value.musicSemantic))
+    (value.musicAnalysis === undefined || isMusicAnalysisMetadata(value.musicAnalysis))
   )
 }
 
@@ -336,13 +267,6 @@ function isMediaPersistedSourceData(value: unknown): value is BaseDataSourcePers
   switch (value.type) {
     case 'user-selected':
       return true
-    case 'ai-generation':
-      return (
-        typeof value.aiTaskId === 'string' &&
-        isRecord(value.requestParams) &&
-        typeof value.taskStatus === 'string' &&
-        (value.resultData === undefined || isRecord(value.resultData))
-      )
     default:
       return false
   }

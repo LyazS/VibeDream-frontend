@@ -317,43 +317,9 @@
           "solo": "独奏",
           "verse": "主歌",
           "chorus": "副歌"
-        },
-        "semantic": {
-          "title": "AI 语义摘要",
-          "count": "{sections} 段 · {anchors} 个锚点",
-          "analyze": "AI 语义分析",
-          "reanalyze": "重新分析语义",
-          "retry": "重试语义分析",
-          "processing": "语义分析中",
-          "failed": "音乐语义分析失败",
-          "anchors": "个精选锚点",
-          "genres": "风格",
-          "rhythm": "节奏",
-          "energyArc": "能量走势",
-          "lyrics": "歌词",
-          "energy": "能量",
-          "arrangement": "编曲",
-          "vocal": "人声",
-          "editingNotes": "剪辑提示",
-          "shotPace": "镜头节奏",
-          "anchorCount": "{count} 个锚点",
-          "partialFailed": "{count} 个分段使用本地回退",
-          "noValue": "暂无",
-          "shotPaceValues": {
-            "slow": "慢",
-            "medium": "中",
-            "fast": "快",
-            "variable": "变化",
-            "unknown": "无法判断"
-          },
-          "decisions": {
-            "primary": "重点",
-            "secondary": "次要"
-          }
         }
       },
       "actions": "操作",
-      "retry": "重试",
       "cancel": "取消",
       "errorDetails": "错误详情"
     },

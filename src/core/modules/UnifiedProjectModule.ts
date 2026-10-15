@@ -18,7 +18,7 @@ import {
   parseEffectPackageId,
   type EffectPackageIdentity,
 } from '@/core/effect-template/commonTypes'
-import { shouldRecoverMediaIndexing, shouldRecoverMusicSemantic } from '@/core/jobs'
+import { shouldRecoverMediaIndexing } from '@/core/jobs'
 import { useProjectThumbnailService } from '@/core/composables/useProjectThumbnailService'
 import { framesToSeconds } from '@/core/utils/timeUtils'
 import { useAppI18n } from '@/core/composables/useI18n'
@@ -68,9 +68,7 @@ export function createUnifiedProjectModule(registry: ModuleRegistry) {
   const loadingDetails = ref('') // 详细信息
 
   let ensureMediaReadyForProjectLoad: ((mediaId: string) => Promise<unknown>) | null = null
-  let ensureAIGeneratedMediaForProjectLoad: ((mediaId: string) => Promise<unknown>) | null = null
   let ensureMediaIndexingForProjectLoad: ((mediaId: string) => Promise<unknown>) | null = null
-  let ensureMusicSemanticForProjectLoad: ((mediaId: string) => Promise<unknown>) | null = null
   let _ensureEffectTemplateReadyForProjectLoad: ((assetId: string) => Promise<unknown>) | null =
     null
   let ensureTimelineItemResolvedForProjectLoad:
@@ -121,16 +119,8 @@ export function createUnifiedProjectModule(registry: ModuleRegistry) {
     ensureMediaReadyForProjectLoad = ensurer
   }
 
-  function setAIGeneratedMediaEnsurer(ensurer: (mediaId: string) => Promise<unknown>): void {
-    ensureAIGeneratedMediaForProjectLoad = ensurer
-  }
-
   function setMediaIndexingEnsurer(ensurer: (mediaId: string) => Promise<unknown>): void {
     ensureMediaIndexingForProjectLoad = ensurer
-  }
-
-  function setMusicSemanticEnsurer(ensurer: (mediaId: string) => Promise<unknown>): void {
-    ensureMusicSemanticForProjectLoad = ensurer
   }
 
   function setEffectTemplateReadyEnsurer(ensurer: (assetId: string) => Promise<unknown>): void {
@@ -444,23 +434,6 @@ export function createUnifiedProjectModule(registry: ModuleRegistry) {
           continue
         }
 
-        if (isMediaAsset(mediaItem) && isRecoverableAIGeneratedMedia(mediaItem)) {
-          if (ensureAIGeneratedMediaForProjectLoad) {
-            void ensureAIGeneratedMediaForProjectLoad(mediaItem.id).catch((error) => {
-              console.error(
-                `❌ [rebuildMediaItems] 恢复 AI 生成媒体失败，已跳过: ${mediaItem.name}`,
-                error,
-              )
-            })
-          } else {
-            console.warn(
-              `⚠️ [rebuildMediaItems] ensureAIGeneratedMedia 未初始化，跳过恢复: ${mediaItem.name}`,
-            )
-          }
-          immediateCount++
-          continue
-        }
-
         if (isMediaAsset(mediaItem) && isRecoverableMediaIndexing(mediaItem)) {
           if (ensureMediaIndexingForProjectLoad) {
             void ensureMediaIndexingForProjectLoad(mediaItem.id).catch((error) => {
@@ -492,17 +465,6 @@ export function createUnifiedProjectModule(registry: ModuleRegistry) {
 
           immediateCount++
           continue
-        }
-
-        if (
-          isMediaAsset(mediaItem) &&
-          shouldRecoverMusicSemantic(mediaItem.metadata?.musicSemantic)
-        ) {
-          if (ensureMusicSemanticForProjectLoad) {
-            void ensureMusicSemanticForProjectLoad(mediaItem.id).catch((error) => {
-              console.error(`恢复音乐语义任务失败: ${mediaItem.name}`, error)
-            })
-          }
         }
 
         if (immediateLoadIds.has(mediaItem.id)) {
@@ -750,9 +712,7 @@ export function createUnifiedProjectModule(registry: ModuleRegistry) {
 
     // 加载进度方法
     setMediaReadyEnsurer,
-    setAIGeneratedMediaEnsurer,
     setMediaIndexingEnsurer,
-    setMusicSemanticEnsurer,
     setEffectTemplateReadyEnsurer,
     setTimelineItemResolvedEnsurer,
     updateLoadingProgress,
@@ -762,22 +722,6 @@ export function createUnifiedProjectModule(registry: ModuleRegistry) {
 
 // 导出类型定义
 export type UnifiedProjectModule = ReturnType<typeof createUnifiedProjectModule>
-
-function isRecoverableAIGeneratedMedia(mediaItem: UnifiedMediaItemData): boolean {
-  if (mediaItem.source.type === 'ai-generation') {
-    return (
-      mediaItem.mediaStatus !== 'error' &&
-      mediaItem.mediaStatus !== 'cancelled' &&
-      mediaItem.source.taskStatus !== 'FAILED' &&
-      mediaItem.source.taskStatus !== 'CANCELLED' &&
-      Boolean(
-        mediaItem.source.aiTaskId || mediaItem.source.resultData || mediaItem.source.requestParams,
-      )
-    )
-  }
-
-  return false
-}
 
 function isRecoverableMediaIndexing(mediaItem: UnifiedMediaItemData): boolean {
   if (mediaItem.mediaType !== 'video' && mediaItem.mediaType !== 'image') {

@@ -5,15 +5,6 @@
         <component :is="IconComponents.MUSIC" size="16px" />
         <h3 class="section-title">{{ t('properties.mediaItem.musicAnalysis.title') }}</h3>
       </div>
-      <n-button
-        size="tiny"
-        secondary
-        :type="semanticStatus === 'completed' ? 'success' : 'primary'"
-        :loading="isSemanticActive"
-        @click="handleSemanticAnalysis"
-      >
-        {{ semanticButtonLabel }}
-      </n-button>
     </div>
 
     <template v-if="isAnalysisActive">
@@ -161,168 +152,6 @@
           </div>
         </div>
       </details>
-
-      <details
-        v-if="semanticSummary"
-        class="music-semantic-details"
-        :open="semanticExpanded"
-        @toggle="handleSemanticToggle"
-      >
-        <summary class="music-semantic-details__summary">
-          <span class="music-semantic-details__title">
-            {{ t('properties.mediaItem.musicAnalysis.semantic.title') }}
-          </span>
-          <span class="music-semantic-details__count">
-            {{
-              t('properties.mediaItem.musicAnalysis.semantic.count', {
-                sections: semanticSummary.sectionCount,
-                anchors: semanticSummary.anchorCount,
-              })
-            }}
-          </span>
-          <component
-            :is="IconComponents.DROPDOWN"
-            size="14px"
-            class="music-semantic-details__chevron"
-            aria-hidden="true"
-          />
-        </summary>
-
-        <div class="music-semantic-details__body">
-          <div class="music-semantic-overview">
-            <div v-if="semanticSummary.genres.length" class="music-semantic-overview__item">
-              <span class="music-semantic-overview__label">
-                {{ t('properties.mediaItem.musicAnalysis.semantic.genres') }}
-              </span>
-              <span class="music-semantic-overview__value">
-                {{ semanticSummary.genres.join(' / ') }}
-              </span>
-            </div>
-            <div v-if="semanticSummary.rhythm" class="music-semantic-overview__item">
-              <span class="music-semantic-overview__label">
-                {{ t('properties.mediaItem.musicAnalysis.semantic.rhythm') }}
-              </span>
-              <span class="music-semantic-overview__value">{{ semanticSummary.rhythm }}</span>
-            </div>
-            <div v-if="semanticSummary.energyArc" class="music-semantic-overview__item">
-              <span class="music-semantic-overview__label">
-                {{ t('properties.mediaItem.musicAnalysis.semantic.energyArc') }}
-              </span>
-              <span class="music-semantic-overview__value">{{ semanticSummary.energyArc }}</span>
-            </div>
-            <span
-              v-if="semanticSummary.failedSectionCount"
-              class="music-semantic-overview__fallback"
-            >
-              {{
-                t('properties.mediaItem.musicAnalysis.semantic.partialFailed', {
-                  count: semanticSummary.failedSectionCount,
-                })
-              }}
-            </span>
-          </div>
-
-          <div v-if="semanticSummary.sections.length" class="music-semantic-section-list">
-            <article
-              v-for="section in semanticSummary.sections"
-              :key="`semantic-${section.sectionId}`"
-              class="music-semantic-section"
-            >
-              <div class="music-semantic-section__heading">
-                <span class="music-semantic-section__id">{{ section.sectionId }}</span>
-                <time class="music-semantic-section__time" :datetime="`${section.start}s`">
-                  {{ formatMusicTime(section.start) }} - {{ formatMusicTime(section.end) }}
-                </time>
-                <span class="music-semantic-section__anchors">
-                  {{
-                    t('properties.mediaItem.musicAnalysis.semantic.anchorCount', {
-                      count: section.refinement.anchors.length,
-                    })
-                  }}
-                </span>
-              </div>
-
-              <dl class="music-semantic-facts">
-                <div class="music-semantic-fact">
-                  <dt>{{ t('properties.mediaItem.musicAnalysis.semantic.lyrics') }}</dt>
-                  <dd>{{ semanticText(section.semantic.lyrics) }}</dd>
-                </div>
-                <div class="music-semantic-fact">
-                  <dt>{{ t('properties.mediaItem.musicAnalysis.semantic.rhythm') }}</dt>
-                  <dd>{{ semanticText(section.semantic.rhythm) }}</dd>
-                </div>
-                <div class="music-semantic-fact">
-                  <dt>{{ t('properties.mediaItem.musicAnalysis.semantic.energy') }}</dt>
-                  <dd>{{ semanticText(section.semantic.energy) }}</dd>
-                </div>
-                <div class="music-semantic-fact">
-                  <dt>{{ t('properties.mediaItem.musicAnalysis.semantic.arrangement') }}</dt>
-                  <dd>{{ semanticText(section.semantic.arrangement) }}</dd>
-                </div>
-                <div class="music-semantic-fact">
-                  <dt>{{ t('properties.mediaItem.musicAnalysis.semantic.vocal') }}</dt>
-                  <dd>{{ semanticText(section.semantic.vocal) }}</dd>
-                </div>
-              </dl>
-
-              <div class="music-semantic-refinement">
-                <div class="music-semantic-refinement__row">
-                  <span class="music-semantic-refinement__label">
-                    {{ t('properties.mediaItem.musicAnalysis.semantic.editingNotes') }}
-                  </span>
-                  <span class="music-semantic-refinement__value">
-                    {{ semanticText(section.refinement.editingNotes) }}
-                  </span>
-                </div>
-                <div class="music-semantic-refinement__row">
-                  <span class="music-semantic-refinement__label">
-                    {{ t('properties.mediaItem.musicAnalysis.semantic.shotPace') }}
-                  </span>
-                  <span class="music-semantic-refinement__value">
-                    {{ formatShotPace(section.refinement.shotPace) }}
-                  </span>
-                </div>
-              </div>
-
-              <div
-                v-if="section.refinement.anchors.length"
-                class="music-semantic-anchor-list"
-                role="list"
-              >
-                <div
-                  v-for="anchor in section.refinement.anchors"
-                  :key="anchor.anchorId"
-                  class="music-semantic-anchor"
-                  role="listitem"
-                >
-                  <time class="music-semantic-anchor__time" :datetime="`${anchor.time}s`">
-                    {{ formatAnchorTime(anchor.time) }}
-                  </time>
-                  <div class="music-semantic-anchor__content">
-                    <div class="music-semantic-anchor__heading">
-                      <span class="music-semantic-anchor__event">
-                        {{ formatAnchorEventLabel(anchor.eventLabel) }}
-                      </span>
-                      <span class="music-semantic-anchor__decision">
-                        {{ formatSemanticDecision(anchor.decision) }}
-                      </span>
-                    </div>
-                    <span v-if="anchor.roles.length" class="music-semantic-anchor__roles">
-                      {{ formatAnchorRoles(anchor.roles) }}
-                    </span>
-                    <span v-if="anchor.recommendedUses.length" class="music-semantic-anchor__uses">
-                      {{ anchor.recommendedUses.join(' · ') }}
-                    </span>
-                    <span v-if="anchor.reason" class="music-semantic-anchor__reason">
-                      {{ anchor.reason }}
-                    </span>
-                  </div>
-                </div>
-              </div>
-            </article>
-          </div>
-        </div>
-      </details>
     </template>
 
     <div v-else class="music-analysis-not-started">
@@ -352,11 +181,7 @@ import { useAppI18n } from '@/core/composables/useI18n'
 import { useMusicStructureAnalysis } from '@/core/composables/useMusicStructureAnalysis'
 import { useUnifiedStore } from '@/core/unifiedStore'
 import { MUSIC_STRUCTURE_ANALYSIS_RESOURCE_TYPE, type TaskView } from '@/core/jobs'
-import type {
-  MusicAnalysisMetadata,
-  MusicSemanticSection,
-  UnifiedMediaItemData,
-} from '@/core/mediaitem/types'
+import type { MusicAnalysisMetadata, UnifiedMediaItemData } from '@/core/mediaitem/types'
 import {
   getMusicAnalysisSegmentColorKey,
   MUSIC_ANALYSIS_MAX_DURATION_SECONDS,
@@ -377,7 +202,6 @@ const analysis = computed<MusicAnalysisMetadata | undefined>(
   () => props.mediaItem.metadata?.musicAnalysis,
 )
 const anchorsExpanded = ref(false)
-const semanticExpanded = ref(false)
 const hasAnalysis = computed(() => Boolean(analysis.value))
 const musicAnalysisTask = computed<TaskView | undefined>(() =>
   unifiedStore.jobTaskViews.find(
@@ -385,40 +209,6 @@ const musicAnalysisTask = computed<TaskView | undefined>(() =>
       task.rootResourceId === `${MUSIC_STRUCTURE_ANALYSIS_RESOURCE_TYPE}:${props.mediaItem.id}`,
   ),
 )
-const semanticTask = computed<TaskView | undefined>(() =>
-  unifiedStore.jobTaskViews.find(
-    (task) => task.rootResourceId === `music-semantic-metadata-writeback:${props.mediaItem.id}`,
-  ),
-)
-const semanticStatus = computed(() => props.mediaItem.metadata?.musicSemantic?.status)
-const isSemanticActive = computed(
-  () =>
-    ['idle', 'queued', 'running'].includes(semanticTask.value?.status ?? '') ||
-    semanticStatus.value === 'pending' ||
-    semanticStatus.value === 'processing',
-)
-const semanticButtonLabel = computed(() => {
-  if (isSemanticActive.value) return t('properties.mediaItem.musicAnalysis.semantic.processing')
-  if (semanticStatus.value === 'completed')
-    return t('properties.mediaItem.musicAnalysis.semantic.reanalyze')
-  if (semanticStatus.value === 'failed' || semanticStatus.value === 'partial_failed')
-    return t('properties.mediaItem.musicAnalysis.semantic.retry')
-  return t('properties.mediaItem.musicAnalysis.semantic.analyze')
-})
-const semanticSummary = computed(() => {
-  const semantic = props.mediaItem.metadata?.musicSemantic
-  if (!semantic || !['completed', 'partial_failed'].includes(semantic.status)) return null
-  const sections = semantic.sections ?? []
-  return {
-    genres: semantic.global?.genres ?? [],
-    rhythm: semantic.global?.rhythm ?? '',
-    energyArc: semantic.global?.energyArc ?? '',
-    sections,
-    sectionCount: sections.length,
-    failedSectionCount: semantic.failedSectionIds?.length ?? 0,
-    anchorCount: sections.reduce((count, section) => count + section.refinement.anchors.length, 0),
-  }
-})
 const isAnalysisActive = computed(() => {
   const status = musicAnalysisTask.value?.status
   return status === 'idle' || status === 'queued' || status === 'running'
@@ -464,7 +254,6 @@ watch(
   () => props.mediaItem.id,
   () => {
     anchorsExpanded.value = false
-    semanticExpanded.value = false
   },
 )
 const progressPercent = computed<number | null>(() => {
@@ -548,53 +337,9 @@ function handleAnchorToggle(event: Event): void {
   anchorsExpanded.value = (event.currentTarget as HTMLDetailsElement).open
 }
 
-function handleSemanticToggle(event: Event): void {
-  semanticExpanded.value = (event.currentTarget as HTMLDetailsElement).open
-}
-
-function semanticText(value: string): string {
-  return value.trim() || t('properties.mediaItem.musicAnalysis.semantic.noValue')
-}
-
-function formatShotPace(value: MusicSemanticSection['refinement']['shotPace']): string {
-  const key: Record<string, string> = {
-    慢: 'slow',
-    中: 'medium',
-    快: 'fast',
-    变化: 'variable',
-    无法判断: 'unknown',
-  }
-  return key[value]
-    ? t(`properties.mediaItem.musicAnalysis.semantic.shotPaceValues.${key[value]}`)
-    : value
-}
-
-function formatSemanticDecision(value: string): string {
-  const key: Record<string, string> = {
-    重点: 'primary',
-    次要: 'secondary',
-  }
-  return key[value]
-    ? t(`properties.mediaItem.musicAnalysis.semantic.decisions.${key[value]}`)
-    : value
-}
-
 async function handleStartAnalysis(force: boolean): Promise<void> {
   if (!canStartAnalysis.value) return
   await analyzeMusicStructure(props.mediaItem.id, force)
-}
-
-async function handleSemanticAnalysis(): Promise<void> {
-  if (isSemanticActive.value) return
-  try {
-    await unifiedStore.ensureMusicSemanticAnalysis(props.mediaItem.id)
-  } catch (error) {
-    unifiedStore.messageError(
-      error instanceof Error
-        ? error.message
-        : t('properties.mediaItem.musicAnalysis.semantic.failed'),
-    )
-  }
 }
 
 async function handleCancelAnalysis(): Promise<void> {
@@ -907,241 +652,6 @@ const MUSIC_ANALYSIS_ANCHOR_ROLE_LABEL_KEYS: Record<string, string> = {
 
 .music-analysis-anchors[open] .music-analysis-anchors__chevron {
   transform: rotate(180deg);
-}
-
-.music-semantic-details {
-  border-top: 1px solid color-mix(in srgb, var(--color-border-default) 58%, transparent);
-}
-
-.music-semantic-details__summary {
-  display: flex;
-  align-items: center;
-  min-height: 40px;
-  cursor: pointer;
-  list-style: none;
-  color: var(--color-text-primary);
-  font-size: var(--font-size-sm);
-  font-weight: 500;
-  user-select: none;
-}
-
-.music-semantic-details__summary::-webkit-details-marker {
-  display: none;
-}
-
-.music-semantic-details__title {
-  min-width: 0;
-  text-wrap: balance;
-}
-
-.music-semantic-details__count {
-  margin-left: auto;
-  color: var(--color-text-secondary);
-  font-size: var(--font-size-xs);
-  font-variant-numeric: tabular-nums;
-  font-weight: 400;
-}
-
-.music-semantic-details__chevron {
-  margin-left: var(--spacing-xs);
-  color: var(--color-text-secondary);
-  transition: transform 160ms cubic-bezier(0.2, 0, 0, 1);
-}
-
-.music-semantic-details[open] .music-semantic-details__chevron {
-  transform: rotate(180deg);
-}
-
-.music-semantic-details__body {
-  display: flex;
-  max-height: 440px;
-  overflow-y: auto;
-  flex-direction: column;
-  gap: var(--spacing-sm);
-  padding: var(--spacing-sm) 0 0;
-  border-top: 1px solid color-mix(in srgb, var(--color-border-default) 46%, transparent);
-}
-
-.music-semantic-overview {
-  display: flex;
-  flex-direction: column;
-  gap: var(--spacing-xs);
-}
-
-.music-semantic-overview__item {
-  display: grid;
-  grid-template-columns: minmax(56px, auto) minmax(0, 1fr);
-  gap: var(--spacing-sm);
-  font-size: var(--font-size-xs);
-  line-height: 1.45;
-}
-
-.music-semantic-overview__label,
-.music-semantic-refinement__label {
-  color: var(--color-text-secondary);
-}
-
-.music-semantic-overview__value,
-.music-semantic-refinement__value {
-  min-width: 0;
-  color: var(--color-text-primary);
-  overflow-wrap: anywhere;
-}
-
-.music-semantic-overview__fallback {
-  color: var(--color-status-warning);
-  font-size: var(--font-size-xs);
-  line-height: 1.4;
-}
-
-.music-semantic-section-list {
-  display: flex;
-  flex-direction: column;
-}
-
-.music-semantic-section {
-  display: flex;
-  flex-direction: column;
-  gap: var(--spacing-xs);
-  padding: var(--spacing-sm) 0;
-  border-bottom: 1px solid color-mix(in srgb, var(--color-border-default) 46%, transparent);
-}
-
-.music-semantic-section:first-child {
-  padding-top: 0;
-}
-
-.music-semantic-section:last-child {
-  border-bottom: none;
-}
-
-.music-semantic-section__heading {
-  display: grid;
-  grid-template-columns: minmax(0, auto) minmax(0, 1fr) minmax(60px, auto);
-  align-items: baseline;
-  gap: var(--spacing-sm);
-}
-
-.music-semantic-section__id {
-  overflow: hidden;
-  color: var(--color-text-primary);
-  font-size: var(--font-size-sm);
-  font-weight: 500;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.music-semantic-section__time,
-.music-semantic-section__anchors {
-  color: var(--color-text-secondary);
-  font-size: var(--font-size-xs);
-  font-variant-numeric: tabular-nums;
-}
-
-.music-semantic-section__anchors {
-  text-align: right;
-}
-
-.music-semantic-facts {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: var(--spacing-xs) var(--spacing-sm);
-  margin: 0;
-}
-
-.music-semantic-fact {
-  display: flex;
-  min-width: 0;
-  flex-direction: column;
-  gap: 1px;
-  font-size: var(--font-size-xs);
-  line-height: 1.4;
-}
-
-.music-semantic-fact dt {
-  color: var(--color-text-secondary);
-}
-
-.music-semantic-fact dd {
-  margin: 0;
-  color: var(--color-text-primary);
-  overflow-wrap: anywhere;
-}
-
-.music-semantic-refinement {
-  display: flex;
-  flex-direction: column;
-  gap: var(--spacing-xs);
-  padding-left: var(--spacing-sm);
-  border-left: 2px solid color-mix(in srgb, var(--color-status-processing) 58%, transparent);
-}
-
-.music-semantic-refinement__row {
-  display: grid;
-  grid-template-columns: minmax(56px, auto) minmax(0, 1fr);
-  gap: var(--spacing-sm);
-  font-size: var(--font-size-xs);
-  line-height: 1.45;
-}
-
-.music-semantic-anchor-list {
-  display: flex;
-  flex-direction: column;
-  border-top: 1px solid color-mix(in srgb, var(--color-border-default) 38%, transparent);
-}
-
-.music-semantic-anchor {
-  display: grid;
-  grid-template-columns: minmax(52px, auto) minmax(0, 1fr);
-  gap: var(--spacing-sm);
-  padding: var(--spacing-xs) 0;
-  border-bottom: 1px solid color-mix(in srgb, var(--color-border-default) 38%, transparent);
-}
-
-.music-semantic-anchor:last-child {
-  border-bottom: none;
-}
-
-.music-semantic-anchor__time {
-  color: var(--color-text-secondary);
-  font-size: var(--font-size-xs);
-  font-variant-numeric: tabular-nums;
-}
-
-.music-semantic-anchor__content {
-  display: flex;
-  min-width: 0;
-  flex-direction: column;
-  gap: 1px;
-  font-size: var(--font-size-xs);
-  line-height: 1.4;
-}
-
-.music-semantic-anchor__heading {
-  display: flex;
-  min-width: 0;
-  align-items: baseline;
-  gap: var(--spacing-xs);
-}
-
-.music-semantic-anchor__event {
-  overflow: hidden;
-  color: var(--color-text-primary);
-  font-size: var(--font-size-sm);
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.music-semantic-anchor__decision {
-  flex: none;
-  color: var(--color-status-processing);
-}
-
-.music-semantic-anchor__roles,
-.music-semantic-anchor__uses,
-.music-semantic-anchor__reason {
-  color: var(--color-text-secondary);
-  overflow-wrap: anywhere;
 }
 
 .music-analysis-anchor-list {

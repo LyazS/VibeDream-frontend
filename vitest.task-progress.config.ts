@@ -10,9 +10,9 @@ export default defineConfig({
   test: {
     include: [
       'test/task-progress.test.ts',
+      'test/media-analysis.test.ts',
       'test/media-indexing-recovery.test.ts',
       'test/project-timeline-recovery.test.ts',
-      'test/ai-generation.test.ts',
     ],
   },
 })

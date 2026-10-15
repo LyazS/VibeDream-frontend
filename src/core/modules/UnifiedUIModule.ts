@@ -4,12 +4,7 @@ import type { CommonEffectType } from '@/core/effect-template/commonTypes'
 
 export type PropertyTabKey = 'basic' | 'transition' | 'mask' | 'filter' | 'animation'
 export type LibrarySectionKey = 'media' | 'transition' | 'filter'
-export type AIPanelTabKey =
-  | 'ai-generate'
-  | 'agent'
-  | 'media-search-test'
-  | 'transition-test'
-  | 'item-property-test'
+export type AIPanelTabKey = 'agent' | 'media-search-test' | 'transition-test' | 'item-property-test'
 
 export interface LibraryRevealRequest {
   assetId: string

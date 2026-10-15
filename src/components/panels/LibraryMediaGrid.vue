@@ -293,8 +293,6 @@ import MediaItemThumbnail from '@/components/panels/MediaItemThumbnail.vue'
 import MediaPreviewModal from '@/components/modals/MediaPreviewModal.vue'
 import FolderIcon from '@/components/utils/FolderIcon.vue'
 import LibraryBreadcrumb from './LibraryBreadcrumb.vue'
-import { globalMetaFileManager } from '@/core/managers/media/globalMetaFileManager'
-import { resetAIGeneratedMediaForRetry } from '@/core/jobs'
 import {
   MUSIC_ANALYSIS_MAX_DURATION_SECONDS,
   MUSIC_ANALYSIS_MIN_DURATION_SECONDS,
@@ -798,22 +796,6 @@ const currentMenuItems = computed((): MenuItem[] => {
             },
           ] satisfies MenuItem[])
         : []),
-      ...(canStartMusicSemanticAnalysis(target)
-        ? ([
-            { type: 'separator' as const },
-            {
-              label: t('media.musicSemanticAnalysis'),
-              icon: IconComponents.MUSIC,
-              onClick: handleStartMusicSemanticAnalysis,
-            },
-            {
-              label: t('media.musicSemanticAnalysisCancel'),
-              icon: IconComponents.CLOSE,
-              onClick: handleCancelMusicSemanticAnalysis,
-              disabled: !canCancelMusicSemanticAnalysis(target),
-            },
-          ] satisfies MenuItem[])
-        : []),
       ...(getMediaItem(target.id)
         ? ([
             { type: 'separator' as const },
@@ -822,12 +804,6 @@ const currentMenuItems = computed((): MenuItem[] => {
               icon: IconComponents.CLOSE,
               onClick: handleCancelTask,
               disabled: !canCancel(target),
-            },
-            {
-              label: t('media.retry'),
-              icon: IconComponents.REFRESH,
-              onClick: handleRetry,
-              disabled: !canRetry(target),
             },
           ] satisfies MenuItem[])
         : []),
@@ -1678,56 +1654,6 @@ async function handleCancelTask(): Promise<void> {
   }
 }
 
-// ==================== 重试功能 ====================
-
-/**
- * 判断素材是否可以重试
- */
-function canRetry(item: DisplayItem): boolean {
-  if (item.type !== 'asset') return false
-
-  const mediaItem = getMediaItem(item.id)
-  if (!mediaItem) return false
-
-  // 只有错误或取消状态可以重试
-  if (mediaItem.mediaStatus !== 'error' && mediaItem.mediaStatus !== 'cancelled') {
-    return false
-  }
-
-  // 🌟 只有 AI 生成类型支持重试
-  return mediaItem.source.type === 'ai-generation'
-}
-
-/**
- * 处理重试操作
- */
-async function handleRetry(): Promise<void> {
-  if (!contextMenuTarget.value || contextMenuTarget.value.type !== 'asset') return
-
-  const mediaItem = getMediaItem(contextMenuTarget.value.id)
-  if (!mediaItem) return
-
-  showContextMenu.value = false
-
-  try {
-    // 🌟 只支持 AI 生成类型的重试
-    if (mediaItem.source.type === 'ai-generation') {
-      await retryAIGeneration(mediaItem)
-    } else {
-      // 其他类型不支持重试
-      unifiedStore.messageWarning(t('media.retryNotSupported'))
-      return
-    }
-  } catch (error) {
-    console.error('重试失败:', error)
-    unifiedStore.messageError(
-      t('media.retryFailed', {
-        error: error instanceof Error ? error.message : '未知错误',
-      }),
-    )
-  }
-}
-
 function canStartMediaIndexing(item: DisplayItem): boolean {
   if (item.type !== 'asset') {
     return false
@@ -1834,57 +1760,6 @@ async function handleCancelMusicStructureAnalysis(): Promise<void> {
   } else {
     unifiedStore.messageWarning(t('media.musicAnalysisCancelFailed', { name: mediaItem.name }))
   }
-}
-
-function canStartMusicSemanticAnalysis(item: DisplayItem): boolean {
-  if (item.type !== 'asset') return false
-  const mediaItem = getMediaItem(item.id)
-  return Boolean(mediaItem && (mediaItem.mediaType === 'audio' || mediaItem.mediaType === 'video'))
-}
-
-function canCancelMusicSemanticAnalysis(item: DisplayItem): boolean {
-  if (item.type !== 'asset') return false
-  const mediaItem = getMediaItem(item.id)
-  return mediaItem?.metadata?.musicSemantic?.status === 'pending'
-}
-
-async function handleStartMusicSemanticAnalysis(): Promise<void> {
-  if (!contextMenuTarget.value || contextMenuTarget.value.type !== 'asset') return
-  showContextMenu.value = false
-  await unifiedStore.ensureMusicSemanticAnalysis(contextMenuTarget.value.id).catch((error) => {
-    unifiedStore.messageError(
-      error instanceof Error ? error.message : t('media.musicSemanticAnalysisFailed'),
-    )
-  })
-}
-
-async function handleCancelMusicSemanticAnalysis(): Promise<void> {
-  if (!contextMenuTarget.value || contextMenuTarget.value.type !== 'asset') return
-  showContextMenu.value = false
-  await unifiedStore.cancelMusicSemanticAnalysis(contextMenuTarget.value.id)
-}
-
-/**
- * 重试AI生成素材
- */
-async function retryAIGeneration(mediaItem: UnifiedMediaItemData): Promise<void> {
-  resetAIGeneratedMediaForRetry(mediaItem)
-
-  const saved = await globalMetaFileManager.saveMetaFile(mediaItem)
-  if (!saved) {
-    throw new Error(`保存重试状态失败: ${mediaItem.name}`)
-  }
-
-  void unifiedStore.ensureAIGeneratedMedia(mediaItem.id).catch((error) => {
-    console.error('重试 AI 生成素材失败:', error)
-    unifiedStore.messageError(
-      t('media.retryFailed', {
-        error: error instanceof Error ? error.message : '未知错误',
-      }),
-    )
-  })
-
-  unifiedStore.messageSuccess(t('media.retryStarted', { name: mediaItem.name }))
 }
 
 // 移除资产（考虑引用计数）

@@ -68,12 +68,6 @@ export class MusicStructureAnalysisResolver
     ctx: ResolveContext<MusicStructureAnalysisInput>,
   ): Promise<MusicStructureAnalysisResult> {
     const mediaItem = this.getAudioCapableMedia(ctx.input.mediaId)
-    // Semantic facts are tied to the exact local structure version. Clear them
-    // before recomputing so a failed rerun cannot leave stale recommendations.
-    if (mediaItem.metadata?.musicSemantic) {
-      mediaItem.metadata = { ...mediaItem.metadata, musicSemantic: undefined }
-      await globalMetaFileManager.saveMetaFile(mediaItem)
-    }
     const bunnyMedia = mediaItem.runtime.bunny?.bunnyMedia
     if (!bunnyMedia) {
       throw new Error(`音乐素材未就绪: ${mediaItem.name}`)

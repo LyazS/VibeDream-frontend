@@ -3,9 +3,7 @@
  * 负责协调源处理器和目标处理器
  */
 
-import {
-  DragSourceType,
-} from '@/core/types/drag'
+import { DragSourceType } from '@/core/types/drag'
 import type {
   DropTargetType,
   DragSourceHandler,
@@ -31,7 +29,6 @@ import {
   FolderTargetHandler,
   TabTargetHandler,
   TimelineTrackTargetHandler,
-  AIGenerationPanelTargetHandler,
   ClipFilterDropTargetHandler,
 } from '@/core/drag/targets'
 
@@ -226,7 +223,6 @@ export function useUnifiedDrag(
   registerTargetHandler(
     new TimelineTrackTargetHandler(timelineModule, selectionModule, trackModule),
   )
-  registerTargetHandler(new AIGenerationPanelTargetHandler(mediaModule, timelineModule))
   registerTargetHandler(new ClipFilterDropTargetHandler(timelineModule, mediaModule))
 
   console.log(

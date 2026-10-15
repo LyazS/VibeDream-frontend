@@ -2,7 +2,7 @@
  * Resource-first 任务中心的核心类型定义。
  *
  * 这里的“资源”不是 UI 上的一条任务，而是业务真正想要的 ready 状态，
- * 例如 media-ready、ai-generated-media。JobRuntime 根据这些
+ * 例如 media-ready、media-index-metadata-writeback。JobRuntime 根据这些
  * ResourceRequest 构建运行态 DAG，并把 DAG 投影成任务中心视图。
  */
 
@@ -23,14 +23,7 @@ export type ResourceType =
   | 'media-index-task-complete'
   | 'media-index-metadata-writeback'
   | 'music-structure-analysis'
-  | 'music-semantic-task-submit'
-  | 'music-semantic-task-complete'
-  | 'music-semantic-metadata-writeback'
   | 'timeline-item-ready'
-  | 'ai-input-prepared'
-  | 'ai-task-submitted'
-  | 'remote-task-completed'
-  | 'ai-generated-media'
   | 'effect-template-ready'
 
 /**

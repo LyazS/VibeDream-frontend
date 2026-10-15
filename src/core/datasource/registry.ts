@@ -6,7 +6,6 @@
 
 import { DataSourceProcessor } from '@/core/datasource/core/BaseDataSourceProcessor'
 import { UserSelectedFileProcessor } from '@/core/datasource/providers/user-selected/UserSelectedFileProcessor'
-import { AIGenerationProcessor } from '@/core/datasource/providers/ai-generation/AIGenerationProcessor'
 
 // ==================== 类型定义 ====================
 
@@ -62,9 +61,6 @@ export class DataSourceRegistry {
   private initializeDefaultProcessors(): void {
     // 注册用户选择文件执行器
     this.register('user-selected', UserSelectedFileProcessor.getInstance())
-
-    // 注册 AI 生成执行器
-    this.register('ai-generation', AIGenerationProcessor.getInstance())
   }
 }
 

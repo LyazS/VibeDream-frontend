@@ -2,9 +2,7 @@ import { globalMetaFileManager } from '@/core/managers/media/globalMetaFileManag
 import type { MediaMetaFile } from '@/core/project/metaTypes'
 import { createUnifiedMediaItemData } from '@/core/mediaitem/types'
 import { DataSourceFactory } from '@/core/datasource/core/DataSourceTypes'
-import { SourceOrigin } from '@/core/datasource/core/BaseDataSource'
 import type { BaseUserSelectedFileSourceData } from '@/core/datasource/providers/user-selected/UserSelectedFileSource'
-import type { BaseAIGenerationSourceData } from '@/core/datasource/providers/ai-generation/AIGenerationSource'
 import type { UnifiedLibraryAssetData } from '@/core/asset/types'
 
 /**
@@ -94,12 +92,6 @@ export class MediaItemLoader {
       source = DataSourceFactory.createUserSelectedSourceFromBaseData(
         metaData.source as BaseUserSelectedFileSourceData,
       )
-    } else if (sourceType === 'ai-generation') {
-      // AI 生成数据源（从项目加载）
-      source = DataSourceFactory.createAIGenerationSource(
-        metaData.source as BaseAIGenerationSourceData,
-        SourceOrigin.PROJECT_LOAD,
-      )
     } else {
       throw new Error(`不支持的数据源类型: ${sourceType}`)
     }
@@ -115,7 +107,7 @@ export class MediaItemLoader {
         mediaType: metaData.mediaType,
         duration: metaData.duration,
         mediaStatus: metaData.mediaStatus || 'pending', // 🌟 如果 meta 文件中有终态状态，使用它；否则默认为 pending
-        // 🌟 新增：恢复 AI 生成的元数据
+        // 恢复素材分析元数据
         ...(metaData.metadata && {
           metadata: metaData.metadata,
         }),

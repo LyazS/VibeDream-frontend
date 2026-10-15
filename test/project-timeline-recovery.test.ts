@@ -17,7 +17,6 @@ vi.mock('@/core/managers/media/MediaItemLoader', () => ({ globalMediaItemLoader:
 vi.mock('@/core/effect-template/EffectTemplateRegistry', () => ({ effectTemplateRegistry: {} }))
 vi.mock('@/core/jobs', () => ({
   shouldRecoverMediaIndexing: vi.fn(),
-  shouldRecoverMusicSemantic: vi.fn(),
 }))
 vi.mock('@/core/composables/useProjectThumbnailService', () => ({
   useProjectThumbnailService: () => ({}),
