@@ -12,6 +12,7 @@ export default defineConfig({
       'test/task-progress.test.ts',
       'test/media-indexing-recovery.test.ts',
       'test/project-timeline-recovery.test.ts',
+      'test/ai-generation.test.ts',
     ],
   },
 })

@@ -16,7 +16,7 @@ import type {
 } from '@/core/timelineitem/model/timelineItem'
 import { createDefaultTimelineExtraRenderConfig } from '@/core/timelineitem/model/timelineItem'
 import { DEFAULT_BLEND_MODE } from '@/core/timelineitem/model/blendMode'
-import type { UploadFileExportOptions } from '@/core/utils/bizyairFileUploader'
+import type { UploadFileExportOptions } from '@/core/utils/mediaExporter'
 import type { ResourcePolicy, ResourceRequest } from '../ResourceTypes'
 import { getAiTaskResult } from '@/core/ai-tasks/taskApi'
 import { subscribeToMediaIndexingTask } from './mediaIndexingTask'

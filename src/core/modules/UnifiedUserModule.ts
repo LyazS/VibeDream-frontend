@@ -9,7 +9,6 @@ import { isDefinitiveOperationFailure } from '@/utils/idempotency'
 
 export type { User, LoginRequest, RegisterRequest } from '@/utils/types'
 
-const BIZYAIR_API_KEY_STORAGE_KEY = 'bizyair_api_key'
 const INITIALIZATION_RETRY_DELAYS_MS = [500, 1000, 2000] as const
 type AuthResult = Record<string, unknown>
 
@@ -20,7 +19,6 @@ export function createUnifiedUserModule(registry: ModuleRegistry) {
   const isLoggingIn = ref(false)
   const isRegistering = ref(false)
   const isUsingActivationCode = ref(false)
-  const bizyairApiKey = ref<string>(getBizyAirApiKey())
   let refreshBalancePromise: Promise<void> | null = null
   let pendingActivationCodeOperation: { code: string; key: string } | null = null
   let authStateVersion = 0
@@ -257,21 +255,6 @@ export function createUnifiedUserModule(registry: ModuleRegistry) {
     return isLoggedIn.value
   }
 
-  function saveBizyAirApiKey(apiKey: string): void {
-    localStorage.setItem(BIZYAIR_API_KEY_STORAGE_KEY, apiKey.trim())
-    bizyairApiKey.value = apiKey.trim()
-  }
-  function getBizyAirApiKey(): string {
-    return localStorage.getItem(BIZYAIR_API_KEY_STORAGE_KEY) || ''
-  }
-  function clearBizyAirApiKey(): void {
-    localStorage.removeItem(BIZYAIR_API_KEY_STORAGE_KEY)
-    bizyairApiKey.value = ''
-  }
-  function hasBizyAirApiKey(): boolean {
-    return bizyairApiKey.value.length > 0
-  }
-
   function initialize(): Promise<void> {
     if (isInitialized) return Promise.resolve()
     if (initializationPromise) return initializationPromise
@@ -297,7 +280,6 @@ export function createUnifiedUserModule(registry: ModuleRegistry) {
     isLoggingIn,
     isRegistering,
     isUsingActivationCode,
-    bizyairApiKey,
     isLoggedIn,
     username,
     login,
@@ -307,10 +289,6 @@ export function createUnifiedUserModule(registry: ModuleRegistry) {
     checkLoginStatus,
     refreshBalance,
     useActivationCode,
-    saveBizyAirApiKey,
-    getBizyAirApiKey,
-    clearBizyAirApiKey,
-    hasBizyAirApiKey,
     initialize,
   }
 }

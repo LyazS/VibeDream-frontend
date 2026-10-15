@@ -9,7 +9,6 @@ import type {
 } from '@/core/datasource/providers/ai-generation/types'
 import { useUnifiedStore } from '@/core/unifiedStore'
 import { generateMediaId } from '@/core/utils/idGenerator'
-import { BizyairFileUploader } from '@/core/utils/bizyairFileUploader'
 import { RunningHubFileUploader } from '@/core/utils/runninghubFileUploader'
 import { RunningHubFileUploaderStd } from '@/core/utils/runninghubFileUploaderStd'
 import {
@@ -19,19 +18,12 @@ import {
   type AIGenerationSourceData,
 } from '@/core/datasource/providers/ai-generation/AIGenerationSource'
 import { SourceOrigin } from '@/core/datasource/core/BaseDataSource'
-import {
-  BizyAirSourceFactory,
-  BizyAirTaskStatus,
-  type BizyAirSourceData,
-} from '@/core/datasource/providers/bizyair/BizyAirSource'
 import type { UnifiedMediaItemData } from '@/core/mediaitem/types'
 import { flattenAiConfig } from '../utils/pathUtils'
 import { ConfigCacheManager } from '../utils/configCacheManager'
 import { globalMetaFileManager } from '@/core/managers/media/globalMetaFileManager'
 import { fetchClient } from '@/utils/fetchClient'
 import type { TaskSubmitResponse } from '@/types/taskApi'
-import { BizyAirAPIClient } from '@/core/datasource/providers/bizyair/BizyAirAPIClient'
-import { BizyAirConfigManager } from '@/core/datasource/providers/bizyair/BizyAirConfigManager'
 
 /**
  * AI 生成 Composable
@@ -130,7 +122,6 @@ export function useAIGeneration() {
     }
 
     const uploadHandlers = {
-      bizyair: BizyairFileUploader,
       runninghub: RunningHubFileUploader,
       runninghubstd: RunningHubFileUploaderStd,
     }
@@ -158,7 +149,7 @@ export function useAIGeneration() {
    * @returns 创建的媒体项
    */
   async function createAndAddMediaItem(
-    source: AIGenerationSourceData | BizyAirSourceData,
+    source: AIGenerationSourceData,
     configData: AIGenerateConfig,
   ): Promise<UnifiedMediaItemData> {
     // 根据内容类型确定文件扩展名和媒体类型
@@ -205,59 +196,9 @@ export function useAIGeneration() {
   // ==================== 提交策略 ====================
 
   /**
-   * BizyAir 直接调用策略
-   */
-  const bizyAirSubmitStrategy = {
-    /**
-     * 检查是否可以使用此策略
-     */
-    canUse: async (configData: AIGenerateConfig): Promise<boolean> => {
-      if (configData.aiTaskType !== 'bizyair_generate_media') {
-        return false
-      }
-      const apiKey = await unifiedStore.getBizyAirApiKey()
-      return !!apiKey
-    },
-
-    /**
-     * 提交任务到 BizyAir API
-     */
-    createSource: (requestParams: MediaGenerationRequest, taskId: string) => {
-      const bizyAirSource = BizyAirSourceFactory.createBizyAirSource(
-        {
-          type: 'bizyair',
-          bizyairTaskId: taskId,
-          requestParams: requestParams,
-          taskStatus: BizyAirTaskStatus.QUEUING,
-        },
-        SourceOrigin.USER_CREATE,
-      )
-
-      return { source: bizyAirSource }
-    },
-    submitTask: async (requestParams: MediaGenerationRequest): Promise<string> => {
-      const apiKey = await unifiedStore.getBizyAirApiKey()
-      if (!apiKey) {
-        throw new Error('BizyAir API Key 未配置')
-      }
-
-      const appConfig = BizyAirConfigManager.getConfig(requestParams.task_config)
-      const requestBuilder = BizyAirConfigManager.getRequestBuilder(requestParams.task_config)
-      const requestData = requestBuilder(requestParams.task_config, appConfig)
-
-      return BizyAirAPIClient.submitAsyncTask(requestData, apiKey)
-    },
-  }
-
-  /**
    * 后端代理策略
    */
   const backendSubmitStrategy = {
-    /**
-     * 检查是否可以使用此策略（总是可用）
-     */
-    canUse: async () => true,
-
     /**
      * 提交任务到后端 API
      */
@@ -300,11 +241,6 @@ export function useAIGeneration() {
 
   /**
    * 处理生成按钮点击（统一的生成入口）
-   * 参考 LibraryMediaGrid.vue:1302-1503
-   *
-   * 逻辑：
-   * 1. 如果 aiTaskType 是 bizyair_generate_media 且有 API Key → 使用 BizyAir 直接调用
-   * 2. 否则 → 使用后端代理
    */
   async function handleGenerate() {
     if (!selectedConfig.value || !aiConfig.value) {
@@ -332,23 +268,14 @@ export function useAIGeneration() {
         sub_ai_task_type: configData.subAiTaskType,
       }
 
-      // 4. 选择提交策略
-      const strategy = (await bizyAirSubmitStrategy.canUse(configData))
-        ? bizyAirSubmitStrategy
-        : backendSubmitStrategy
-
-      console.log(
-        `🎯 [useAIGeneration] 使用策略: ${strategy === bizyAirSubmitStrategy ? 'BizyAir 直接调用' : '后端代理'}`,
-      )
-
-      // 5. 先提交任务，拿到 taskId 后再创建 media item
-      const taskId = await strategy.submitTask(requestParams)
+      // 4. 先提交任务，拿到 taskId 后再创建 media item
+      const taskId = await backendSubmitStrategy.submitTask(requestParams)
       console.log('🆔 [useAIGeneration] 已获取远程任务 ID:', taskId)
 
-      // 6. 创建带 taskId 的 source
-      const result = strategy.createSource(requestParams, taskId)
+      // 5. 创建带 taskId 的 source
+      const result = backendSubmitStrategy.createSource(requestParams, taskId)
 
-      // 7. 创建并添加媒体项
+      // 6. 创建并添加媒体项
       const mediaItem = await createAndAddMediaItem(result.source, configData)
       const saved = await globalMetaFileManager.saveMetaFile(mediaItem)
       if (!saved) {
@@ -364,40 +291,23 @@ export function useAIGeneration() {
         )
       })
 
-      // 8. 显示成功消息
+      // 7. 显示成功消息
       unifiedStore.messageSuccess(t('aiPanel.taskSubmitted'))
 
       console.log('✅ [useAIGeneration] 生成流程启动完成')
     } catch (error) {
       console.error('❌ [useAIGeneration] 任务提交失败:', error)
 
-      // 处理 BizyAir API 错误
       const errorMessage = error instanceof Error ? error.message : '未知错误'
 
-      // 检查是否是认证错误
-      if (
-        errorMessage.includes('401') ||
-        errorMessage.includes('403') ||
-        errorMessage.includes('API Key')
-      ) {
-        unifiedStore.dialogWarning({
-          title: t('media.error.apiKeyInvalid'),
-          content: errorMessage + '\n\n请检查您的 BizyAir API Key 配置',
-          positiveText: t('media.confirm'),
-          negativeText: t('media.cancel'),
-          onPositiveClick: () => {
-            console.log('跳转到设置页面')
-          },
-        })
-      } else if (errorMessage.includes('429')) {
+      if (errorMessage.includes('429')) {
         unifiedStore.dialogWarning({
           title: t('media.error.rateLimit'),
           content: errorMessage + '\n\n请稍后再试',
           positiveText: t('media.confirm'),
           negativeText: t('media.cancel'),
         })
-      } else if (!errorMessage.includes('BizyAir API Key 未配置')) {
-        // 避免重复显示已处理的错误
+      } else {
         unifiedStore.messageError(
           t('aiPanel.submitFailed', {
             error: errorMessage,
@@ -434,19 +344,7 @@ export function useAIGeneration() {
       let newConfig: Record<string, unknown>
 
       if (uploadServer) {
-        if (uploadServer === 'bizyair') {
-          newConfig = await BizyairFileUploader.processConfigUploads(
-            flattenedConfig, // 传递扁平化后的配置
-            unifiedStore.getMediaItem,
-            unifiedStore.getTimelineItem,
-            (fileIndex, stage, progress) => {
-              console.log(`文件 ${fileIndex + 1}: ${stage} ${progress}%`)
-            },
-          )
-
-          console.log('🔍 [useAIGeneration] 上传后的配置:')
-          console.log(JSON.stringify(newConfig, null, 2))
-        } else if (uploadServer === 'runninghub') {
+        if (uploadServer === 'runninghub') {
           newConfig = await RunningHubFileUploader.processConfigUploads(
             flattenedConfig, // 传递扁平化后的配置
             unifiedStore.getMediaItem,

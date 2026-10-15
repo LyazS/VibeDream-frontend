@@ -5,13 +5,6 @@ import type { UnifiedMediaModule } from '@/core/modules/UnifiedMediaModule'
 import type { ResolveCheckContext, ResolveContext, ResourceResolver } from '../ResourceResolver'
 import type { ResourcePolicy, ResourceRequest } from '../ResourceTypes'
 import {
-  BizyAirTypeGuards,
-  type BizyAirSourceData,
-} from '@/core/datasource/providers/bizyair/BizyAirSource'
-import { BizyAirAPIClient } from '@/core/datasource/providers/bizyair/BizyAirAPIClient'
-import { BizyAirConfigManager } from '@/core/datasource/providers/bizyair/BizyAirConfigManager'
-import { BizyAirTaskStatus } from '@/core/datasource/providers/bizyair/types'
-import {
   AIGenerationTypeGuards,
   type AIGenerationSourceData,
 } from '@/core/datasource/providers/ai-generation/AIGenerationSource'
@@ -28,7 +21,7 @@ export const AI_INPUT_PREPARED_RESOURCE_TYPE = 'ai-input-prepared'
 export const AI_TASK_SUBMITTED_RESOURCE_TYPE = 'ai-task-submitted'
 export const REMOTE_TASK_COMPLETED_RESOURCE_TYPE = 'remote-task-completed'
 
-export type AIGeneratedMediaProvider = 'backend' | 'bizyair'
+export type AIGeneratedMediaProvider = 'backend'
 
 export interface AIGeneratedMediaInput {
   mediaId: string
@@ -73,15 +66,11 @@ export interface RemoteTaskCompletedResult {
   taskId: string
 }
 
-type AIGeneratedMediaModule = Pick<
-  UnifiedMediaModule,
-  'getMediaItem'
-> & {
+type AIGeneratedMediaModule = Pick<UnifiedMediaModule, 'getMediaItem'> & {
   ensureMediaReady(mediaId: string): Promise<unknown>
-  getBizyAirApiKey(): Promise<string | null>
 }
 
-type AIGeneratedSource = AIGenerationSourceData | BizyAirSourceData
+type AIGeneratedSource = AIGenerationSourceData
 
 export function isAIGeneratedMediaItem(
   mediaItem: UnifiedMediaItemData | null | undefined,
@@ -90,10 +79,7 @@ export function isAIGeneratedMediaItem(
     return false
   }
 
-  return (
-    AIGenerationTypeGuards.isAIGenerationSource(mediaItem.source) ||
-    BizyAirTypeGuards.isBizyAirSource(mediaItem.source)
-  )
+  return AIGenerationTypeGuards.isAIGenerationSource(mediaItem.source)
 }
 
 export function isAIGeneratedMediaRecoverable(mediaItem: UnifiedMediaItemData): boolean {
@@ -106,22 +92,11 @@ export function isAIGeneratedMediaRecoverable(mediaItem: UnifiedMediaItemData): 
   }
 
   const source = getAIGeneratedSourceFromMediaItem(mediaItem)
-  if (AIGenerationTypeGuards.isAIGenerationSource(source)) {
-    if (source.taskStatus === TaskStatus.FAILED || source.taskStatus === TaskStatus.CANCELLED) {
-      return false
-    }
-
-    return Boolean(source.aiTaskId || source.resultData || source.requestParams)
-  }
-
-  if (
-    source.taskStatus === BizyAirTaskStatus.FAILED ||
-    source.taskStatus === BizyAirTaskStatus.CANCELED
-  ) {
+  if (source.taskStatus === TaskStatus.FAILED || source.taskStatus === TaskStatus.CANCELLED) {
     return false
   }
 
-  return Boolean(source.bizyairTaskId || source.resultData || source.requestParams)
+  return Boolean(source.aiTaskId || source.resultData || source.requestParams)
 }
 
 export function resetAIGeneratedMediaForRetry(mediaItem: UnifiedMediaItemData): void {
@@ -132,15 +107,9 @@ export function resetAIGeneratedMediaForRetry(mediaItem: UnifiedMediaItemData): 
   mediaItem.mediaStatus = 'pending'
 
   const source = getAIGeneratedSourceFromMediaItem(mediaItem)
-  if (AIGenerationTypeGuards.isAIGenerationSource(source)) {
-    source.aiTaskId = ''
-    source.taskStatus = TaskStatus.PENDING
-    source.resultData = undefined
-  } else {
-    source.bizyairTaskId = ''
-    source.taskStatus = BizyAirTaskStatus.QUEUING
-    source.resultData = undefined
-  }
+  source.aiTaskId = ''
+  source.taskStatus = TaskStatus.PENDING
+  source.resultData = undefined
 
   source.progress = 0
   source.errorMessage = undefined
@@ -188,11 +157,14 @@ export class AIGeneratedMediaResolver
       return toResult(this.getExistingMediaItem(mediaItem.id))
     }
 
-    const provider = getProviderForMediaItem(mediaItem)
+    const provider: AIGeneratedMediaProvider = 'backend'
     const taskId =
       getTaskId(source) ||
-      (await ctx.ensure<RemoteTaskSubmittedResult>(createAITaskSubmittedRequest(mediaItem.id, provider)))
-        .taskId
+      (
+        await ctx.ensure<RemoteTaskSubmittedResult>(
+          createAITaskSubmittedRequest(mediaItem.id, provider),
+        )
+      ).taskId
 
     await ctx.ensure<RemoteTaskCompletedResult>(
       createRemoteTaskCompletedRequest(mediaItem.id, provider, taskId),
@@ -211,7 +183,7 @@ export class AIGeneratedMediaResolver
       return []
     }
 
-    return [createAITaskSubmittedRequest(mediaItem.id, getProviderForMediaItem(mediaItem))]
+    return [createAITaskSubmittedRequest(mediaItem.id, 'backend')]
   }
 
   async cancel(ctx: ResolveContext<AIGeneratedMediaInput>): Promise<void> {
@@ -220,7 +192,7 @@ export class AIGeneratedMediaResolver
       return
     }
 
-    await cancelAIGeneratedMediaTask(this.mediaModule, mediaItem)
+    await cancelAIGeneratedMediaTask(mediaItem)
   }
 
   private async ensureMediaReady(ctx: ResolveContext<AIGeneratedMediaInput>, mediaId: string) {
@@ -376,12 +348,11 @@ export class AITaskSubmittedResolver
       message: `Submitting remote task: ${mediaItem.name}`,
     })
 
-    await ctx.ensure<AIInputPreparedResult>(createAIInputPreparedRequest(mediaItem.id, ctx.input.provider))
+    await ctx.ensure<AIInputPreparedResult>(
+      createAIInputPreparedRequest(mediaItem.id, ctx.input.provider),
+    )
 
-    const taskId =
-      ctx.input.provider === 'bizyair'
-        ? await this.submitBizyAirTask(mediaItem, ctx.signal)
-        : await submitBackendTask(mediaItem, ctx.signal)
+    const taskId = await submitBackendTask(mediaItem, ctx.signal)
 
     console.log(
       `🆔 [AIGeneratedMediaResolver] 已获取远程任务 ID: ${taskId} (provider=${ctx.input.provider}, mediaId=${mediaItem.id})`,
@@ -408,34 +379,7 @@ export class AITaskSubmittedResolver
       return
     }
 
-    await cancelAIGeneratedMediaTask(this.mediaModule, mediaItem)
-  }
-
-  private async submitBizyAirTask(
-    mediaItem: UnifiedMediaItemData,
-    signal: AbortSignal,
-  ): Promise<string> {
-    const source = mediaItem.source
-    if (!BizyAirTypeGuards.isBizyAirSource(source)) {
-      throw new Error(`Unexpected source type for BizyAir submit: ${source.type}`)
-    }
-
-    const apiKey = await this.mediaModule.getBizyAirApiKey()
-    if (!apiKey) {
-      throw new Error('BizyAir API Key 未配置')
-    }
-
-    const appConfig = BizyAirConfigManager.getConfig(source.requestParams.task_config)
-    const requestBuilder = BizyAirConfigManager.getRequestBuilder(source.requestParams.task_config)
-    const requestData = requestBuilder(source.requestParams.task_config, appConfig)
-
-    const taskId = await BizyAirAPIClient.submitAsyncTask(requestData, apiKey, signal)
-    source.bizyairTaskId = taskId
-    source.taskStatus = BizyAirTaskStatus.QUEUING
-    source.errorMessage = undefined
-    source.progress = 0
-
-    return taskId
+    await cancelAIGeneratedMediaTask(mediaItem)
   }
 
   private getMediaItem(mediaId: string): UnifiedMediaItemData {
@@ -508,11 +452,7 @@ export class RemoteTaskCompletedResolver
         message: `Waiting for remote task: ${ctx.input.taskId}`,
       })
 
-      if (ctx.input.provider === 'bizyair') {
-        await this.waitForBizyAirCompletion(mediaItem, ctx, controller.signal)
-      } else {
-        await waitForBackendCompletion(mediaItem, ctx, controller.signal)
-      }
+      await waitForBackendCompletion(mediaItem, ctx, controller.signal)
 
       await persistMediaItem(mediaItem)
 
@@ -544,60 +484,7 @@ export class RemoteTaskCompletedResolver
       return
     }
 
-    await cancelAIGeneratedMediaTask(this.mediaModule, mediaItem, ctx.input.taskId)
-  }
-
-  private async waitForBizyAirCompletion(
-    mediaItem: UnifiedMediaItemData,
-    ctx: ResolveContext<RemoteTaskCompletedInput>,
-    signal: AbortSignal,
-  ): Promise<void> {
-    const source = mediaItem.source
-    if (!BizyAirTypeGuards.isBizyAirSource(source)) {
-      throw new Error(`Unexpected source type for BizyAir completion: ${source.type}`)
-    }
-
-    const apiKey = await this.mediaModule.getBizyAirApiKey()
-    if (!apiKey) {
-      throw new Error('BizyAir API Key 未配置')
-    }
-
-    const taskDetail = await BizyAirAPIClient.pollUntilComplete(
-      ctx.input.taskId,
-      apiKey,
-      (progress, message) => {
-        source.progress = progress
-        mediaItem.mediaStatus = 'asyncprocessing'
-        ctx.update({
-          progress: Math.max(0.1, Math.min(0.95, progress / 100)),
-          stage: 'polling',
-          message,
-        })
-      },
-      signal,
-    )
-
-    source.taskStatus = taskDetail.status
-
-    if (taskDetail.status === BizyAirTaskStatus.FAILED) {
-      mediaItem.mediaStatus = 'error'
-      source.errorMessage = taskDetail.error?.message || 'BizyAir 任务失败'
-      throw new Error(source.errorMessage)
-    }
-
-    if (taskDetail.status === BizyAirTaskStatus.CANCELED) {
-      mediaItem.mediaStatus = 'cancelled'
-      source.errorMessage = 'BizyAir 任务已取消'
-      throw new Error(source.errorMessage)
-    }
-
-    const result = await BizyAirAPIClient.getTaskResults(ctx.input.taskId, apiKey, signal)
-    source.resultData = {
-      url: result.url,
-      bizyair_task_id: ctx.input.taskId,
-    }
-    source.errorMessage = undefined
-    mediaItem.mediaStatus = 'pending'
+    await cancelAIGeneratedMediaTask(mediaItem, ctx.input.taskId)
   }
 
   private getMediaItem(mediaId: string): UnifiedMediaItemData {
@@ -831,44 +718,19 @@ async function waitForBackendCompletion(
 }
 
 async function cancelAIGeneratedMediaTask(
-  mediaModule: AIGeneratedMediaModule,
   mediaItem: UnifiedMediaItemData,
   preferredTaskId?: string,
 ): Promise<void> {
   const source = getAIGeneratedSourceFromMediaItem(mediaItem)
-  const provider = getProviderForMediaItem(mediaItem)
   const taskId = preferredTaskId || getTaskId(source)
 
-  const alreadyCancelled =
-    provider === 'bizyair'
-      ? source.taskStatus === BizyAirTaskStatus.CANCELED
-      : source.taskStatus === TaskStatus.CANCELLED
-
-  if (alreadyCancelled) {
+  if (source.taskStatus === TaskStatus.CANCELLED) {
     return
   }
 
   if (taskId) {
-    if (provider === 'bizyair') {
-      const apiKey = await mediaModule.getBizyAirApiKey()
-      if (!apiKey) {
-        throw new Error('BizyAir API Key 未配置')
-      }
-
-      await BizyAirAPIClient.cancelTask(taskId, apiKey)
-      if (BizyAirTypeGuards.isBizyAirSource(source)) {
-        source.taskStatus = BizyAirTaskStatus.CANCELED
-      }
-    } else {
-      // 后端 DELETE /api/media/tasks/{taskId} (backend/routers/tasks.py:163)
-      // 成功: 200 + { success: true, message: "任务已取消" }
-      // 失败: 抛 HTTP 异常 —— 403 (任务不存在/无权限) / 400 (状态不允许取消) / 500 (内部错误)
-      // 此处不读取返回值，仅依赖请求是否抛异常来判断远程取消是否成功。
-      await fetchClient.delete(`/api/media/tasks/${taskId}`)
-      if (AIGenerationTypeGuards.isAIGenerationSource(source)) {
-        source.taskStatus = TaskStatus.CANCELLED
-      }
-    }
+    await fetchClient.delete(`/api/media/tasks/${taskId}`)
+    source.taskStatus = TaskStatus.CANCELLED
   }
 
   mediaItem.mediaStatus = 'cancelled'
@@ -876,16 +738,8 @@ async function cancelAIGeneratedMediaTask(
   await persistMediaItem(mediaItem)
 }
 
-function getProviderForMediaItem(mediaItem: UnifiedMediaItemData): AIGeneratedMediaProvider {
-  return BizyAirTypeGuards.isBizyAirSource(getAIGeneratedSourceFromMediaItem(mediaItem))
-    ? 'bizyair'
-    : 'backend'
-}
-
 function getTaskId(source: AIGeneratedSource): string {
-  return AIGenerationTypeGuards.isAIGenerationSource(source)
-    ? source.aiTaskId
-    : source.bizyairTaskId
+  return source.aiTaskId
 }
 
 function hasPreparedInput(source: AIGeneratedSource): boolean {
@@ -893,11 +747,7 @@ function hasPreparedInput(source: AIGeneratedSource): boolean {
 }
 
 function hasCompletedResult(source: AIGeneratedSource): boolean {
-  if (AIGenerationTypeGuards.isAIGenerationSource(source)) {
-    return source.taskStatus === TaskStatus.COMPLETED && Boolean(source.resultData)
-  }
-
-  return source.taskStatus === BizyAirTaskStatus.SUCCESS && Boolean(source.resultData)
+  return source.taskStatus === TaskStatus.COMPLETED && Boolean(source.resultData)
 }
 
 function isTerminalFailure(mediaItem: UnifiedMediaItemData, source: AIGeneratedSource): boolean {
@@ -905,14 +755,7 @@ function isTerminalFailure(mediaItem: UnifiedMediaItemData, source: AIGeneratedS
     return true
   }
 
-  if (AIGenerationTypeGuards.isAIGenerationSource(source)) {
-    return source.taskStatus === TaskStatus.FAILED || source.taskStatus === TaskStatus.CANCELLED
-  }
-
-  return (
-    source.taskStatus === BizyAirTaskStatus.FAILED ||
-    source.taskStatus === BizyAirTaskStatus.CANCELED
-  )
+  return source.taskStatus === TaskStatus.FAILED || source.taskStatus === TaskStatus.CANCELLED
 }
 
 function toResult(mediaItem: UnifiedMediaItemData): AIGeneratedMediaResult {
@@ -939,10 +782,6 @@ async function persistMediaItem(mediaItem: UnifiedMediaItemData): Promise<void> 
 
 function getAIGeneratedSourceFromMediaItem(mediaItem: UnifiedMediaItemData): AIGeneratedSource {
   if (AIGenerationTypeGuards.isAIGenerationSource(mediaItem.source)) {
-    return mediaItem.source
-  }
-
-  if (BizyAirTypeGuards.isBizyAirSource(mediaItem.source)) {
     return mediaItem.source
   }
 

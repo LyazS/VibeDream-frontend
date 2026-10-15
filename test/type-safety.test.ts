@@ -10,8 +10,6 @@ import {
 } from '@/components/ai-generation/utils/pathUtils'
 import { isFileData } from '@/core/datasource/providers/ai-generation/typeGuards'
 import type { FileData } from '@/core/datasource/providers/ai-generation/types'
-import { BizyAirRequestBuilder } from '@/core/datasource/providers/bizyair/BizyAirRequestBuilder'
-import type { BizyAirAppConfig } from '@/core/datasource/providers/bizyair/types'
 import { buildToolException } from '@/core/agent/tools/utils/result'
 
 afterEach(() => vi.restoreAllMocks())
@@ -108,79 +106,6 @@ describe('file data at the drag-and-drop boundary', () => {
     { ...file, timeRange: { clipStartTime: 0 } },
   ])('rejects malformed file data %#', (value) => {
     expect(isFileData(value)).toBe(false)
-  })
-})
-
-describe('generation request mapping', () => {
-  const appConfig: BizyAirAppConfig = {
-    id: 'test',
-    variant: 'default',
-    web_app_id: 123,
-    name: 'Test',
-    description: '',
-    media_type: 'video',
-    cost: '0.00',
-    input_mapping: {
-      prompt: { mapping: '1:Text.prompt', type: 'string', default: 'default prompt' },
-      seed: { mapping: '2:Sampler.seed', type: 'random_seed', default: -1 },
-      enabled: { mapping: '2:Sampler.enabled', type: 'boolean', default: true },
-      images: { mapping: '3:Images.urls', type: 'arrayurl', separator: '\n' },
-      size: {
-        type: 'array',
-        items: [
-          { mapping: '4:Size.width', type: 'number' },
-          { mapping: '4:Size.height', type: 'number' },
-        ],
-      },
-      local: { mapping: 'ignored', type: 'string', skip_mapping: true },
-      missing: { mapping: 'missing', type: 'string' },
-    },
-  }
-
-  it('preserves explicit empty, zero and false values and maps file URLs and arrays', () => {
-    expect(
-      BizyAirRequestBuilder.build(
-        {
-          prompt: '',
-          seed: 0,
-          enabled: false,
-          images: ['https://example.com/1.png', 'https://example.com/2.png'],
-          size: [1280, 720],
-          local: 'local only',
-        },
-        appConfig,
-      ),
-    ).toEqual({
-      web_app_id: 123,
-      suppress_preview_output: false,
-      input_values: {
-        '1:Text.prompt': '',
-        '2:Sampler.seed': 0,
-        '2:Sampler.enabled': false,
-        '3:Images.urls': 'https://example.com/1.png\nhttps://example.com/2.png',
-        '4:Size.width': 1280,
-        '4:Size.height': 720,
-      },
-    })
-  })
-
-  it('uses defaults and generates a random seed only for -1', () => {
-    vi.spyOn(Math, 'random').mockReturnValue(0.5)
-    expect(BizyAirRequestBuilder.build({}, appConfig).input_values).toEqual({
-      '1:Text.prompt': 'default prompt',
-      '2:Sampler.seed': 2147483647,
-      '2:Sampler.enabled': true,
-    })
-  })
-
-  it('omits malformed array inputs instead of mapping them as file lists', () => {
-    vi.spyOn(console, 'error').mockImplementation(() => {})
-    expect(
-      BizyAirRequestBuilder.build({ images: 'not an array', size: {} }, appConfig).input_values,
-    ).not.toHaveProperty('3:Images.urls')
-    expect(BizyAirRequestBuilder.build({ size: {} }, appConfig).input_values).not.toHaveProperty(
-      '4:Size.width',
-    )
   })
 })
 

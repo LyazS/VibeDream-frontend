@@ -1695,7 +1695,7 @@ function canRetry(item: DisplayItem): boolean {
   }
 
   // 🌟 只有 AI 生成类型支持重试
-  return mediaItem.source.type === 'ai-generation' || mediaItem.source.type === 'bizyair'
+  return mediaItem.source.type === 'ai-generation'
 }
 
 /**
@@ -1711,7 +1711,7 @@ async function handleRetry(): Promise<void> {
 
   try {
     // 🌟 只支持 AI 生成类型的重试
-    if (mediaItem.source.type === 'ai-generation' || mediaItem.source.type === 'bizyair') {
+    if (mediaItem.source.type === 'ai-generation') {
       await retryAIGeneration(mediaItem)
     } else {
       // 其他类型不支持重试

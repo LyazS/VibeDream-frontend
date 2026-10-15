@@ -97,9 +97,6 @@ export default defineConfig({
           if (isPackage(packageName, ['mediabunny', '@mediabunny'])) {
             return 'media-vendor'
           }
-          if (isPackage(packageName, ['ali-oss', 'aliyun-sdk'])) {
-            return 'oss-vendor'
-          }
           if (isPackage(packageName, ['markdown-it', 'github-markdown-css'])) {
             return 'markdown-vendor'
           }

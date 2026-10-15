@@ -3,22 +3,14 @@
     <!-- 搜索栏 -->
     <div class="search-bar">
       <div class="search-input-wrapper">
-        <component
-          :is="IconComponents.SEARCH"
-          size="16px"
-          class="search-icon"
-        />
+        <component :is="IconComponents.SEARCH" size="16px" class="search-icon" />
         <input
           v-model="searchKeyword"
           type="text"
           class="search-input"
           :placeholder="t('aiPanel.searchPlaceholder')"
         />
-        <button
-          v-if="searchKeyword"
-          class="clear-button"
-          @click="clearSearch"
-        >
+        <button v-if="searchKeyword" class="clear-button" @click="clearSearch">
           <component :is="IconComponents.CLOSE" size="14px" />
         </button>
       </div>
@@ -34,19 +26,10 @@
       >
         <div class="card-header">
           <div class="header-left">
-            <component
-              :is="getIconForContentType(config.value)"
-              size="24px"
-              class="card-icon"
-            />
+            <component :is="getIconForContentType(config.value)" size="24px" class="card-icon" />
             <h3 class="card-title">{{ config.label }}</h3>
           </div>
-          <!-- 根据 provider 类型显示对应的服务商 logo -->
-          <img
-            :src="getProviderLogo(config.provider).src"
-            :alt="getProviderLogo(config.provider).alt"
-            class="provider-logo"
-          />
+          <img src="/icon/favicon.svg" alt="LightCut" class="provider-logo" />
         </div>
         <p
           class="card-description"
@@ -55,7 +38,7 @@
           {{ config.description }}
         </p>
       </div>
-      
+
       <!-- 无搜索结果提示 -->
       <div v-if="filteredConfigOptions.length === 0" class="no-results">
         <component :is="IconComponents.SEARCH" size="48px" class="no-results-icon" />
@@ -71,21 +54,11 @@ import { collection, type ConfigKey } from '@/components/ai-generation/configs'
 import { IconComponents } from '@/constants/iconComponents'
 import { useAppI18n } from '@/core/composables/useI18n'
 import type { Component } from 'vue'
-import { useUnifiedStore } from '@/core/unifiedStore'
-
-/**
- * 服务商类型枚举
- */
-enum ProviderType {
-  LIGHTCUT = 'lightcut',      // LightCut 自己的服务
-  BIZYAIR = 'bizyair',         // BizyAir 服务
-}
 
 interface ConfigOption {
   label: string
   value: ConfigKey
   description: string
-  provider: ProviderType  // 服务商类型
 }
 
 interface Props {
@@ -102,50 +75,16 @@ const emit = defineEmits<Emits>()
 // 使用全局 i18n 获取翻译函数
 const { t } = useAppI18n()
 
-// 引入 unifiedStore 获取 BizyAir API Key 状态
-const unifiedStore = useUnifiedStore()
-
-/**
- * 服务商 Logo 配置映射
- */
-const providerLogoMap: Record<ProviderType, { src: string; alt: string }> = {
-  [ProviderType.LIGHTCUT]: {
-    src: '/icon/favicon.svg',
-    alt: 'LightCut',
-  },
-  [ProviderType.BIZYAIR]: {
-    src: '/logo-3rd/bizyair.webp',
-    alt: 'BizyAir',
-  },
-}
-
-/**
- * 获取服务商 Logo 信息
- */
-const getProviderLogo = (provider: ProviderType) => {
-  return providerLogoMap[provider]
-}
-
 // 搜索关键词
 const searchKeyword = ref('')
 
 // 从 collection 生成选项列表，支持多语言
 const configOptions = computed<ConfigOption[]>(() => {
   return Object.entries(collection).map(([key, config]) => {
-    // 根据配置和用户状态判断服务商类型
-    let provider = ProviderType.LIGHTCUT  // 默认使用 LightCut
-    
-    // 判断是否使用 BizyAir
-    if (config.aiTaskType === 'bizyair_generate_media' && unifiedStore.hasBizyAirApiKey()) {
-      provider = ProviderType.BIZYAIR
-    }
-    // 未来可以添加其他服务商的判断逻辑
-    
     return {
       label: config.name[props.locale],
       value: key as ConfigKey,
       description: config.description[props.locale],
-      provider,  // 添加服务商类型
     }
   })
 })
@@ -162,7 +101,7 @@ const filteredConfigOptions = computed<ConfigOption[]>(() => {
   }
 
   const query = searchKeyword.value.toLowerCase()
-  
+
   return configOptions.value.filter((config) => {
     const label = config.label.toLowerCase()
     const description = config.description.toLowerCase()
@@ -387,15 +326,13 @@ const clearSearch = () => {
   opacity: 1;
 }
 
-
 /* 服务商 Logo 样式 */
 .provider-logo {
-  height: 20px;  /* 与原 card-tag 高度保持一致 */
+  height: 20px; /* 与原 card-tag 高度保持一致 */
   width: auto;
   object-fit: contain;
   flex-shrink: 0;
   border-radius: var(--border-radius-small);
   padding: 2px 4px;
 }
-
 </style>

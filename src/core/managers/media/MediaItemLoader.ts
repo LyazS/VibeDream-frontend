@@ -5,8 +5,6 @@ import { DataSourceFactory } from '@/core/datasource/core/DataSourceTypes'
 import { SourceOrigin } from '@/core/datasource/core/BaseDataSource'
 import type { BaseUserSelectedFileSourceData } from '@/core/datasource/providers/user-selected/UserSelectedFileSource'
 import type { BaseAIGenerationSourceData } from '@/core/datasource/providers/ai-generation/AIGenerationSource'
-import type { BaseBizyAirSourceData } from '@/core/datasource/providers/bizyair/types'
-import { BizyAirSourceFactory } from '@/core/datasource/providers/bizyair/BizyAirSource'
 import type { UnifiedLibraryAssetData } from '@/core/asset/types'
 
 /**
@@ -79,7 +77,9 @@ export class MediaItemLoader {
    * @param metaData Meta 文件数据
    * @returns 重建的媒体项目
    */
-  private async rebuildMediaItemFromMeta(metaData: MediaMetaFile): Promise<UnifiedLibraryAssetData> {
+  private async rebuildMediaItemFromMeta(
+    metaData: MediaMetaFile,
+  ): Promise<UnifiedLibraryAssetData> {
     if (metaData.assetKind === 'effect-template') {
       throw new Error('新链路不再支持从项目媒体目录恢复 effect-template 资产')
     }
@@ -98,12 +98,6 @@ export class MediaItemLoader {
       // AI 生成数据源（从项目加载）
       source = DataSourceFactory.createAIGenerationSource(
         metaData.source as BaseAIGenerationSourceData,
-        SourceOrigin.PROJECT_LOAD,
-      )
-    } else if (sourceType === 'bizyair') {
-      // BizyAir 数据源（从项目加载）
-      source = BizyAirSourceFactory.createBizyAirSource(
-        metaData.source as BaseBizyAirSourceData,
         SourceOrigin.PROJECT_LOAD,
       )
     } else {

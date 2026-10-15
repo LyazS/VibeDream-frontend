@@ -47,9 +47,6 @@
     "activationCodeSuccess": "激活码使用成功！充值金额：{amount}元，当前余额：{balance}元",
     "activationCodeInvalid": "激活码无效或已使用",
     "activationCodeUnauthorized": "请先登录",
-    "activationCodeError": "激活码使用失败，请重试",
-    "bizyairApiKeyPlaceholder": "请输入 BizyAir API Key",
-    "bizyairApiKeyHint": "配置后可直接使用 BizyAir 服务",
-    "bizyairApiKeyConfigured": "API Key 已配置"
+    "activationCodeError": "激活码使用失败，请重试"
   }
 }

@@ -776,20 +776,6 @@ function isRecoverableAIGeneratedMedia(mediaItem: UnifiedMediaItemData): boolean
     )
   }
 
-  if (mediaItem.source.type === 'bizyair') {
-    return (
-      mediaItem.mediaStatus !== 'error' &&
-      mediaItem.mediaStatus !== 'cancelled' &&
-      mediaItem.source.taskStatus !== 'Failed' &&
-      mediaItem.source.taskStatus !== 'Canceled' &&
-      Boolean(
-        mediaItem.source.bizyairTaskId ||
-          mediaItem.source.resultData ||
-          mediaItem.source.requestParams,
-      )
-    )
-  }
-
   return false
 }
 

@@ -2,10 +2,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 
 const PROJECT_ROOT = process.cwd()
-const TARGET_DIRS = [
-  'src/components/ai-generation/configs',
-  'src/core/datasource/providers/bizyair/configs',
-]
+const TARGET_DIRS = ['src/components/ai-generation/configs']
 const MONEY_KEYS = new Set(['cost', 'real_cost', 'add_cost', 'add_real_cost'])
 const DECIMAL_PATTERN = /^-?(?:0|[0-9]+)(?:\.[0-9]+)?$/
 

@@ -26,6 +26,11 @@ export interface ExportMediaItemOptions {
   outputHeight?: number
 }
 
+export type UploadFileExportOptions = Pick<
+  ExportMediaItemOptions,
+  'outputWidth' | 'outputHeight' | 'frameRate'
+>
+
 export interface ExportTimelineItemOptions {
   timelineItem: UnifiedTimelineItemData
   getMediaItem: (id: string | null) => UnifiedMediaItemData | undefined

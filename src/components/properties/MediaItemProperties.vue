@@ -335,8 +335,7 @@ const showActions = computed(() => {
 // 是否可以重试（仅 AI 生成类型）
 const canRetry = computed(() => {
   const status = props.mediaItem.mediaStatus
-  const isAIType =
-    props.mediaItem.source.type === 'ai-generation' || props.mediaItem.source.type === 'bizyair'
+  const isAIType = props.mediaItem.source.type === 'ai-generation'
   return (status === 'error' || status === 'cancelled') && isAIType
 })
 
@@ -409,7 +408,7 @@ async function handleRetry(): Promise<void> {
 
   try {
     // 🌟 只支持 AI 生成类型的重试
-    if (mediaItem.source.type === 'ai-generation' || mediaItem.source.type === 'bizyair') {
+    if (mediaItem.source.type === 'ai-generation') {
       await retryAIGeneration(mediaItem)
     } else {
       // 其他类型不支持重试

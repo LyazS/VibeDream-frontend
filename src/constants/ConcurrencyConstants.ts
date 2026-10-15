@@ -13,9 +13,6 @@ export const DATA_SOURCE_CONCURRENCY = {
   /** AI生成处理器并发数（较低，因为AI生成任务较重） */
   AI_GENERATION_MAX_CONCURRENT_TASKS: 2,
 
-  /** BizyAir处理器并发数（较低，因为AI生成任务较重） */
-  BIZYAIR_MAX_CONCURRENT_TASKS: 1,
-
   /** 用户选择文件处理器并发数（较高，因为本地文件处理速度快） */
   USER_SELECTED_MAX_CONCURRENT_TASKS: 10,
 } as const

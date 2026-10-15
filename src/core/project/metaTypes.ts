@@ -343,13 +343,6 @@ function isMediaPersistedSourceData(value: unknown): value is BaseDataSourcePers
         typeof value.taskStatus === 'string' &&
         (value.resultData === undefined || isRecord(value.resultData))
       )
-    case 'bizyair':
-      return (
-        typeof value.bizyairTaskId === 'string' &&
-        isRecord(value.requestParams) &&
-        typeof value.taskStatus === 'string' &&
-        (value.resultData === undefined || isRecord(value.resultData))
-      )
     default:
       return false
   }

@@ -22,15 +22,6 @@
           </HoverButton>
           <LanguageSelector />
           <HoverButton
-            @click="showProviderConfigDialog = true"
-            :title="t('app.apiConfigCenter')"
-          >
-            <template #icon>
-              <img src="/logo-3rd/logo-bizyair-only.webp" alt="BizyAir" style="width: 16px; height: 16px;" />
-            </template>
-            <span v-if="!hasBizyAirKey" class="bizyair-key-text">Key</span>
-          </HoverButton>
-          <HoverButton
             @click="handleUserClick"
             :title="isUserLogin ? t('user.userInfo') : t('user.login')"
           >
@@ -131,10 +122,7 @@
               </div>
 
               <div v-else-if="projects.length === 0" class="empty-state-container">
-                <div
-                  class="setup-card clickable-card"
-                  @click="!isLoading && createNewProject()"
-                >
+                <div class="setup-card clickable-card" @click="!isLoading && createNewProject()">
                   <div class="setup-icon">
                     <component :is="IconComponents.ADD" size="48px" />
                   </div>
@@ -257,12 +245,6 @@
     :user="currentUser"
     @close="showUserInfoDialog = false"
   />
-
-  <!-- Provider配置对话框 -->
-  <ProviderConfigModal
-    :show="showProviderConfigDialog"
-    @close="showProviderConfigDialog = false"
-  />
 </template>
 
 <script setup lang="ts">
@@ -281,7 +263,6 @@ import ProjectSettingsButton from '@/components/base/ProjectSettingsButton.vue'
 import { useProjectThumbnailService } from '@/core/composables/useProjectThumbnailService'
 import LoginModal from '@/components/modals/LoginModal.vue'
 import UserInfoModal from '@/components/modals/UserInfoModal.vue'
-import ProviderConfigModal from '@/components/modals/ProviderConfigModal.vue'
 import { useAppI18n } from '@/core/composables/useI18n'
 import announcementsConfig from '@/config/announcements.json'
 
@@ -311,7 +292,6 @@ const permissionError = ref(false)
 // 用户相关状态
 const showLoginDialog = ref(false)
 const showUserInfoDialog = ref(false)
-const showProviderConfigDialog = ref(false)
 const hoveredProjectId = ref<string | null>(null)
 
 // 上下文菜单相关
@@ -333,7 +313,6 @@ const unifiedStore = useUnifiedStore()
 // 计算属性
 const isUserLogin = computed(() => unifiedStore.isLoggedIn)
 const currentUser = computed(() => unifiedStore.getCurrentUser())
-const hasBizyAirKey = computed(() => unifiedStore.hasBizyAirApiKey())
 const isApiSupported = computed(() => fileSystemService.isSupported())
 
 // 权限和工作目录管理
@@ -991,11 +970,7 @@ onMounted(async () => {
 }
 
 .create-thumbnail {
-  background: linear-gradient(
-    135deg,
-    var(--color-bg-tertiary) 0%,
-    var(--color-bg-secondary) 100%
-  );
+  background: linear-gradient(135deg, var(--color-bg-tertiary) 0%, var(--color-bg-secondary) 100%);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -1112,12 +1087,5 @@ onMounted(async () => {
   color: var(--color-text-secondary);
   line-height: 1.6;
   margin: 0 0 1rem 0;
-}
-
-.bizyair-key-text {
-  font-size: var(--font-size-xs);
-  color: #ff4444;
-  font-weight: 600;
-  margin-left: 2px;
 }
 </style>

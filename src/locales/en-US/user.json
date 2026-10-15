@@ -47,9 +47,6 @@
     "activationCodeSuccess": "Activation code used successfully! Recharge amount: {amount}, current balance: {balance}",
     "activationCodeInvalid": "Activation code is invalid or already used",
     "activationCodeUnauthorized": "Please login first",
-    "activationCodeError": "Failed to use activation code, please try again",
-    "bizyairApiKeyPlaceholder": "Please enter BizyAir API Key",
-    "bizyairApiKeyHint": "Configure to use BizyAir services directly",
-    "bizyairApiKeyConfigured": "API Key configured"
+    "activationCodeError": "Failed to use activation code, please try again"
   }
 }

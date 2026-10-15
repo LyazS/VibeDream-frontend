@@ -25,7 +25,6 @@ export enum FieldType {
 export enum AITaskType {
   TEXT_TO_IMAGE = 'text_to_image',
   REMOTE_IMAGE = 'remote_image',
-  BIZYAIR_GENERATE_MEDIA = 'bizyair_generate_media',
   RUNNINGHUB_GENERATE_MEDIA = 'runninghub_generate_media', // RunningHub 媒体生成
 }
 
@@ -347,7 +346,7 @@ export type UIConfig = NumberInputConfig | TextareaInputConfig | SelectInputConf
 /**
  * 上传服务器类型
  */
-export type UploadServerType = 'bizyair' | 'runninghub' | 'runninghubstd'
+export type UploadServerType = 'runninghub' | 'runninghubstd'
 
 /**
  * AI 生成配置结构

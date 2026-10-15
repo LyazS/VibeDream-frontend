@@ -38,16 +38,6 @@
 
             <LanguageSelector />
 
-            <!-- <HoverButton
-              @click="showProviderConfigDialog = true"
-              :title="t('app.apiConfigCenter')"
-            >
-              <template #icon>
-                <img src="/logo-3rd/logo-bizyair-only.webp" alt="BizyAir" style="width: 16px; height: 16px;" />
-              </template>
-              <span v-if="!hasBizyAirKey" class="bizyair-key-text">Key</span>
-            </HoverButton> -->
-
             <HoverButton
               @click="toggleChatPanel"
               :title="t('editor.toggleChatPanel')"
@@ -126,9 +116,6 @@
     @close="showExportDialog = false"
     @export="handleExportWithSettings"
   />
-
-  <!-- Provider配置对话框 -->
-  <ProviderConfigModal :show="showProviderConfigDialog" @close="showProviderConfigDialog = false" />
 </template>
 
 <script setup lang="ts">
@@ -142,7 +129,6 @@ import EditProjectModal from '@/components/modals/EditProjectModal.vue'
 import LoginModal from '@/components/modals/LoginModal.vue'
 import UserInfoModal from '@/components/modals/UserInfoModal.vue'
 import ExportSettingsModal from '@/components/modals/ExportSettingsModal.vue'
-import ProviderConfigModal from '@/components/modals/ProviderConfigModal.vue'
 import ActiveTaskIndicator from '@/components/task-center/ActiveTaskIndicator.vue'
 import { useAppI18n } from '@/core/composables/useI18n'
 import type { Quality } from 'mediabunny'
@@ -155,7 +141,6 @@ const showEditDialog = ref(false)
 const showLoginDialog = ref(false)
 const showUserInfoDialog = ref(false)
 const showExportDialog = ref(false)
-const showProviderConfigDialog = ref(false)
 const currentUser = computed(() => unifiedStore.getCurrentUser())
 const isUserLogin = computed(() => unifiedStore.isLoggedIn)
 
@@ -502,12 +487,5 @@ defineExpose({
   font-size: var(--font-size-sm);
   color: var(--color-text-secondary);
   margin-left: var(--spacing-xs);
-}
-
-.bizyair-key-text {
-  font-size: var(--font-size-xs);
-  color: #ff4444;
-  font-weight: 600;
-  margin-left: 2px;
 }
 </style>

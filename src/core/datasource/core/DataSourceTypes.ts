@@ -10,32 +10,23 @@ import type {
   AIGenerationSourceData,
   BaseAIGenerationSourceData,
 } from '@/core/datasource/providers/ai-generation/AIGenerationSource'
-import type {
-  BizyAirSourceData,
-  BaseBizyAirSourceData,
-} from '@/core/datasource/providers/bizyair/BizyAirSource'
 import { UserSelectedFileSourceFactory } from '@/core/datasource/providers/user-selected/UserSelectedFileSource'
 import { AIGenerationSourceFactory } from '@/core/datasource/providers/ai-generation/AIGenerationSource'
 import { UserSelectedFileTypeGuards } from '@/core/datasource/providers/user-selected/UserSelectedFileSource'
 import { AIGenerationTypeGuards } from '@/core/datasource/providers/ai-generation/AIGenerationSource'
-import { BizyAirTypeGuards } from '@/core/datasource/providers/bizyair/BizyAirSource'
 import {
   RuntimeStateQueries as BaseDataSourceQueries,
   SourceOrigin,
 } from '@/core/datasource/core/BaseDataSource'
 import { extractUserSelectedFileSourceData } from '@/core/datasource/providers/user-selected/UserSelectedFileSource'
 import { extractAIGenerationSourceData } from '@/core/datasource/providers/ai-generation/AIGenerationSource'
-import { extractBizyAirSourceData } from '@/core/datasource/providers/bizyair/BizyAirSource'
 
 // ==================== 联合类型定义 ====================
 
 /**
  * 统一数据源联合类型
  */
-export type UnifiedDataSourceData =
-  | UserSelectedFileSourceData
-  | AIGenerationSourceData
-  | BizyAirSourceData
+export type UnifiedDataSourceData = UserSelectedFileSourceData | AIGenerationSourceData
 
 /**
  * 可持久化的数据源联合类型。
@@ -43,7 +34,6 @@ export type UnifiedDataSourceData =
 export type BaseDataSourcePersistedData =
   | BaseUserSelectedFileSourceData
   | BaseAIGenerationSourceData
-  | BaseBizyAirSourceData
 
 // ==================== 统一工厂函数 ====================
 
@@ -90,8 +80,6 @@ export function extractSourceData(source: UnifiedDataSourceData): BaseDataSource
     return extractUserSelectedFileSourceData(source)
   } else if (DataSourceQueries.isAIGenerationSource(source)) {
     return extractAIGenerationSourceData(source)
-  } else if (DataSourceQueries.isBizyAirSource(source)) {
-    return extractBizyAirSourceData(source)
   } else {
     console.warn('未知的数据源类型:', source)
     throw new Error('未知的数据源类型')
@@ -114,9 +102,5 @@ export const DataSourceQueries = {
 
   isAIGenerationSource(source: UnifiedDataSourceData): source is AIGenerationSourceData {
     return AIGenerationTypeGuards.isAIGenerationSource(source)
-  },
-
-  isBizyAirSource(source: UnifiedDataSourceData): source is BizyAirSourceData {
-    return BizyAirTypeGuards.isBizyAirSource(source)
   },
 }

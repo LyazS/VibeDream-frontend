@@ -1,7 +1,6 @@
 {
   "app": {
     "title": "VibeDream",
-    "subtitle": "AI Video Editor",
-    "apiConfigCenter": "API Configuration Center"
+    "subtitle": "AI Video Editor"
   }
 }

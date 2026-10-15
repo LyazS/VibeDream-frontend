@@ -4,12 +4,9 @@
  * 负责按 `source.type` 注册和分发具体执行器。
  */
 
-import {
-  DataSourceProcessor,
-} from '@/core/datasource/core/BaseDataSourceProcessor'
+import { DataSourceProcessor } from '@/core/datasource/core/BaseDataSourceProcessor'
 import { UserSelectedFileProcessor } from '@/core/datasource/providers/user-selected/UserSelectedFileProcessor'
 import { AIGenerationProcessor } from '@/core/datasource/providers/ai-generation/AIGenerationProcessor'
-import { BizyAirProcessor } from '@/core/datasource/providers/bizyair/BizyAirProcessor'
 
 // ==================== 类型定义 ====================
 
@@ -68,11 +65,7 @@ export class DataSourceRegistry {
 
     // 注册 AI 生成执行器
     this.register('ai-generation', AIGenerationProcessor.getInstance())
-
-    // 注册 BizyAir 执行器
-    this.register('bizyair', BizyAirProcessor.getInstance())
   }
-
 }
 
 // ==================== 导出便捷函数 ====================
