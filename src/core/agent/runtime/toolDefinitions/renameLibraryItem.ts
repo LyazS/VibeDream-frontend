@@ -39,7 +39,7 @@ state_mismatch 后重新读取并判断，不自动覆盖 match 并机械重试�
 Examples
 --------
 重命名文件夹：{"itemId":"dir_shots","match":{"name":"镜头"},"newName":"精选镜头"}
-重命名媒体：{"itemId":"media_take01.mp4","match":{"name":"镜头01.mp4"},"newName":"开场.mp4"}
+重命名媒体：{"itemId":"media_V1StGXR8_Z5j","match":{"name":"镜头01.mp4"},"newName":"开场.mp4"}
 
 Limitations
 -----------

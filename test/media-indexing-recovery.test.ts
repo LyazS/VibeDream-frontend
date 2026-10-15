@@ -37,6 +37,7 @@ let savedIndexing: UnifiedMediaIndexMetadata | undefined
 function media(indexStatus: 'pending' | 'processing' = 'processing'): UnifiedMediaItemData {
   return {
     id: 'image-1',
+    ext: '.png',
     name: 'image.png',
     mediaType: 'image',
     metadata: { indexing: { mediaKind: 'image', indexStatus, lastIndexTaskId: taskId } },

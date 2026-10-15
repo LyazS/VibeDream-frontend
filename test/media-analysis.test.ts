@@ -10,12 +10,15 @@ import {
 import { analyzeMusicStructure } from '@/core/utils/music-analysis'
 import { VideoSegmentExportsResolver } from '@/core/jobs/resolvers/VideoSegmentExportsResolver'
 import { VideoSegmentOssUploadsResolver } from '@/core/jobs/resolvers/VideoSegmentOssUploadsResolver'
+import { MediaIndexTaskSubmitResolver } from '@/core/jobs/resolvers/MediaIndexTaskSubmitResolver'
 import {
   buildSegmentsFromBoundaries,
   createVideoSegmentExportsRequest,
   createVideoSegmentOssUploadsRequest,
+  createMediaIndexTaskSubmitRequest,
 } from '@/core/jobs/resolvers/mediaIndexingShared'
-import { exportTimelineItem, exportVideoFrames } from '@/core/utils/mediaExporter'
+import { exportMediaItem, exportTimelineItem, exportVideoFrames } from '@/core/utils/mediaExporter'
+import { submitAiTask } from '@/core/ai-tasks/taskApi'
 import { CloudflareTemporaryFileUploader } from '@/core/utils/cloudflareTemporaryFileUploader'
 import { RENDERER_FPS } from '@/core/mediabunny/constant'
 
@@ -33,11 +36,16 @@ vi.mock('@/core/timelineitem/queries', () => ({
   TimelineItemQueries: { isVideoTimelineItem: () => true },
 }))
 vi.mock('@/core/utils/mediaExporter', () => ({
+  exportMediaItem: vi.fn(),
   exportTimelineItem: vi.fn(),
   exportVideoFrames: vi.fn(),
 }))
 vi.mock('@/core/utils/cloudflareTemporaryFileUploader', () => ({
   CloudflareTemporaryFileUploader: { uploadBlob: vi.fn() },
+}))
+vi.mock('@/core/ai-tasks/taskApi', () => ({
+  submitAiTask: vi.fn(),
+  createAiTaskIdempotencyKey: () => 'indexing-test',
 }))
 
 function context<T>(request: ResourceRequest<T>): ResolveContext<T> {
@@ -65,7 +73,8 @@ describe('local music analysis', () => {
     vi.stubGlobal('fetch', fetch)
     const file = new File(['audio'], 'music.wav', { type: 'audio/wav' })
     const item = {
-      id: 'music.wav',
+      id: 'media_music',
+      ext: '.wav',
       name: 'music.wav',
       mediaType: 'audio',
       mediaStatus: 'ready',
@@ -113,8 +122,9 @@ describe('local music analysis', () => {
 describe('video indexing exports', () => {
   it('uploads short-segment frames and long-segment videos using their own export plans', async () => {
     const item = {
-      id: 'video.mp4',
-      name: 'video.mp4',
+      id: 'media_video',
+      ext: '.mov',
+      name: 'Renamed video.webm',
       mediaType: 'video',
       runtime: { bunny: { originalWidth: 1920, originalHeight: 1080 } },
     } as unknown as UnifiedMediaItemData
@@ -149,16 +159,16 @@ describe('video indexing exports', () => {
         segmentIndex: 0,
         sourceType: 'image_urls',
         taggingImageUrls: frames.map(
-          (_, i) => `https://upload.example/tagging/video-segment-0000-frame-0${i}.png`,
+          (_, i) => `https://upload.example/tagging/media_video-segment-0000-frame-0${i}.png`,
         ),
         imageTimecodes: expect.any(Array),
-        embeddingVideoUrl: 'https://upload.example/embedding/video-segment-0000.mp4',
+        embeddingVideoUrl: 'https://upload.example/embedding/media_video-segment-0000.mp4',
       },
       {
         segmentIndex: 1,
         sourceType: 'video_url',
-        taggingOssUrl: 'https://upload.example/tagging/video-segment-0001.mp4',
-        embeddingOssUrl: 'https://upload.example/embedding/video-segment-0001.mp4',
+        taggingOssUrl: 'https://upload.example/tagging/media_video-segment-0001.mp4',
+        embeddingOssUrl: 'https://upload.example/embedding/media_video-segment-0001.mp4',
       },
     ])
     expect(exportTimelineItem).toHaveBeenCalledTimes(2)
@@ -180,5 +190,67 @@ describe('video indexing exports', () => {
         clipEndTime: 10 * RENDERER_FPS,
       },
     ])
+  })
+})
+
+describe('image indexing exports', () => {
+  it('uploads PNG exports using the media ID and submits the original display name separately', async () => {
+    const item = {
+      id: 'media_image',
+      ext: '.jpg',
+      name: 'Renamed image.gif',
+      mediaType: 'image',
+      createdAt: '2026-10-15T00:00:00.000Z',
+      runtime: { bunny: { originalWidth: 100, originalHeight: 100 } },
+    } as UnifiedMediaItemData
+    const module = {
+      getMediaItem: () => item,
+      getProjectId: () => 'project',
+      ensureMediaReady: vi.fn(),
+    }
+    const imageBlob = new Blob(['image'], { type: 'image/png' })
+    vi.mocked(exportMediaItem).mockResolvedValue(imageBlob)
+    vi.mocked(CloudflareTemporaryFileUploader.uploadBlob).mockImplementation(
+      async (_, options) => ({
+        success: true,
+        url: `https://upload.example/${options.purpose}/${options.fileName}`,
+      }),
+    )
+    vi.mocked(submitAiTask).mockResolvedValue({ type: 'media.indexing', task_id: 'task-image' })
+    const ctx = context(createMediaIndexTaskSubmitRequest(item.id))
+
+    await expect(new MediaIndexTaskSubmitResolver(module).resolve(ctx)).resolves.toEqual({
+      mediaId: item.id,
+      taskId: 'task-image',
+    })
+
+    expect(CloudflareTemporaryFileUploader.uploadBlob).toHaveBeenCalledTimes(2)
+    expect(CloudflareTemporaryFileUploader.uploadBlob).toHaveBeenCalledWith(
+      imageBlob,
+      { capability: 'indexing', purpose: 'tagging', fileName: 'media_image.png' },
+      expect.any(Function),
+      ctx.signal,
+    )
+    expect(submitAiTask).toHaveBeenCalledWith(
+      'media.indexing',
+      expect.objectContaining({
+        input: expect.objectContaining({
+          media_id: item.id,
+          media_name: item.name,
+          segments: [
+            {
+              segment_id: 'image',
+              provider_urls: [
+                'https://upload.example/tagging/media_image.png',
+                'https://upload.example/embedding/media_image.png',
+              ],
+              source_type: 'image_url',
+            },
+          ],
+        }),
+      }),
+      'indexing-test',
+      ctx.signal,
+    )
   })
 })

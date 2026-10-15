@@ -1,7 +1,15 @@
 import { fileSystemService } from '@/core/managers/filesystem/fileSystemService'
-import { parseLibraryAssetMetaFile, type MediaMetaFile } from '@/core/project/metaTypes'
+import {
+  MEDIA_META_VERSION,
+  parseLibraryAssetMetaFile,
+  type MediaMetaFile,
+} from '@/core/project/metaTypes'
 import type { UnifiedMediaItemData, MediaStatus } from '@/core/mediaitem/types'
-import { getMediaPath } from '@/core/utils/mediaPathUtils'
+import {
+  getMediaFileName,
+  getMediaPath,
+  type MediaFileReference,
+} from '@/core/utils/mediaPathUtils'
 import { extractSourceData } from '@/core/datasource/core/DataSourceTypes'
 import type { UnifiedLibraryAssetData } from '@/core/asset/types'
 import { extractEffectTemplateSourceData, isMediaAsset } from '@/core/asset/types'
@@ -50,12 +58,20 @@ class GlobalMetaFileManager {
   /**
    * 保存媒体文件到项目
    * @param file 媒体文件
-   * @param id 媒体ID（格式：{nanoid}.{ext}）
+   * @param media 媒体 ID 和原文件扩展名
    * @returns 是否成功
    */
-  async saveMediaFile(file: File, id: string): Promise<boolean> {
+  async saveMediaFile(file: File, media: MediaFileReference): Promise<boolean> {
+    const { id } = media
     try {
-      console.log(`💾 [globalMetaFileManager] 保存媒体文件: ${id}`)
+      console.info('[MediaIdentity] save-file:start', {
+        projectId: this.projectId,
+        id,
+        ext: media.ext,
+        originalFileName: file.name,
+        fileType: file.type,
+        fileSize: file.size,
+      })
 
       // 检查工作空间权限
       const permissionResult = await fileSystemService.checkPermission()
@@ -69,51 +85,67 @@ class GlobalMetaFileManager {
       }
 
       // 保存文件
-      const mediaPath = fileSystemService.paths.getMediaPath(this.projectId, id)
+      const mediaPath = fileSystemService.paths.getMediaPath(this.projectId, media)
       await fileSystemService.writeFile(mediaPath, file)
 
-      console.log(`✅ [globalMetaFileManager] 媒体文件保存成功: ${id}`)
+      console.info('[MediaIdentity] save-file:success', { id, ext: media.ext, path: mediaPath })
       return true
     } catch (error) {
-      console.error(`❌ [globalMetaFileManager] 媒体文件保存失败: ${id}`, error)
+      console.error('[MediaIdentity] save-file:failed', { id, ext: media.ext }, error)
       return false
     }
   }
 
   /**
-   * 获取媒体文件句柄
-   * @param id 媒体ID（格式：{nanoid}.{ext}）
-   * @returns 文件句柄
-   */
-  /**
    * 从项目加载媒体文件
-   * @param id 媒体ID（格式：{nanoid}.{ext}）
+   * @param media 媒体 ID 和原文件扩展名
    * @returns 媒体文件
    */
-  async loadMediaFile(id: string): Promise<File> {
+  async loadMediaFile(media: MediaFileReference): Promise<File> {
+    const { id } = media
     try {
-      const mediaPath = fileSystemService.paths.getMediaPath(this.projectId, id)
+      console.info('[MediaIdentity] load-file:start', {
+        projectId: this.projectId,
+        id,
+        ext: media.ext,
+      })
+      const mediaPath = fileSystemService.paths.getMediaPath(this.projectId, media)
       const blob = await fileSystemService.readFileAsBlob(mediaPath)
-      const file = new File([blob], id, { type: blob.type })
+      const file = new File([blob], getMediaFileName(media), { type: blob.type })
 
-      console.log(`📂 [globalMetaFileManager] 媒体文件加载成功: ${id}`)
+      console.info('[MediaIdentity] load-file:success', {
+        id,
+        ext: media.ext,
+        path: mediaPath,
+        fileName: file.name,
+        fileType: file.type,
+        fileSize: file.size,
+      })
       return file
     } catch (error) {
-      console.error(`❌ [globalMetaFileManager] 媒体文件加载失败: ${id}`, error)
+      console.error('[MediaIdentity] load-file:failed', { id, ext: media.ext }, error)
       throw new Error(`加载媒体文件失败: ${error instanceof Error ? error.message : String(error)}`)
     }
   }
 
   /**
    * 验证媒体文件是否存在
-   * @param id 媒体ID
+   * @param media 媒体 ID 和原文件扩展名
    * @returns 是否存在
    */
-  async verifyMediaFileExists(id: string): Promise<boolean> {
+  async verifyMediaFileExists(media: MediaFileReference): Promise<boolean> {
     try {
-      const mediaPath = fileSystemService.paths.getMediaPath(this.projectId, id)
-      return await fileSystemService.fileExists(mediaPath)
-    } catch {
+      const mediaPath = fileSystemService.paths.getMediaPath(this.projectId, media)
+      const exists = await fileSystemService.fileExists(mediaPath)
+      console.info('[MediaIdentity] verify-file', {
+        id: media.id,
+        ext: media.ext,
+        path: mediaPath,
+        exists,
+      })
+      return exists
+    } catch (error) {
+      console.error('[MediaIdentity] verify-file:failed', { id: media.id, ext: media.ext }, error)
       return false
     }
   }
@@ -148,8 +180,9 @@ class GlobalMetaFileManager {
 
       const metaData: MediaMetaFile = isMediaAsset(asset)
         ? {
-            version: '1.1.0',
+            version: MEDIA_META_VERSION,
             id: asset.id,
+            ext: asset.ext,
             name: asset.name,
             createdAt: asset.createdAt,
             assetKind: 'media',
@@ -191,19 +224,31 @@ class GlobalMetaFileManager {
 
       // 4. 写入 meta 文件
       const metaPath = fileSystemService.paths.getMetaPath(this.projectId, asset.id)
+      console.info('[MediaIdentity] save-meta:start', {
+        id: asset.id,
+        ext: isMediaAsset(asset) ? asset.ext : undefined,
+        name: asset.name,
+        version: metaData.version,
+        assetKind: asset.assetKind,
+        path: metaPath,
+      })
       await fileSystemService.writeFile(metaPath, JSON.stringify(metaData, null, 2))
 
-      console.log(`✅ [globalMetaFileManager] Meta 文件保存成功: ${asset.id}.meta`)
+      console.info('[MediaIdentity] save-meta:success', { id: asset.id, path: metaPath })
       return true
     } catch (error) {
-      console.error(`❌ [globalMetaFileManager] Meta 文件保存失败: ${asset.id}`, error)
+      console.error(
+        '[MediaIdentity] save-meta:failed',
+        { id: asset.id, assetKind: asset.assetKind },
+        error,
+      )
       return false
     }
   }
 
   /**
    * 读取 Meta 文件
-   * @param id Meta 文件 ID（如 "V1StGXR8_Z5j.mp4"）
+   * @param id 素材 ID（不含扩展名）
    * @returns Meta 文件数据
    */
   async readMetaFile(id: string): Promise<MediaMetaFile | null> {
@@ -233,9 +278,15 @@ class GlobalMetaFileManager {
           try {
             const content = await fileSystemService.readFile(entry.path)
             const metaData = parseLibraryAssetMetaFile(JSON.parse(content) as unknown)
+            console.info('[MediaIdentity] scan-meta:accepted', {
+              id: metaData.id,
+              ext: metaData.assetKind === 'media' ? metaData.ext : undefined,
+              version: metaData.version,
+              path: entry.path,
+            })
             metaFiles.push(metaData)
           } catch (error) {
-            console.warn(`⚠️ [globalMetaFileManager] 解析 Meta 文件失败: ${entry.name}`, error)
+            console.warn('[MediaIdentity] scan-meta:rejected', { path: entry.path }, error)
           }
         }
       }
@@ -268,8 +319,8 @@ class GlobalMetaFileManager {
 
       console.log(`💾 [globalMetaFileManager] 开始保存媒体到项目: ${targetFile.name}`)
 
-      // 1. 保存媒体文件到 media/{id}
-      const saveFileSuccess = await this.saveMediaFile(targetFile, mediaItem.id)
+      // 1. 保存媒体文件到 media/{id}{ext}
+      const saveFileSuccess = await this.saveMediaFile(targetFile, mediaItem)
       if (!saveFileSuccess) {
         throw new Error('保存媒体文件失败')
       }
@@ -285,7 +336,7 @@ class GlobalMetaFileManager {
       return {
         success: true,
         mediaId: mediaItem.id,
-        storagePath: getMediaPath(mediaItem.id),
+        storagePath: getMediaPath(mediaItem),
         isReused: false,
       }
     } catch (error) {
@@ -299,17 +350,22 @@ class GlobalMetaFileManager {
 
   /**
    * 删除媒体文件和Meta文件
-   * @param id 媒体ID（格式：{nanoid}.{ext}）
+   * @param media 媒体 ID 和原文件扩展名
    * @returns 删除结果
    */
-  async deleteMediaFiles(id: string): Promise<{
+  async deleteMediaFiles(media: MediaFileReference): Promise<{
     success: boolean
     deletedMedia: boolean
     deletedMeta: boolean
     error?: string
   }> {
+    const { id } = media
     try {
-      console.log(`🗑️ [globalMetaFileManager] 开始删除媒体文件: ${id}`)
+      console.info('[MediaIdentity] delete:start', {
+        projectId: this.projectId,
+        id,
+        ext: media.ext,
+      })
 
       let deletedMedia = false
       let deletedMeta = false
@@ -320,7 +376,7 @@ class GlobalMetaFileManager {
 
       // 1. 删除媒体文件
       try {
-        const mediaPath = fileSystemService.paths.getMediaPath(this.projectId, id)
+        const mediaPath = fileSystemService.paths.getMediaPath(this.projectId, media)
         mediaExists = await fileSystemService.fileExists(mediaPath)
 
         if (mediaExists) {
@@ -331,7 +387,7 @@ class GlobalMetaFileManager {
           console.warn(`⚠️ [globalMetaFileManager] 媒体文件不存在: ${id}`)
         }
       } catch (error) {
-        console.error(`❌ [globalMetaFileManager] 删除媒体文件失败: ${id}`, error)
+        console.error('[MediaIdentity] delete-file:failed', { id, ext: media.ext }, error)
         mediaDeleteFailed = true
       }
 
@@ -348,7 +404,7 @@ class GlobalMetaFileManager {
           console.warn(`⚠️ [globalMetaFileManager] Meta文件不存在: ${id}.meta`)
         }
       } catch (error) {
-        console.error(`❌ [globalMetaFileManager] 删除Meta文件失败: ${id}.meta`, error)
+        console.error('[MediaIdentity] delete-meta:failed', { id }, error)
         metaDeleteFailed = true
       }
 
@@ -359,11 +415,15 @@ class GlobalMetaFileManager {
         (!mediaExists || deletedMedia) &&
         (!metaExists || deletedMeta)
 
-      if (success) {
-        console.log(`✅ [globalMetaFileManager] 媒体文件删除完成: ${id}`)
-      } else {
-        console.warn(`⚠️ [globalMetaFileManager] 媒体文件删除不完整: ${id}`)
-      }
+      console.info('[MediaIdentity] delete:result', {
+        id,
+        ext: media.ext,
+        success,
+        mediaExists,
+        metaExists,
+        deletedMedia,
+        deletedMeta,
+      })
 
       return {
         success,
@@ -372,7 +432,7 @@ class GlobalMetaFileManager {
         ...(success ? {} : { error: '媒体文件或 Meta 文件删除失败' }),
       }
     } catch (error) {
-      console.error(`❌ [globalMetaFileManager] 删除媒体文件失败: ${id}`, error)
+      console.error('[MediaIdentity] delete:failed', { id, ext: media.ext }, error)
       return {
         success: false,
         deletedMedia: false,
@@ -389,11 +449,14 @@ class GlobalMetaFileManager {
     error?: string
   }> {
     if (isMediaAsset(asset)) {
-      return this.deleteMediaFiles(asset.id)
+      return this.deleteMediaFiles(asset)
     }
 
     try {
-      const packageDirPath = fileSystemService.paths.getMediaPath(this.projectId, asset.id)
+      const packageDirPath = fileSystemService.paths.getProjectEffectPackageDirPath(
+        this.projectId,
+        asset.id,
+      )
       const packageDirExists = await fileSystemService.directoryExists(packageDirPath)
       if (packageDirExists) {
         await fileSystemService.deleteDirectory(packageDirPath, true)

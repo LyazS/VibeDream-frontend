@@ -9,6 +9,7 @@ import type { UnifiedDataSourceData } from '@/core/datasource/core/DataSourceTyp
 import { BunnyMedia } from '../mediabunny/bunny-media'
 import type { AudioWaveformLOD } from '../audiowaveform/types'
 import type { MusicAnalysisAnchor } from '../utils/music-analysis/types'
+import { isMediaExtension, type MediaFileReference } from '../utils/mediaPathUtils'
 // ==================== 类型定义 ====================
 
 /**
@@ -47,9 +48,8 @@ export interface BunnyObjects {
 /**
  * 统一的媒体项目数据接口 - 纯响应式状态对象
  */
-export interface UnifiedMediaItemData {
+export interface UnifiedMediaItemData extends MediaFileReference {
   // ==================== 核心属性 ====================
-  readonly id: string
   name: string
   createdAt: string
   assetKind: 'media'
@@ -269,10 +269,25 @@ export function createUnifiedMediaItemData(
   id: string,
   name: string,
   source: UnifiedDataSourceData,
-  options: Omit<Partial<UnifiedMediaItemData>, 'parentDirectoryId'> & {
+  options: Omit<
+    Partial<UnifiedMediaItemData>,
+    'id' | 'name' | 'source' | 'ext' | 'parentDirectoryId'
+  > & {
+    ext: string
     parentDirectoryId: string
   },
 ): UnifiedMediaItemData {
+  if (!isMediaExtension(options.ext)) {
+    console.error('[MediaIdentity] create:invalid-extension', { id, ext: options.ext, name })
+    throw new Error('Invalid media extension')
+  }
+  console.info('[MediaIdentity] create', {
+    id,
+    ext: options.ext,
+    name,
+    sourceOrigin: source.sourceOrigin,
+    parentDirectoryId: options.parentDirectoryId,
+  })
   return reactive({
     id,
     name,

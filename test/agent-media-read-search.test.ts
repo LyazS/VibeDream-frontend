@@ -70,7 +70,7 @@ function deferred<T>() {
 }
 
 function media(
-  id = 'media_video.mp4',
+  id = 'media_video',
   mediaType: 'video' | 'image' | 'audio' = 'video',
   indexStatus: MediaIndexStatus = 'completed',
 ) {
@@ -79,6 +79,7 @@ function media(
     'Original name',
     UserSelectedFileSourceFactory.createFromBaseData({ type: 'user-selected' }),
     {
+      ext: mediaType === 'audio' ? '.wav' : mediaType === 'image' ? '.png' : '.mp4',
       parentDirectoryId: 'dir_original',
       mediaType,
       duration: 75,
@@ -99,7 +100,7 @@ function media(
   return item
 }
 
-function candidate(id = 'media_video.mp4', segmentIndex?: number): RetrievalResultItem {
+function candidate(id = 'media_video', segmentIndex?: number): RetrievalResultItem {
   const pointId = `${id}:${segmentIndex ?? 'image'}`
   return {
     point_id: pointId,
@@ -143,10 +144,10 @@ describe('read_media ID contract', () => {
     { mediaIds: [] },
     { mediaIds: [''] },
     { mediaIds: [null] },
-    { mediaIds: 'media_video.mp4' },
-    { mediaIds: Array.from({ length: 11 }, () => 'media_video.mp4') },
-    { mediaIds: ['media_video.mp4'], includeSegments: 'true' },
-    { mediaIds: ['media_video.mp4'], parentDirId: 'dir_original' },
+    { mediaIds: 'media_video' },
+    { mediaIds: Array.from({ length: 11 }, () => 'media_video') },
+    { mediaIds: ['media_video'], includeSegments: 'true' },
+    { mediaIds: ['media_video'], parentDirId: 'dir_original' },
   ])('rejects malformed input via ToolRuntime: %j', async (args) => {
     await expect(run('read_media', args)).rejects.toThrow('TOOL_ARGUMENTS_INVALID')
     expect(mocks.indexing).not.toHaveBeenCalled()
@@ -159,7 +160,7 @@ describe('read_media ID contract', () => {
     expect(mocks.indexing).not.toHaveBeenCalled()
   })
 
-  it.each([' media_video.mp4 ', 'media_video', 'media_video.mp4.extra'])(
+  it.each([' media_video ', 'media_vide', 'media_video.mp4', 'media_video_extra'])(
     'does not trim or substitute the requested ID %j',
     async (id) => {
       media()
@@ -172,9 +173,9 @@ describe('read_media ID contract', () => {
   )
 
   it('accepts an exact stored ID with surrounding whitespace', async () => {
-    media(' media_video.mp4 ')
-    const { output } = await run('read_media', { mediaIds: [' media_video.mp4 '] })
-    expect(output.mediaItems[0]).toMatchObject({ mediaId: ' media_video.mp4 ', status: 'found' })
+    media(' media_video ')
+    const { output } = await run('read_media', { mediaIds: [' media_video '] })
+    expect(output.mediaItems[0]).toMatchObject({ mediaId: ' media_video ', status: 'found' })
   })
 
   it('preserves basic, summary and segment formats without adding identity or location fields', async () => {
@@ -222,7 +223,7 @@ describe('read_media ID contract', () => {
   })
 
   it('returns audio basics without content indexing', async () => {
-    const item = media('audio.wav', 'audio')
+    const item = media('media_audio', 'audio')
     const { output } = await run('read_media', { mediaIds: [item.id] })
     expect(output.mediaItems).toEqual([
       {
@@ -236,8 +237,8 @@ describe('read_media ID contract', () => {
   })
 
   it('uses current local names and details after indexing, including items already resolved', async () => {
-    const ready = media('ready.mp4')
-    const waiting = media('waiting.mp4', 'video', 'processing')
+    const ready = media('media_ready')
+    const waiting = media('media_waiting', 'video', 'processing')
     const indexing = deferred<void>()
     mocks.indexing.mockReturnValue(indexing.promise)
     const pending = executeReadMedia({ mediaIds: [ready.id, waiting.id] }, context())
@@ -275,14 +276,14 @@ describe('read_media ID contract', () => {
   it.each(['ready', 'waiting'])(
     'reports a deleted %s item after waiting without using its replacement',
     async (kind) => {
-      const ready = media('ready.mp4')
-      const waiting = media('waiting.mp4', 'video', 'processing')
+      const ready = media('media_ready')
+      const waiting = media('media_waiting', 'video', 'processing')
       const deletedId = kind === 'ready' ? ready.id : waiting.id
       const indexing = deferred<void>()
       mocks.indexing.mockReturnValue(indexing.promise)
       const pending = executeReadMedia({ mediaIds: [ready.id, waiting.id] }, context())
       mocks.items = mocks.items.filter((item) => item.id !== deletedId)
-      media(`${deletedId}.replacement`)
+      media(`${deletedId}_replacement`)
       waiting.metadata!.indexing!.indexStatus = 'completed'
       indexing.resolve()
       const { output } = parse(await pending)
@@ -299,7 +300,7 @@ describe('read_media ID contract', () => {
   it.each(['status', 'rejection'])(
     'keeps local basics when analysis fails through %s',
     async (kind) => {
-      const item = media('failed.mp4', 'video', kind === 'status' ? 'failed' : 'processing')
+      const item = media('media_failed', 'video', kind === 'status' ? 'failed' : 'processing')
       mocks.indexing.mockRejectedValue(new Error('Indexing service unavailable'))
       const { output } = await run('read_media', { mediaIds: [item.id] })
       expect(output.mediaItems[0]).toMatchObject({
@@ -361,7 +362,7 @@ describe('search_media ID contract', () => {
   })
 
   it('preserves image candidates and the requested limit without directory fields', async () => {
-    const item = media('image.png', 'image')
+    const item = media('media_image', 'image')
     mocks.search.mockResolvedValue({ results: [candidate(item.id)] })
     const { output } = await run('search_media', { query: 'city', top_k: 10 })
     expect(output.requestedTopK).toBe(10)
@@ -380,13 +381,13 @@ describe('search_media ID contract', () => {
   it.each([false, true])(
     'filters deleted candidates and counts segments even when allDeleted=%s',
     async (allDeleted) => {
-      const deleted = media('deleted.mp4')
-      const retained = media('retained.mp4')
+      const deleted = media('media_deleted')
+      const retained = media('media_retained')
       const search = deferred<{ results: RetrievalResultItem[] }>()
       mocks.search.mockReturnValue(search.promise)
       const pending = executeSearchMedia({ query: 'city' }, context())
       mocks.items = allDeleted ? [] : [retained]
-      media('deleted.mp4.replacement')
+      media('media_deleted_replacement')
       search.resolve({
         results: [candidate(deleted.id, 1), candidate(retained.id, 1), candidate(deleted.id, 2)],
       })
@@ -403,7 +404,7 @@ describe('search_media ID contract', () => {
   it('does not normalize or complete backend candidate IDs', async () => {
     media()
     mocks.search.mockResolvedValue({
-      results: [candidate(' media_video.mp4 '), candidate('media_video')],
+      results: [candidate(' media_video '), candidate('media_video.mp4')],
     })
     const { output } = await run('search_media', { query: 'city' })
     expect(output.results).toEqual([])
@@ -412,7 +413,7 @@ describe('search_media ID contract', () => {
 
   it('ignores missing validation only for candidates that no longer exist', async () => {
     mocks.search.mockResolvedValue({
-      results: [{ ...candidate('deleted.mp4'), validation_result: undefined }],
+      results: [{ ...candidate('media_deleted'), validation_result: undefined }],
     })
     const { result, output } = await run('search_media', { query: 'city' })
     expect(result.success).toBe(true)

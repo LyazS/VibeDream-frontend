@@ -61,69 +61,17 @@ export function generateTrackId(): string {
 }
 
 /**
- * 生成带扩展名的媒体 ID
- * @param extension 文件扩展名（如 ".mp4"）
- * @returns 完整 ID（如 "media_V1StGXR8_Z5j.mp4"）
+ * 生成媒体 ID，文件扩展名由媒体对象单独保存。
  */
-export function generateMediaId(extension: string): string {
-  const nanoId = nanoid(12) // 生成12字符的 nanoid
-  // 确保扩展名以 . 开头
-  const ext = extension.startsWith('.') ? extension : `.${extension}`
-  return `media_${nanoId}${ext}`
+export function generateMediaId(): string {
+  return `media_${nanoid(12)}`
 }
 
 /**
  * 生成通用资产 ID
  */
-export function generateAssetId(prefix: 'asset' | 'effect', extension?: string): string {
-  const nanoId = nanoid(12)
-  if (!extension) {
-    return `${prefix}_${nanoId}`
-  }
-
-  const ext = extension.startsWith('.') ? extension : `.${extension}`
-  return `${prefix}_${nanoId}${ext}`
-}
-
-/**
- * 从文件名提取扩展名
- * @param fileName 文件名
- * @returns 扩展名（包含点，如 ".mp4"）
- */
-export function extractExtension(fileName: string): string {
-  const lastDotIndex = fileName.lastIndexOf('.')
-  return lastDotIndex !== -1 ? fileName.substring(lastDotIndex) : ''
-}
-
-/**
- * 从 ID 提取扩展名
- * @param id 媒体 ID（如 "V1StGXR8_Z5j.mp4"）
- * @returns 扩展名（如 ".mp4"）
- */
-export function extractExtensionFromId(id: string): string {
-  return extractExtension(id)
-}
-
-/**
- * 从 ID 提取纯 nanoid 部分
- * @param id 媒体 ID（如 "V1StGXR8_Z5j.mp4"）
- * @returns nanoid 部分（如 "V1StGXR8_Z5j"）
- */
-export function extractNanoId(id: string): string {
-  const lastDotIndex = id.lastIndexOf('.')
-  return lastDotIndex !== -1 ? id.substring(0, lastDotIndex) : id
-}
-
-/**
- * 解析 ID 为 nanoid 和扩展名
- * @param id 媒体 ID
- * @returns { nanoid, extension }
- */
-export function parseMediaId(id: string): { nanoid: string; extension: string } {
-  return {
-    nanoid: extractNanoId(id),
-    extension: extractExtensionFromId(id),
-  }
+export function generateAssetId(prefix: 'asset' | 'effect'): string {
+  return `${prefix}_${nanoid(12)}`
 }
 
 /**

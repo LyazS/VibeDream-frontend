@@ -113,7 +113,7 @@ export class VideoSegmentOssUploadsResolver
         // 保持 frame URL 与 image_timecodes 的同序关系，Worker 才能把标签对应回视频时间轴。
         const taggingImageUrls: string[] = []
         for (let frameIdx = 0; frameIdx < frameBlobs.length; frameIdx += 1) {
-          const frameName = buildFrameFileName(mediaItem.name, plan.segment.segmentIndex, frameIdx)
+          const frameName = buildFrameFileName(mediaItem.id, plan.segment.segmentIndex, frameIdx)
           const frameUploadResult = await CloudflareTemporaryFileUploader.uploadBlob(
             frameBlobs[frameIdx],
             { capability: 'indexing', purpose: 'tagging', fileName: frameName },

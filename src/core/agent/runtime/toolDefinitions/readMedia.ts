@@ -73,7 +73,7 @@ Limitations
           description: '素材 ID。',
         },
         description:
-          '素材 ID 数组，1-10 个。仅用于读取已知素材；如果还没有 mediaId，应先通过 list_media 或 search_media 获取。必须使用完整原始 mediaId，不要截断、补全、翻译或修改扩展名。',
+          '素材 ID 数组，1-10 个。仅用于读取已知素材；如果还没有 mediaId，应先通过 list_media 或 search_media 获取。必须使用完整原始 mediaId，不要截断、补全、翻译或追加文件扩展名。',
         minItems: 1,
         maxItems: 10,
       },

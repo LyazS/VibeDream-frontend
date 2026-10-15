@@ -42,7 +42,7 @@ export class MediaItemLoader {
             // text 类型没有实际媒体文件，跳过文件验证
             console.log(`📝 [MediaItemLoader] 文本媒体项目加载（无文件）: ${metaData.name}`)
           } else if (mediaItem.mediaStatus === 'ready') {
-            const fileExists = await globalMetaFileManager.verifyMediaFileExists(metaData.id)
+            const fileExists = await globalMetaFileManager.verifyMediaFileExists(mediaItem)
 
             if (fileExists) {
               console.log(`✅ [MediaItemLoader] 媒体项目加载成功: ${metaData.name}`)
@@ -97,22 +97,26 @@ export class MediaItemLoader {
     }
 
     // 2. 创建媒体项目
-    const mediaItem = createUnifiedMediaItemData(
-      metaData.id, // ID 格式: {nanoid}.{ext}
-      metaData.name,
-      source,
-      {
-        createdAt: metaData.createdAt,
-        parentDirectoryId: metaData.parentDirectoryId,
-        mediaType: metaData.mediaType,
-        duration: metaData.duration,
-        mediaStatus: metaData.mediaStatus || 'pending', // 🌟 如果 meta 文件中有终态状态，使用它；否则默认为 pending
-        // 恢复素材分析元数据
-        ...(metaData.metadata && {
-          metadata: metaData.metadata,
-        }),
-      },
-    )
+    const mediaItem = createUnifiedMediaItemData(metaData.id, metaData.name, source, {
+      ext: metaData.ext,
+      createdAt: metaData.createdAt,
+      parentDirectoryId: metaData.parentDirectoryId,
+      mediaType: metaData.mediaType,
+      duration: metaData.duration,
+      mediaStatus: metaData.mediaStatus || 'pending', // 🌟 如果 meta 文件中有终态状态，使用它；否则默认为 pending
+      // 恢复素材分析元数据
+      ...(metaData.metadata && {
+        metadata: metaData.metadata,
+      }),
+    })
+    console.info('[MediaIdentity] restore-meta', {
+      id: mediaItem.id,
+      ext: mediaItem.ext,
+      name: mediaItem.name,
+      version: metaData.version,
+      mediaStatus: mediaItem.mediaStatus,
+      parentDirectoryId: mediaItem.parentDirectoryId,
+    })
 
     return mediaItem
   }

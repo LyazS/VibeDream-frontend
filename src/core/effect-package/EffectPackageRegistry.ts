@@ -78,7 +78,9 @@ export class EffectPackageRegistry {
         content: file.content as string | Blob,
       }
     })
-    const parentDirs = Array.from(new Set(preparedFiles.map((file) => this.getParentDirectory(file.targetPath))))
+    const parentDirs = Array.from(
+      new Set(preparedFiles.map((file) => this.getParentDirectory(file.targetPath))),
+    )
 
     for (const directoryPath of parentDirs) {
       if (!directoryPath) {
@@ -87,9 +89,11 @@ export class EffectPackageRegistry {
       await fileSystemService.createDirectory(directoryPath)
     }
 
-    await Promise.all(preparedFiles.map(async (file) => {
-      await fileSystemService.writeFile(file.targetPath, file.content)
-    }))
+    await Promise.all(
+      preparedFiles.map(async (file) => {
+        await fileSystemService.writeFile(file.targetPath, file.content)
+      }),
+    )
   }
 
   async installDownloadedPackage(
@@ -102,7 +106,10 @@ export class EffectPackageRegistry {
       await fileSystemService.createDirectory(mediaDirPath)
     }
 
-    const packageDirPath = fileSystemService.paths.getMediaPath(projectId, assetId)
+    const packageDirPath = fileSystemService.paths.getProjectEffectPackageDirPath(
+      projectId,
+      assetId,
+    )
     if (await fileSystemService.directoryExists(packageDirPath).catch(() => false)) {
       await fileSystemService.deleteDirectory(packageDirPath, true)
     }
@@ -122,7 +129,10 @@ export class EffectPackageRegistry {
 
   async cleanupInstalledPackage(projectId: string, assetId: string): Promise<void> {
     this.removePackage(assetId)
-    const packageDirPath = fileSystemService.paths.getMediaPath(projectId, assetId)
+    const packageDirPath = fileSystemService.paths.getProjectEffectPackageDirPath(
+      projectId,
+      assetId,
+    )
     if (await fileSystemService.directoryExists(packageDirPath).catch(() => false)) {
       await fileSystemService.deleteDirectory(packageDirPath, true)
     }

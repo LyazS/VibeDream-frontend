@@ -138,20 +138,21 @@ describe('list_media ID contract', () => {
     root.childDirIds = ['dir_b', 'dir_a']
     directory('dir_b', '同名', 'dir_root')
     directory('dir_a', '同名', 'dir_root')
-    mocks.assets = ['media_b.mp4', 'media_a.mp4'].map((id) => ({
+    mocks.assets = ['media_b', 'media_a'].map((id) => ({
       id,
+      ext: '.mp4',
       name: '同名',
       mediaType: 'video',
     }))
-    mocks.getAssetIdsInDirectory.mockReturnValue(['media_b.mp4', 'media_a.mp4'])
+    mocks.getAssetIdsInDirectory.mockReturnValue(['media_b', 'media_a'])
     const first = (await list({ limit: 2 })).output
     expect(first.entries.map((entry: { dirId: string }) => entry.dirId)).toEqual(['dir_a', 'dir_b'])
     expect(first.page).toEqual({ offset: 1, limit: 2, total: 4, nextOffset: 3 })
     const second = (await list({ dirId: first.dirId, offset: first.page.nextOffset, limit: 2 }))
       .output
     expect(second.entries.map((entry: { mediaId: string }) => entry.mediaId)).toEqual([
-      'media_a.mp4',
-      'media_b.mp4',
+      'media_a',
+      'media_b',
     ])
     expect(second.page.nextOffset).toBeNull()
     expect((await list({ offset: 5 })).output).toMatchObject({
@@ -163,7 +164,8 @@ describe('list_media ID contract', () => {
   it('preserves media fields and completed indexing metadata without repeating parent fields', async () => {
     mocks.assets = [
       {
-        id: 'media_video.mp4',
+        id: 'media_video',
+        ext: '.mp4',
         name: 'A.mp4',
         mediaType: 'video',
         metadata: {
@@ -176,7 +178,8 @@ describe('list_media ID contract', () => {
         },
       },
       {
-        id: 'media_image.png',
+        id: 'media_image',
+        ext: '.png',
         name: 'B.png',
         mediaType: 'image',
         metadata: {
@@ -188,7 +191,8 @@ describe('list_media ID contract', () => {
         },
       },
       {
-        id: 'media_pending.mp4',
+        id: 'media_pending',
+        ext: '.mp4',
         name: 'C.mp4',
         mediaType: 'video',
         metadata: { indexing: { indexStatus: 'processing', segmentCount: 9 } },
@@ -200,7 +204,7 @@ describe('list_media ID contract', () => {
     expect((await list({ dirId: 'dir_videos' })).output.entries).toEqual([
       {
         type: 'media',
-        mediaId: 'media_video.mp4',
+        mediaId: 'media_video',
         name: 'A.mp4',
         mediaType: 'video',
         title: '海边日落',
@@ -208,12 +212,12 @@ describe('list_media ID contract', () => {
       },
       {
         type: 'media',
-        mediaId: 'media_image.png',
+        mediaId: 'media_image',
         name: 'B.png',
         mediaType: 'image',
         title: '照片',
       },
-      { type: 'media', mediaId: 'media_pending.mp4', name: 'C.mp4', mediaType: 'video' },
+      { type: 'media', mediaId: 'media_pending', name: 'C.mp4', mediaType: 'video' },
     ])
     expect(
       (await list()).output.entries.every((entry: { type: string }) => entry.type === 'directory'),

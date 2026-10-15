@@ -176,13 +176,22 @@ export class MediaIndexTaskSubmitResolver
         mediaItem,
         ...exportSize,
       })
+      const fileName = `${mediaItem.id}.png`
+      console.info('[MediaIdentity] indexing:export-image', {
+        id: mediaItem.id,
+        sourceExt: mediaItem.ext,
+        name: mediaItem.name,
+        outputFileName: fileName,
+        outputType: imageBlob.type,
+        outputSize: imageBlob.size,
+      })
       ctx.signal.throwIfAborted()
 
       // DashScope 的视觉打标与多模态 embedding 分别申请用途受限的 OSS policy，
       // 即使当前 Blob 相同也不复用 URL，避免模型资源用途混淆。
       const taggingResult = await CloudflareTemporaryFileUploader.uploadBlob(
         imageBlob,
-        { capability: 'indexing', purpose: 'tagging', fileName: mediaItem.name },
+        { capability: 'indexing', purpose: 'tagging', fileName },
         (progress) => {
           ctx.update({
             progress: Math.max(0.05, Math.min(0.25, (progress / 100) * 0.2 + 0.05)),
@@ -205,7 +214,7 @@ export class MediaIndexTaskSubmitResolver
 
       const embeddingResult = await CloudflareTemporaryFileUploader.uploadBlob(
         imageBlob,
-        { capability: 'indexing', purpose: 'embedding', fileName: mediaItem.name },
+        { capability: 'indexing', purpose: 'embedding', fileName },
         (progress) => {
           ctx.update({
             progress: Math.max(0.25, Math.min(0.45, (progress / 100) * 0.2 + 0.25)),

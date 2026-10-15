@@ -433,11 +433,8 @@ export function buildIndexingExportSize(
   }
 }
 
-export function buildSegmentFileName(mediaName: string, segmentIndex: number): string {
-  const dotIndex = mediaName.lastIndexOf('.')
-  const baseName = dotIndex > 0 ? mediaName.slice(0, dotIndex) : mediaName
-  const ext = dotIndex > 0 ? mediaName.slice(dotIndex) : '.mp4'
-  return `${baseName}-segment-${String(segmentIndex).padStart(4, '0')}${ext}`
+export function buildSegmentFileName(mediaId: string, segmentIndex: number): string {
+  return `${mediaId}-segment-${String(segmentIndex).padStart(4, '0')}.mp4`
 }
 
 export function setIndexingMetadata(
@@ -598,11 +595,9 @@ export function computeFrameTimestampsMs(durationN: number): {
 }
 
 export function buildFrameFileName(
-  mediaName: string,
+  mediaId: string,
   segmentIndex: number,
   frameIndex: number,
 ): string {
-  const dotIndex = mediaName.lastIndexOf('.')
-  const baseName = dotIndex > 0 ? mediaName.slice(0, dotIndex) : mediaName
-  return `${baseName}-segment-${String(segmentIndex).padStart(4, '0')}-frame-${String(frameIndex).padStart(2, '0')}.png`
+  return `${mediaId}-segment-${String(segmentIndex).padStart(4, '0')}-frame-${String(frameIndex).padStart(2, '0')}.png`
 }

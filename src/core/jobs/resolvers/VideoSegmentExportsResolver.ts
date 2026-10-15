@@ -62,7 +62,7 @@ export class VideoSegmentExportsResolver
             outputWidth: exportSize?.outputWidth,
             outputHeight: exportSize?.outputHeight,
           },
-          fileName: buildSegmentFileName(mediaItem.name, segment.segmentIndex),
+          fileName: buildSegmentFileName(mediaItem.id, segment.segmentIndex),
           timelineItemId: timelineItem.id,
           exportOptions: exportSize,
         })
@@ -70,13 +70,19 @@ export class VideoSegmentExportsResolver
         exportPlans.push({
           exportKind: 'video',
           segment,
-          fileName: buildSegmentFileName(mediaItem.name, segment.segmentIndex),
+          fileName: buildSegmentFileName(mediaItem.id, segment.segmentIndex),
           timelineItemId: timelineItem.id,
           exportOptions: exportSize,
         })
       }
     }
 
+    console.info('[MediaIdentity] indexing:export-plans', {
+      id: mediaItem.id,
+      sourceExt: mediaItem.ext,
+      name: mediaItem.name,
+      plans: exportPlans.map((plan) => ({ exportKind: plan.exportKind, fileName: plan.fileName })),
+    })
     ctx.update({
       progress: 1,
       stage: 'segment-export-plans-ready',

@@ -56,6 +56,7 @@ function folder(name: string, parent: string | null = parentId) {
 function addMedia(parent = folderId, register = true) {
   const source = UserSelectedFileSourceFactory.createFromBaseData({ type: 'user-selected' })
   const asset = createUnifiedMediaItemData('media_take01', '镜头01.mp4', source, {
+    ext: '.mp4',
     parentDirectoryId: parent,
     mediaType: 'video',
   })

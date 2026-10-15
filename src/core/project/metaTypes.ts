@@ -1,4 +1,5 @@
 import type { BaseDataSourcePersistedData } from '@/core/datasource/core/DataSourceTypes'
+import { isMediaExtension } from '@/core/utils/mediaPathUtils'
 import type {
   BaseEffectTemplateSourceData,
   EffectTemplateStatus,
@@ -22,8 +23,12 @@ export interface BaseLibraryAssetMetaFile {
   assetKind: 'media' | 'effect-template'
 }
 
+export const MEDIA_META_VERSION = '2.0.0'
+
 export interface MediaLibraryAssetMetaFile extends BaseLibraryAssetMetaFile {
+  version: typeof MEDIA_META_VERSION
   assetKind: 'media'
+  ext: string
   parentDirectoryId: string
   source: BaseDataSourcePersistedData
   mediaType: MediaTypeOrUnknown
@@ -296,6 +301,8 @@ export function isMediaLibraryAssetMetaFileValue(
   const candidate = value as unknown as Record<string, unknown>
 
   return (
+    candidate.version === MEDIA_META_VERSION &&
+    isMediaExtension(candidate.ext) &&
     isMediaPersistedSourceData(candidate.source) &&
     typeof candidate.parentDirectoryId === 'string' &&
     isMediaTypeOrUnknown(candidate.mediaType) &&
@@ -330,5 +337,12 @@ export function parseLibraryAssetMetaFile(value: unknown): LibraryAssetMetaFile 
     return value
   }
 
+  console.error('[MediaIdentity] meta:invalid', {
+    version: isRecord(value) ? value.version : undefined,
+    id: isRecord(value) ? value.id : undefined,
+    ext: isRecord(value) ? value.ext : undefined,
+    assetKind: isRecord(value) ? value.assetKind : undefined,
+    expectedMediaVersion: MEDIA_META_VERSION,
+  })
   throw new Error('Invalid library asset meta file')
 }

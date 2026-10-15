@@ -49,7 +49,7 @@ let rootId: string
 let parentId: string
 let targetId: string
 let folderId: string
-const mediaId = 'media_take01.mp4'
+const mediaId = 'media_take01'
 
 function createTestStore() {
   return {
@@ -75,7 +75,11 @@ function folder(name: string, parent: string | null = parentId) {
 function addMedia(id = mediaId, name = '镜头01.mp4', parent = parentId) {
   const source = UserSelectedFileSourceFactory.createFromBaseData({ type: 'user-selected' })
   media.mediaItems.value.push(
-    createUnifiedMediaItemData(id, name, source, { parentDirectoryId: parent, mediaType: 'video' }),
+    createUnifiedMediaItemData(id, name, source, {
+      ext: '.mp4',
+      parentDirectoryId: parent,
+      mediaType: 'video',
+    }),
   )
   expect(directories.registerAssetLocation(id).success).toBe(true)
   return media.getMediaItem(id)!
@@ -445,7 +449,7 @@ describe('move_library_items ID contract', () => {
         'unregistered',
         '未登记.mp4',
         UserSelectedFileSourceFactory.createFromBaseData({ type: 'user-selected' }),
-        { parentDirectoryId: parentId, mediaType: 'video' },
+        { ext: '.mp4', parentDirectoryId: parentId, mediaType: 'video' },
       ),
     )
     expect((await move(request([folderId, 'unregistered']))).output.code).toBe('invalid_location')

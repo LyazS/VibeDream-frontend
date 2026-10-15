@@ -46,7 +46,7 @@ let store: ReturnType<typeof createTestStore>
 let rootId: string
 let parentId: string
 let folderId: string
-const mediaId = 'media_take01.mp4'
+const mediaId = 'media_take01'
 
 function createTestStore() {
   return {
@@ -76,7 +76,11 @@ function folder(name: string, parent: string | null) {
 function addMedia(id = mediaId, name = '镜头01.mp4', parent = parentId) {
   const source = UserSelectedFileSourceFactory.createFromBaseData({ type: 'user-selected' })
   media.mediaItems.value.push(
-    createUnifiedMediaItemData(id, name, source, { parentDirectoryId: parent, mediaType: 'video' }),
+    createUnifiedMediaItemData(id, name, source, {
+      ext: '.mp4',
+      parentDirectoryId: parent,
+      mediaType: 'video',
+    }),
   )
   expect(directories.registerAssetLocation(id).success).toBe(true)
   return media.getMediaItem(id)!
@@ -164,6 +168,7 @@ describe('rename_library_item ID contract', () => {
     expect(await history.redo()).toBe(true)
     expect(media.getMediaItem(mediaId)).toMatchObject({
       id: mediaId,
+      ext: '.mp4',
       name: '开场.mp4',
       parentDirectoryId: parentId,
     })
@@ -311,7 +316,7 @@ describe('rename_library_item ID contract', () => {
     const original = directories.getDirectory(folderId)!
     const unusualDirId = 'media_is_a_directory'
     directories.directories.value.set(unusualDirId, { ...original, id: unusualDirId })
-    const unusualMediaId = 'dir_is_a_media.mp4'
+    const unusualMediaId = 'dir_is_a_media'
     addMedia(unusualMediaId)
     expect((await rename(request(unusualDirId))).result.success).toBe(true)
     expect((await rename(request(unusualMediaId, '镜头01.mp4'))).result.success).toBe(true)
@@ -346,7 +351,7 @@ describe('rename_library_item ID contract', () => {
     directories.getDirectory(other.id)!.name = '镜头'
     expect((await rename(request(other.id))).result.success).toBe(true)
     expect(directories.getDirectory(folderId)!.name).toBe('镜头')
-    const otherMedia = addMedia('media_other.mp4')
+    const otherMedia = addMedia('media_other')
     expect((await rename(request(mediaId, '镜头01.mp4', '镜头'))).result.success).toBe(true)
     expect(otherMedia.name).toBe('镜头01.mp4')
     expect((await rename(request(mediaId, '镜头', otherMedia.name))).result.success).toBe(true)

@@ -96,7 +96,12 @@ export class UserSelectedFileProcessor extends DataSourceProcessor {
         mediaType = validationResult.mediaType
       } else {
         // 项目加载：从项目目录加载文件
-        file = await globalMetaFileManager.loadMediaFile(mediaItem.id)
+        console.info('[MediaIdentity] restore-source', {
+          id: mediaItem.id,
+          ext: mediaItem.ext,
+          name: mediaItem.name,
+        })
+        file = await globalMetaFileManager.loadMediaFile(mediaItem)
         console.log(`📂 [PROJECT_LOAD] 从项目加载文件: ${mediaItem.id}`)
         // mediaType 保持为 null，外部无需设置
       }
@@ -146,7 +151,6 @@ export class UserSelectedFileProcessor extends DataSourceProcessor {
       } else {
         console.log(`⏭️ [PROJECT_LOAD] 跳过文件保存: ${mediaItem.name}`)
       }
-
     } catch (error) {
       console.error(`❌ [UserSelectedFileProcessor] 媒体项目解码失败: ${mediaItem.name}`, error)
       this.transitionMediaStatus(mediaItem, 'error')

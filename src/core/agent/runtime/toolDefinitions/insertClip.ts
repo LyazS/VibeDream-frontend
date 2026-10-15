@@ -19,7 +19,7 @@ Examples
 --------
 把一个视频素材从素材开头插入到视频轨道的第 10 秒：
 {
-  "mediaId": "video_001.mp4",
+  "mediaId": "media_V1StGXR8_Z5j",
   "trackId": "track_video_1",
   "start": "00:00:10+00"
   // 如果只插入素材的第 3 秒到第 8 秒片段，则需要额外提供以下两个字段：

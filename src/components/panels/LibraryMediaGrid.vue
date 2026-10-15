@@ -279,7 +279,8 @@ import {
 } from '@/core/types/drag'
 import type { UnifiedMediaItemData } from '@/core'
 import { DataSourceFactory } from '@/core'
-import { generateMediaId, extractExtension } from '@/core/utils/idGenerator'
+import { generateMediaId } from '@/core/utils/idGenerator'
+import { extractExtension } from '@/core/utils/mediaPathUtils'
 import { IconComponents } from '@/constants/iconComponents'
 import {
   ContextMenu,
@@ -1573,16 +1574,24 @@ async function addMediaItem(file: File, targetDirectoryId: string): Promise<void
     const userSelectedSource = DataSourceFactory.createUserSelectedSourceFromFile(file)
 
     // 生成媒体ID
-    const extension = extractExtension(file.name)
-    const mediaId = generateMediaId(extension)
+    const ext = extractExtension(file.name)
+    const mediaId = generateMediaId()
 
     // 创建统一媒体项目
     const mediaItem = unifiedStore.createUnifiedMediaItemData(
       mediaId,
       file.name,
       userSelectedSource,
-      { parentDirectoryId: targetDirectoryId },
+      { ext, parentDirectoryId: targetDirectoryId },
     )
+    console.info('[MediaIdentity] import', {
+      id: mediaId,
+      ext,
+      originalFileName: file.name,
+      fileType: file.type,
+      fileSize: file.size,
+      parentDirectoryId: targetDirectoryId,
+    })
 
     // 添加到媒体库
     unifiedStore.addMediaItem(mediaItem)

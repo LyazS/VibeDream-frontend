@@ -1,5 +1,12 @@
 import { ref, watch } from 'vue'
-import { type UnifiedMediaItemData, type MediaType, type UnifiedMediaItemMetadata, createUnifiedMediaItemData, MediaItemQueries, UnifiedMediaItemActions } from '@/core'
+import {
+  type UnifiedMediaItemData,
+  type MediaType,
+  type UnifiedMediaItemMetadata,
+  createUnifiedMediaItemData,
+  MediaItemQueries,
+  UnifiedMediaItemActions,
+} from '@/core'
 import type { UnifiedTimelineItemData } from '@/core/timelineitem/model/timelineItem'
 import type { ModuleRegistry } from '@/core/modules/ModuleRegistry'
 import { MODULE_NAMES } from '@/core/modules/ModuleRegistry'
@@ -81,9 +88,8 @@ export function createUnifiedMediaModule(registry: ModuleRegistry) {
   const mediaItems = ref<UnifiedMediaItemData[]>([])
   const effectTemplateAssets = ref<EffectTemplateAssetData[]>([])
   const preparedMediaFiles = new Map<string, PreparedMediaFile>()
-  const effectTemplateManager = new EffectTemplateManager(
-    registry,
-    (assetId) => effectTemplateAssets.value.find((item) => item.id === assetId),
+  const effectTemplateManager = new EffectTemplateManager(registry, (assetId) =>
+    effectTemplateAssets.value.find((item) => item.id === assetId),
   )
 
   // ==================== 媒体项目管理方法 ====================
@@ -139,7 +145,7 @@ export function createUnifiedMediaModule(registry: ModuleRegistry) {
       const mediaItem = mediaItems.value[index]
 
       // 1. 先删除硬盘文件（媒体文件 + Meta文件）。失败时保留媒体和目录归属以便重试。
-      const deleteResult = await globalMetaFileManager.deleteMediaFiles(mediaItemId)
+      const deleteResult = await globalMetaFileManager.deleteMediaFiles(mediaItem)
       if (!deleteResult.success) {
         throw new Error(deleteResult.error || `删除媒体文件失败: ${mediaItem.name}`)
       }
@@ -221,10 +227,7 @@ export function createUnifiedMediaModule(registry: ModuleRegistry) {
       return undefined
     }
 
-    return (
-      getMediaItem(assetId) ??
-      effectTemplateAssets.value.find((item) => item.id === assetId)
-    )
+    return getMediaItem(assetId) ?? effectTemplateAssets.value.find((item) => item.id === assetId)
   }
 
   function getAllAssets(): UnifiedLibraryAssetData[] {
@@ -322,10 +325,7 @@ export function createUnifiedMediaModule(registry: ModuleRegistry) {
    * @param mediaId 媒体项目ID
    * @param metadata 元数据（部分更新）
    */
-  function updateMediaItemMetadata(
-    mediaId: string,
-    metadata: Partial<UnifiedMediaItemMetadata>,
-  ) {
+  function updateMediaItemMetadata(mediaId: string, metadata: Partial<UnifiedMediaItemMetadata>) {
     const mediaItem = getMediaItem(mediaId)
     if (!mediaItem) return
 
@@ -350,7 +350,10 @@ export function createUnifiedMediaModule(registry: ModuleRegistry) {
    * @param mediaItemId 素材ID（可以为null，此时返回默认分辨率）
    * @returns 视频分辨率对象
    */
-  function getVideoOriginalResolution(mediaItemId: string | null): { width: number; height: number } {
+  function getVideoOriginalResolution(mediaItemId: string | null): {
+    width: number
+    height: number
+  } {
     const mediaItem = getMediaItem(mediaItemId)
     if (mediaItem && mediaItem.mediaType === 'video' && mediaItem.runtime.bunny) {
       const size = MediaItemQueries.getOriginalSize(mediaItem)
@@ -367,7 +370,10 @@ export function createUnifiedMediaModule(registry: ModuleRegistry) {
    * @param mediaItemId 素材ID（可以为null，此时返回默认分辨率）
    * @returns 图片分辨率对象
    */
-  function getImageOriginalResolution(mediaItemId: string | null): { width: number; height: number } {
+  function getImageOriginalResolution(mediaItemId: string | null): {
+    width: number
+    height: number
+  } {
     const mediaItem = getMediaItem(mediaItemId)
     if (mediaItem && mediaItem.mediaType === 'image' && mediaItem.runtime.bunny) {
       const size = MediaItemQueries.getOriginalSize(mediaItem)
@@ -625,7 +631,8 @@ export function createUnifiedMediaModule(registry: ModuleRegistry) {
       }
 
       const relatedTransitionItems = timelineModule.timelineItems.value.filter(
-        (item: UnifiedTimelineItemData) => TimelineItemQueries.getBaseTransition(item)?.effectPackageId === assetId,
+        (item: UnifiedTimelineItemData) =>
+          TimelineItemQueries.getBaseTransition(item)?.effectPackageId === assetId,
       )
 
       for (const timelineItem of relatedTransitionItems) {
@@ -650,7 +657,6 @@ export function createUnifiedMediaModule(registry: ModuleRegistry) {
       console.error(`❌ 清理效果素材引用失败: ${assetId}`, error)
     }
   }
-
 
   return {
     // 状态

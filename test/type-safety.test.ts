@@ -4,8 +4,9 @@ import { parseLibraryAssetMetaFile } from '@/core/project/metaTypes'
 
 describe('media source persistence', () => {
   const meta = {
-    version: '1.0',
-    id: 'music.wav',
+    version: '2.0.0',
+    id: 'media_music',
+    ext: '.wav',
     name: 'music.wav',
     createdAt: '2026-10-15T00:00:00.000Z',
     assetKind: 'media',
@@ -42,6 +43,25 @@ describe('media source persistence', () => {
     expect(parseLibraryAssetMetaFile(meta)).toEqual(meta)
   })
 
+  it.each(['1.0', '1.1.0', '3.0.0'])(
+    'rejects unsupported media meta version %s without migration',
+    (version) => {
+      expect(() => parseLibraryAssetMetaFile({ ...meta, version })).toThrow()
+    },
+  )
+
+  it.each([undefined, null, 1, 'wav', '.WAV', '.', '../wav', '.wav/meta', '.wav.meta'])(
+    'rejects a missing or invalid extension %j instead of inferring it from the name',
+    (ext) => {
+      expect(() => parseLibraryAssetMetaFile({ ...meta, ext })).toThrow()
+    },
+  )
+
+  it('preserves an empty extension independently of the display name', () => {
+    const extensionless = { ...meta, ext: '' }
+    expect(parseLibraryAssetMetaFile(extensionless)).toEqual(extensionless)
+  })
+
   it('rejects retired generation sources instead of migrating them', () => {
     expect(() =>
       parseLibraryAssetMetaFile({ ...meta, source: { type: 'ai-generation' } }),
@@ -67,7 +87,7 @@ describe('tool exception responses', () => {
 
   it('preserves a domain error code and details while retaining the error string', () => {
     const details = {
-      current: { itemId: 'media_take01.mp4', name: '镜头', parentDirId: 'dir_root' },
+      current: { itemId: 'media_take01', name: '镜头', parentDirId: 'dir_root' },
     }
     const error = Object.assign(new Error('项目状态已变化'), {
       toolCode: 'state_mismatch',

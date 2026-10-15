@@ -1,4 +1,5 @@
 import { toPackageVersionPathSegment } from '@/core/effect-template/commonTypes'
+import { getMediaFileName, type MediaFileReference } from '@/core/utils/mediaPathUtils'
 import type { ParsedPath } from './types'
 
 /**
@@ -145,15 +146,30 @@ export class PathResolver {
   /**
    * 获取媒体文件路径
    */
-  getMediaPath(projectId: string, mediaId: string): string {
-    return this.join(this.getMediaDirPath(projectId), mediaId)
+  getMediaPath(projectId: string, media: MediaFileReference): string {
+    const path = this.join(this.getMediaDirPath(projectId), getMediaFileName(media))
+    console.info('[MediaIdentity] resolve-file-path', {
+      projectId,
+      id: media.id,
+      ext: media.ext,
+      path,
+    })
+    return path
+  }
+
+  getProjectEffectPackageDirPath(projectId: string, assetId: string): string {
+    const path = this.join(this.getMediaDirPath(projectId), assetId)
+    console.info('[MediaIdentity] resolve-effect-directory', { projectId, assetId, path })
+    return path
   }
 
   /**
    * 获取Meta文件路径
    */
   getMetaPath(projectId: string, mediaId: string): string {
-    return this.join(this.getMediaDirPath(projectId), `${mediaId}.meta`)
+    const path = this.join(this.getMediaDirPath(projectId), `${mediaId}.meta`)
+    console.info('[MediaIdentity] resolve-meta-path', { projectId, id: mediaId, path })
+    return path
   }
 
   /**
