@@ -74,6 +74,29 @@ export class PathResolver {
     return this.join(this.PROJECTS_DIR, projectId)
   }
 
+  getAgentAttachmentsDirPath(projectId: string): string {
+    this.assertPathSegment(projectId)
+    return this.join(this.getProjectPath(projectId), 'agent', 'attachments')
+  }
+
+  getAgentAttachmentPath(projectId: string, attachmentId: string, mimeType: string): string {
+    this.assertPathSegment(attachmentId)
+    const extension = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/webp': 'webp' }[mimeType]
+    if (!extension) throw new Error('INVALID_AGENT_ATTACHMENT_MIME_TYPE')
+    return this.join(this.getAgentAttachmentsDirPath(projectId), `${attachmentId}.${extension}`)
+  }
+
+  assertAgentAttachmentPath(projectId: string, attachmentId: string, path: string): void {
+    const allowed = ['image/png', 'image/jpeg', 'image/webp'].map((mimeType) =>
+      this.getAgentAttachmentPath(projectId, attachmentId, mimeType),
+    )
+    if (!allowed.includes(path)) throw new Error('INVALID_AGENT_ATTACHMENT_PATH')
+  }
+
+  private assertPathSegment(segment: string) {
+    if (!/^[a-zA-Z0-9_-]+$/.test(segment)) throw new Error('INVALID_AGENT_ATTACHMENT_PATH')
+  }
+
   getCommonEffectsDirPath(): string {
     return this.COMMON_EFFECTS_DIR
   }

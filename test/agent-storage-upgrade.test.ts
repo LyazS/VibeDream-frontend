@@ -7,6 +7,39 @@ afterEach(() => {
   vi.unstubAllGlobals()
 })
 
+it('adds attachment metadata at v8 without migrating or deleting legacy image blobs', async () => {
+  indexedDBService.close()
+  vi.stubGlobal('indexedDB', new IDBFactory())
+  const legacy = {
+    key: 'legacy',
+    owner: 'owner',
+    sessionKey: 'session',
+    blob: new Blob(['legacy']),
+  }
+  await new Promise<void>((resolve, reject) => {
+    const request = indexedDB.open('VideoEditorDB', 7)
+    request.onerror = () => reject(request.error)
+    request.onupgradeneeded = () => {
+      const images = request.result.createObjectStore('agentImages', { keyPath: 'key' })
+      images.createIndex('owner', 'owner')
+      images.createIndex('session', 'sessionKey')
+      images.put(legacy)
+    }
+    request.onsuccess = () => {
+      request.result.close()
+      resolve()
+    }
+  })
+  const db = await indexedDBService.openDB()
+  expect(db.version).toBe(8)
+  expect(
+    await indexedDBService.transaction('agentImages', 'readonly', (table) => table.get('legacy')),
+  ).toEqual(legacy)
+  expect(
+    await indexedDBService.transaction('agentAttachments', 'readonly', (table) => table.getAll()),
+  ).toEqual([])
+})
+
 it('adds the image table to v6 without removing existing text conversations', async () => {
   indexedDBService.close()
   vi.stubGlobal('indexedDB', new IDBFactory())
@@ -31,7 +64,7 @@ it('adds the image table to v6 without removing existing text conversations', as
     }
   })
   const db = await indexedDBService.openDB()
-  expect(db.objectStoreNames.contains('agentImages')).toBe(true)
+  expect(db.objectStoreNames.contains('agentAttachments')).toBe(true)
   expect(
     await indexedDBService.transaction('agentSessions', 'readonly', (store) =>
       store.get('text-session'),
@@ -76,7 +109,7 @@ it.each([3, 4, 5])(
     })
 
     const db = await indexedDBService.openDB()
-    expect(db.version).toBe(7)
+    expect(db.version).toBe(8)
     for (const name of ['agentTurns', 'agentModelCalls', 'agentTools'])
       expect(db.objectStoreNames.contains(name)).toBe(false)
     expect(

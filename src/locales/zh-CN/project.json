@@ -25,6 +25,20 @@
       "description": "创建您的第一个项目开始视频编辑之旅"
     },
     "noDescription": "暂无描述",
+    "workspaceSettings": {
+      "title": "配置",
+      "workspace": "工作空间",
+      "orphanAttachments": "孤立附件",
+      "cleanup": "执行回收",
+      "cleaning": "正在回收...",
+      "completed": "已回收 {count} 个孤立附件。",
+      "empty": "未发现孤立附件。",
+      "notReclaimed": "本次未回收附件。",
+      "partial": "{completed}{failed}",
+      "failedProjects": "{count} 个项目未完成。",
+      "skipped": "{count} 个项目的附件正在使用，已跳过。",
+      "failed": "回收未完成，请检查工作目录权限后重试。"
+    },
     "progress": {
       "startContent": "开始加载项目内容...",
       "contentData": "加载项目内容数据...",

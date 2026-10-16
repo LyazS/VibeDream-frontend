@@ -19,6 +19,8 @@ const errorKeys: Readonly<Record<string, string>> = {
   ACCOUNT_DISABLED: 'accountDisabled',
   AGENT_IMAGE_URL_EXPIRED: 'imageExpired',
   AGENT_IMAGE_UPLOAD_FAILED: 'imageUploadFailed',
+  AGENT_IMAGE_SOURCE_MISSING: 'imageSourceMissing',
+  AGENT_IMAGE_RECORD_MISSING: 'imageRecordMissing',
   AGENT_NOT_CONFIGURED: 'unavailable',
   AGENT_KEY_NOT_CONFIGURED: 'unavailable',
   AGENT_BILLING_CONFIG_INVALID: 'unavailable',

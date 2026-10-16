@@ -12,6 +12,13 @@ import {
   processAgentImage,
   prepareAgentImages,
   invalidateAgentImageUploads,
+  rememberAgentImages,
+  forgetAgentImages,
+  retainAgentAttachment,
+  readAgentImageSource,
+  deleteAgentImageSource,
+  AgentImageSourceError,
+  type ResolvedAgentImage,
 } from '@/core/agent/services/agentImageService'
 import { getAgentContextUsage, summarizeAgentUsage } from '@/core/agent/runtime/AgentUsage'
 import { AgentTelemetry, newLogSource } from '@/core/agent/runtime/AgentTelemetry'
@@ -69,14 +76,15 @@ export type AgentDraft = {
 }
 
 type DraftImageTask = {
-  input: Blob
+  release: () => void
   controller: AbortController
   userId: string
   projectId: string
-}
+} & ({ input: Blob; image?: never } | { input?: never; image: AgentImage })
 
 type LocalSubmission = {
   session: AgentSession
+  images: readonly AgentImage[]
   committed: boolean
   settled: Promise<void>
   settle: () => void
@@ -215,13 +223,26 @@ export function createUnifiedAgentModule(registry: ModuleRegistry) {
         const item = draft.value.images.find((image) => image.status === 'queued')
         if (!item) return
         const task = draftImageTasks.get(item.id)
-        if (!task || !ownsDraftImage(item.id, task)) return
+        if (!task?.input || !ownsDraftImage(item.id, task)) return
         updateDraftImage(item.id, { status: 'processing', error: undefined })
         try {
-          const image = await processAgentImage(task.input, task.controller.signal)
-          if (!ownsDraftImage(item.id, task)) continue
+          const image = await processAgentImage(task.input, task.controller.signal, {
+            userId: task.userId,
+            projectId: task.projectId,
+            id: item.id,
+          })
+          if (!ownsDraftImage(item.id, task)) {
+            void deleteAgentImageSource(image).catch(() => {})
+            continue
+          }
+          draftImageTasks.set(item.id, {
+            image,
+            controller: task.controller,
+            release: task.release,
+            userId: task.userId,
+            projectId: task.projectId,
+          })
           updateDraftImage(item.id, { status: 'ready', image })
-          draftImageTasks.delete(item.id)
         } catch (error) {
           if (!ownsDraftImage(item.id, task)) continue
           updateDraftImage(item.id, {
@@ -247,6 +268,7 @@ export function createUnifiedAgentModule(registry: ModuleRegistry) {
         controller: new AbortController(),
         userId,
         projectId: config.projectId.value,
+        release: retainAgentAttachment(config.projectId.value, id),
       })
       return { id, status: 'queued' }
     })
@@ -261,7 +283,10 @@ export function createUnifiedAgentModule(registry: ModuleRegistry) {
 
   function removeDraftImage(id: string) {
     if (draft.value.submitting) return
-    draftImageTasks.get(id)?.controller.abort()
+    const task = draftImageTasks.get(id)
+    task?.controller.abort()
+    task?.release()
+    if (task?.image) void deleteAgentImageSource(task.image).catch(() => {})
     draftImageTasks.delete(id)
     draft.value = {
       ...draft.value,
@@ -278,8 +303,25 @@ export function createUnifiedAgentModule(registry: ModuleRegistry) {
     void processDraftImages()
   }
 
-  function resetDraft() {
-    draftImageTasks.forEach((task) => task.controller.abort())
+  function resetDraft(committed = false, submission?: LocalSubmission) {
+    draftImageTasks.forEach((task) => {
+      task.controller.abort()
+      const image = task.image
+      if (
+        !committed &&
+        image &&
+        submission?.images.some((submitted) => submitted.id === image.id)
+      ) {
+        // Account/project cleanup must wait until the atomic local commit decides file ownership.
+        void submission.settled.then(async () => {
+          if (!submission.committed) await deleteAgentImageSource(image).catch(() => {})
+          task.release()
+        })
+      } else {
+        task.release()
+        if (!committed && image) void deleteAgentImageSource(image).catch(() => {})
+      }
+    })
     draftImageTasks.clear()
     draftImageWorker = null
     draft.value = emptyDraft()
@@ -340,6 +382,7 @@ export function createUnifiedAgentModule(registry: ModuleRegistry) {
     try {
       const images = pendingImages.get(session.id) ?? []
       await sessionStore.save(session, images)
+      if (sessions.value[session.id] === session) rememberAgentImages(sessionStore, session, images)
       if (pendingImages.get(session.id) === images) pendingImages.delete(session.id)
     } catch (error) {
       if (!submission) reportStorageError(session, error)
@@ -485,8 +528,10 @@ export function createUnifiedAgentModule(registry: ModuleRegistry) {
     activeRun.value = null
     sessions.value = {}
     pendingImages.clear()
+    forgetAgentImages(sessionStore)
+    const submission = localSubmission.value
     localSubmission.value = null
-    resetDraft()
+    resetDraft(false, submission ?? undefined)
     newChat()
   }
 
@@ -498,8 +543,13 @@ export function createUnifiedAgentModule(registry: ModuleRegistry) {
       return false
     delete sessions.value[id]
     pendingImages.delete(id)
+    forgetAgentImages(sessionStore, session)
     if (currentSessionId.value === id) newChat()
-    await Promise.all([sessionStore.delete(session), telemetry.delete(session)])
+    const [attachments] = await Promise.all([
+      sessionStore.delete(session),
+      telemetry.delete(session),
+    ])
+    await Promise.all(attachments.map((image) => deleteAgentImageSource(image)))
     return true
   }
 
@@ -516,21 +566,42 @@ export function createUnifiedAgentModule(registry: ModuleRegistry) {
    */
   function buildModelHistory(
     session: AgentSession,
-    imageUrls: Map<string, string>,
+    images: Map<string, ResolvedAgentImage>,
   ): ModelMessage[] {
     // 每次请求都从运行所属会话重新生成协议消息，保持对话顺序；与 UI 展示选择无关，不缓存第二份历史。
     // 系统提示词由 buildTextMessages() 添加；背景上下文属于对应用户消息的固定快照。
     const history: ModelMessage[] = []
     for (const message of session.messages) {
-      // 保留用户图文顺序；其他角色只映射文本。
-      // 用户背景快照放在正文之前；工具调用另行映射，进度和交互元数据不转成正文。
-      const content: (TextContentPart | ImageContentPart)[] = message.parts.flatMap(
+      // 用户图片按原顺序放在文字之前，兼容此前按文字优先保存的消息；背景快照放在最后。
+      // 其他角色只映射文本；工具调用另行映射，进度和交互元数据不转成正文。
+      const parts =
+        message.role === AgentMessageRole.USER
+          ? [
+              ...message.parts.filter((part) => part.type === MessagePartType.IMAGE),
+              ...message.parts.filter((part) => part.type !== MessagePartType.IMAGE),
+            ]
+          : message.parts
+      const content: (TextContentPart | ImageContentPart)[] = parts.flatMap(
         (part): (TextContentPart | ImageContentPart)[] => {
           if (part.type === MessagePartType.TEXT) return [{ type: 'text', text: part.text }]
           if (part.type === MessagePartType.IMAGE && message.role === AgentMessageRole.USER) {
-            const url = imageUrls.get(part.imageId)
-            if (!url) throw new Error('无法读取对话图片')
-            return [{ type: 'image_url', image_url: { url } }]
+            if (!part.attachmentId) return []
+            const image: ResolvedAgentImage = images.get(part.attachmentId) ?? {
+              kind: 'unavailable',
+              reason: 'record_missing',
+            }
+            const identity = `attachmentId=${encodeURIComponent(part.attachmentId)}, name=${encodeURIComponent(image.fileName ?? 'unknown')}`
+            if (image.kind === 'unavailable')
+              return [
+                {
+                  type: 'text',
+                  text: `[ATTACHMENT ${identity}, original=missing, reason=${image.reason}]`,
+                },
+              ]
+            return [
+              { type: 'image_url', image_url: { url: image.url } },
+              { type: 'text', text: `[ATTACHMENT ${identity}, original=${image.source}]` },
+            ]
           }
           return []
         },
@@ -539,7 +610,7 @@ export function createUnifiedAgentModule(registry: ModuleRegistry) {
         const background = message.parts
           .filter((part) => part.type === MessagePartType.BACKGROUND_CONTEXT)
           .filter((part) => part.text.trim())
-        content.unshift(
+        content.push(
           ...background.map((part) => ({
             type: 'text' as const,
             text: `[BACKGROUND_CONTEXT]\n用户发送时的工程上下文快照：\n${part.text}`,
@@ -1056,15 +1127,20 @@ export function createUnifiedAgentModule(registry: ModuleRegistry) {
       images.some(
         (image) =>
           !image.id ||
+          image.userId !== user.currentUser.value?.id ||
+          image.projectId !== config.projectId.value ||
+          !image.original?.relativePath ||
+          !image.conversionParams ||
           !image.blob.size ||
           image.blob.size > AGENT_IMAGE_LIMITS.encodedBytes ||
-          !['image/png', 'image/jpeg', 'image/webp'].includes(image.mimeType) ||
-          image.blob.type !== image.mimeType ||
-          !Number.isInteger(image.width) ||
-          !Number.isInteger(image.height) ||
-          image.width <= 0 ||
-          image.height <= 0 ||
-          Math.max(image.width, image.height) > AGENT_IMAGE_LIMITS.edge,
+          image.conversionParams.mimeType !== 'image/webp' ||
+          image.blob.type !== image.conversionParams.mimeType ||
+          !Number.isInteger(image.conversionParams.width) ||
+          !Number.isInteger(image.conversionParams.height) ||
+          image.conversionParams.width <= 0 ||
+          image.conversionParams.height <= 0 ||
+          Math.max(image.conversionParams.width, image.conversionParams.height) >
+            AGENT_IMAGE_LIMITS.edge,
       )
     )
       return false
@@ -1072,8 +1148,8 @@ export function createUnifiedAgentModule(registry: ModuleRegistry) {
     const previousUpdatedAt = session.updatedAt
     const previousImages = pendingImages.get(session.id)
     const message = buildDisplayMessage(crypto.randomUUID(), AgentMessageRole.USER, content)
-    message.parts.push(
-      ...images.map((image) => ({ type: MessagePartType.IMAGE as const, imageId: image.id })),
+    message.parts.unshift(
+      ...images.map((image) => ({ type: MessagePartType.IMAGE as const, attachmentId: image.id })),
     )
     message.parts.push(captureBackgroundContext(registry))
     if (images.length)
@@ -1083,12 +1159,17 @@ export function createUnifiedAgentModule(registry: ModuleRegistry) {
       ])
     session.messages.push(message)
     const registeredImages = pendingImages.get(session.id)
+    const releaseImages = images.map((image) => retainAgentAttachment(image.projectId, image.id))
     let settle!: () => void
     const settled = new Promise<void>((resolve) => {
-      settle = resolve
+      settle = () => {
+        releaseImages.forEach((release) => release())
+        resolve()
+      }
     })
     const submission: LocalSubmission = {
       session,
+      images,
       committed: false,
       settled,
       settle,
@@ -1144,7 +1225,7 @@ export function createUnifiedAgentModule(registry: ModuleRegistry) {
         snapshot.text,
         snapshot.images.map((item) => item.image!),
         () => {
-          if (draft.value === submittedDraft) resetDraft()
+          if (draft.value === submittedDraft) resetDraft(true)
         },
         fail,
       )
@@ -1156,13 +1237,14 @@ export function createUnifiedAgentModule(registry: ModuleRegistry) {
     }
   }
 
-  async function getImage(id: string): Promise<AgentImage> {
+  async function getImage(id: string): Promise<{ blob: Blob; fileName: string }> {
     const session = currentSession.value
     if (!session) throw new Error('无法读取对话图片')
-    return (
+    const image =
       pendingImages.get(session.id)?.find((image) => image.id === id) ??
-      sessionStore.readImage(session, id)
-    )
+      (await sessionStore.readImage(session, id))
+    if (!image) throw new AgentImageSourceError('AGENT_IMAGE_RECORD_MISSING')
+    return { blob: await readAgentImageSource(image), fileName: image.original.fileName }
   }
 
   // 身份失效通知的取消订阅函数，模块释放时移除该监听。

@@ -57,7 +57,7 @@
         v-if="store.agentDraft.submitError"
         class="image-error"
         role="alert"
-        :title="store.agentDraft.submitError"
+        :title="t(getAgentErrorKey(store.agentDraft.submitError, 'common.chat.draftSubmitFailed'))"
       >
         {{ t('common.chat.draftSubmitFailed') }}
       </div>
@@ -117,6 +117,7 @@ import ChatSendButton from '@/components/base/ChatSendButton.vue'
 import AgentUsageIndicator from './AgentUsageIndicator.vue'
 import { useUnifiedStore } from '@/core/unifiedStore'
 import { useAppI18n } from '@/core/composables/useI18n'
+import { getAgentErrorKey } from './agentErrorMessage'
 
 const { t } = useAppI18n()
 const store = useUnifiedStore()

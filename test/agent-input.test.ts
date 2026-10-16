@@ -1,16 +1,24 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import { createRenderer, nextTick, reactive } from 'vue'
+import { createRenderer, nextTick, reactive, toRaw } from 'vue'
 import { createI18n } from 'vue-i18n'
 import AgentInput from '../src/components/agent/AgentInput.vue'
+import AgentImagePreview from '../src/components/agent/AgentImage.vue'
 import type { AgentImage } from '../src/core/agent/types'
 import type { AgentDraft } from '../src/core/modules/UnifiedAgentModule'
 import en from '../src/locales/en-US/common.json'
 import zh from '../src/locales/zh-CN/common.json'
+import enAi from '../src/locales/en-US/aiPanel.json'
+import zhAi from '../src/locales/zh-CN/aiPanel.json'
+import { agentImageFixture } from './helpers/agent-files'
+
+vi.mock('@/core/managers/filesystem/fileSystemService', async () => ({
+  fileSystemService: (await import('./helpers/agent-files')).agentFileSystem,
+}))
 
 const i18n = createI18n({
   legacy: false,
   locale: 'en-US',
-  messages: { 'en-US': en, 'zh-CN': zh },
+  messages: { 'en-US': { ...en, ...enAi }, 'zh-CN': { ...zh, ...zhAi } },
 })
 
 const mocks = vi.hoisted(() => ({
@@ -18,6 +26,8 @@ const mocks = vi.hoisted(() => ({
     agentReady: true,
     agentBusy: false,
     agentRunning: false,
+    agentSessionId: 'session',
+    getAgentImage: vi.fn(),
     agentDraft: {} as AgentDraft,
     agentDraftEditable: true,
     agentDraftSendable: false,
@@ -45,7 +55,7 @@ vi.mock('@/constants/iconComponents', () => ({
     REFRESH: 'span',
   },
 }))
-vi.mock('naive-ui', () => ({ NImage: { render: () => null } }))
+vi.mock('naive-ui', () => ({ NImage: { render: () => null }, NSpin: { render: () => null } }))
 vi.mock('../src/components/agent/AgentUsageIndicator.vue', () => ({
   default: { render: () => null },
 }))
@@ -64,6 +74,10 @@ class HostNode {
   addEventListener() {}
   getRootNode() {
     return null
+  }
+  closest(selector: string): HostNode | null {
+    if (selector === `.${this.props.class}`) return this
+    return this.parent?.closest(selector) ?? null
   }
 }
 const renderer = createRenderer<HostNode, HostNode>({
@@ -112,11 +126,9 @@ function findOptional(
 const sendButton = () => findNode((node) => node.props.class === 'chat-send-button')
 const textarea = () => findNode((node) => node.type === 'textarea')
 const image = (id: string): AgentImage => ({
+  ...agentImageFixture(),
   id,
   blob: new Blob([id], { type: 'image/webp' }),
-  mimeType: 'image/webp',
-  width: 100,
-  height: 80,
 })
 async function typeText(text: string) {
   ;(textarea().props['onUpdate:modelValue'] as (text: string) => void)(text)
@@ -143,12 +155,14 @@ beforeEach(() => {
     dispose: mocks.disposePreview,
   }))
   mocks.store.sendAgentDraft.mockReset()
+  mocks.store.getAgentImage.mockReset()
   i18n.global.locale.value = 'en-US'
   mocks.store = reactive({
     ...mocks.store,
     agentReady: true,
     agentBusy: false,
     agentRunning: false,
+    agentSessionId: 'session',
     agentDraft: { text: '', images: [], imageError: null, submitting: false, submitError: null },
     get agentDraftEditable() {
       return !this.agentDraft.submitting && (!this.agentBusy || this.agentRunning)
@@ -173,6 +187,7 @@ beforeEach(() => {
 })
 afterEach(() => {
   app.unmount()
+  vi.useRealTimers()
   vi.unstubAllGlobals()
 })
 
@@ -213,6 +228,184 @@ it('reads shared preparation state and sends through the module without clearing
   await nextTick()
   expect(textarea().value).toBe('')
   expect(mocks.disposePreview).toHaveBeenCalledTimes(2)
+})
+
+function mountSentImage(inChatScroller = false) {
+  app.unmount()
+  root = new HostNode('root')
+  if (inChatScroller) root.props.class = 'chat-messages-container'
+  app = renderer.createApp(AgentImagePreview, { attachmentId: 'original' })
+  app.mount(root)
+}
+
+function mockPreviewIntersection() {
+  let intersect!: (entries: { isIntersecting: boolean }[]) => void
+  const options = vi.fn()
+  const disconnect = vi.fn()
+  vi.stubGlobal(
+    'IntersectionObserver',
+    class {
+      constructor(callback: typeof intersect, init?: IntersectionObserverInit) {
+        intersect = callback
+        options(init)
+      }
+      observe() {}
+      disconnect = disconnect
+    },
+  )
+  return {
+    options,
+    disconnect,
+    setVisible: (isIntersecting: boolean) => intersect([{ isIntersecting }]),
+  }
+}
+
+it('recreates local sent-image previews after remount and releases their URLs on leaving the view', async () => {
+  const blob = new Blob(['original bytes'], { type: 'image/png' })
+  mocks.store.getAgentImage.mockResolvedValue({ blob, fileName: 'source.png' })
+  mountSentImage()
+  await vi.waitFor(() => expect(mocks.createPreview).toHaveBeenCalledWith(blob))
+  expect(findNode((node) => node.props.class === 'agent-image').props.title).toBe('source.png')
+  mountSentImage()
+  await vi.waitFor(() => expect(mocks.createPreview).toHaveBeenCalledTimes(2))
+  expect(mocks.disposePreview).toHaveBeenCalledOnce()
+  expect(mocks.store.getAgentImage).toHaveBeenNthCalledWith(2, 'original')
+})
+
+it('ignores a late local preview read after changing sessions', async () => {
+  let finish!: (value: { blob: Blob; fileName: string }) => void
+  mocks.store.getAgentImage
+    .mockReturnValueOnce(
+      new Promise((resolve) => {
+        finish = resolve
+      }),
+    )
+    .mockResolvedValue({ blob: new Blob(['current']), fileName: 'current.png' })
+  mountSentImage()
+  mocks.store.agentSessionId = 'next-session'
+  await vi.waitFor(() => expect(mocks.createPreview).toHaveBeenCalledOnce())
+  finish({ blob: new Blob(['late']), fileName: 'late.png' })
+  await nextTick()
+  expect(mocks.createPreview).toHaveBeenCalledOnce()
+  expect(findNode((node) => node.props.class === 'agent-image').props.title).toBe('current.png')
+})
+
+it('preloads within a 300px buffer of the chat scroller', async () => {
+  const intersection = mockPreviewIntersection()
+  mocks.store.getAgentImage.mockResolvedValue({
+    blob: new Blob(['source']),
+    fileName: 'source.png',
+  })
+  mountSentImage(true)
+  expect(intersection.options).toHaveBeenCalledOnce()
+  const options = intersection.options.mock.calls[0]![0] as IntersectionObserverInit
+  expect(toRaw(options.root)).toBe(root)
+  expect(options.rootMargin).toBe('300px 0px')
+  expect(mocks.store.getAgentImage).not.toHaveBeenCalled()
+  intersection.setVisible(true)
+  await vi.waitFor(() => expect(mocks.createPreview).toHaveBeenCalledOnce())
+})
+
+it('retains previews during brief scrolls away and releases them after two seconds outside the buffer', async () => {
+  vi.useFakeTimers()
+  const intersection = mockPreviewIntersection()
+  mocks.store.getAgentImage.mockResolvedValue({
+    blob: new Blob(['source']),
+    fileName: 'source.png',
+  })
+  mountSentImage()
+  expect(intersection.options).toHaveBeenCalledWith({ root: null, rootMargin: '300px 0px' })
+  intersection.setVisible(true)
+  await vi.advanceTimersByTimeAsync(0)
+  expect(mocks.createPreview).toHaveBeenCalledOnce()
+  intersection.setVisible(false)
+  await vi.advanceTimersByTimeAsync(1999)
+  expect(mocks.disposePreview).not.toHaveBeenCalled()
+  intersection.setVisible(true)
+  await vi.advanceTimersByTimeAsync(2001)
+  expect(mocks.disposePreview).not.toHaveBeenCalled()
+  expect(mocks.store.getAgentImage).toHaveBeenCalledOnce()
+  intersection.setVisible(false)
+  await vi.advanceTimersByTimeAsync(2000)
+  expect(mocks.disposePreview).toHaveBeenCalledOnce()
+  intersection.setVisible(true)
+  await vi.advanceTimersByTimeAsync(0)
+  expect(mocks.createPreview).toHaveBeenCalledTimes(2)
+  expect(mocks.store.getAgentImage).toHaveBeenCalledTimes(2)
+})
+
+it('discards a late local read after the delayed release', async () => {
+  vi.useFakeTimers()
+  const intersection = mockPreviewIntersection()
+  let finish!: (value: { blob: Blob; fileName: string }) => void
+  mocks.store.getAgentImage
+    .mockReturnValueOnce(new Promise((resolve) => (finish = resolve)))
+    .mockResolvedValue({ blob: new Blob(['current']), fileName: 'current.png' })
+  mountSentImage()
+  intersection.setVisible(true)
+  await vi.advanceTimersByTimeAsync(0)
+  intersection.setVisible(false)
+  await vi.advanceTimersByTimeAsync(2000)
+  finish({ blob: new Blob(['late']), fileName: 'late.png' })
+  await vi.advanceTimersByTimeAsync(0)
+  expect(mocks.createPreview).not.toHaveBeenCalled()
+  intersection.setVisible(true)
+  await vi.advanceTimersByTimeAsync(0)
+  expect(mocks.createPreview).toHaveBeenCalledOnce()
+  expect(findNode((node) => node.props.class === 'agent-image').props.title).toBe('current.png')
+})
+
+it('immediately releases previews and cancels pending timers on a session change or unmount', async () => {
+  vi.useFakeTimers()
+  const intersection = mockPreviewIntersection()
+  mocks.store.getAgentImage.mockResolvedValue({
+    blob: new Blob(['source']),
+    fileName: 'source.png',
+  })
+  mountSentImage()
+  intersection.setVisible(true)
+  await vi.advanceTimersByTimeAsync(0)
+  intersection.setVisible(false)
+  await vi.advanceTimersByTimeAsync(500)
+  mocks.store.agentSessionId = 'next-session'
+  await nextTick()
+  expect(mocks.disposePreview).toHaveBeenCalledOnce()
+  expect(mocks.store.getAgentImage).toHaveBeenCalledOnce()
+  expect(vi.getTimerCount()).toBe(0)
+  intersection.setVisible(true)
+  await vi.advanceTimersByTimeAsync(0)
+  expect(mocks.createPreview).toHaveBeenCalledTimes(2)
+  intersection.setVisible(false)
+  expect(vi.getTimerCount()).toBe(1)
+  app.unmount()
+  expect(mocks.disposePreview).toHaveBeenCalledTimes(2)
+  expect(vi.getTimerCount()).toBe(0)
+  expect(intersection.disconnect).toHaveBeenCalledOnce()
+  app = renderer.createApp(AgentInput)
+  app.mount(root)
+})
+
+it.each([
+  [
+    'AGENT_IMAGE_SOURCE_MISSING',
+    'The original image is missing from this project.',
+    '工程中的原图已不存在。',
+  ],
+  [
+    'AGENT_IMAGE_RECORD_MISSING',
+    'This image attachment record is missing.',
+    '这张图片的附件记录已不存在。',
+  ],
+])('shows a localized accessible missing state for %s', async (code, english, chinese) => {
+  mocks.store.getAgentImage.mockRejectedValue({ code })
+  mountSentImage()
+  await vi.waitFor(() =>
+    expect(findNode((node) => node.props.role === 'alert').props['aria-label']).toBe(english),
+  )
+  expect(mocks.createPreview).not.toHaveBeenCalled()
+  i18n.global.locale.value = 'zh-CN'
+  await nextTick()
+  expect(findNode((node) => node.props.role === 'alert').props['aria-label']).toBe(chinese)
 })
 
 it('keeps failed images visible and blocks sending until removal or retry succeeds', async () => {
@@ -296,29 +489,43 @@ it('forwards file selection, paste and drop to the module', async () => {
   expect(mocks.store.addAgentDraftImages).toHaveBeenCalledTimes(3)
 })
 
-it('restores localized preparation and submission errors and disables edits during local commit', async () => {
-  mocks.store.agentDraft = {
-    text: 'locked input',
-    images: [{ id: 'failed', status: 'failed', error: 'imageInvalid' }],
-    imageError: null,
-    submitting: true,
-    submitError: 'LOCAL_SAVE_FAILED',
-  }
+it.each(['LOCAL_SAVE_FAILED', '对话图片存储事务失败'])(
+  'localizes preparation and submission errors during local commit without exposing %s',
+  async (submitError) => {
+    mocks.store.agentDraft = {
+      text: 'locked input',
+      images: [{ id: 'failed', status: 'failed', error: 'imageInvalid' }],
+      imageError: null,
+      submitting: true,
+      submitError,
+    }
+    await nextTick()
+    expect(textarea().props.disabled).toBe(true)
+    expect(findNode((node) => node.props.class === 'remove-image').props.disabled).toBe(true)
+    expect(findNode((node) => node.props.role === 'alert').value).toBe(
+      'Choose a valid JPEG, PNG or WebP image',
+    )
+    const notice = findNode((node) => node.props.role === 'alert' && 'title' in node.props)
+    expect(notice.props.title).toBe(en.common.chat.draftSubmitFailed)
+    expect(notice.value).toBe('Unable to save the message. Try sending again.')
+    i18n.global.locale.value = 'zh-CN'
+    await nextTick()
+    expect(findNode((node) => node.props.role === 'alert').value).toBe(
+      '请选择有效的 JPEG、PNG 或 WebP 图片',
+    )
+    expect(notice.props.title).toBe(zh.common.chat.draftSubmitFailed)
+    expect(notice.value).toBe('消息保存失败，请重新发送')
+    expect(mocks.store.agentDraft.submitError).toBe(submitError)
+  },
+)
+
+it('translates recognized submission error codes in the tooltip when switching languages', async () => {
+  mocks.store.agentDraft.submitError = 'QuotaExceededError'
   await nextTick()
-  expect(textarea().props.disabled).toBe(true)
-  expect(findNode((node) => node.props.class === 'remove-image').props.disabled).toBe(true)
-  expect(findNode((node) => node.props.role === 'alert').value).toBe(
-    'Choose a valid JPEG, PNG or WebP image',
-  )
-  expect(findNode((node) => node.props.title === 'LOCAL_SAVE_FAILED').value).toBe(
-    'Unable to save the message. Try sending again.',
-  )
+  const notice = findNode((node) => node.props.role === 'alert' && 'title' in node.props)
+  expect(notice.props.title).toBe(enAi.aiPanel.errors.storageQuotaExceeded)
   i18n.global.locale.value = 'zh-CN'
   await nextTick()
-  expect(findNode((node) => node.props.role === 'alert').value).toBe(
-    '请选择有效的 JPEG、PNG 或 WebP 图片',
-  )
-  expect(findNode((node) => node.props.title === 'LOCAL_SAVE_FAILED').value).toBe(
-    '消息保存失败，请重新发送',
-  )
+  expect(notice.props.title).toBe(zhAi.aiPanel.errors.storageQuotaExceeded)
+  expect(mocks.store.agentDraft.submitError).toBe('QuotaExceededError')
 })

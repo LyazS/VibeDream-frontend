@@ -30,6 +30,7 @@
       "imagePixelLimit": "Images cannot exceed 40 megapixels",
       "imageOriginalSizeLimit": "Each original image must be 10 MiB or smaller",
       "imageProcessingFailed": "Unable to process the image",
+      "imageSaveFailed": "Unable to save the original image to this project",
       "imageEncodingFailed": "Unable to encode the image",
       "imageEncodedSizeLimit": "The processed image exceeds 2 MiB",
       "stop": "Stop",

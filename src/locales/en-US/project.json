@@ -25,6 +25,20 @@
       "description": "Create your first project to get started with video editing"
     },
     "noDescription": "No Description",
+    "workspaceSettings": {
+      "title": "Settings",
+      "workspace": "Workspace",
+      "orphanAttachments": "Orphan attachments",
+      "cleanup": "Reclaim orphans",
+      "cleaning": "Reclaiming...",
+      "completed": "Reclaimed {count} orphan attachment. | Reclaimed {count} orphan attachments.",
+      "empty": "No orphan attachments found.",
+      "notReclaimed": "No attachments were reclaimed.",
+      "partial": "{completed} {failed}",
+      "failedProjects": "{count} project could not be completed. | {count} projects could not be completed.",
+      "skipped": "Attachments in {count} project are in use. That project was skipped. | Attachments in {count} projects are in use. Those projects were skipped.",
+      "failed": "Cleanup could not be completed. Check workspace permissions and try again."
+    },
     "progress": {
       "startContent": "Starting to load project content...",
       "contentData": "Loading project content data...",

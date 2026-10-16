@@ -1,7 +1,11 @@
 <template>
   <div class="chat-message user">
     <div v-if="images.length" class="message-images">
-      <AgentImage v-for="image in images" :key="image.imageId" :image-id="image.imageId" />
+      <AgentImage
+        v-for="image in images"
+        :key="image.attachmentId"
+        :attachment-id="image.attachmentId"
+      />
     </div>
     <div v-if="textParts.length" class="message-bubble">
       <div v-for="(text, index) in textParts" :key="index" class="message-content">
@@ -12,7 +16,7 @@
 </template>
 
 <script setup lang="ts">
-import type { AgentMessage } from '@/core/agent/types'
+import type { AgentMessage, ImagePart } from '@/core/agent/types'
 import { MessagePartType } from '@/core/agent/types'
 import { computed, type DeepReadonly } from 'vue'
 import AgentImage from './AgentImage.vue'
@@ -22,7 +26,10 @@ const props = defineProps<{
 }>()
 
 const images = computed(() =>
-  props.message.parts.filter((part) => part.type === MessagePartType.IMAGE),
+  props.message.parts.filter(
+    (part): part is DeepReadonly<ImagePart> =>
+      part.type === MessagePartType.IMAGE && Boolean(part.attachmentId),
+  ),
 )
 const textParts = computed(() =>
   props.message.parts.flatMap((part) =>

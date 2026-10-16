@@ -30,6 +30,7 @@
       "imagePixelLimit": "图片不能超过 4000 万像素",
       "imageOriginalSizeLimit": "每张原图不能超过 10 MiB",
       "imageProcessingFailed": "无法处理图片",
+      "imageSaveFailed": "无法将原图保存到工程",
       "imageEncodingFailed": "图片编码失败",
       "imageEncodedSizeLimit": "处理后的图片超过 2 MiB",
       "stop": "停止",

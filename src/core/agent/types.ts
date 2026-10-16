@@ -27,18 +27,42 @@ export interface TextPart {
 
 export interface ImagePart {
   type: MessagePartType.IMAGE
-  imageId: string
+  attachmentId: string
 }
 
-export type AgentImage = {
-  id: string
-  blob: Blob
-  mimeType: string
+export type AgentImageMimeType = 'image/png' | 'image/jpeg' | 'image/webp'
+
+export type AgentImageConversionParams = {
   width: number
   height: number
+  mimeType: 'image/webp'
+  quality: number
 }
 
-export type AgentImageRecord = AgentImage & {
+export type AgentAttachmentScope = {
+  userId: string
+  projectId: string
+}
+
+export type AgentAttachment = AgentAttachmentScope & {
+  id: string
+  original: {
+    relativePath: string
+    fileName: string
+    mimeType: AgentImageMimeType
+    byteSize: number
+    width: number
+    height: number
+  }
+  conversionParams: AgentImageConversionParams
+}
+
+/** The encoded image is a disposable runtime cache, never part of the stored record. */
+export type AgentImage = AgentAttachment & {
+  blob: Blob
+}
+
+export type AgentAttachmentRecord = AgentAttachment & {
   key: string
   owner: string
   sessionKey: string

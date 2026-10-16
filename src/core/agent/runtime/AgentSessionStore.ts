@@ -1,15 +1,59 @@
 import { indexedDBService } from '@/core/storage/IndexedDBService'
 import {
   MessagePartType,
-  type AgentImage,
-  type AgentImageRecord,
+  type AgentAttachment,
+  type AgentAttachmentRecord,
   type AgentSession,
 } from '../types'
 import { toolContractVersion } from './ToolRuntime'
+import { PathResolver } from '@/core/filesystem/core/PathResolver'
 
 /** 固定快照：剥离 Vue 代理，排队后不再读取正在变化的响应式对象。 */
 function snapshot<T>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T
+}
+
+function isAttachment(value: unknown): value is AgentAttachment {
+  const image = value as Partial<AgentAttachment> | undefined
+  const original = image?.original
+  const params = image?.conversionParams
+  if (
+    typeof image?.id !== 'string' ||
+    !image.id ||
+    typeof image.userId !== 'string' ||
+    !image.userId ||
+    typeof image.projectId !== 'string' ||
+    !image.projectId ||
+    !original ||
+    !params ||
+    typeof original.fileName !== 'string' ||
+    !Number.isInteger(original.byteSize) ||
+    original.byteSize <= 0 ||
+    original.byteSize > 10 * 1024 * 1024 ||
+    !Number.isInteger(original.width) ||
+    !Number.isInteger(original.height) ||
+    original.width <= 0 ||
+    original.height <= 0 ||
+    original.width * original.height > 40_000_000 ||
+    !Number.isInteger(params.width) ||
+    !Number.isInteger(params.height) ||
+    params.width <= 0 ||
+    params.height <= 0 ||
+    Math.max(params.width, params.height) > 2048 ||
+    params.mimeType !== 'image/webp' ||
+    !Number.isFinite(params.quality) ||
+    params.quality <= 0 ||
+    params.quality > 1
+  )
+    return false
+  try {
+    return (
+      original.relativePath ===
+      new PathResolver().getAgentAttachmentPath(image.projectId, image.id, original.mimeType)
+    )
+  } catch {
+    return false
+  }
 }
 
 /** 会话快照与图片原子提交；诊断日志由 AgentTelemetry 独立管理。 */
@@ -22,7 +66,7 @@ export class AgentSessionStore {
   }
 
   /** 固定消息、用量及调用摘要，只保留恢复待回答问题所需的工具记录。 */
-  save(session: AgentSession, images: readonly AgentImage[] = []): Promise<void> {
+  save(session: AgentSession, images: readonly AgentAttachment[] = []): Promise<void> {
     const data = snapshot({
       ...session,
       toolExecutions: Object.fromEntries(
@@ -39,24 +83,33 @@ export class AgentSessionStore {
         ),
       ),
     })
-    const pending = images.map((image) => ({ ...image }))
+    const pending = images.map(({ id, userId, projectId, original, conversionParams }) =>
+      snapshot({ id, userId, projectId, original, conversionParams }),
+    )
+    for (const image of pending) {
+      if (!isAttachment(image)) return Promise.reject(new Error('INVALID_AGENT_ATTACHMENT'))
+      if (image.userId !== data.userId || image.projectId !== data.projectId)
+        return Promise.reject(new Error('INVALID_AGENT_ATTACHMENT_OWNER'))
+    }
     return this.enqueue(async () => {
       const db = await indexedDBService.openDB()
       const owner = this.owner(data.userId, data.projectId)
       const key = JSON.stringify([owner, data.id])
       await new Promise<void>((resolve, reject) => {
-        const transaction = db.transaction(['agentSessions', 'agentImages'], 'readwrite')
+        const transaction = db.transaction(['agentSessions', 'agentAttachments'], 'readwrite')
         transaction.oncomplete = () => resolve()
         transaction.onerror = transaction.onabort = () =>
           reject(transaction.error ?? new Error('对话图片存储事务失败'))
-        transaction.objectStore('agentSessions').put({ key, owner, sessionKey: key, data })
-        const imageStore = transaction.objectStore('agentImages')
+        const sessionStore = transaction.objectStore('agentSessions')
+        const previous = sessionStore.get(key)
+        sessionStore.put({ key, owner, sessionKey: key, data })
+        const imageStore = transaction.objectStore('agentAttachments')
         const imageIds = new Set(
           data.messages
             .filter((message) => message.role === 'user')
             .flatMap((message) =>
               message.parts.flatMap((part) =>
-                part.type === MessagePartType.IMAGE ? [part.imageId] : [],
+                part.type === MessagePartType.IMAGE ? [part.attachmentId] : [],
               ),
             ),
         )
@@ -71,15 +124,34 @@ export class AgentSessionStore {
                 key: imageKey,
                 owner,
                 sessionKey: key,
-              } satisfies AgentImageRecord)
+              } satisfies AgentAttachmentRecord)
           }
         }
-        // A dangling reference must abort the entire message/image commit.
-        for (const id of imageIds) {
-          if (pending.some((image) => image.id === id)) continue
-          const request = imageStore.getKey(JSON.stringify([key, id]))
-          request.onsuccess = () => {
-            if (!request.result) transaction.abort()
+        // Only new references must exist: damaged history cannot block subsequent saves.
+        previous.onsuccess = () => {
+          const saved = previous.result?.data as AgentSession | undefined
+          const existing = new Set(
+            saved?.messages.flatMap((message) =>
+              message.parts.flatMap((part) =>
+                part.type === MessagePartType.IMAGE
+                  ? [JSON.stringify([message.id, part.attachmentId])]
+                  : [],
+              ),
+            ),
+          )
+          for (const message of data.messages.filter((message) => message.role === 'user')) {
+            for (const part of message.parts) {
+              if (
+                part.type !== MessagePartType.IMAGE ||
+                existing.has(JSON.stringify([message.id, part.attachmentId])) ||
+                pending.some((image) => image.id === part.attachmentId)
+              )
+                continue
+              const request = imageStore.getKey(JSON.stringify([key, part.attachmentId]))
+              request.onsuccess = () => {
+                if (!request.result) transaction.abort()
+              }
+            }
           }
         }
       })
@@ -107,22 +179,33 @@ export class AgentSessionStore {
   }
 
   /** 删除会话快照；排在此前保存之后，避免被旧写入重新创建。 */
-  delete(session: AgentSession): Promise<void> {
+  delete(session: AgentSession): Promise<AgentAttachmentRecord[]> {
     const owner = this.owner(session.userId, session.projectId)
     const key = JSON.stringify([owner, session.id])
     return this.enqueue(async () => {
       const db = await indexedDBService.openDB()
-      await new Promise<void>((resolve, reject) => {
-        const transaction = db.transaction(['agentSessions', 'agentImages'], 'readwrite')
-        transaction.oncomplete = () => resolve()
+      return new Promise<AgentAttachmentRecord[]>((resolve, reject) => {
+        const removed: AgentAttachmentRecord[] = []
+        const transaction = db.transaction(['agentSessions', 'agentAttachments'], 'readwrite')
+        transaction.oncomplete = () => resolve(removed)
         transaction.onerror = transaction.onabort = () =>
           reject(transaction.error ?? new Error('对话图片存储事务失败'))
         transaction.objectStore('agentSessions').delete(key)
-        const request = transaction.objectStore('agentImages').index('session').openCursor(key)
+        const request = transaction.objectStore('agentAttachments').index('session').openCursor(key)
         request.onsuccess = () => {
           const cursor = request.result
           if (cursor) {
-            cursor.delete()
+            const record = cursor.value as AgentAttachmentRecord
+            if (
+              record.owner === owner &&
+              record.sessionKey === key &&
+              record.userId === session.userId &&
+              record.projectId === session.projectId &&
+              record.key === cursor.primaryKey
+            ) {
+              if (isAttachment(record)) removed.push(record)
+              cursor.delete()
+            }
             cursor.continue()
           }
         }
@@ -133,18 +216,27 @@ export class AgentSessionStore {
   async readImage(
     session: Pick<AgentSession, 'id' | 'userId' | 'projectId'>,
     id: string,
-  ): Promise<AgentImageRecord> {
+  ): Promise<AgentAttachmentRecord | undefined> {
     await this.queue
     const db = await indexedDBService.openDB()
     const owner = this.owner(session.userId, session.projectId)
     const sessionKey = JSON.stringify([owner, session.id])
     return new Promise((resolve, reject) => {
-      const transaction = db.transaction('agentImages', 'readonly')
-      const request = transaction.objectStore('agentImages').get(JSON.stringify([sessionKey, id]))
+      const transaction = db.transaction('agentAttachments', 'readonly')
+      const request = transaction
+        .objectStore('agentAttachments')
+        .get(JSON.stringify([sessionKey, id]))
       transaction.oncomplete = () => {
-        const image = request.result as AgentImageRecord | undefined
-        if (!image || image.owner !== owner || image.sessionKey !== sessionKey)
-          reject(new Error('无法读取对话图片'))
+        const image = request.result as AgentAttachmentRecord | undefined
+        if (
+          !isAttachment(image) ||
+          image.owner !== owner ||
+          image.sessionKey !== sessionKey ||
+          image.userId !== session.userId ||
+          image.projectId !== session.projectId ||
+          image.id !== id
+        )
+          resolve(undefined)
         else resolve(image)
       }
       transaction.onerror = transaction.onabort = () => reject(transaction.error)
@@ -152,37 +244,62 @@ export class AgentSessionStore {
   }
 
   updateImageUpload(
-    image: AgentImageRecord,
-    upload: AgentImageRecord['upload'],
+    image: AgentAttachmentRecord,
+    upload: AgentAttachmentRecord['upload'],
     isCurrent: () => boolean,
-  ): Promise<void> {
+  ): Promise<boolean> {
     return this.enqueue(async () => {
-      if (!isCurrent()) return
+      if (!isCurrent()) return false
       const db = await indexedDBService.openDB()
-      if (!isCurrent()) return
-      await new Promise<void>((resolve, reject) => {
-        const transaction = db.transaction('agentImages', 'readwrite')
-        const store = transaction.objectStore('agentImages')
+      if (!isCurrent()) return false
+      return new Promise<boolean>((resolve, reject) => {
+        let updated = false
+        const transaction = db.transaction('agentAttachments', 'readwrite')
+        const store = transaction.objectStore('agentAttachments')
         const request = store.get(image.key)
         request.onsuccess = () => {
-          const existing = request.result as AgentImageRecord | undefined
+          const existing = request.result as AgentAttachmentRecord | undefined
           if (
             isCurrent() &&
             existing?.owner === image.owner &&
-            existing.sessionKey === image.sessionKey
-          )
+            existing.sessionKey === image.sessionKey &&
+            existing.id === image.id &&
+            existing.userId === image.userId &&
+            existing.projectId === image.projectId
+          ) {
             store.put({ ...existing, upload })
+            updated = true
+          }
         }
-        transaction.oncomplete = () => resolve()
+        transaction.oncomplete = () => resolve(updated)
         transaction.onerror = transaction.onabort = () => reject(transaction.error)
       })
     })
   }
 
+  async listProjectAttachments(projectId: string): Promise<AgentAttachmentRecord[]> {
+    await this.queue
+    const db = await indexedDBService.openDB()
+    return new Promise((resolve, reject) => {
+      const transaction = db.transaction('agentAttachments', 'readonly')
+      const request = transaction.objectStore('agentAttachments').getAll()
+      transaction.oncomplete = () =>
+        resolve(
+          (request.result as AgentAttachmentRecord[]).filter(
+            (item) => isAttachment(item) && item.projectId === projectId,
+          ),
+        )
+      transaction.onerror = transaction.onabort = () => reject(transaction.error)
+    })
+  }
+
   /** 串行执行存储操作；单次失败仍向调用者报告，后续已授权保存可以继续排队。 */
-  private enqueue(operation: () => Promise<void>) {
+  private enqueue<T>(operation: () => Promise<T>): Promise<T> {
     const pending = this.queue.then(operation)
-    this.queue = pending.catch(() => {})
+    this.queue = pending.then(
+      () => {},
+      () => {},
+    )
     return pending
   }
 }

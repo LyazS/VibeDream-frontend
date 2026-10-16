@@ -22,6 +22,18 @@
           </HoverButton>
           <LanguageSelector />
           <HoverButton
+            v-if="hasWorkspaceAccess && workspaceInfo"
+            class="workspace-config-button"
+            :title="t('project.workspaceSettings.title')"
+            :aria-label="t('project.workspaceSettings.title')"
+            :disabled="isLoading || isCleaningAttachments"
+            @click="showWorkspaceSettings = true"
+          >
+            <template #icon>
+              <component :is="IconComponents.SETTINGS" size="20px" />
+            </template>
+          </HoverButton>
+          <HoverButton
             @click="handleUserClick"
             :title="isUserLogin ? t('user.userInfo') : t('user.login')"
           >
@@ -33,7 +45,12 @@
               />
             </template>
           </HoverButton>
-          <HoverButton v-if="workspaceInfo" @click="changeWorkspace" :title="t('workspace.change')">
+          <HoverButton
+            v-if="workspaceInfo"
+            @click="changeWorkspace"
+            :title="t('workspace.change')"
+            :disabled="isCleaningAttachments"
+          >
             <template #icon>
               <component :is="IconComponents.HomeOfficeFill" size="16px" />
             </template>
@@ -235,6 +252,13 @@
     @save="handleSaveProjectEdit"
   />
 
+  <WorkspaceSettingsModal
+    :show="showWorkspaceSettings"
+    :workspace-name="workspaceInfo?.name || ''"
+    @close="showWorkspaceSettings = false"
+    @running-change="isCleaningAttachments = $event"
+  />
+
   <!-- 登录对话框 -->
   <LoginModal :show="showLoginDialog" @close="showLoginDialog = false" />
 
@@ -256,6 +280,7 @@ import { useUnifiedStore } from '@/core/unifiedStore'
 import type { UnifiedProjectConfig } from '@/core/project'
 import { ContextMenu, ContextMenuItem } from '@imengyu/vue3-context-menu'
 import EditProjectModal from '@/components/modals/EditProjectModal.vue'
+import WorkspaceSettingsModal from '@/components/modals/WorkspaceSettingsModal.vue'
 import LanguageSelector from '@/components/utils/LanguageSelector.vue'
 import { IconComponents, getUserStatusIcon } from '@/constants/iconComponents'
 import HoverButton from '@/components/base/HoverButton.vue'
@@ -276,7 +301,7 @@ interface Announcement {
   content: string
 }
 
-const { t } = useAppI18n()
+const { t, locale } = useAppI18n()
 
 // 公告数据
 const announcements = ref<Announcement[]>(announcementsConfig.announcements)
@@ -288,6 +313,8 @@ const isLoading = ref(false)
 const hasWorkspaceAccess = ref(false)
 const workspaceInfo = ref<{ name: string; path?: string } | null>(null)
 const permissionError = ref(false)
+const showWorkspaceSettings = ref(false)
+const isCleaningAttachments = ref(false)
 
 // 用户相关状态
 const showLoginDialog = ref(false)
@@ -386,6 +413,7 @@ async function setupWorkspace() {
 }
 
 async function changeWorkspace() {
+  if (isCleaningAttachments.value) return
   try {
     // 强制弹窗让用户选择新的工作空间
     const result = await fileSystemService.checkPermission(true)
@@ -447,7 +475,7 @@ async function createNewProject() {
 
   try {
     // 生成项目名称
-    const projectName = `${t('project.newName')} ${new Date().toLocaleDateString()}`
+    const projectName = `${t('project.newName')} ${new Date().toLocaleDateString(locale.value)}`
     const project = await unifiedProjectManager.createProject(projectName)
 
     // 跳转到编辑器页面
@@ -557,7 +585,7 @@ async function handleSaveProjectEdit(data: { name: string; description: string }
 
 function formatDate(dateString: string) {
   const date = new Date(dateString)
-  return date.toLocaleDateString('zh-CN', {
+  return date.toLocaleDateString(locale.value, {
     year: 'numeric',
     month: 'short',
     day: 'numeric',
@@ -622,6 +650,17 @@ onMounted(async () => {
   display: flex;
   align-items: center;
   gap: 0.75rem;
+}
+
+.workspace-config-button {
+  width: 40px;
+  height: 40px;
+  padding: 8px;
+  transition-property: background-color, color, transform;
+}
+
+.workspace-config-button:active:not(:disabled) {
+  transform: scale(0.96);
 }
 
 .app-logo {
@@ -1087,5 +1126,40 @@ onMounted(async () => {
   color: var(--color-text-secondary);
   line-height: 1.6;
   margin: 0 0 1rem 0;
+}
+
+@media (max-width: 768px) {
+  .header-content {
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: 8px 16px;
+  }
+
+  .header > .header-content > .header-actions {
+    flex-wrap: wrap;
+    gap: 8px;
+    width: 100%;
+  }
+
+  .logo-section {
+    min-width: 0;
+  }
+
+  .app-subtitle {
+    display: none;
+  }
+
+  .content-container {
+    padding: 0 16px;
+  }
+
+  .content-wrapper {
+    flex-direction: column;
+  }
+
+  .main-section,
+  .notification-sidebar {
+    width: 100%;
+  }
 }
 </style>

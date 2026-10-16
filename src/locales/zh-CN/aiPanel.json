@@ -17,6 +17,8 @@
       "imageExpired": "图片上传地址已失效，请再次发送消息以重新上传。",
       "imageUploadFailed": "对话图片上传失败，请检查网络后重试。",
       "imageReadFailed": "无法读取这张对话图片。",
+      "imageSourceMissing": "工程中的原图已不存在。",
+      "imageRecordMissing": "这张图片的附件记录已不存在。",
       "storageFailed": "无法访问会话存储，请检查浏览器存储后刷新页面。",
       "storageQuotaExceeded": "浏览器存储空间不足，请释放空间后刷新页面。",
       "deleteSessionFailed": "删除会话失败，请重试。",

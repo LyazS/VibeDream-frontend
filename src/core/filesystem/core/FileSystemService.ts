@@ -164,6 +164,31 @@ export class FileSystemService {
 
   // ==================== 便捷方法 ====================
 
+  async writeAgentAttachment(
+    projectId: string,
+    attachmentId: string,
+    mimeType: string,
+    original: Blob,
+  ): Promise<string> {
+    const path = this.paths.getAgentAttachmentPath(projectId, attachmentId, mimeType)
+    await this.writeFile(path, original)
+    return path
+  }
+
+  async readAgentAttachment(projectId: string, attachmentId: string, path: string): Promise<Blob> {
+    this.paths.assertAgentAttachmentPath(projectId, attachmentId, path)
+    return this.readFileAsBlob(path)
+  }
+
+  async deleteAgentAttachment(
+    projectId: string,
+    attachmentId: string,
+    path: string,
+  ): Promise<void> {
+    this.paths.assertAgentAttachmentPath(projectId, attachmentId, path)
+    await this.deleteFile(path)
+  }
+
   /**
    * 获取路径解析器
    */

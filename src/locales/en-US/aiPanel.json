@@ -17,6 +17,8 @@
       "imageExpired": "An image upload has expired. Send the message again to upload it again.",
       "imageUploadFailed": "Unable to upload conversation images. Check your connection and try again.",
       "imageReadFailed": "Unable to read this conversation image.",
+      "imageSourceMissing": "The original image is missing from this project.",
+      "imageRecordMissing": "This image attachment record is missing.",
       "storageFailed": "Unable to access conversation storage. Check your browser storage and reload.",
       "storageQuotaExceeded": "Browser storage is full. Free up space and reload.",
       "deleteSessionFailed": "Unable to delete this conversation. Please try again.",
