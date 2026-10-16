@@ -99,34 +99,43 @@ export function inspectAgentImage(bytes: Uint8Array): {
   return { mimeType, width, height }
 }
 
-export async function processAgentImage(file: Blob): Promise<AgentImage> {
+export async function processAgentImage(file: Blob, signal?: AbortSignal): Promise<AgentImage> {
+  signal?.throwIfAborted()
   if (file.size > AGENT_IMAGE_LIMITS.originalBytes)
     throw new AgentImageProcessingError('imageOriginalSizeLimit')
-  const metadata = inspectAgentImage(new Uint8Array(await file.arrayBuffer()))
+  const bytes = await file.arrayBuffer()
+  signal?.throwIfAborted()
+  const metadata = inspectAgentImage(new Uint8Array(bytes))
+  signal?.throwIfAborted()
   const bitmap = await createImageBitmap(new Blob([file], { type: metadata.mimeType }), {
     imageOrientation: 'from-image',
   })
+  let canvas: HTMLCanvasElement | undefined
   try {
+    signal?.throwIfAborted()
     if (!bitmap.width || !bitmap.height) throw new AgentImageProcessingError('imageInvalid')
     if (bitmap.width * bitmap.height > AGENT_IMAGE_LIMITS.pixels)
       throw new AgentImageProcessingError('imagePixelLimit')
     const scale = Math.min(1, AGENT_IMAGE_LIMITS.edge / Math.max(bitmap.width, bitmap.height))
-    const canvas = document.createElement('canvas')
+    canvas = document.createElement('canvas')
     canvas.width = Math.max(1, Math.round(bitmap.width * scale))
     canvas.height = Math.max(1, Math.round(bitmap.height * scale))
     const context = canvas.getContext('2d')
     if (!context) throw new AgentImageProcessingError('imageProcessingFailed')
+    const encodingCanvas = canvas
     for (let attempt = 0; attempt < 8; attempt++) {
+      signal?.throwIfAborted()
       context.clearRect(0, 0, canvas.width, canvas.height)
       context.drawImage(bitmap, 0, 0, canvas.width, canvas.height)
       const blob = await new Promise<Blob>((resolve, reject) => {
-        canvas.toBlob(
+        encodingCanvas.toBlob(
           (result) =>
             result ? resolve(result) : reject(new AgentImageProcessingError('imageEncodingFailed')),
           'image/webp',
           Math.max(0.55, 0.9 - attempt * 0.1),
         )
       })
+      signal?.throwIfAborted()
       if (blob.size <= AGENT_IMAGE_LIMITS.encodedBytes)
         return {
           id: crypto.randomUUID(),
@@ -141,6 +150,7 @@ export async function processAgentImage(file: Blob): Promise<AgentImage> {
     throw new AgentImageProcessingError('imageEncodedSizeLimit')
   } finally {
     bitmap.close()
+    if (canvas) canvas.width = canvas.height = 0
   }
 }
 

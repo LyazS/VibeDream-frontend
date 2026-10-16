@@ -115,7 +115,56 @@ it('uses native orientation and re-encodes a bounded bitmap, releasing decode re
   })
   expect(result).toMatchObject({ width: 2048, height: 1536, mimeType: 'image/webp' })
   expect(close).toHaveBeenCalledOnce()
+  expect(canvas.width).toBe(0)
+  expect(canvas.height).toBe(0)
 })
+
+it.each(['before', 'read', 'decode', 'encode'] as const)(
+  'cancels image preparation at %s and releases any allocated resources',
+  async (phase) => {
+    const controller = new AbortController()
+    const close = vi.fn()
+    let release!: () => void
+    const gate = new Promise<void>((resolve) => {
+      release = resolve
+    })
+    const file = new Blob([png()])
+    const read = vi.spyOn(file, 'arrayBuffer').mockImplementation(async () => {
+      if (phase === 'read') await gate
+      return png().buffer
+    })
+    const decode = vi.fn(async () => {
+      if (phase === 'decode') await gate
+      return { width: 100, height: 80, close }
+    })
+    const toBlob = vi.fn(async (done: (blob: Blob) => void) => {
+      if (phase === 'encode') await gate
+      done(new Blob(['encoded'], { type: 'image/webp' }))
+    })
+    const canvas = {
+      width: 0,
+      height: 0,
+      getContext: () => ({ clearRect: vi.fn(), drawImage: vi.fn() }),
+      toBlob,
+    }
+    vi.stubGlobal('createImageBitmap', decode)
+    vi.stubGlobal('document', { createElement: () => canvas })
+    if (phase === 'before') controller.abort()
+    const pending = processAgentImage(file, controller.signal)
+    const cancelled = expect(pending).rejects.toMatchObject({ name: 'AbortError' })
+    if (phase === 'read') await vi.waitFor(() => expect(read).toHaveBeenCalledOnce())
+    if (phase === 'decode') await vi.waitFor(() => expect(decode).toHaveBeenCalledOnce())
+    if (phase === 'encode') await vi.waitFor(() => expect(toBlob).toHaveBeenCalledOnce())
+    controller.abort()
+    release()
+    await cancelled
+    expect(decode).toHaveBeenCalledTimes(phase === 'before' || phase === 'read' ? 0 : 1)
+    expect(close).toHaveBeenCalledTimes(phase === 'decode' || phase === 'encode' ? 1 : 0)
+    expect(toBlob).toHaveBeenCalledTimes(phase === 'encode' ? 1 : 0)
+    expect(canvas.width).toBe(0)
+    expect(canvas.height).toBe(0)
+  },
+)
 
 it('rolls back a session save containing a missing image', async () => {
   const store = new AgentSessionStore()

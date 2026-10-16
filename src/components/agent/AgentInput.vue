@@ -7,20 +7,60 @@
   >
     <div class="chat-input-shell">
       <div v-if="draftImages.length" class="draft-images">
-        <div v-for="draft in draftImages" :key="draft.image.id" class="draft-image">
-          <NImage :src="draft.preview.url" :alt="t('common.chat.image')" object-fit="cover" />
+        <div v-for="draft in draftImages" :key="draft.id" class="draft-image">
+          <NImage
+            v-if="previews.get(draft.id)"
+            :src="previews.get(draft.id)!.url"
+            :alt="t('common.chat.image')"
+            object-fit="cover"
+          />
+          <div
+            v-else
+            class="draft-image-status"
+            :class="{ 'draft-image-status--failed': draft.status === 'failed' }"
+            :aria-label="imageStatusLabel(draft)"
+          >
+            <component
+              :is="draft.status === 'failed' ? IconComponents.WARNING : IconComponents.LOADING"
+              size="20px"
+            />
+            <button
+              v-if="draft.status === 'failed'"
+              type="button"
+              class="retry-image"
+              :title="t('common.retry')"
+              :aria-label="t('common.retry')"
+              :disabled="!store.agentDraftEditable"
+              @click="store.retryAgentDraftImage(draft.id)"
+            >
+              <component :is="IconComponents.REFRESH" size="18px" />
+            </button>
+            <span v-else>{{ imageStatusLabel(draft) }}</span>
+          </div>
           <button
             type="button"
             class="remove-image"
             :title="t('common.chat.removeImage')"
             :aria-label="t('common.chat.removeImage')"
-            @click="removeImage(draft.image.id)"
+            :disabled="store.agentDraft.submitting"
+            @click="store.removeAgentDraftImage(draft.id)"
           >
             <component :is="IconComponents.CLOSE" size="16px" />
           </button>
         </div>
       </div>
       <div v-if="imageErrorMessage" class="image-error" role="alert">{{ imageErrorMessage }}</div>
+      <div v-for="draft in failedImages" :key="draft.id" class="image-error" role="alert">
+        {{ t(`common.chat.${draft.error}`) }}
+      </div>
+      <div
+        v-if="store.agentDraft.submitError"
+        class="image-error"
+        role="alert"
+        :title="store.agentDraft.submitError"
+      >
+        {{ t('common.chat.draftSubmitFailed') }}
+      </div>
       <div class="chat-input-main">
         <textarea
           v-model="inputMessage"
@@ -28,7 +68,7 @@
           :placeholder="inputPlaceholder"
           :style="textareaStyle"
           autocomplete="off"
-          :disabled="!store.agentReady || (store.agentBusy && !store.agentRunning)"
+          :disabled="!store.agentDraftEditable"
           @input="adjustTextareaHeight"
           @keydown.enter="handleEnterKey"
           @compositionstart="isComposing = true"
@@ -47,18 +87,14 @@
           class="attach-image"
           :title="t('common.chat.attachImage')"
           :aria-label="t('common.chat.attachImage')"
-          :disabled="
-            !store.agentReady ||
-            (store.agentBusy && !store.agentRunning) ||
-            draftImages.length + queuedImages >= AGENT_IMAGE_LIMITS.count
-          "
+          :disabled="!store.agentDraftEditable || draftImages.length >= AGENT_IMAGE_LIMITS.count"
           @click="fileInput?.click()"
         >
           <component :is="IconComponents.IMAGE_SMALL" size="18px" />
         </button>
         <AgentUsageIndicator />
         <ChatSendButton
-          :disabled="!hasProcessingMessage && !canSend"
+          :disabled="!hasProcessingMessage && !store.agentDraftSendable"
           :title="hasProcessingMessage ? t('common.chat.stop') : t('common.chat.send')"
           :icon="hasProcessingMessage ? IconComponents.STOP : IconComponents.SEND"
           @click="hasProcessingMessage ? handleStop() : handleSend()"
@@ -69,14 +105,11 @@
 </template>
 
 <script setup lang="ts">
-import { ref, shallowRef, computed, nextTick, onBeforeUnmount } from 'vue'
+import { ref, shallowRef, computed, nextTick, onBeforeUnmount, watch } from 'vue'
 import { NImage } from 'naive-ui'
-import type { AgentImage } from '@/core/agent/types'
+import type { AgentDraftImage } from '@/core/modules/UnifiedAgentModule'
 import {
   AGENT_IMAGE_LIMITS,
-  AgentImageProcessingError,
-  type AgentImageErrorCode,
-  processAgentImage,
   createAgentImagePreview,
 } from '@/core/agent/services/agentImageService'
 import { IconComponents } from '@/constants/iconComponents'
@@ -88,65 +121,46 @@ import { useAppI18n } from '@/core/composables/useI18n'
 const { t } = useAppI18n()
 const store = useUnifiedStore()
 
-// AgentInput 现在完全自主，不需要发射任何事件
-
-const inputMessage = ref('')
+const inputMessage = computed({
+  get: () => store.agentDraft.text,
+  set: (text: string) => store.setAgentDraftText(text),
+})
 const fileInput = ref<HTMLInputElement>()
-type DraftImage = { image: AgentImage; preview: ReturnType<typeof createAgentImagePreview> }
-const draftImages = shallowRef<DraftImage[]>([])
-const imageError = ref<AgentImageErrorCode | 'imageCountLimit' | ''>('')
+const draftImages = computed(() => store.agentDraft.images)
+const failedImages = computed(() => draftImages.value.filter((item) => item.status === 'failed'))
+const previews = shallowRef(new Map<string, ReturnType<typeof createAgentImagePreview>>())
 const imageErrorMessage = computed(() =>
-  imageError.value ? t(`common.chat.${imageError.value}`, { count: AGENT_IMAGE_LIMITS.count }) : '',
+  store.agentDraft.imageError
+    ? t(`common.chat.${store.agentDraft.imageError}`, { count: AGENT_IMAGE_LIMITS.count })
+    : '',
 )
-let draftGeneration = 0
-const queuedImages = ref(0)
-let processing = Promise.resolve()
-const canSend = computed(
-  () =>
-    store.agentReady &&
-    !store.agentBusy &&
-    queuedImages.value === 0 &&
-    Boolean(inputMessage.value.trim() || draftImages.value.length),
-)
-
-function removeImage(id: string) {
-  draftImages.value.find((draft) => draft.image.id === id)?.preview.dispose()
-  draftImages.value = draftImages.value.filter((draft) => draft.image.id !== id)
-}
-function addFiles(files: File[]) {
-  if (!store.agentReady || (store.agentBusy && !store.agentRunning)) return
-  const generation = draftGeneration
-  imageError.value = ''
-  const available = Math.max(
-    0,
-    AGENT_IMAGE_LIMITS.count - draftImages.value.length - queuedImages.value,
-  )
-  if (files.length > available) imageError.value = 'imageCountLimit'
-  const accepted = files.slice(0, available)
-  queuedImages.value += accepted.length
-  processing = processing.then(async () => {
-    for (const file of accepted) {
-      if (generation !== draftGeneration) return
-      try {
-        const image = await processAgentImage(file)
-        if (generation !== draftGeneration) return
-        draftImages.value = [
-          ...draftImages.value,
-          { image, preview: createAgentImagePreview(image.blob) },
-        ]
-      } catch (error) {
-        if (generation === draftGeneration)
-          imageError.value =
-            error instanceof AgentImageProcessingError ? error.code : 'imageProcessingFailed'
-      } finally {
-        if (generation === draftGeneration) queuedImages.value--
-      }
+watch(
+  draftImages,
+  (images) => {
+    const next = new Map(previews.value)
+    for (const [id, preview] of next) {
+      if (images.some((item) => item.id === id && item.status === 'ready')) continue
+      preview.dispose()
+      next.delete(id)
     }
-  })
+    for (const item of images) {
+      if (item.image && item.status === 'ready' && !next.has(item.id))
+        next.set(item.id, createAgentImagePreview(item.image.blob))
+    }
+    previews.value = next
+  },
+  { immediate: true },
+)
+onBeforeUnmount(() => {
+  previews.value.forEach((preview) => preview.dispose())
+})
+function imageStatusLabel(draft: { status: AgentDraftImage['status']; error?: string }) {
+  if (draft.error) return t(`common.chat.${draft.error}`)
+  return t(draft.status === 'queued' ? 'common.chat.imageQueued' : 'common.processing')
 }
 function handleFileSelection(event: Event) {
   const input = event.target as HTMLInputElement
-  addFiles(Array.from(input.files ?? []))
+  store.addAgentDraftImages(Array.from(input.files ?? []))
   input.value = ''
 }
 function handlePaste(event: ClipboardEvent) {
@@ -158,7 +172,7 @@ function handlePaste(event: ClipboardEvent) {
     })
   if (files.length) {
     event.preventDefault()
-    addFiles(files)
+    store.addAgentDraftImages(files)
   }
 }
 function handleDragOver(event: DragEvent) {
@@ -171,16 +185,8 @@ function handleDrop(event: DragEvent) {
   if (!event.dataTransfer?.files.length) return
   event.preventDefault()
   event.stopPropagation()
-  addFiles(Array.from(event.dataTransfer.files))
+  store.addAgentDraftImages(Array.from(event.dataTransfer.files))
 }
-function clearImages() {
-  draftGeneration++
-  queuedImages.value = 0
-  draftImages.value.forEach((draft) => draft.preview.dispose())
-  draftImages.value = []
-  imageError.value = ''
-}
-onBeforeUnmount(clearImages)
 const isComposing = ref(false) // 跟踪输入法 composition 状态
 const textareaHeight = ref(72) // 初始高度 72px (3行 × 24px)
 
@@ -218,6 +224,7 @@ const adjustTextareaHeight = () => {
 
   textareaHeight.value = newHeight
 }
+watch(inputMessage, adjustTextareaHeight, { immediate: true })
 
 const handleEnterKey = (event: KeyboardEvent) => {
   // 如果正在使用输入法，不处理 Enter 键
@@ -237,17 +244,7 @@ const handleEnterKey = (event: KeyboardEvent) => {
 }
 
 const handleSend = async () => {
-  if (!canSend.value) return
-
-  const message = inputMessage.value.trim()
-  const images = draftImages.value.map((draft) => draft.image)
-
-  // 清空输入框并重置高度
-  inputMessage.value = ''
-  clearImages()
-  textareaHeight.value = MIN_LINES * LINE_HEIGHT // 重置为最小高度(3行)
-
-  await store.sendAgentMessage(message, images)
+  if (store.agentDraftSendable) await store.sendAgentDraft()
 }
 
 // 停止当前进行中的消息
@@ -355,6 +352,33 @@ const handleStop = () => {
   position: relative;
   width: 80px;
   height: 80px;
+  flex: 0 0 80px;
+}
+.draft-image-status {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  border-radius: 6px;
+  background: var(--color-bg-secondary);
+  color: var(--color-text-secondary);
+  font-size: 11px;
+}
+.draft-image-status span {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  text-align: center;
+}
+.draft-image-status--failed {
+  box-sizing: border-box;
+  padding-bottom: 40px;
+}
+.retry-image {
+  position: absolute;
+  left: 20px;
+  bottom: 0;
 }
 .draft-image :deep(.n-image),
 .draft-image :deep(img) {
@@ -366,7 +390,8 @@ const handleStop = () => {
   outline: 1px solid rgba(255, 255, 255, 0.1);
 }
 .remove-image,
-.attach-image {
+.attach-image,
+.retry-image {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -404,12 +429,15 @@ const handleStop = () => {
   right: 58px;
   bottom: 10px;
 }
-.attach-image:disabled {
+.attach-image:disabled,
+.remove-image:disabled,
+.retry-image:disabled {
   opacity: 0.5;
   cursor: not-allowed;
 }
 .attach-image:active:not(:disabled),
-.remove-image:active {
+.remove-image:active:not(:disabled),
+.retry-image:active:not(:disabled) {
   transform: scale(0.96);
 }
 .image-error {

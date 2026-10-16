@@ -22,6 +22,8 @@
       "send": "发送",
       "attachImage": "添加图片",
       "removeImage": "移除图片",
+      "imageQueued": "排队中",
+      "draftSubmitFailed": "消息保存失败，请重新发送",
       "image": "对话图片",
       "imageCountLimit": "每条消息最多添加 {count} 张图片",
       "imageInvalid": "请选择有效的 JPEG、PNG 或 WebP 图片",

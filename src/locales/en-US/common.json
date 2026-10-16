@@ -22,6 +22,8 @@
       "send": "Send",
       "attachImage": "Add images",
       "removeImage": "Remove image",
+      "imageQueued": "Queued",
+      "draftSubmitFailed": "Unable to save the message. Try sending again.",
       "image": "Conversation image",
       "imageCountLimit": "Up to {count} images per message",
       "imageInvalid": "Choose a valid JPEG, PNG or WebP image",

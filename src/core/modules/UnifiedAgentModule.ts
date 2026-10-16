@@ -7,6 +7,9 @@ import { agentTools, createToolRuntime } from '@/core/agent/runtime/ToolRuntime'
 import { AgentSessionStore } from '@/core/agent/runtime/AgentSessionStore'
 import {
   AGENT_IMAGE_LIMITS,
+  AgentImageProcessingError,
+  type AgentImageErrorCode,
+  processAgentImage,
   prepareAgentImages,
   invalidateAgentImageUploads,
 } from '@/core/agent/services/agentImageService'
@@ -47,6 +50,38 @@ type AgentRun = {
   finalized: boolean
   modelCall: ModelCallSummary | null
   awaitingCompletion: boolean
+  committed: boolean
+}
+
+export type AgentDraftImage = {
+  id: string
+  status: 'queued' | 'processing' | 'ready' | 'failed'
+  image?: AgentImage
+  error?: AgentImageErrorCode
+}
+
+export type AgentDraft = {
+  text: string
+  images: AgentDraftImage[]
+  imageError: 'imageCountLimit' | null
+  submitting: boolean
+  submitError: string | null
+}
+
+type DraftImageTask = {
+  input: Blob
+  controller: AbortController
+  userId: string
+  projectId: string
+}
+
+type LocalSubmission = {
+  session: AgentSession
+  committed: boolean
+  settled: Promise<void>
+  settle: () => void
+  commit: () => void
+  rollback: (error: unknown) => void
 }
 
 /** 创建工程级 Agent 模块，管理本地会话、模型调用及生命周期，并导出只读状态和操作。 */
@@ -66,6 +101,17 @@ export function createUnifiedAgentModule(registry: ModuleRegistry) {
   // 会话存储和当前账户/工程的内存索引。
   const sessionStore = new AgentSessionStore()
   const pendingImages = new Map<string, AgentImage[]>()
+  const emptyDraft = (): AgentDraft => ({
+    text: '',
+    images: [],
+    imageError: null,
+    submitting: false,
+    submitError: null,
+  })
+  const draft = shallowRef<AgentDraft>(emptyDraft())
+  const draftImageTasks = new Map<string, DraftImageTask>()
+  let draftImageWorker: object | null = null
+  const localSubmission = shallowRef<LocalSubmission | null>(null)
   // 日志独立于聊天存储；读取实时账号，供后台补传在切号时立即停止。
   const telemetry = new AgentTelemetry(() => user.currentUser.value?.id)
   // 仅缓存当前账户工程分区；账户变化清空，IndexedDB 中其他分区仍保留。
@@ -124,6 +170,124 @@ export function createUnifiedAgentModule(registry: ModuleRegistry) {
       ? message.interaction.interrupt
       : null
   })
+  const draftEditable = computed(
+    () => ready.value && !draft.value.submitting && (!running.value || currentRunning.value),
+  )
+  const draftSendable = computed(
+    () =>
+      ready.value &&
+      !running.value &&
+      !localSubmission.value &&
+      !pendingInteraction.value &&
+      !draft.value.submitting &&
+      draft.value.images.every((item) => item.status === 'ready') &&
+      Boolean(draft.value.text.trim() || draft.value.images.length),
+  )
+
+  function setDraftText(text: string) {
+    if (!draftEditable.value) return
+    draft.value = { ...draft.value, text, submitError: null }
+  }
+
+  function updateDraftImage(id: string, changes: Partial<AgentDraftImage>) {
+    draft.value = {
+      ...draft.value,
+      images: draft.value.images.map((item) => (item.id === id ? { ...item, ...changes } : item)),
+    }
+  }
+
+  function ownsDraftImage(id: string, task: DraftImageTask) {
+    return (
+      !disposed.value &&
+      !task.controller.signal.aborted &&
+      draftImageTasks.get(id) === task &&
+      task.userId === user.currentUser.value?.id &&
+      task.projectId === config.projectId.value
+    )
+  }
+
+  async function processDraftImages() {
+    if (draftImageWorker) return
+    const worker = {}
+    draftImageWorker = worker
+    try {
+      while (draftImageWorker === worker) {
+        const item = draft.value.images.find((image) => image.status === 'queued')
+        if (!item) return
+        const task = draftImageTasks.get(item.id)
+        if (!task || !ownsDraftImage(item.id, task)) return
+        updateDraftImage(item.id, { status: 'processing', error: undefined })
+        try {
+          const image = await processAgentImage(task.input, task.controller.signal)
+          if (!ownsDraftImage(item.id, task)) continue
+          updateDraftImage(item.id, { status: 'ready', image })
+          draftImageTasks.delete(item.id)
+        } catch (error) {
+          if (!ownsDraftImage(item.id, task)) continue
+          updateDraftImage(item.id, {
+            status: 'failed',
+            error:
+              error instanceof AgentImageProcessingError ? error.code : 'imageProcessingFailed',
+          })
+        }
+      }
+    } finally {
+      if (draftImageWorker === worker) draftImageWorker = null
+    }
+  }
+
+  function addDraftImages(files: readonly Blob[]) {
+    const userId = user.currentUser.value?.id
+    if (!draftEditable.value || !userId) return
+    const available = Math.max(0, AGENT_IMAGE_LIMITS.count - draft.value.images.length)
+    const images = files.slice(0, available).map((input): AgentDraftImage => {
+      const id = crypto.randomUUID()
+      draftImageTasks.set(id, {
+        input,
+        controller: new AbortController(),
+        userId,
+        projectId: config.projectId.value,
+      })
+      return { id, status: 'queued' }
+    })
+    draft.value = {
+      ...draft.value,
+      images: [...draft.value.images, ...images],
+      imageError: files.length > available ? 'imageCountLimit' : null,
+      submitError: null,
+    }
+    void processDraftImages()
+  }
+
+  function removeDraftImage(id: string) {
+    if (draft.value.submitting) return
+    draftImageTasks.get(id)?.controller.abort()
+    draftImageTasks.delete(id)
+    draft.value = {
+      ...draft.value,
+      images: draft.value.images.filter((item) => item.id !== id),
+      imageError: null,
+      submitError: null,
+    }
+  }
+
+  function retryDraftImage(id: string) {
+    if (!draftEditable.value || !draftImageTasks.has(id)) return
+    if (draft.value.images.find((item) => item.id === id)?.status !== 'failed') return
+    updateDraftImage(id, { status: 'queued', error: undefined })
+    void processDraftImages()
+  }
+
+  function resetDraft() {
+    draftImageTasks.forEach((task) => task.controller.abort())
+    draftImageTasks.clear()
+    draftImageWorker = null
+    draft.value = emptyDraft()
+  }
+
+  function clearDraft() {
+    if (!draft.value.submitting) resetDraft()
+  }
   // 工具运行时调用编辑器执行器及撤销命令。
   const toolRuntime = createToolRuntime()
   // 客户端连接状态的响应式镜像，供顶栏展示连接颜色及读取关闭原因。
@@ -166,14 +330,19 @@ export function createUnifiedAgentModule(registry: ModuleRegistry) {
   }
 
   /** 保存固定会话快照；存储异常阻止新请求，详细恢复策略留待阶段 3.4。 */
-  async function persistSession(session: AgentSession) {
+  async function persistSession(session: AgentSession, submission?: LocalSubmission) {
+    const pending = localSubmission.value
+    if (pending?.session === session && pending !== submission) {
+      await pending.settled
+      if (sessions.value[session.id] !== session) return
+    }
     session.updatedAt = new Date().toISOString()
     try {
       const images = pendingImages.get(session.id) ?? []
       await sessionStore.save(session, images)
       if (pendingImages.get(session.id) === images) pendingImages.delete(session.id)
     } catch (error) {
-      reportStorageError(session, error)
+      if (!submission) reportStorageError(session, error)
       throw error
     }
   }
@@ -268,7 +437,7 @@ export function createUnifiedAgentModule(registry: ModuleRegistry) {
     },
   )
 
-  /** 同步撤销推进权限并交接；旧执行器自行结束，全部未提交结果丢弃。 */
+  /** 立即撤销推进权限；首次提交结束后交接，其余阶段同步收口。 */
   function stop() {
     const run = activeRun.value
     if (!run || run.session.id !== currentSessionId.value || run.finalized) return
@@ -280,7 +449,7 @@ export function createUnifiedAgentModule(registry: ModuleRegistry) {
         (execution.call.name === 'read_media' || execution.call.name === 'search_media'),
     )
     if (cancellable) run.tool.abort()
-    finalizeRun(run, 'cancelled')
+    if (run.committed) finalizeRun(run, 'cancelled')
   }
 
   /** 新建空白会话并切换展示；已有会话及运行继续保留，共享客户端不变。 */
@@ -316,6 +485,8 @@ export function createUnifiedAgentModule(registry: ModuleRegistry) {
     activeRun.value = null
     sessions.value = {}
     pendingImages.clear()
+    localSubmission.value = null
+    resetDraft()
     newChat()
   }
 
@@ -323,7 +494,8 @@ export function createUnifiedAgentModule(registry: ModuleRegistry) {
   async function deleteSession(id: string) {
     const session = sessions.value[id]
     // 模块入口也检查运行归属，避免绕过界面禁用或点击时状态变化导致删除在途会话。
-    if (!session || activeSessionId.value === id) return false
+    if (!session || activeSessionId.value === id || localSubmission.value?.session.id === id)
+      return false
     delete sessions.value[id]
     pendingImages.delete(id)
     if (currentSessionId.value === id) newChat()
@@ -528,7 +700,7 @@ export function createUnifiedAgentModule(registry: ModuleRegistry) {
     if (run.finalized) return
     run.finalized = true
     const session = run.session
-    if (ownsSession(run)) {
+    if (run.committed && ownsSession(run)) {
       const current = run.modelCall
       if (current?.status === 'running')
         current.status = status === 'failed' ? 'failed' : 'cancelled'
@@ -593,7 +765,7 @@ export function createUnifiedAgentModule(registry: ModuleRegistry) {
   }
 
   /** 自动推进只属于活动上下文；退出后保存、日志和取消分别自行收口。 */
-  async function runLoop(session: AgentSession) {
+  async function runLoop(session: AgentSession, submission?: LocalSubmission) {
     const control: AgentRun = {
       session,
       trigger: session.messages[session.messages.length - 1]!,
@@ -604,6 +776,7 @@ export function createUnifiedAgentModule(registry: ModuleRegistry) {
       finalized: false,
       modelCall: null,
       awaitingCompletion: false,
+      committed: !submission,
     }
     activeRun.value = control
     const sessionId = session.id
@@ -612,6 +785,18 @@ export function createUnifiedAgentModule(registry: ModuleRegistry) {
     const isRunCurrent = () =>
       ownsSession(control) && activeRun.value === control && !control.stopped && ready.value
     try {
+      // 首次消息与图片原子保存失败时回滚；后续运行错误不再影响草稿。
+      try {
+        await persistSession(session, submission)
+      } catch (error) {
+        if (!submission) throw error
+        submission.rollback(error)
+        return
+      }
+      control.committed = true
+      submission?.commit()
+      // 保存期间收到停止请求时，先记录已提交输入，再由 finally 完成取消收口。
+      if (!ownsSession(control) || activeRun.value !== control) return
       const trigger = control.trigger
       void telemetry.activity(session, session.messages.length > 1)
       // 回答交互后由工具结果触发续轮，不再把该回答重复记录为用户输入节点。
@@ -627,9 +812,6 @@ export function createUnifiedAgentModule(registry: ModuleRegistry) {
             })),
           }),
         )
-      // 先保存触发消息（用户输入或回答后的工具对）；运行槽已同步占用，保存期间不能并发发送。
-      await persistSession(session)
-      if (!isRunCurrent()) return
       while (isRunCurrent()) {
         // 1. 等待旧模型调用释放槽位，再复核归属；只等待收口，不重放旧请求。
         await client.waitForIdle()
@@ -826,7 +1008,14 @@ export function createUnifiedAgentModule(registry: ModuleRegistry) {
    */
   async function answerQuestion(answer: string, via: InteractionSubmittedVia = 'custom_input') {
     const content = answer.trim()
-    if (!ready.value || running.value || !content || !pendingInteraction.value) return false
+    if (
+      !ready.value ||
+      running.value ||
+      localSubmission.value ||
+      !content ||
+      !pendingInteraction.value
+    )
+      return false
     // 发送准入由 pendingInteraction 统一判断；回答结果直接写回最后一条消息的交互记录。
     const message = currentMessages.value[currentMessages.value.length - 1]!
     const interaction = message.interaction
@@ -847,9 +1036,20 @@ export function createUnifiedAgentModule(registry: ModuleRegistry) {
   }
 
   /** 发送新的用户消息；等待 ask_user 回答时拒绝发送，回答须通过 answerQuestion 单独提交。 */
-  async function send(text: string, images: readonly AgentImage[] = []) {
+  async function submitMessage(
+    text: string,
+    images: readonly AgentImage[],
+    onCommitted?: () => void,
+    onFailed?: (error: unknown) => void,
+  ) {
     const content = text.trim()
-    if (!ready.value || running.value || pendingInteraction.value || (!content && !images.length))
+    if (
+      !ready.value ||
+      running.value ||
+      localSubmission.value ||
+      pendingInteraction.value ||
+      (!content && !images.length)
+    )
       return false
     if (
       images.length > AGENT_IMAGE_LIMITS.count ||
@@ -869,19 +1069,91 @@ export function createUnifiedAgentModule(registry: ModuleRegistry) {
     )
       return false
     const session = currentSession.value!
+    const previousUpdatedAt = session.updatedAt
+    const previousImages = pendingImages.get(session.id)
     const message = buildDisplayMessage(crypto.randomUUID(), AgentMessageRole.USER, content)
     message.parts.push(
       ...images.map((image) => ({ type: MessagePartType.IMAGE as const, imageId: image.id })),
     )
+    message.parts.push(captureBackgroundContext(registry))
     if (images.length)
       pendingImages.set(session.id, [
         ...(pendingImages.get(session.id) ?? []),
         ...images.map((image) => ({ ...image })),
       ])
-    message.parts.push(captureBackgroundContext(registry))
     session.messages.push(message)
-    await runLoop(session)
-    return true
+    const registeredImages = pendingImages.get(session.id)
+    let settle!: () => void
+    const settled = new Promise<void>((resolve) => {
+      settle = resolve
+    })
+    const submission: LocalSubmission = {
+      session,
+      committed: false,
+      settled,
+      settle,
+      commit() {
+        submission.committed = true
+        if (localSubmission.value === submission) {
+          localSubmission.value = null
+          onCommitted?.()
+        }
+        submission.settle()
+      },
+      rollback(error) {
+        if (sessions.value[session.id] === session) {
+          session.messages = session.messages.filter((item) => item.id !== message.id)
+          session.updatedAt = previousUpdatedAt
+          if (pendingImages.get(session.id) === registeredImages) {
+            if (previousImages) pendingImages.set(session.id, previousImages)
+            else pendingImages.delete(session.id)
+          }
+        }
+        if (localSubmission.value === submission) {
+          localSubmission.value = null
+          onFailed?.(error)
+        }
+        submission.settle()
+      },
+    }
+    localSubmission.value = submission
+    await runLoop(session, submission)
+    return submission.committed
+  }
+
+  function send(text: string, images: readonly AgentImage[] = []) {
+    if (draft.value.submitting) return Promise.resolve(false)
+    return submitMessage(text, images)
+  }
+
+  async function sendDraft() {
+    if (!draftSendable.value) return false
+    const snapshot = draft.value
+    draft.value = { ...snapshot, submitting: true, submitError: null }
+    const submittedDraft = draft.value
+    const fail = (error: unknown) => {
+      if (draft.value === submittedDraft)
+        draft.value = {
+          ...snapshot,
+          submitting: false,
+          submitError: error instanceof Error ? error.message : String(error),
+        }
+    }
+    try {
+      return await submitMessage(
+        snapshot.text,
+        snapshot.images.map((item) => item.image!),
+        () => {
+          if (draft.value === submittedDraft) resetDraft()
+        },
+        fail,
+      )
+    } catch (error) {
+      fail(error)
+      return false
+    } finally {
+      if (draft.value === submittedDraft) draft.value = { ...snapshot, submitting: false }
+    }
   }
 
   async function getImage(id: string): Promise<AgentImage> {
@@ -947,6 +1219,11 @@ export function createUnifiedAgentModule(registry: ModuleRegistry) {
     },
     { immediate: true, flush: 'sync' },
   )
+  const stopProjectWatch = watch(
+    () => config.projectId.value,
+    () => leaveProject(),
+    { flush: 'sync' },
+  )
   // 工程就绪观察器的停止函数；工程退出就绪状态时清空临时会话并关闭连接。
   const stopReadyWatch = watch(
     /** 合并工程设置与时间轴的就绪状态，判断工程是否仍可使用。 */ () =>
@@ -969,6 +1246,7 @@ export function createUnifiedAgentModule(registry: ModuleRegistry) {
       disposed.value = true
       stopIdentityWatch()
       stopReadyWatch()
+      stopProjectWatch()
       stopHistoryWatch()
       unsubscribeIdentity()
       unsubscribeConnection()
@@ -994,6 +1272,15 @@ export function createUnifiedAgentModule(registry: ModuleRegistry) {
     toolExecutions: readonly(toolExecutions),
     pendingInteraction: readonly(pendingInteraction),
     connection: readonly(connection),
+    draft: readonly(draft),
+    draftEditable: readonly(draftEditable),
+    draftSendable: readonly(draftSendable),
+    setDraftText,
+    addDraftImages,
+    removeDraftImage,
+    retryDraftImage,
+    clearDraft,
+    sendDraft,
     send,
     getImage,
     answerQuestion,

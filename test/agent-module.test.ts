@@ -4,6 +4,7 @@ import { IDBFactory } from 'fake-indexeddb'
 import { indexedDBService } from '../src/core/storage/IndexedDBService'
 import { AgentSessionStore } from '../src/core/agent/runtime/AgentSessionStore'
 import { AgentTelemetry, type LocalAgentLog } from '../src/core/agent/runtime/AgentTelemetry'
+import { sanitizeLog } from '../src/core/agent/telemetry/agent-log'
 import { enabledApiCapabilities } from '../src/config/apiCapabilities'
 import { ModuleRegistry } from '../src/core/modules/ModuleRegistry'
 import { createUnifiedAgentModule } from '../src/core/modules/UnifiedAgentModule'
@@ -15,6 +16,7 @@ import type { VirtualDirectory } from '../src/core/directory/types'
 import systemPrompt from '../src/core/agent/prompts/system-prompt.txt?raw'
 import { CloudflareTemporaryFileUploader } from '../src/core/utils/cloudflareTemporaryFileUploader'
 import type { AgentImage, AgentImageRecord } from '../src/core/agent/types'
+import * as imageService from '../src/core/agent/services/agentImageService'
 
 const transport = vi.hoisted(() => ({
   calls: vi.fn(),
@@ -189,6 +191,474 @@ afterEach(async () => {
   await Promise.allSettled(backgroundWrites)
   vi.restoreAllMocks()
   vi.unstubAllGlobals()
+})
+
+describe('shared Agent draft', () => {
+  const image = (): AgentImage => ({
+    id: crypto.randomUUID(),
+    blob: new Blob(['image'], { type: 'image/webp' }),
+    mimeType: 'image/webp',
+    width: 100,
+    height: 80,
+  })
+  const storedImages = () =>
+    indexedDBService.transaction<AgentImageRecord[]>('agentImages', 'readonly', (store) =>
+      store.getAll(),
+    )
+
+  it('keeps text, ordered preparation and errors across new, selected and deleted sessions', async () => {
+    const pending = deferred<AgentImage>()
+    const prepare = vi
+      .spyOn(imageService, 'processAgentImage')
+      .mockReturnValueOnce(pending.promise)
+      .mockRejectedValueOnce(new imageService.AgentImageProcessingError('imageInvalid'))
+    agent.setDraftText('shared input')
+    agent.addDraftImages([new Blob(['first']), new Blob(['second'])])
+    const original = agent.currentSessionId.value
+    const draft = agent.draft.value
+    expect(draft.images.map((item) => item.status)).toEqual(['processing', 'queued'])
+    agent.newChat()
+    const other = agent.currentSessionId.value
+    expect(agent.draft.value).toBe(draft)
+    expect(agent.selectSession(original)).toBe(true)
+    expect(await agent.deleteSession(other)).toBe(true)
+    expect(await agent.deleteSession(original)).toBe(true)
+    expect(prepare).toHaveBeenCalledOnce()
+    expect(prepare.mock.calls[0]![1]?.aborted).toBe(false)
+    pending.resolve(image())
+    await vi.waitFor(() => expect(agent.draft.value.images[1]?.status).toBe('failed'))
+    expect(agent.draft.value.text).toBe('shared input')
+    expect(agent.draft.value.images[0]?.status).toBe('ready')
+    const failed = agent.draft.value
+    agent.newChat()
+    expect(agent.draft.value).toBe(failed)
+    expect(failed.images[1]?.error).toBe('imageInvalid')
+    expect(prepare).toHaveBeenCalledTimes(2)
+  })
+
+  it('counts queued, processing and failed images and retries the original input', async () => {
+    const pending = deferred<AgentImage>()
+    const prepare = vi
+      .spyOn(imageService, 'processAgentImage')
+      .mockReturnValueOnce(pending.promise)
+      .mockResolvedValue(image())
+    const files = Array.from({ length: 5 }, () => new Blob(['original']))
+    agent.setDraftText('inspect all')
+    agent.addDraftImages(files)
+    expect(agent.draft.value.images).toHaveLength(4)
+    expect(agent.draft.value.imageError).toBe('imageCountLimit')
+    expect(agent.draftSendable.value).toBe(false)
+    expect(await agent.sendDraft()).toBe(false)
+    pending.reject(new Error('decode failure'))
+    await vi.waitFor(() => expect(agent.draft.value.images[3]?.status).toBe('ready'))
+    expect(agent.draft.value.images[0]).toMatchObject({
+      status: 'failed',
+      error: 'imageProcessingFailed',
+    })
+    expect(agent.draftSendable.value).toBe(false)
+    expect(await agent.sendDraft()).toBe(false)
+    const failedId = agent.draft.value.images[0]!.id
+    agent.retryDraftImage(failedId)
+    await vi.waitFor(() => expect(agent.draft.value.images[0]?.status).toBe('ready'))
+    expect(prepare.mock.lastCall?.[0]).toBe(files[0])
+    expect(agent.draftSendable.value).toBe(true)
+    agent.retryDraftImage(failedId)
+    expect(prepare).toHaveBeenCalledTimes(5)
+  })
+
+  it('cancels removed processing and queued images and ignores their late results', async () => {
+    const pending = deferred<AgentImage>()
+    const prepare = vi
+      .spyOn(imageService, 'processAgentImage')
+      .mockReturnValueOnce(pending.promise)
+      .mockResolvedValue(image())
+    const inputs = [new Blob(['removed active']), new Blob(['removed queued']), new Blob(['kept'])]
+    agent.addDraftImages(inputs)
+    const [active, queued, kept] = agent.draft.value.images
+    agent.removeDraftImage(queued!.id)
+    agent.removeDraftImage(active!.id)
+    expect(prepare.mock.calls[0]![1]?.aborted).toBe(true)
+    pending.resolve(image())
+    await vi.waitFor(() => expect(agent.draft.value.images[0]?.status).toBe('ready'))
+    expect(agent.draft.value.images.map((item) => item.id)).toEqual([kept!.id])
+    expect(prepare).toHaveBeenCalledTimes(2)
+    expect(prepare.mock.lastCall?.[0]).toBe(inputs[2])
+  })
+
+  it.each(['clear', 'account', 'project', 'leave', 'notReady', 'identity', 'dispose'] as const)(
+    'cancels the old draft on %s without letting late results affect the next partition',
+    async (event) => {
+      const pending = deferred<AgentImage>()
+      const prepare = vi
+        .spyOn(imageService, 'processAgentImage')
+        .mockReturnValueOnce(pending.promise)
+        .mockResolvedValue(image())
+      agent.setDraftText('old draft')
+      agent.addDraftImages([new Blob(['old']), new Blob(['never started'])])
+      if (event === 'clear') agent.clearDraft()
+      if (event === 'account') user.currentUser.value = { id: 'u2', balance: '0' }
+      if (event === 'project') config.projectId.value = 'p2'
+      if (event === 'leave') agent.leaveProject()
+      if (event === 'notReady') project.isProjectTimelineReady.value = false
+      if (event === 'identity') transport.identity!()
+      if (event === 'dispose') scope.stop()
+      expect(prepare.mock.calls[0]![1]?.aborted).toBe(true)
+      expect(agent.draft.value).toMatchObject({ text: '', images: [], submitError: null })
+      if (event === 'notReady') project.isProjectTimelineReady.value = true
+      if (event === 'identity') user.currentUser.value = { id: 'u2', balance: '0' }
+      if (event !== 'dispose') {
+        await vi.waitFor(() => expect(agent.ready.value).toBe(true))
+        agent.setDraftText('new draft')
+        agent.addDraftImages([new Blob(['new'])])
+        await vi.waitFor(() => expect(agent.draft.value.images[0]?.status).toBe('ready'))
+      }
+      const freshDraft = agent.draft.value
+      pending.resolve(image())
+      await pending.promise
+      await Promise.resolve()
+      expect(agent.draft.value).toBe(freshDraft)
+      expect(prepare).toHaveBeenCalledTimes(event === 'dispose' ? 1 : 2)
+    },
+  )
+
+  it('preserves a rejected draft and rolls back a failed commit before retrying in the selected session', async () => {
+    const attachment = image()
+    vi.spyOn(imageService, 'processAgentImage').mockResolvedValue(attachment)
+    vi.spyOn(CloudflareTemporaryFileUploader, 'uploadBlob').mockResolvedValue({
+      success: true,
+      url: 'oss://dashscope-instant/draft.webp',
+      expiresAt: new Date(Date.now() + 3600_000).toISOString(),
+    })
+    agent.setDraftText('retry me')
+    agent.addDraftImages([new Blob(['source'])])
+    await vi.waitFor(() => expect(agent.draftSendable.value).toBe(true))
+    const idle = deferred()
+    transport.idle.mockReturnValueOnce(idle.promise)
+    const previousRun = agent.send('previous instruction')
+    const originalDraft = agent.draft.value
+    expect(await agent.sendDraft()).toBe(false)
+    expect(agent.draft.value).toBe(originalDraft)
+    agent.stop()
+    idle.resolve()
+    await previousRun
+    await Promise.allSettled(backgroundWrites)
+    await agent.deleteSession(agent.currentSessionId.value)
+    expect(agent.draftSendable.value).toBe(true)
+    const target = agent.currentSessionId.value
+    vi.mocked(AgentSessionStore.prototype.save).mockRejectedValueOnce(
+      new Error('LOCAL_SAVE_FAILED'),
+    )
+    expect(await agent.sendDraft()).toBe(false)
+    expect(agent.draft.value).toMatchObject({
+      text: 'retry me',
+      submitting: false,
+      submitError: 'LOCAL_SAVE_FAILED',
+    })
+    expect(agent.draft.value.images[0]?.image).toEqual(attachment)
+    expect(agent.currentMessages.value).toEqual([])
+    expect(agent.storageError.value).toBeNull()
+    expect(agent.ready.value).toBe(true)
+    expect(agent.busy.value).toBe(false)
+    expect(await storedImages()).toEqual([])
+    expect(await new AgentSessionStore().load('u1', 'p1')).toEqual([])
+    expect(await sessionLogs()).toEqual([])
+    agent.newChat()
+    const retryTarget = agent.currentSessionId.value
+    expect(await agent.sendDraft()).toBe(true)
+    expect(agent.draft.value).toMatchObject({ text: '', images: [], submitError: null })
+    expect(agent.currentMessages.value.filter((message) => message.role === 'user')).toHaveLength(1)
+    expect((await storedImages()).map((record) => record.sessionKey)).toEqual([
+      expect.stringContaining(retryTarget),
+    ])
+    expect(agent.selectSession(target)).toBe(true)
+    expect(agent.currentMessages.value).toEqual([])
+  })
+
+  it('keeps preparing the shared draft while an ask_user question replaces the input', async () => {
+    const prepared = deferred<AgentImage>()
+    vi.spyOn(imageService, 'processAgentImage').mockReturnValueOnce(prepared.promise)
+    agent.setDraftText('next instruction')
+    agent.addDraftImages([new Blob(['source'])])
+    transport.calls.mockImplementationOnce(async (request: StreamParams) =>
+      output(
+        request,
+        Promise.resolve({
+          modelCallId: request.modelCallId,
+          usage: null,
+          message: {
+            role: 'assistant',
+            content: 'question',
+            tool_calls: [
+              {
+                id: 'draft-question',
+                name: 'ask_user',
+                args: { question: 'Continue?', suggested_options: ['yes'] },
+              },
+            ],
+          },
+        }),
+      ),
+    )
+    await agent.send('ask first')
+    expect(agent.pendingInteraction.value?.interaction_id).toBe('draft-question')
+    expect(await agent.sendDraft()).toBe(false)
+    prepared.resolve(image())
+    await vi.waitFor(() => expect(agent.draft.value.images[0]?.status).toBe('ready'))
+    const draft = agent.draft.value
+    expect(draft.text).toBe('next instruction')
+    await agent.answerQuestion('yes')
+    expect(agent.draft.value).toBe(draft)
+    expect(agent.draftSendable.value).toBe(true)
+  })
+
+  it('does not restore committed input or overwrite a later draft after model failure', async () => {
+    const completion = deferred<Completion>()
+    transport.calls.mockImplementationOnce(async (request: StreamParams) =>
+      output(request, completion.promise),
+    )
+    agent.setDraftText('first input')
+    const sending = agent.sendDraft()
+    await vi.waitFor(() => expect(transport.calls).toHaveBeenCalledOnce())
+    expect(agent.draft.value).toMatchObject({ text: '', submitting: false })
+    agent.setDraftText('next input')
+    completion.reject(new Error('MODEL_FAILED'))
+    expect(await sending).toBe(true)
+    expect(agent.draft.value).toMatchObject({ text: 'next input', submitError: null })
+    expect(agent.currentMessages.value[0]?.parts).toContainEqual({
+      type: 'text',
+      text: 'first input',
+    })
+  })
+
+  it('defers background snapshots until a failed local commit has been rolled back', async () => {
+    await agent.send('committed input')
+    await Promise.allSettled(backgroundWrites)
+    const sessionId = agent.currentSessionId.value
+    const modelCallId = agent.latestModelCall.value!.id
+    const saving = deferred()
+    vi.mocked(AgentSessionStore.prototype.save).mockReturnValueOnce(saving.promise)
+    agent.setDraftText('uncommitted input')
+    const sending = agent.sendDraft()
+    transport.settlement!(modelCallId, { usage: null, chargedAmount: '0.02' })
+    saving.reject(new Error('LOCAL_SAVE_FAILED'))
+    expect(await sending).toBe(false)
+    await vi.waitFor(async () => {
+      const session = (await new AgentSessionStore().load('u1', 'p1')).find(
+        (item) => item.id === sessionId,
+      )!
+      expect(session.usageRecords[modelCallId]?.chargedAmount).toBe('0.02')
+      expect(session.messages.filter((message) => message.role === 'user')).toHaveLength(1)
+    })
+    expect(agent.draft.value.text).toBe('uncommitted input')
+  })
+
+  it('locks the shared draft across session changes until local commit, then leaves new input intact on upload failure', async () => {
+    const attachment = image()
+    vi.spyOn(imageService, 'processAgentImage').mockResolvedValue(attachment)
+    const saved = deferred()
+    const uploadResult = deferred<{ success: false; error: string }>()
+    const upload = vi
+      .spyOn(CloudflareTemporaryFileUploader, 'uploadBlob')
+      .mockReturnValue(uploadResult.promise)
+    agent.setDraftText('fixed target')
+    agent.addDraftImages([new Blob(['source'])])
+    await vi.waitFor(() => expect(agent.draftSendable.value).toBe(true))
+    vi.mocked(AgentSessionStore.prototype.save).mockImplementationOnce(
+      async function (session, images) {
+        await saved.promise
+        return saveSession.call(this, session, images)
+      },
+    )
+    const target = agent.currentSessionId.value
+    const sending = agent.sendDraft()
+    agent.newChat()
+    expect(agent.currentSessionId.value).not.toBe(target)
+    expect(agent.draft.value.submitting).toBe(true)
+    expect(agent.draftEditable.value).toBe(false)
+    agent.setDraftText('ignored change')
+    agent.removeDraftImage(agent.draft.value.images[0]!.id)
+    agent.clearDraft()
+    agent.addDraftImages([new Blob(['ignored'])])
+    expect(agent.draft.value.text).toBe('fixed target')
+    expect(agent.draft.value.images).toHaveLength(1)
+    expect(await agent.sendDraft()).toBe(false)
+    expect(await agent.deleteSession(target)).toBe(false)
+    saved.resolve()
+    await vi.waitFor(() => expect(upload).toHaveBeenCalledOnce())
+    expect(agent.draft.value).toMatchObject({ text: '', images: [], submitting: false })
+    expect(agent.currentMessages.value).toEqual([])
+    const sessions = await new AgentSessionStore().load('u1', 'p1')
+    expect(sessions.map((session) => session.id)).toEqual([target])
+    expect(sessions[0]?.messages[0]?.parts).toContainEqual({ type: 'text', text: 'fixed target' })
+    agent.selectSession(target)
+    agent.setDraftText('next input')
+    agent.addDraftImages([new Blob(['next source'])])
+    await vi.waitFor(() => expect(agent.draft.value.images[0]?.status).toBe('ready'))
+    const nextDraft = agent.draft.value
+    uploadResult.resolve({ success: false, error: 'UPLOAD_FAILED' })
+    expect(await sending).toBe(true)
+    expect(agent.draft.value).toBe(nextDraft)
+    expect(agent.latestModelCall.value?.error).toBe('UPLOAD_FAILED')
+  })
+
+  it.each([false, true])(
+    'waits for local commit before completing stop and preserves later logs (existing log: %s)',
+    async (existingLog) => {
+      if (existingLog) {
+        await agent.send('earlier input')
+        await Promise.allSettled(backgroundWrites)
+      }
+      const attachment = image()
+      vi.spyOn(imageService, 'processAgentImage').mockResolvedValue(attachment)
+      const upload = vi.spyOn(CloudflareTemporaryFileUploader, 'uploadBlob').mockResolvedValue({
+        success: true,
+        url: 'oss://dashscope-instant/stopped.webp',
+        expiresAt: new Date(Date.now() + 3600_000).toISOString(),
+      })
+      agent.setDraftText('saved before stopping')
+      agent.addDraftImages([new Blob(['source'])])
+      await vi.waitFor(() => expect(agent.draftSendable.value).toBe(true))
+      const saved = deferred()
+      vi.mocked(AgentSessionStore.prototype.save).mockImplementationOnce(
+        async function (session, images) {
+          await saved.promise
+          return saveSession.call(this, session, images)
+        },
+      )
+      const publish = vi.mocked(AgentTelemetry.prototype.finishAndPublish)
+      const publishedCount = publish.mock.calls.length
+      const target = agent.currentSessionId.value
+      const sending = agent.sendDraft()
+      const messageId = agent.currentMessages.value.at(-1)!.id
+      agent.stop()
+      agent.stop()
+      expect(agent.busy.value).toBe(true)
+      expect(agent.activeSessionId.value).toBe(target)
+      expect(agent.draft.value.submitting).toBe(true)
+      expect(await agent.send('bypass pending stop')).toBe(false)
+      expect(await agent.deleteSession(target)).toBe(false)
+      expect(publish).toHaveBeenCalledTimes(publishedCount)
+      saved.resolve()
+      expect(await sending).toBe(true)
+      await Promise.allSettled(backgroundWrites)
+      expect(agent.busy.value).toBe(false)
+      expect(agent.draft.value).toMatchObject({ text: '', images: [], submitting: false })
+      expect(upload).not.toHaveBeenCalled()
+      expect(transport.calls).toHaveBeenCalledTimes(existingLog ? 1 : 0)
+      expect((await storedImages()).map((record) => record.id)).toEqual([attachment.id])
+      let log = (await sessionLogs())[0]!
+      expect(log.spans.find((span) => span.span_id === messageId)).toMatchObject({
+        kind: 'user_message',
+        source: { input: { content: [{ type: 'text', text: 'saved before stopping' }] } },
+      })
+      expect(log.published?.summary).toMatchObject({
+        stop_status: 'cancelled',
+        path_incomplete: false,
+        missing: [],
+      })
+      expect(publish).toHaveBeenCalledTimes(publishedCount + 1)
+      expect(await agent.send('next input')).toBe(true)
+      await Promise.allSettled(backgroundWrites)
+      log = (await sessionLogs())[0]!
+      expect(log.spans.filter((span) => span.kind === 'user_message')).toHaveLength(
+        existingLog ? 3 : 2,
+      )
+      expect(log.published?.summary).toMatchObject({
+        stop_status: 'completed',
+        path_incomplete: false,
+        missing: [],
+      })
+      const request = transport.calls.mock.lastCall![0] as StreamParams
+      expect(log.spans.find((span) => span.span_id === request.modelCallId)?.source.input).toEqual(
+        sanitizeLog({ messages: request.messages, tools: request.tools }).value,
+      )
+    },
+  )
+
+  it('waits for a failed local commit before releasing stop and restores the draft without logs', async () => {
+    const saved = deferred()
+    vi.mocked(AgentSessionStore.prototype.save).mockReturnValueOnce(saved.promise)
+    agent.setDraftText('retry after failed stop')
+    const sending = agent.sendDraft()
+    agent.stop()
+    expect(agent.busy.value).toBe(true)
+    expect(agent.draft.value.submitting).toBe(true)
+    expect(AgentTelemetry.prototype.finishAndPublish).not.toHaveBeenCalled()
+    saved.reject(new Error('LOCAL_SAVE_FAILED'))
+    expect(await sending).toBe(false)
+    expect(agent.busy.value).toBe(false)
+    expect(agent.draft.value).toMatchObject({
+      text: 'retry after failed stop',
+      submitting: false,
+      submitError: 'LOCAL_SAVE_FAILED',
+    })
+    expect(agent.currentMessages.value).toEqual([])
+    expect(agent.ready.value).toBe(true)
+    expect(transport.calls).not.toHaveBeenCalled()
+    expect(await sessionLogs()).toEqual([])
+    expect(await agent.sendDraft()).toBe(true)
+    await Promise.allSettled(backgroundWrites)
+    expect(
+      (await sessionLogs())[0]?.spans.filter((span) => span.kind === 'user_message'),
+    ).toHaveLength(1)
+  })
+
+  it.each(['account', 'project'] as const)(
+    'isolates a successful stopped commit after the %s changes',
+    async (partition) => {
+      const saved = deferred()
+      vi.mocked(AgentSessionStore.prototype.save).mockImplementationOnce(
+        async function (session, images) {
+          await saved.promise
+          return saveSession.call(this, session, images)
+        },
+      )
+      agent.setDraftText('old partition input')
+      const sending = agent.sendDraft()
+      agent.stop()
+      expect(agent.busy.value).toBe(true)
+      if (partition === 'account') user.currentUser.value = { id: 'u2', balance: '0' }
+      else config.projectId.value = 'p2'
+      await vi.waitFor(() => expect(agent.ready.value).toBe(true))
+      agent.setDraftText('new partition draft')
+      saved.resolve()
+      expect(await sending).toBe(true)
+      expect(agent.draft.value).toMatchObject({
+        text: 'new partition draft',
+        submitting: false,
+        submitError: null,
+      })
+      expect(agent.currentMessages.value).toEqual([])
+      expect(agent.busy.value).toBe(false)
+      expect(transport.calls).not.toHaveBeenCalled()
+      expect(await sessionLogs()).toEqual([])
+    },
+  )
+
+  it('keeps the draft locked after stop during local save and ignores late failure after an account change', async () => {
+    const saved = deferred()
+    vi.mocked(AgentSessionStore.prototype.save).mockReturnValueOnce(saved.promise)
+    agent.setDraftText('old input')
+    const sending = agent.sendDraft()
+    agent.stop()
+    expect(agent.busy.value).toBe(true)
+    expect(agent.draft.value.submitting).toBe(true)
+    expect(await agent.sendDraft()).toBe(false)
+    expect(await agent.send('bypass lock')).toBe(false)
+    expect(await agent.deleteSession(agent.currentSessionId.value)).toBe(false)
+    user.currentUser.value = { id: 'u2', balance: '0' }
+    await vi.waitFor(() => expect(agent.ready.value).toBe(true))
+    agent.setDraftText('new owner input')
+    saved.reject(new Error('OLD_LOCAL_SAVE_FAILED'))
+    expect(await sending).toBe(false)
+    expect(agent.draft.value).toMatchObject({
+      text: 'new owner input',
+      submitting: false,
+      submitError: null,
+    })
+    expect(agent.storageError.value).toBeNull()
+    expect(agent.currentMessages.value).toEqual([])
+  })
 })
 
 describe('persisted Agent sessions', () => {
@@ -426,17 +896,20 @@ describe('persisted Agent sessions', () => {
     },
   )
 
-  it('keeps pending Blobs for final saves when the first storage commit fails', async () => {
+  it('rolls back pending Blobs and messages when the first storage commit fails', async () => {
     const attachment = image()
     const first = vi
       .mocked(AgentSessionStore.prototype.save)
       .mockRejectedValueOnce(new Error('first save failed'))
-    await agent.send('inspect', [attachment])
-    expect(agent.storageError.value).toBe('first save failed')
+    expect(await agent.send('inspect', [attachment])).toBe(false)
+    expect(agent.storageError.value).toBeNull()
     expect(transport.calls).not.toHaveBeenCalled()
     await Promise.allSettled(backgroundWrites)
     expect(first.mock.calls.at(-1)?.[1]).toEqual([attachment])
-    expect((await storedImages())[0]?.id).toBe(attachment.id)
+    expect(first).toHaveBeenCalledOnce()
+    expect(await storedImages()).toEqual([])
+    expect(agent.currentMessages.value).toEqual([])
+    expect(agent.ready.value).toBe(true)
   })
 
   it('blocks sending when the Agent capability is disabled even in development', async () => {
@@ -2061,11 +2534,12 @@ describe('text Agent orchestration', () => {
     const pending = agent.send('first')
     await entered.promise
     agent.stop()
-    expect(agent.busy.value).toBe(false)
+    expect(agent.busy.value).toBe(phase === 'initial_save')
     expect(agent.pendingInteraction.value).toBeNull()
     expect(agent.toolExecutions.value).toEqual({})
     release.resolve()
     await pending
+    expect(agent.busy.value).toBe(false)
     expect(agent.pendingInteraction.value).toBeNull()
     expect(toolExecution).not.toHaveBeenCalled()
     expect(
