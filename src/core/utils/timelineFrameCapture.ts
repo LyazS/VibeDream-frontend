@@ -1,5 +1,8 @@
 import type { UnifiedLibraryAssetData } from '@/core/asset/types'
 import { setupTimelineItemBunny } from '@/core/bunnyUtils/timelineItemSetup'
+import { prepareEffectPackageResources } from '@/core/effect-package/runtime/prepareEffectPackageResources'
+import { effectTemplateRegistry } from '@/core/effect-template/EffectTemplateRegistry'
+import { parseEffectPackageId } from '@/core/effect-template/commonTypes'
 import { RENDERER_FPS } from '@/core/mediabunny/constant'
 import type { IClip } from '@/core/mediabunny/IClip'
 import type { MediaType, UnifiedMediaItemData } from '@/core/mediaitem/types'
@@ -58,6 +61,7 @@ export class TimelineFrameCaptureSession {
         this.config.timelineItems,
         this.config.getMediaItem,
       )
+      await this.prepareEffectResources()
       refreshClipTransitionsForItems(this.clonedTimelineItems)
       await this.transitionEdgeResolver.prepareItems(this.clonedTimelineItems)
       this.initialized = true
@@ -234,6 +238,33 @@ export class TimelineFrameCaptureSession {
     }
 
     this.webglRenderer.render(this.clonedTimelineItems, frameIn30fps, this.bunnyCurFrameMap)
+  }
+
+  private async prepareEffectResources(): Promise<void> {
+    const packages = new Map<string, string>()
+    for (const item of this.clonedTimelineItems) {
+      for (const config of [
+        TimelineItemQueries.getResolvedFilter(item),
+        TimelineItemQueries.getResolvedTransition(item),
+      ]) {
+        if (config?.effectPackageId) {
+          packages.set(config.effectPackageId, config.catalogVersion)
+        }
+      }
+    }
+
+    // Preload both transition and branch-filter resources before the only render tick.
+    for (const [effectPackageId, catalogVersion] of packages) {
+      await effectTemplateRegistry.ensureReady({
+        ...parseEffectPackageId(effectPackageId),
+        catalogVersion,
+      })
+      const loadedPackage = effectTemplateRegistry.getReadyPackage(effectPackageId)
+      if (!loadedPackage) {
+        throw new Error(`截图所需的效果包未就绪: ${effectPackageId}`)
+      }
+      await prepareEffectPackageResources(loadedPackage)
+    }
   }
 }
 
