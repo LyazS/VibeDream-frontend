@@ -82,7 +82,8 @@ export class BunnyProcessor {
         break
       }
       case 'image': {
-        const bmedia = await fileToImageBitmap(targetFile)
+        // 与聊天附件的原图像素上限一致，首次导入和刷新后加载都解码完整原图。
+        const bmedia = await fileToImageBitmap(targetFile, { maxPixels: 40_000_000 })
         bunnyObjects = {
           imageClip: bmedia,
           originalWidth: bmedia.width,

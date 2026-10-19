@@ -25,6 +25,12 @@ export interface MediaSaveResult {
   error?: string
 }
 
+/** 固定一次导入的工程；异步步骤之后及写入之前重新检查执行权限。 */
+export interface MediaPersistenceContext {
+  projectId: string
+  assertActive?: () => void
+}
+
 /**
  * 全局Meta文件管理器
  * 统一管理媒体文件 + Meta文件的完整生命周期
@@ -61,11 +67,16 @@ class GlobalMetaFileManager {
    * @param media 媒体 ID 和原文件扩展名
    * @returns 是否成功
    */
-  async saveMediaFile(file: File, media: MediaFileReference): Promise<boolean> {
+  async saveMediaFile(
+    file: File,
+    media: MediaFileReference,
+    context: MediaPersistenceContext = { projectId: this.projectId },
+  ): Promise<boolean> {
     const { id } = media
     try {
+      context.assertActive?.()
       console.info('[MediaIdentity] save-file:start', {
-        projectId: this.projectId,
+        projectId: context.projectId,
         id,
         ext: media.ext,
         originalFileName: file.name,
@@ -75,18 +86,22 @@ class GlobalMetaFileManager {
 
       // 检查工作空间权限
       const permissionResult = await fileSystemService.checkPermission()
+      context.assertActive?.()
       if (!permissionResult.hasAccess) throw new Error('未设置工作目录')
 
       // 确保 media 目录存在
-      const mediaDirPath = fileSystemService.paths.getMediaDirPath(this.projectId)
+      const mediaDirPath = fileSystemService.paths.getMediaDirPath(context.projectId)
       const mediaDirExists = await fileSystemService.directoryExists(mediaDirPath)
+      context.assertActive?.()
       if (!mediaDirExists) {
         await fileSystemService.createDirectory(mediaDirPath)
+        context.assertActive?.()
       }
 
       // 保存文件
-      const mediaPath = fileSystemService.paths.getMediaPath(this.projectId, media)
+      const mediaPath = fileSystemService.paths.getMediaPath(context.projectId, media)
       await fileSystemService.writeFile(mediaPath, file)
+      context.assertActive?.()
 
       console.info('[MediaIdentity] save-file:success', { id, ext: media.ext, path: mediaPath })
       return true
@@ -171,8 +186,12 @@ class GlobalMetaFileManager {
    * @param mediaItem 媒体项目数据
    * @returns 是否成功
    */
-  async saveMetaFile(asset: UnifiedLibraryAssetData): Promise<boolean> {
+  async saveMetaFile(
+    asset: UnifiedLibraryAssetData,
+    context: MediaPersistenceContext = { projectId: this.projectId },
+  ): Promise<boolean> {
     try {
+      context.assertActive?.()
       console.log(`💾 [globalMetaFileManager] 保存 Meta 文件: ${asset.id}`)
 
       // 定义终态列表
@@ -213,17 +232,20 @@ class GlobalMetaFileManager {
 
       // 2. 检查工作空间权限
       const permissionResult = await fileSystemService.checkPermission()
+      context.assertActive?.()
       if (!permissionResult.hasAccess) throw new Error('未设置工作目录')
 
       // 3. 确保 media 目录存在
-      const mediaDirPath = fileSystemService.paths.getMediaDirPath(this.projectId)
+      const mediaDirPath = fileSystemService.paths.getMediaDirPath(context.projectId)
       const mediaDirExists = await fileSystemService.directoryExists(mediaDirPath)
+      context.assertActive?.()
       if (!mediaDirExists) {
         await fileSystemService.createDirectory(mediaDirPath)
+        context.assertActive?.()
       }
 
       // 4. 写入 meta 文件
-      const metaPath = fileSystemService.paths.getMetaPath(this.projectId, asset.id)
+      const metaPath = fileSystemService.paths.getMetaPath(context.projectId, asset.id)
       console.info('[MediaIdentity] save-meta:start', {
         id: asset.id,
         ext: isMediaAsset(asset) ? asset.ext : undefined,
@@ -233,6 +255,7 @@ class GlobalMetaFileManager {
         path: metaPath,
       })
       await fileSystemService.writeFile(metaPath, JSON.stringify(metaData, null, 2))
+      context.assertActive?.()
 
       console.info('[MediaIdentity] save-meta:success', { id: asset.id, path: metaPath })
       return true
@@ -309,8 +332,13 @@ class GlobalMetaFileManager {
    * @param file 文件对象（必需）
    * @returns 保存结果
    */
-  async saveMediaToProject(mediaItem: UnifiedMediaItemData, file: File): Promise<MediaSaveResult> {
+  async saveMediaToProject(
+    mediaItem: UnifiedMediaItemData,
+    file: File,
+    context: MediaPersistenceContext = { projectId: this.projectId },
+  ): Promise<MediaSaveResult> {
     try {
+      context.assertActive?.()
       if (!file) {
         throw new Error('媒体项目缺少文件数据')
       }
@@ -320,15 +348,17 @@ class GlobalMetaFileManager {
       console.log(`💾 [globalMetaFileManager] 开始保存媒体到项目: ${targetFile.name}`)
 
       // 1. 保存媒体文件到 media/{id}{ext}
-      const saveFileSuccess = await this.saveMediaFile(targetFile, mediaItem)
+      const saveFileSuccess = await this.saveMediaFile(targetFile, mediaItem, context)
+      context.assertActive?.()
       if (!saveFileSuccess) {
         throw new Error('保存媒体文件失败')
       }
 
       // 2. 保存 Meta 文件到 media/{id}.meta
-      const saveMetaSuccess = await this.saveMetaFile(mediaItem)
+      const saveMetaSuccess = await this.saveMetaFile(mediaItem, context)
+      context.assertActive?.()
       if (!saveMetaSuccess) {
-        console.warn(`⚠️ [globalMetaFileManager] Meta 文件保存失败，但媒体文件已保存`)
+        throw new Error('保存 Meta 文件失败')
       }
 
       console.log(`✅ [globalMetaFileManager] 媒体保存成功: ${targetFile.name} -> ${mediaItem.id}`)

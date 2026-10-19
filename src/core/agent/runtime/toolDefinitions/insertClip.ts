@@ -14,6 +14,7 @@ Do NOT Use When
 ---------------
 - 需要创建文字/字幕 clip 时，应使用 create_subtitle_clip
 - 需要移动已有片段时，应使用 move_clip
+- 聊天图片尚未导入素材库时，应先使用 import_attachment
 
 Examples
 --------
@@ -55,7 +56,7 @@ video 轨道可放 video/image；audio 轨道只能放 audio。`,
       mediaId: {
         type: 'string',
         description:
-          '要插入的素材 ID。必须来自 list_media/search_media/read_media 返回的完整 mediaId，不要传 clipId。',
+          '要插入的素材 ID。必须来自 list_media/search_media/read_media/import_attachment 返回的完整 mediaId，不要传 clipId、attachmentId、路径或临时 URL。',
       },
       trackId: {
         type: 'string',

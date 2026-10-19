@@ -141,6 +141,25 @@ describe('media file identity persistence', () => {
     })
     expect(memory.files.has('projects/project/media/media_clip.mp4')).toBe(true)
   })
+
+  it('saves the original and meta to the same captured project across initialization changes', async () => {
+    const file = new File(['original'], 'image.png', { type: 'image/png' })
+    const item = createUnifiedMediaItemData(
+      'media_image',
+      file.name,
+      UserSelectedFileSourceFactory.createFromFile(file),
+      { ext: '.png', parentDirectoryId: 'dir_root' },
+    )
+    vi.mocked(fileSystemService.writeFile).mockImplementationOnce(async (path, data) => {
+      memory.files.set(path, data as Blob)
+      await globalMetaFileManager.initialize('next-project')
+    })
+    expect((await globalMetaFileManager.saveMediaToProject(item, file)).success).toBe(true)
+    expect([...memory.files.keys()]).toEqual([
+      'projects/project/media/media_image.png',
+      'projects/project/media/media_image.meta',
+    ])
+  })
 })
 
 describe('effect package paths', () => {

@@ -155,6 +155,7 @@
       "add_track": "新增轨道",
       "create_subtitle_clip": "创建字幕片段",
       "insert_clip": "插入片段",
+      "import_attachment": "导入图片附件",
       "list_media": "读取素材列表",
       "list_tracks": "读取轨道列表",
       "move_clip": "移动片段",

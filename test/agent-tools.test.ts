@@ -72,9 +72,9 @@ describe('tool runtime', () => {
     ).rejects.toThrow('TOOL_NOT_FOUND')
     expect(mocks.execute).not.toHaveBeenCalled()
   })
-  it('exposes all 30 original definitions including complete nested move arguments', () => {
-    expect(agentTools).toHaveLength(30)
-    expect(new Set(agentTools.map((tool) => tool.name)).size).toBe(30)
+  it('exposes all 31 definitions including complete nested move arguments', () => {
+    expect(agentTools).toHaveLength(31)
+    expect(new Set(agentTools.map((tool) => tool.name)).size).toBe(31)
     const move = agentTools.find((tool) => tool.name === 'move_clip')!
     expect(move.parameters).toMatchObject({
       properties: {
@@ -87,6 +87,27 @@ describe('tool runtime', () => {
       },
     })
     expect(move.description).toContain('What It Does')
+  })
+  it('validates attachment IDs and optional target directories without coercion', () => {
+    const runtime = createToolRuntime()
+    for (const args of [{ attachmentId: 'a' }, { attachmentId: 'a', targetDirectoryId: 'dir' }]) {
+      expect(() =>
+        runtime.validate({ id: 'import', name: 'import_attachment', args }),
+      ).not.toThrow()
+    }
+    for (const args of [
+      {},
+      { attachmentId: '' },
+      { attachmentId: 1 },
+      { attachmentId: 'a', mediaId: 'm' },
+    ]) {
+      expect(() => runtime.validate({ id: 'import', name: 'import_attachment', args })).toThrow(
+        'TOOL_ARGUMENTS_INVALID',
+      )
+    }
+    const insert = agentTools.find((tool) => tool.name === 'insert_clip')!
+    expect(JSON.stringify(insert.parameters)).toContain('import_attachment')
+    expect(systemPrompt).toContain('attachmentId 与素材库 mediaId')
   })
   it('only recommends tools present in the current contract', () => {
     const names = new Set(agentTools.map((tool) => tool.name))

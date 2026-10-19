@@ -120,6 +120,11 @@ export class MediaReadyResolver implements ResourceResolver<MediaReadyInput, Med
       throw new Error(`Media item not found: ${mediaId}`)
     }
 
+    // 解码对象可能在持久化失败前已经产生，不能据此复活失败或取消的导入。
+    if (['error', 'cancelled', 'missing'].includes(mediaItem.mediaStatus)) {
+      throw new Error(`Media item is ${mediaItem.mediaStatus}: ${mediaItem.name}`)
+    }
+
     return mediaItem
   }
 }

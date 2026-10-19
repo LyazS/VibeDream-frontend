@@ -7,6 +7,7 @@ import type {
 } from '@/core/datasource/core/BaseDataSource'
 import { reactive } from 'vue'
 import { RuntimeStateFactory, SourceOrigin } from '@/core/datasource/core/BaseDataSource'
+import type { MediaPersistenceContext } from '@/core/managers/media/globalMetaFileManager'
 
 // ==================== 用户选择文件数据源类型定义 ====================
 
@@ -26,6 +27,8 @@ export interface BaseUserSelectedFileSourceData extends BaseDataSourceData {
 export type UserSelectedFileSourceData = BaseUserSelectedFileSourceData &
   DataSourceRuntimeState & {
     selectedFile: File | null
+    /** 仅运行时使用，不随 source 写入 Meta。 */
+    importContext?: MediaPersistenceContext
   }
 
 // ==================== 工厂函数 ====================

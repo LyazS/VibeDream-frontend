@@ -15,7 +15,7 @@ export interface ToolExecutionContext {
   sessionId: string
   /** 产生本次工具调用的模型调用 ID；每次调用模型都生成新的 ID。 */
   modelCallId: string
-  /** 工具取消信号；会话清理时触发，停止 Agent 时也会取消素材读取/检索。 */
+  /** 工具取消信号；会话清理时触发，停止 Agent 时也会取消素材读取、检索及附件导入。 */
   signal: AbortSignal
   /** 实时检查执行归属及工具取消状态。 */
   isCurrent: () => boolean

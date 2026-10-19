@@ -58,6 +58,7 @@ export class UserSelectedFileProcessor extends DataSourceProcessor {
       console.error(`❌ [UserSelectedFileProcessor] 媒体项目处理失败: ${mediaItem.name}`, error)
       this.transitionMediaStatus(mediaItem, 'error')
       mediaItem.source.errorMessage = error instanceof Error ? error.message : '处理失败'
+      throw error
     }
   }
 
@@ -68,6 +69,7 @@ export class UserSelectedFileProcessor extends DataSourceProcessor {
     const source = mediaItem.source as UserSelectedFileSourceData
 
     try {
+      source.importContext?.assertActive?.()
       this.transitionMediaStatus(mediaItem, 'asyncprocessing')
 
       RuntimeStateActions.startAcquisition(source)
@@ -107,6 +109,7 @@ export class UserSelectedFileProcessor extends DataSourceProcessor {
       }
 
       await RuntimeStateActions.completeAcquisition(source)
+      source.importContext?.assertActive?.()
       return { file, mediaType }
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : '文件处理失败'
@@ -121,8 +124,10 @@ export class UserSelectedFileProcessor extends DataSourceProcessor {
     preparedFile: PreparedMediaFile,
   ): Promise<void> {
     const source = mediaItem.source as UserSelectedFileSourceData
+    const context = source.importContext ?? { projectId: globalMetaFileManager.currentProjectId }
 
     try {
+      context.assertActive?.()
       const { file, mediaType } = preparedFile
       if (mediaType !== null) {
         mediaItem.mediaType = mediaType
@@ -131,23 +136,19 @@ export class UserSelectedFileProcessor extends DataSourceProcessor {
       this.transitionMediaStatus(mediaItem, 'decoding')
 
       const bunnyResult = await this.bunnyProcessor.processMedia(mediaItem, file)
+      context.assertActive?.()
 
       mediaItem.runtime.bunny = bunnyResult.bunnyObjects
       mediaItem.duration = Number(bunnyResult.durationN)
       console.log(`🔧 [UserSelectedFileProcessor] 元数据设置完成: ${mediaItem.name}`)
 
       if (DataSourceHelpers.isUserCreate(source)) {
-        try {
-          const saveResult = await globalMetaFileManager.saveMediaToProject(mediaItem, file)
-          if (saveResult.success) {
-            console.log(`💾 [USER_CREATE] 媒体和Meta文件保存成功: ${mediaItem.name}`)
-          } else {
-            throw new Error(saveResult.error || '保存失败')
-          }
-        } catch (saveError) {
-          console.error(`❌ 媒体文件保存失败: ${mediaItem.name}`, saveError)
-          console.warn(`媒体文件保存失败，但解析继续: ${mediaItem.name}`, saveError)
+        const saveResult = await globalMetaFileManager.saveMediaToProject(mediaItem, file, context)
+        context.assertActive?.()
+        if (!saveResult.success) {
+          throw new Error(saveResult.error || '保存失败')
         }
+        console.log(`💾 [USER_CREATE] 媒体和Meta文件保存成功: ${mediaItem.name}`)
       } else {
         console.log(`⏭️ [PROJECT_LOAD] 跳过文件保存: ${mediaItem.name}`)
       }

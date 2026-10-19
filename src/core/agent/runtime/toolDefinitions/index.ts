@@ -17,6 +17,7 @@ import { updateTrackPropertiesDefinition } from './updateTrackProperties'
 import { removeTrackDefinition } from './removeTrack'
 import { createSubtitleClipDefinition } from './createSubtitleClip'
 import { insertClipDefinition } from './insertClip'
+import { importAttachmentDefinition } from './importAttachment'
 import { moveClipDefinition } from './moveClip'
 import { splitClipDefinition } from './splitClip'
 import { trimClipDefinition } from './trimClip'
@@ -52,6 +53,7 @@ export const agentTools: ModelTool[] = [
   removeTrackDefinition,
   createSubtitleClipDefinition,
   insertClipDefinition,
+  importAttachmentDefinition,
   moveClipDefinition,
   splitClipDefinition,
   trimClipDefinition,

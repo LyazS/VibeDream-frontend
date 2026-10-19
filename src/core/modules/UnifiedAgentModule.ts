@@ -489,7 +489,9 @@ export function createUnifiedAgentModule(registry: ModuleRegistry) {
     const cancellable = Object.values(run.session.toolExecutions).some(
       (execution) =>
         execution.status === 'pending' &&
-        (execution.call.name === 'read_media' || execution.call.name === 'search_media'),
+        (execution.call.name === 'read_media' ||
+          execution.call.name === 'search_media' ||
+          execution.call.name === 'import_attachment'),
     )
     if (cancellable) run.tool.abort()
     if (run.committed) finalizeRun(run, 'cancelled')

@@ -278,9 +278,6 @@ import {
   type DropTargetInfo,
 } from '@/core/types/drag'
 import type { UnifiedMediaItemData } from '@/core'
-import { DataSourceFactory } from '@/core'
-import { generateMediaId } from '@/core/utils/idGenerator'
-import { extractExtension } from '@/core/utils/mediaPathUtils'
 import { IconComponents } from '@/constants/iconComponents'
 import {
   ContextMenu,
@@ -301,11 +298,13 @@ import {
 import {
   captureDroppedImportRoots,
   createExternalMediaImportService,
+  createMediaFileImportService,
   type DirectoryImportSummary,
   type ExternalImportRoot,
 } from '@/core/media-import'
 
 const unifiedStore = useUnifiedStore()
+const mediaFileImportService = createMediaFileImportService(unifiedStore)
 const { t } = useAppI18n()
 const { analyzeMusicStructure } = useMusicStructureAnalysis()
 const fileNameTooltip = ref({
@@ -1565,47 +1564,10 @@ async function handlePasteFromClipboard(): Promise<void> {
 
 // 添加媒体项
 async function addMediaItem(file: File, targetDirectoryId: string): Promise<void> {
-  if (!unifiedStore.getDirectory(targetDirectoryId)) {
-    throw new Error('目标文件夹不存在，无法导入素材')
-  }
-
   try {
-    // 创建用户选择文件数据源
-    const userSelectedSource = DataSourceFactory.createUserSelectedSourceFromFile(file)
-
-    // 生成媒体ID
-    const ext = extractExtension(file.name)
-    const mediaId = generateMediaId()
-
-    // 创建统一媒体项目
-    const mediaItem = unifiedStore.createUnifiedMediaItemData(
-      mediaId,
-      file.name,
-      userSelectedSource,
-      { ext, parentDirectoryId: targetDirectoryId },
-    )
-    console.info('[MediaIdentity] import', {
-      id: mediaId,
-      ext,
-      originalFileName: file.name,
-      fileType: file.type,
-      fileSize: file.size,
-      parentDirectoryId: targetDirectoryId,
-    })
-
-    // 添加到媒体库
-    unifiedStore.addMediaItem(mediaItem)
-
-    const locationResult = unifiedStore.registerAssetLocation(mediaId)
-    if (!locationResult.success) {
-      await unifiedStore.removeMediaItem(mediaId)
-      throw new Error(locationResult.error ?? '登记素材目录归属失败')
-    }
-
-    // 通过 Resource DAG 声明媒体资源需要 ready。
-    // 这里不 await，保持手动导入“加入后后台处理”的现有交互节奏。
-    void unifiedStore.ensureMediaReady(mediaId).catch((error) => {
-      console.error(t('media.fileProcessFailed', { name: file.name }), error)
+    await mediaFileImportService.importFile(file, targetDirectoryId, {
+      onBackgroundError: (error) =>
+        console.error(t('media.fileProcessFailed', { name: file.name }), error),
     })
 
     console.log(t('media.fileProcessStarted', { name: file.name }))

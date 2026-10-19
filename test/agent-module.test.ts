@@ -1862,7 +1862,7 @@ describe('text Agent orchestration', () => {
     expect(calls[1].messages.slice(0, 2)).toEqual(calls[0].messages)
     expect(calls[2].messages.slice(0, 2)).toEqual(calls[0].messages)
     expect(new Set(calls.map((call) => call.modelCallId)).size).toBe(3)
-    expect(calls[0].tools).toHaveLength(30)
+    expect(calls[0].tools).toHaveLength(31)
     expect(calls[2].messages.slice(1).map((message) => message.role)).toEqual([
       'user',
       'assistant',
@@ -2234,7 +2234,7 @@ describe('text Agent orchestration', () => {
   })
   it('shares full original schemas and rejects type coercion before executing', () => {
     const runtime = createToolRuntime()
-    expect(agentTools).toHaveLength(30)
+    expect(agentTools).toHaveLength(31)
     expect(agentTools.some((tool) => tool.name === 'inspect_timeline_frames')).toBe(false)
     expect(() =>
       runtime.validate({
@@ -2260,6 +2260,8 @@ describe('text Agent orchestration', () => {
     { name: 'read_media', outcome: 'error' },
     { name: 'search_media', outcome: 'success' },
     { name: 'search_media', outcome: 'error' },
+    { name: 'import_attachment', outcome: 'success' },
+    { name: 'import_attachment', outcome: 'error' },
   ])('cancels $name on Agent stop and discards its late $outcome', async ({ name, outcome }) => {
     transport.calls.mockImplementationOnce(async (request: StreamParams) =>
       output(
@@ -2274,7 +2276,12 @@ describe('text Agent orchestration', () => {
               {
                 id: 'cancelled-media',
                 name,
-                args: name === 'read_media' ? { mediaIds: ['m1'] } : { query: 'city' },
+                args:
+                  name === 'read_media'
+                    ? { mediaIds: ['m1'] }
+                    : name === 'import_attachment'
+                      ? { attachmentId: 'image' }
+                      : { query: 'city' },
               },
             ],
           },

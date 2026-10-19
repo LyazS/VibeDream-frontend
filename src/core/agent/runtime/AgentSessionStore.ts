@@ -216,25 +216,43 @@ export class AgentSessionStore {
   async readImage(
     session: Pick<AgentSession, 'id' | 'userId' | 'projectId'>,
     id: string,
+    options: { requireUserReference?: boolean } = {},
   ): Promise<AgentAttachmentRecord | undefined> {
     await this.queue
     const db = await indexedDBService.openDB()
     const owner = this.owner(session.userId, session.projectId)
     const sessionKey = JSON.stringify([owner, session.id])
     return new Promise((resolve, reject) => {
-      const transaction = db.transaction('agentAttachments', 'readonly')
+      const transaction = db.transaction(['agentAttachments', 'agentSessions'], 'readonly')
       const request = transaction
         .objectStore('agentAttachments')
         .get(JSON.stringify([sessionKey, id]))
+      const sessionRequest = options.requireUserReference
+        ? transaction.objectStore('agentSessions').get(sessionKey)
+        : undefined
       transaction.oncomplete = () => {
         const image = request.result as AgentAttachmentRecord | undefined
+        const saved = sessionRequest?.result?.data as AgentSession | undefined
         if (
           !isAttachment(image) ||
+          image.key !== JSON.stringify([sessionKey, id]) ||
           image.owner !== owner ||
           image.sessionKey !== sessionKey ||
           image.userId !== session.userId ||
           image.projectId !== session.projectId ||
-          image.id !== id
+          image.id !== id ||
+          (options.requireUserReference &&
+            (!saved ||
+              saved.id !== session.id ||
+              saved.userId !== session.userId ||
+              saved.projectId !== session.projectId ||
+              !saved.messages.some(
+                (message) =>
+                  message.role === 'user' &&
+                  message.parts.some(
+                    (part) => part.type === MessagePartType.IMAGE && part.attachmentId === id,
+                  ),
+              )))
         )
           resolve(undefined)
         else resolve(image)

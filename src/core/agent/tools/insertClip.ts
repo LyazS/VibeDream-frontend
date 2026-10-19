@@ -48,7 +48,7 @@ export async function executeInsertClip(args: Record<string, unknown>) {
       return buildToolError(
         'insert_clip',
         'media_not_found',
-        `未找到素材 ${mediaId}。请先使用 list_media 或 search_media 确认素材 ID。`,
+        `未找到素材 ${mediaId}。请使用 list_media 或 search_media 确认素材 ID；聊天图片须先通过 import_attachment 取得 mediaId。`,
         { mediaId },
       )
     }

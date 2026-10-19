@@ -2,6 +2,7 @@ export { buildDirectoryImportPlan, getDirectoryPlanKey } from './DirectoryImport
 export { captureDroppedImportRoots, discoverExternalImportEntries } from './ExternalEntryDiscovery'
 export { allocateCopyName, executeDirectoryImportPlan } from './DirectoryImportExecutor'
 export { createExternalMediaImportService } from './ExternalMediaImportService'
+export { createMediaFileImportService } from './MediaFileImportService'
 export type {
   DirectoryImportPhase,
   DirectoryImportPlan,
