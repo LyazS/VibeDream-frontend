@@ -1,9 +1,9 @@
 <template>
-  <div ref="element" class="agent-image" :title="error ? t(error) : fileName">
+  <div ref="element" class="agent-image" :title="error ? t(error) : description || fileName">
     <NImage
       v-if="url && !error"
       :src="url"
-      :alt="fileName || t('common.chat.image')"
+      :alt="description || fileName || t('common.chat.image')"
       object-fit="contain"
       @error="error = 'aiPanel.errors.imageReadFailed'"
     />
@@ -29,6 +29,8 @@ const { t } = useAppI18n()
 const url = ref('')
 const error = ref('')
 const fileName = ref('')
+// 工具图片使用观察描述；用户附件没有描述时继续展示原文件名。
+const description = ref('')
 const element = ref<HTMLElement>()
 const previewActive = ref(typeof IntersectionObserver === 'undefined')
 let withinBuffer = previewActive.value
@@ -73,6 +75,7 @@ watch(
     url.value = ''
     error.value = ''
     fileName.value = ''
+    description.value = ''
     onCleanup(() => {
       current = false
       preview?.dispose()
@@ -85,6 +88,7 @@ watch(
         preview = createAgentImagePreview(image.blob)
         url.value = preview.url
         fileName.value = image.fileName
+        description.value = image.description ?? ''
       })
       .catch((reason: unknown) => {
         if (current) error.value = getAgentErrorKey(reason, 'aiPanel.errors.imageReadFailed')
@@ -118,8 +122,6 @@ onBeforeUnmount(() => {
 }
 .agent-image :deep(img) {
   border-radius: 6px;
-  outline: 1px solid rgba(255, 255, 255, 0.1);
-  outline-offset: -1px;
 }
 .image-error {
   display: flex;

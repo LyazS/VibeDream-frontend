@@ -23,10 +23,11 @@ export type ConnectionState = Readonly<{
   /** 需要向调用方暴露的连接错误，正常空闲或页面退出时为 null。 */
   error: string | null
 }>
-/** 用户正文支持有序图文部件；其余角色仍只使用文本。 */
+/** 用户和工具正文支持有序图文部件。 */
 export type TextContentPart = { type: 'text'; text: string }
 export type ImageContentPart = { type: 'image_url'; image_url: { url: string } }
 export type MessageContent = string | TextContentPart[]
+export type MultimodalContent = string | (TextContentPart | ImageContentPart)[]
 export type TextMessage = { role: 'system' | 'assistant'; content: MessageContent }
 export type ToolCall = { id: string; name: string; args: Record<string, unknown> }
 export type AssistantMessage = {
@@ -36,9 +37,9 @@ export type AssistantMessage = {
 }
 export type ModelMessage =
   | TextMessage
-  | { role: 'user'; content: string | (TextContentPart | ImageContentPart)[] }
+  | { role: 'user'; content: MultimodalContent }
   | (Omit<AssistantMessage, 'content'> & { content: MessageContent })
-  | { role: 'tool'; content: MessageContent; tool_call_id: string; name: string }
+  | { role: 'tool'; content: MultimodalContent; tool_call_id: string; name: string }
 export type ModelTool = {
   name: string
   description: string

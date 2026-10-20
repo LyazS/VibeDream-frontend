@@ -58,7 +58,7 @@ export class IndexedDBService {
           }
         }
 
-        // v7 image blobs remain untouched; new messages use original-file attachment records.
+        // 图片记录显式区分用户原图与工具观察图，观察图的 Blob 直接存入同一附件表。
         for (const name of ['agentSessions', 'agentLogs', 'agentAttachments']) {
           if (!db.objectStoreNames.contains(name)) {
             const store = db.createObjectStore(name, { keyPath: 'key' })

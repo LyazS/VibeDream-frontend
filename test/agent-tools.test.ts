@@ -72,9 +72,9 @@ describe('tool runtime', () => {
     ).rejects.toThrow('TOOL_NOT_FOUND')
     expect(mocks.execute).not.toHaveBeenCalled()
   })
-  it('exposes all 31 definitions including complete nested move arguments', () => {
-    expect(agentTools).toHaveLength(31)
-    expect(new Set(agentTools.map((tool) => tool.name)).size).toBe(31)
+  it('exposes all 33 definitions including complete nested move arguments', () => {
+    expect(agentTools).toHaveLength(33)
+    expect(new Set(agentTools.map((tool) => tool.name)).size).toBe(33)
     const move = agentTools.find((tool) => tool.name === 'move_clip')!
     expect(move.parameters).toMatchObject({
       properties: {

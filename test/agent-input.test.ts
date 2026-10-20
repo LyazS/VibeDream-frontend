@@ -1,9 +1,10 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import { createRenderer, nextTick, reactive, toRaw } from 'vue'
+import { createRenderer, nextTick, reactive, ref, toRaw } from 'vue'
 import { createI18n } from 'vue-i18n'
 import AgentInput from '../src/components/agent/AgentInput.vue'
+import ToolCallDisplay from '../src/components/agent/ToolCallDisplay.vue'
 import AgentImagePreview from '../src/components/agent/AgentImage.vue'
-import type { AgentImage } from '../src/core/agent/types'
+import type { AgentImage, AgentMessage } from '../src/core/agent/types'
 import type { AgentDraft } from '../src/core/modules/UnifiedAgentModule'
 import en from '../src/locales/en-US/common.json'
 import zh from '../src/locales/zh-CN/common.json'
@@ -27,6 +28,7 @@ const mocks = vi.hoisted(() => ({
     agentBusy: false,
     agentRunning: false,
     agentSessionId: 'session',
+    agentToolResults: {} as Record<string, AgentMessage>,
     getAgentImage: vi.fn(),
     agentDraft: {} as AgentDraft,
     agentDraftEditable: true,
@@ -41,6 +43,8 @@ const mocks = vi.hoisted(() => ({
   },
   createPreview: vi.fn(),
   disposePreview: vi.fn(),
+  readMediaState: vi.fn(),
+  searchMediaState: vi.fn(),
 }))
 vi.mock('@/core/unifiedStore', () => ({ useUnifiedStore: () => mocks.store }))
 vi.mock('@/core/composables/useI18n', () => ({ useAppI18n: () => ({ t: i18n.global.t }) }))
@@ -55,6 +59,15 @@ vi.mock('@/constants/iconComponents', () => ({
     REFRESH: 'span',
   },
 }))
+vi.mock('@/core/agent/tools/readMedia', () => ({
+  useReadMediaExecutionState: mocks.readMediaState,
+}))
+vi.mock('@/core/agent/tools/searchMedia', () => ({
+  useSearchMediaExecutionState: mocks.searchMediaState,
+}))
+vi.mock('../src/components/agent/IndexingRuntimeCard.vue', () => ({
+  default: { render: () => null },
+}))
 vi.mock('naive-ui', () => ({ NImage: { render: () => null }, NSpin: { render: () => null } }))
 vi.mock('../src/components/agent/AgentUsageIndicator.vue', () => ({
   default: { render: () => null },
@@ -64,7 +77,7 @@ vi.mock('@/core/agent/services/agentImageService', async (importOriginal) => ({
   createAgentImagePreview: mocks.createPreview,
 }))
 
-// Mount the actual component with Vue's host renderer, without a browser dependency.
+// 使用 Vue 宿主渲染器挂载真实组件，在无浏览器环境中验证输入交互。
 class HostNode {
   props: Record<string, unknown> = {}
   children: HostNode[] = []
@@ -150,6 +163,8 @@ function pressEnter() {
 
 beforeEach(() => {
   vi.clearAllMocks()
+  mocks.readMediaState.mockReturnValue(ref(null))
+  mocks.searchMediaState.mockReturnValue(ref(null))
   mocks.createPreview.mockImplementation(() => ({
     url: 'blob:preview',
     dispose: mocks.disposePreview,
@@ -529,3 +544,137 @@ it('translates recognized submission error codes in the tooltip when switching l
   expect(notice.props.title).toBe(zhAi.aiPanel.errors.storageQuotaExceeded)
   expect(mocks.store.agentDraft.submitError).toBe('QuotaExceededError')
 })
+
+it('loads ordered tool result previews only while expanded and releases their URLs on collapse', async () => {
+  mocks.store.agentToolResults = {
+    generic: {
+      id: 'result',
+      role: 'tool',
+      toolCallId: 'generic',
+      toolName: 'read_project_info',
+      created_at: '',
+      parts: [
+        { type: 'image', attachmentId: 'first' },
+        { type: 'image', attachmentId: 'second' },
+      ],
+    },
+  } as never
+  mocks.store.getAgentImage.mockImplementation(async (id: string) => ({
+    blob: new Blob([id]),
+    fileName: id,
+    description: `说明 ${id}`,
+  }))
+  app.unmount()
+  app = renderer.createApp(ToolCallDisplay, {
+    item: {
+      type: 'tool_call',
+      tool_call_id: 'generic',
+      tool_name: 'read_project_info',
+      args: {},
+      status: 'completed',
+    },
+  })
+  app.mount(root)
+  await nextTick()
+  expect(findOptional((node) => node.props.class === 'tool-result-images', root)).toBeUndefined()
+  expect(mocks.store.getAgentImage).not.toHaveBeenCalled()
+  const toggleExpanded = findNode(
+    (node) => node.props.class === 'tool-header tool-header--interactive',
+  ).props.onClick as () => void
+  toggleExpanded()
+  await nextTick()
+  await Promise.resolve()
+  await nextTick()
+  expect(mocks.store.getAgentImage.mock.calls.map(([id]) => id)).toEqual(['first', 'second'])
+  const expanded = findNode((node) => node.props.class === 'tool-params-expanded')
+  const images = findNode((node) => node.props.class === 'tool-result-images', expanded)
+  expect(findNode((node) => node.props.title === '说明 first', images)).toBeDefined()
+  expect(findNode((node) => node.props.title === '说明 second', images)).toBeDefined()
+  toggleExpanded()
+  await nextTick()
+  expect(findOptional((node) => node.props.class === 'tool-params-expanded', root)).toBeUndefined()
+  expect(mocks.disposePreview).toHaveBeenCalledTimes(2)
+  toggleExpanded()
+  await nextTick()
+  await Promise.resolve()
+  await nextTick()
+  expect(mocks.store.getAgentImage.mock.calls.map(([id]) => id)).toEqual([
+    'first',
+    'second',
+    'first',
+    'second',
+  ])
+  app.unmount()
+  expect(mocks.disposePreview).toHaveBeenCalledTimes(4)
+})
+
+it('does not add a preview region to a text-only paired tool result', async () => {
+  mocks.store.agentToolResults = {
+    generic: {
+      id: 'result',
+      role: 'tool',
+      toolCallId: 'generic',
+      toolName: 'view_media',
+      created_at: '',
+      parts: [{ type: 'text', text: 'failed' }],
+    },
+  } as never
+  app.unmount()
+  app = renderer.createApp(ToolCallDisplay, {
+    item: {
+      type: 'tool_call',
+      tool_call_id: 'generic',
+      tool_name: 'view_media',
+      args: {},
+      status: 'failed',
+    },
+  })
+  app.mount(root)
+  ;(
+    findNode((node) => node.props.class === 'tool-header tool-header--interactive').props
+      .onClick as () => void
+  )()
+  await nextTick()
+  expect(findOptional((node) => node.props.class === 'tool-result-images', root)).toBeUndefined()
+  expect(mocks.store.getAgentImage).not.toHaveBeenCalled()
+})
+
+it.each(['read_media', 'search_indexing', 'search_media'])(
+  'shows actual stopped progress including zero for %s',
+  async (mode) => {
+    const state = reactive({
+      active: false,
+      canCancel: false,
+      currentStage: mode === 'search_indexing' ? 'indexing' : 'searching',
+      totalCount: 5,
+      completedCount: 0,
+      failedCount: 0,
+      indexingTotalCount: 5,
+      indexingResolvedCount: 0,
+      totalSteps: 5,
+      completedSteps: 0,
+    })
+    if (mode === 'read_media') mocks.readMediaState.mockReturnValue(ref(state))
+    else mocks.searchMediaState.mockReturnValue(ref(state))
+    app.unmount()
+    app = renderer.createApp(ToolCallDisplay, {
+      item: {
+        type: 'tool_call',
+        tool_call_id: 'progress',
+        tool_name: mode === 'read_media' ? 'read_media' : 'search_media',
+        args: {},
+        status: 'failed',
+      },
+    })
+    app.mount(root)
+    for (const completed of [0, 2, 5]) {
+      state.completedCount = completed
+      state.indexingResolvedCount = completed
+      state.completedSteps = completed
+      await nextTick()
+      expect(findNode((node) => node.props.class === 'tool-progress-fill').props.style).toEqual({
+        width: `${completed * 20}%`,
+      })
+    }
+  },
+)

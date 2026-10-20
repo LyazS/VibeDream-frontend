@@ -1,5 +1,6 @@
 import { beforeEach, expect, it, vi } from 'vitest'
 import type { LoadedEffectPackage } from '@/core/effect-package/types'
+import { setupTimelineItemBunny } from '@/core/bunnyUtils/timelineItemSetup'
 import { prepareEffectPackageResources } from '@/core/effect-package/runtime/prepareEffectPackageResources'
 import { TimelineFrameCaptureSession } from '@/core/utils/timelineFrameCapture'
 import type { UnifiedTimelineItemData } from '@/core/timelineitem/model/timelineItem'
@@ -11,6 +12,7 @@ const mocks = vi.hoisted(() => ({
   ensureReady: vi.fn(),
   getReadyPackage: vi.fn(),
   render: vi.fn(),
+  rendererOptions: vi.fn(),
   toBlob: vi.fn(),
   dispose: vi.fn(),
 }))
@@ -38,6 +40,9 @@ vi.mock('@/core/webgl2/transition/TransitionEdgeFrameResolver', () => ({
 }))
 vi.mock('@/core/utils/WebGLExportRenderer', () => ({
   WebGLExportRenderer: class {
+    constructor(options: unknown) {
+      mocks.rendererOptions(options)
+    }
     canvas = { toBlob: mocks.toBlob }
     render = mocks.render
     dispose = mocks.dispose
@@ -109,6 +114,8 @@ function session() {
 
 beforeEach(() => {
   vi.resetAllMocks()
+  vi.mocked(setupTimelineItemBunny).mockResolvedValue(undefined)
+  mocks.ensureReady.mockResolvedValue(undefined)
   mocks.readFile.mockResolvedValue('shader')
   mocks.loadSampledResource.mockResolvedValue({ kind: 'image-2d' })
   mocks.toBlob.mockImplementation((callback: BlobCallback) => callback(new Blob(['frame'])))
@@ -178,4 +185,203 @@ it('shares an in-progress shader load with preview and reuses cached text', asyn
   shader.resolve('shader')
   await preparation
   expect(finished).toBe(true)
+})
+
+// 用可控异步等待模拟截帧期间继续编辑，后续帧仍须读取最初快照。
+it('freezes nested edits, media metadata, canvas and track visibility before any async setup', async () => {
+  const gate = deferred<void>()
+  vi.mocked(setupTimelineItemBunny).mockImplementationOnce(async () => {
+    await gate.promise
+  })
+  const item = {
+    id: 'text',
+    mediaType: 'text',
+    mediaItemId: null,
+    trackId: 'track',
+    timeRange: { timelineStartTime: 0, timelineEndTime: 60 },
+    baseRenderConfig: { text: { content: 'original caption' } },
+    exRenderConfig: {},
+    runtime: { exRenderConfig: {} },
+  } as unknown as UnifiedTimelineItemData<'text'>
+  const track = { id: 'track', isVisible: true, isMuted: false }
+  const config = {
+    videoWidth: 1920,
+    videoHeight: 1080,
+    timelineItems: [item],
+    tracks: [track],
+    getMediaItem: () => undefined,
+    getAsset: () => undefined,
+  }
+  const capture = new TimelineFrameCaptureSession(config)
+  const pending = capture.captureFrame(0)
+  item.baseRenderConfig.text.content = 'subsequent edit'
+  track.isVisible = false
+  config.videoWidth = 100
+  gate.resolve()
+  await pending
+  const rendered = mocks.render.mock.calls[0]![0]
+  expect(rendered[0].baseRenderConfig.text.content).toBe('original caption')
+  expect(mocks.rendererOptions.mock.calls[0]![0].width).toBe(1920)
+  expect(mocks.rendererOptions.mock.calls[0]![0].getTrack('track')).toEqual({ isVisible: true })
+  await capture.captureFrame(30)
+  expect(mocks.render.mock.calls[1]![0][0].baseRenderConfig.text.content).toBe('original caption')
+  await capture.dispose()
+})
+
+it('fails a visible video frame instead of encoding a blank canvas, but accepts an empty composition', async () => {
+  const make = (visible = true) =>
+    new TimelineFrameCaptureSession({
+      videoWidth: 100,
+      videoHeight: 100,
+      tracks: [{ id: 'track', isVisible: visible, isMuted: false }],
+      timelineItems: [
+        {
+          id: 'video',
+          mediaItemId: 'media',
+          mediaType: 'video',
+          trackId: 'track',
+          timeRange: {
+            timelineStartTime: 0,
+            timelineEndTime: 60,
+            clipStartTime: 0,
+            clipEndTime: 60,
+          },
+          baseRenderConfig: { visual: {} },
+          exRenderConfig: {},
+          runtime: { exRenderConfig: {} },
+        } as UnifiedTimelineItemData<'video'>,
+      ],
+      getMediaItem: () => ({ id: 'media', runtime: {} }) as UnifiedMediaItemData,
+      getAsset: () => undefined,
+    })
+  vi.mocked(setupTimelineItemBunny).mockImplementation(async (item) => {
+    item.runtime.bunnyClip = {
+      tickN: async () => ({ state: 'error', video: null }),
+      dispose: async () => {},
+    } as never
+  })
+  const invalid = make()
+  await expect(invalid.captureFrame(0)).rejects.toThrow('frame_unavailable')
+  expect(mocks.toBlob).not.toHaveBeenCalled()
+  await invalid.dispose()
+  const blank = make(false)
+  await expect(blank.captureFrame(0)).resolves.toBeInstanceOf(Blob)
+  await blank.dispose()
+})
+
+// 解码和释放都可能迟到；取消必须及时结束，同时关闭最终返回的视频帧。
+it('cancels pending frame decoding and closes a late sample without rendering or persisting it', async () => {
+  const gate = deferred<{ state: string; video: { close: () => void } }>()
+  const tick = vi.fn().mockReturnValue(gate.promise),
+    close = vi.fn(),
+    dispose = vi.fn().mockReturnValue(new Promise(() => {}))
+  vi.mocked(setupTimelineItemBunny).mockImplementation(async (item) => {
+    item.runtime.bunnyClip = { tickN: tick, dispose } as never
+  })
+  const controller = new AbortController()
+  const capture = new TimelineFrameCaptureSession({
+    videoWidth: 100,
+    videoHeight: 100,
+    signal: controller.signal,
+    tracks: [{ id: 'track', isVisible: true, isMuted: false }],
+    timelineItems: [
+      {
+        id: 'video',
+        mediaItemId: 'media',
+        mediaType: 'video',
+        trackId: 'track',
+        timeRange: { timelineStartTime: 0, timelineEndTime: 60 },
+        baseRenderConfig: { visual: {} },
+        exRenderConfig: {},
+        runtime: { exRenderConfig: {} },
+      } as UnifiedTimelineItemData<'video'>,
+    ],
+    getMediaItem: () => ({ id: 'media', runtime: {} }) as UnifiedMediaItemData,
+    getAsset: () => undefined,
+  })
+  const pending = capture.captureFrame(0)
+  await vi.waitFor(() => expect(tick).toHaveBeenCalledOnce())
+  controller.abort()
+  await expect(pending).rejects.toThrow()
+  await capture.dispose()
+  gate.resolve({ state: 'success', video: { close } })
+  await Promise.resolve()
+  await Promise.resolve()
+  expect(close).toHaveBeenCalledOnce()
+  expect(mocks.render).not.toHaveBeenCalled()
+  expect(mocks.toBlob).not.toHaveBeenCalled()
+})
+
+it('keeps borrowed media resources and metadata from the initial snapshot across later edits', async () => {
+  const gate = deferred<void>(),
+    close = vi.fn()
+  const originalBitmap = { close },
+    replacement = { close: vi.fn() }
+  const media = {
+    id: 'photo',
+    name: 'original',
+    runtime: { bunny: { imageClip: originalBitmap } },
+  } as unknown as UnifiedMediaItemData
+  const getMediaItem = vi.fn(() => media)
+  const item = {
+    id: 'image',
+    mediaItemId: 'photo',
+    mediaType: 'image',
+    trackId: 'track',
+    timeRange: { timelineStartTime: 0, timelineEndTime: 60, clipStartTime: 0, clipEndTime: 60 },
+    baseRenderConfig: { visual: {} },
+    exRenderConfig: {},
+    runtime: { exRenderConfig: {} },
+  } as UnifiedTimelineItemData<'image'>
+  vi.mocked(setupTimelineItemBunny).mockImplementationOnce(async () => {
+    await gate.promise
+  })
+  const capture = new TimelineFrameCaptureSession({
+    videoWidth: 100,
+    videoHeight: 100,
+    timelineItems: [item],
+    tracks: [{ id: 'track', isVisible: true, isMuted: false }],
+    getMediaItem,
+    getAsset: () => undefined,
+  })
+  const pending = capture.captureFrame(0)
+  media.name = 'later edit'
+  media.runtime.bunny!.imageClip = replacement as ImageBitmap
+  gate.resolve()
+  await pending
+  const options = mocks.rendererOptions.mock.calls[0]![0]
+  expect(options.getMediaItem('photo').name).toBe('original')
+  expect(options.getMediaItem('photo').runtime.bunny.imageClip).toBe(originalBitmap)
+  expect(getMediaItem).toHaveBeenCalledOnce()
+  await capture.dispose()
+  expect(close).not.toHaveBeenCalled()
+})
+
+it('snapshots library media outside the timeline without retaining editable originals or cloning borrowed bitmaps', async () => {
+  const close = vi.fn()
+  const bitmap = { close }
+  const media = {
+    id: 'off-timeline',
+    assetKind: 'media',
+    name: 'original',
+    runtime: { bunny: { imageClip: bitmap } },
+  } as unknown as UnifiedMediaItemData
+  const capture = new TimelineFrameCaptureSession({
+    videoWidth: 100,
+    videoHeight: 100,
+    timelineItems: [],
+    tracks: [],
+    assets: [media],
+    getMediaItem: () => undefined,
+    getAsset: () => media,
+  })
+  media.name = 'later edit'
+  media.runtime.bunny!.imageClip = {} as ImageBitmap
+  await capture.captureFrame(0)
+  const captured = mocks.rendererOptions.mock.calls[0]![0].getAsset(media.id)
+  expect(captured).not.toBe(media)
+  expect(captured.name).toBe('original')
+  expect(captured.runtime.bunny.imageClip).toBe(bitmap)
+  await capture.dispose()
+  expect(close).not.toHaveBeenCalled()
 })

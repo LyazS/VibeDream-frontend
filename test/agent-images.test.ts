@@ -531,13 +531,38 @@ it.each([true, false])(
       ),
     ).toEqual(
       valid
-        ? { kind: 'image', url: uploadResult().url, source: 'missing', fileName: 'source.png' }
+        ? {
+            kind: 'image',
+            recordKind: 'user_attachment',
+            url: uploadResult().url,
+            source: 'missing',
+            fileName: 'source.png',
+          }
         : { kind: 'unavailable', reason: 'source_missing', fileName: 'source.png' },
     )
     await expect(readAgentImageSource(image)).rejects.toMatchObject({
       code: 'AGENT_IMAGE_SOURCE_MISSING',
     })
     expect(upload).not.toHaveBeenCalled()
+  },
+)
+
+it.each(['url', 'expiresAt'] as const)(
+  'rejects successful uploads missing %s without saving an incomplete cache',
+  async (field) => {
+    const store = new AgentSessionStore()
+    const data = session()
+    const image = attachment()
+    await store.save(data, [image])
+    rememberAgentImages(store, data, [image])
+    vi.spyOn(CloudflareTemporaryFileUploader, 'uploadBlob').mockResolvedValue({
+      ...uploadResult(),
+      [field]: undefined,
+    })
+    await expect(
+      prepareAgentImages(data, store, new AbortController().signal, () => true),
+    ).rejects.toMatchObject({ code: 'AGENT_IMAGE_UPLOAD_FAILED' })
+    expect((await store.readImage(data, image.id))!.upload).toBeUndefined()
   },
 )
 

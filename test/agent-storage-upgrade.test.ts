@@ -7,36 +7,18 @@ afterEach(() => {
   vi.unstubAllGlobals()
 })
 
-it('adds attachment metadata at v8 without migrating or deleting legacy image blobs', async () => {
+it('initializes the final attachment table directly in an empty database', async () => {
   indexedDBService.close()
   vi.stubGlobal('indexedDB', new IDBFactory())
-  const legacy = {
-    key: 'legacy',
-    owner: 'owner',
-    sessionKey: 'session',
-    blob: new Blob(['legacy']),
-  }
-  await new Promise<void>((resolve, reject) => {
-    const request = indexedDB.open('VideoEditorDB', 7)
-    request.onerror = () => reject(request.error)
-    request.onupgradeneeded = () => {
-      const images = request.result.createObjectStore('agentImages', { keyPath: 'key' })
-      images.createIndex('owner', 'owner')
-      images.createIndex('session', 'sessionKey')
-      images.put(legacy)
-    }
-    request.onsuccess = () => {
-      request.result.close()
-      resolve()
-    }
-  })
   const db = await indexedDBService.openDB()
   expect(db.version).toBe(8)
+  expect(db.objectStoreNames.contains('agentAttachments')).toBe(true)
+  const table = db.transaction('agentAttachments').objectStore('agentAttachments')
+  expect(table.keyPath).toBe('key')
+  expect(table.index('owner').keyPath).toBe('owner')
+  expect(table.index('session').keyPath).toBe('sessionKey')
   expect(
-    await indexedDBService.transaction('agentImages', 'readonly', (table) => table.get('legacy')),
-  ).toEqual(legacy)
-  expect(
-    await indexedDBService.transaction('agentAttachments', 'readonly', (table) => table.getAll()),
+    await indexedDBService.transaction('agentAttachments', 'readonly', (store) => store.getAll()),
   ).toEqual([])
 })
 

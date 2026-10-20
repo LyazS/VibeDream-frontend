@@ -18,6 +18,8 @@ import { removeTrackDefinition } from './removeTrack'
 import { createSubtitleClipDefinition } from './createSubtitleClip'
 import { insertClipDefinition } from './insertClip'
 import { importAttachmentDefinition } from './importAttachment'
+import { viewMediaDefinition } from './viewMedia'
+import { viewTimelineDefinition } from './viewTimeline'
 import { moveClipDefinition } from './moveClip'
 import { splitClipDefinition } from './splitClip'
 import { trimClipDefinition } from './trimClip'
@@ -31,7 +33,7 @@ import { readClipKeyframeDefinition } from './readClipKeyframe'
 import { writeClipKeyframeDefinition } from './writeClipKeyframe'
 import { patchClipKeyframeDefinition } from './patchClipKeyframe'
 
-export const toolContractVersion = 'editor-tools-v1'
+export const toolContractVersion = 'editor-tools-v2'
 
 /** 模型调用和本地参数校验共享的公开工具契约。 */
 export const agentTools: ModelTool[] = [
@@ -54,6 +56,8 @@ export const agentTools: ModelTool[] = [
   createSubtitleClipDefinition,
   insertClipDefinition,
   importAttachmentDefinition,
+  viewMediaDefinition,
+  viewTimelineDefinition,
   moveClipDefinition,
   splitClipDefinition,
   trimClipDefinition,

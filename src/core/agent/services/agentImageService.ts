@@ -1,3 +1,5 @@
+import { AGENT_IMAGE_LIMITS, AGENT_VISUAL_CONTEXT_IMAGE_LIMIT } from './agentImageValidation'
+import { abortable } from '@/core/utils/abortable'
 import type {
   AgentAttachment,
   AgentAttachmentRecord,
@@ -9,18 +11,15 @@ import type {
 } from '../types'
 import { MessagePartType } from '../types'
 import type { AgentSessionStore } from '../runtime/AgentSessionStore'
-import { CloudflareTemporaryFileUploader } from '@/core/utils/cloudflareTemporaryFileUploader'
+import {
+  CloudflareTemporaryFileUploader,
+  type TemporaryFileUploadRequest,
+} from '@/core/utils/cloudflareTemporaryFileUploader'
 import { fileSystemService } from '@/core/managers/filesystem/fileSystemService'
 import { FileSystemError } from '@/core/filesystem/errors/FileSystemError'
 import { ErrorCode } from '@/core/filesystem/errors/ErrorCodes'
 
-export const AGENT_IMAGE_LIMITS = {
-  count: 4,
-  originalBytes: 10 * 1024 * 1024,
-  pixels: 40_000_000,
-  edge: 2048,
-  encodedBytes: 2 * 1024 * 1024,
-} as const
+export { AGENT_IMAGE_LIMITS, AGENT_VISUAL_CONTEXT_IMAGE_LIMIT } from './agentImageValidation'
 
 export type AgentImageErrorCode =
   | 'imageInvalid'
@@ -55,11 +54,18 @@ export class AgentImageSourceError extends Error {
 }
 
 export type ResolvedAgentImage =
-  | { kind: 'image'; url: string; source: 'available' | 'missing'; fileName: string }
+  | ({
+      kind: 'image'
+      url: string
+      fileName: string
+    } & (
+      | { recordKind: 'user_attachment'; source: 'available' | 'missing' }
+      | { recordKind: 'tool_image'; source: 'available'; description: string }
+    ))
   | { kind: 'unavailable'; reason: 'source_missing'; fileName: string }
-  | { kind: 'unavailable'; reason: 'record_missing'; fileName?: never }
+  | { kind: 'unavailable'; reason: 'record_missing' | 'context_budget'; fileName?: never }
 
-// Protect original files across preparation, shared drafts and in-flight local commits.
+// 图片准备、共享草稿和本地提交期间都保护原图，避免被孤立文件清理误删。
 const activeOriginals = new Set<string>()
 const heldOriginals = new Map<string, number>()
 const orphanSweepProtections = new Set<Set<string>>()
@@ -92,7 +98,7 @@ function acquireOriginalLease(projectId: string, id: string) {
         await released
       })
       .catch(failed)
-    // Draft leases are synchronous; preparation separately awaits acquisition before writing.
+    // 草稿同步登记原图占用；实际写入前仍须等待跨标签页共享锁获取完成。
     void ready.catch(() => {})
   }
   let released = false
@@ -136,7 +142,7 @@ export async function deleteAgentImageSource(
   }
 }
 
-/** Read dimensions before allocating a decoded bitmap, independently of media import. */
+/** 在分配解码位图前读取尺寸并校验像素限制，此步骤独立于素材导入。 */
 export function inspectAgentImage(bytes: Uint8Array): {
   mimeType: AgentImageMimeType
   width: number
@@ -250,7 +256,7 @@ export async function processAgentImage(
     signal?.throwIfAborted()
     return { ...target, original, ...encoded }
   } catch (error) {
-    // A partial write or an uninterruptible late decode still belongs to this fixed project.
+    // 部分写入或无法中断的迟到解码仍归属本次固定工程，失败时只清理该原图。
     await deleteAgentImageSource({ ...target, original }).catch(() => {})
     throw error
   } finally {
@@ -266,36 +272,108 @@ async function encodeAgentImage(
   params?: AgentImageConversionParams,
 ): Promise<Pick<AgentImage, 'blob' | 'conversionParams'>> {
   signal?.throwIfAborted()
-  const bitmap = await createImageBitmap(new Blob([file], { type: mimeType }), {
-    imageOrientation: 'from-image',
-  })
-  let canvas: HTMLCanvasElement | undefined
+  const bitmap = await abortable(
+    createImageBitmap(new Blob([file], { type: mimeType }), {
+      imageOrientation: 'from-image',
+    }),
+    signal,
+    (late) => late.close(),
+  )
   try {
-    signal?.throwIfAborted()
-    if (!bitmap.width || !bitmap.height) throw new AgentImageProcessingError('imageInvalid')
     if (bitmap.width * bitmap.height > AGENT_IMAGE_LIMITS.pixels)
       throw new AgentImageProcessingError('imagePixelLimit')
-    const scale = Math.min(1, AGENT_IMAGE_LIMITS.edge / Math.max(bitmap.width, bitmap.height))
-    canvas = document.createElement('canvas')
-    canvas.width = params?.width ?? Math.max(1, Math.round(bitmap.width * scale))
-    canvas.height = params?.height ?? Math.max(1, Math.round(bitmap.height * scale))
+    return await encodeAgentVisual(bitmap, bitmap.width, bitmap.height, signal, undefined, params)
+  } finally {
+    bitmap.close()
+  }
+}
+
+/** 相对于正常显示画面的归一化矩形，左上角为原点。 */
+export type AgentViewRegion = { x: number; y: number; width: number; height: number }
+
+/** 将归一化区域转为像素矩形，起点向下、终点向上取整以覆盖目标区域。 */
+export function visualCrop(width: number, height: number, region?: AgentViewRegion) {
+  if (!Number.isFinite(width) || !Number.isFinite(height) || width < 1 || height < 1)
+    throw new AgentImageProcessingError('imageInvalid')
+  const r = region ?? { x: 0, y: 0, width: 1, height: 1 }
+  if (
+    ![r.x, r.y, r.width, r.height].every(Number.isFinite) ||
+    r.x < 0 ||
+    r.y < 0 ||
+    r.width <= 0 ||
+    r.height <= 0 ||
+    r.x + r.width > 1 ||
+    r.y + r.height > 1
+  )
+    throw new Error('invalid_arguments：裁剪区域越界。')
+  const x = Math.floor(r.x * width),
+    y = Math.floor(r.y * height)
+  return {
+    x,
+    y,
+    width: Math.max(1, Math.ceil((r.x + r.width) * width) - x),
+    height: Math.max(1, Math.ceil((r.y + r.height) * height) - y),
+  }
+}
+
+/** 先按显示坐标裁剪，再等比缩放编码；输入资源由调用者管理，本函数只释放临时画布。 */
+export async function encodeAgentVisual(
+  source:
+    | CanvasImageSource
+    | ((
+        context: CanvasRenderingContext2D,
+        crop: ReturnType<typeof visualCrop>,
+        width: number,
+        height: number,
+      ) => void),
+  width: number,
+  height: number,
+  signal?: AbortSignal,
+  region?: AgentViewRegion,
+  params?: AgentImageConversionParams,
+): Promise<Pick<AgentImage, 'blob' | 'conversionParams'>> {
+  signal?.throwIfAborted()
+  const crop = visualCrop(width, height, region)
+  const scale = Math.min(1, AGENT_IMAGE_LIMITS.edge / Math.max(crop.width, crop.height))
+  const canvas = document.createElement('canvas')
+  canvas.width = params?.width ?? Math.max(1, Math.round(crop.width * scale))
+  canvas.height = params?.height ?? Math.max(1, Math.round(crop.height * scale))
+  try {
     const context = canvas.getContext('2d')
     if (!context) throw new AgentImageProcessingError('imageProcessingFailed')
-    const encodingCanvas = canvas
     const outputMimeType = params?.mimeType ?? 'image/webp'
+    // 历史用户图按保存参数重建；新观察图超出字节限制时逐轮降低质量和尺寸。
     for (let attempt = 0; attempt < (params ? 1 : 8); attempt++) {
       signal?.throwIfAborted()
       context.clearRect(0, 0, canvas.width, canvas.height)
-      context.drawImage(bitmap, 0, 0, canvas.width, canvas.height)
-      const quality = params?.quality ?? Math.max(0.55, 0.9 - attempt * 0.1)
-      const blob = await new Promise<Blob>((resolve, reject) => {
-        encodingCanvas.toBlob(
-          (result) =>
-            result ? resolve(result) : reject(new AgentImageProcessingError('imageEncodingFailed')),
-          outputMimeType,
-          quality,
+      if (typeof source === 'function') source(context, crop, canvas.width, canvas.height)
+      else if (!region) context.drawImage(source, 0, 0, canvas.width, canvas.height)
+      else
+        context.drawImage(
+          source,
+          crop.x,
+          crop.y,
+          crop.width,
+          crop.height,
+          0,
+          0,
+          canvas.width,
+          canvas.height,
         )
-      })
+      const quality = params?.quality ?? Math.max(0.55, 0.9 - attempt * 0.1)
+      const blob = await abortable(
+        new Promise<Blob>((resolve, reject) => {
+          canvas.toBlob(
+            (result) =>
+              result
+                ? resolve(result)
+                : reject(new AgentImageProcessingError('imageEncodingFailed')),
+            outputMimeType,
+            quality,
+          )
+        }),
+        signal,
+      )
       signal?.throwIfAborted()
       if (blob.type !== outputMimeType || !blob.size)
         throw new AgentImageProcessingError('imageEncodingFailed')
@@ -314,8 +392,7 @@ async function encodeAgentImage(
     }
     throw new AgentImageProcessingError('imageEncodedSizeLimit')
   } finally {
-    bitmap.close()
-    if (canvas) canvas.width = canvas.height = 0
+    canvas.width = canvas.height = 0
   }
 }
 
@@ -339,11 +416,16 @@ export async function readAgentImageSource(image: AgentAttachment): Promise<Blob
 }
 
 const uploadWindowMs = 11 * 60_000
-function validUpload(upload: AgentAttachmentRecord['upload']): boolean {
+type AgentImageUpload = NonNullable<AgentAttachmentRecord['upload']>
+function validUpload(upload: Partial<AgentImageUpload> | undefined): upload is AgentImageUpload {
   return Boolean(
     typeof upload?.url === 'string' &&
       typeof upload.expiresAt === 'string' &&
-      upload.url.startsWith('oss://dashscope-instant/') &&
+      /^oss:\/\/dashscope-instant\/[A-Za-z0-9_./-]+$/.test(upload.url) &&
+      !upload.url
+        .slice(6)
+        .split('/')
+        .some((part) => part === '.' || part === '..') &&
       Number.isFinite(Date.parse(upload.expiresAt)) &&
       Date.parse(upload.expiresAt) > Date.now() + uploadWindowMs,
   )
@@ -452,6 +534,60 @@ class AgentImageResolver {
     const image = await this.store.readImage(session, id)
     check()
     if (!image) return { kind: 'unavailable', reason: 'record_missing' }
+    const uploadImage = async (
+      blob: Blob,
+      metadata: Pick<
+        TemporaryFileUploadRequest,
+        'fileName' | 'mimeType' | 'byteSize' | 'width' | 'height'
+      >,
+    ): Promise<string> => {
+      const result = await CloudflareTemporaryFileUploader.uploadBlob(
+        blob,
+        {
+          capability: 'agent',
+          purpose: 'agent-image',
+          projectId: session.projectId,
+          ...metadata,
+        },
+        undefined,
+        signal,
+      )
+      check()
+      const upload = { url: result.url, expiresAt: result.expiresAt }
+      if (!result.success || !validUpload(upload)) throw new AgentImageUploadError(result.error)
+      if (!(await this.store.updateImageUpload(image, upload, isCurrent)))
+        throw new DOMException('图片准备已取消', 'AbortError')
+      check()
+      return upload.url
+    }
+    if (image.recordKind === 'tool_image') {
+      // 临时地址过期后重新上传已保存的 Blob，不能按最新素材或时间轴重做历史观察。
+      const fileName = image.id
+      if (validUpload(image.upload))
+        return {
+          kind: 'image',
+          recordKind: image.recordKind,
+          url: image.upload.url,
+          source: 'available',
+          fileName,
+          description: image.description,
+        }
+      const url = await uploadImage(image.blob, {
+        fileName: `${image.id}.${image.mimeType.split('/')[1]}`,
+        mimeType: image.mimeType,
+        byteSize: image.byteSize,
+        width: image.width,
+        height: image.height,
+      })
+      return {
+        kind: 'image',
+        recordKind: image.recordKind,
+        url,
+        source: 'available',
+        fileName,
+        description: image.description,
+      }
+    }
     const fileName = image.original.fileName
     let source: Blob | undefined
     try {
@@ -463,7 +599,8 @@ class AgentImageResolver {
     if (validUpload(image.upload))
       return {
         kind: 'image',
-        url: image.upload!.url,
+        recordKind: image.recordKind,
+        url: image.upload.url,
         source: source ? 'available' : 'missing',
         fileName,
       }
@@ -480,28 +617,14 @@ class AgentImageResolver {
       blob = rebuilt.blob
       this.images.set(key, blob)
     }
-    const result = await CloudflareTemporaryFileUploader.uploadBlob(
-      blob,
-      {
-        capability: 'agent',
-        purpose: 'agent-image',
-        projectId: session.projectId,
-        fileName: `${crypto.randomUUID()}.webp`,
-        mimeType: image.conversionParams.mimeType,
-        byteSize: blob.size,
-        width: image.conversionParams.width,
-        height: image.conversionParams.height,
-      },
-      undefined,
-      signal,
-    )
-    check()
-    const upload = { url: result.url ?? '', expiresAt: result.expiresAt ?? '' }
-    if (!result.success || !validUpload(upload)) throw new AgentImageUploadError(result.error)
-    if (!(await this.store.updateImageUpload(image, upload, isCurrent)))
-      throw new DOMException('图片准备已取消', 'AbortError')
-    check()
-    return { kind: 'image', url: upload.url, source: 'available', fileName }
+    const url = await uploadImage(blob, {
+      fileName: `${crypto.randomUUID()}.webp`,
+      mimeType: image.conversionParams.mimeType,
+      byteSize: blob.size,
+      width: image.conversionParams.width,
+      height: image.conversionParams.height,
+    })
+    return { kind: 'image', recordKind: image.recordKind, url, source: 'available', fileName }
   }
 }
 
@@ -527,6 +650,7 @@ export function forgetAgentImages(store: AgentSessionStore, session?: AgentSessi
   resolvers.get(store)?.forget(session)
 }
 
+/** 准备本轮模型需要的用户附件和工具观察图，超出预算的历史引用保留文本占位。 */
 export async function prepareAgentImages(
   session: AgentSession,
   store: AgentSessionStore,
@@ -537,16 +661,20 @@ export async function prepareAgentImages(
     signal.throwIfAborted()
     if (!isCurrent()) throw new DOMException('图片准备已取消', 'AbortError')
   }
+  // 先按最近引用去重并选出预算内图片，再解析或上传地址，避免为省略图片产生上传。
+  const candidates = session.messages.flatMap((message) =>
+    message.role === 'user' || message.role === 'tool'
+      ? message.parts.flatMap((part) =>
+          part.type === MessagePartType.IMAGE && part.attachmentId ? [part.attachmentId] : [],
+        )
+      : [],
+  )
   const ids = new Set(
-    session.messages.flatMap((message) =>
-      message.role === 'user'
-        ? message.parts.flatMap((part) =>
-            part.type === MessagePartType.IMAGE && part.attachmentId ? [part.attachmentId] : [],
-          )
-        : [],
-    ),
+    [...new Set(candidates.slice().reverse())].slice(0, AGENT_VISUAL_CONTEXT_IMAGE_LIMIT),
   )
   const images = new Map<string, ResolvedAgentImage>()
+  for (const id of candidates)
+    if (!ids.has(id)) images.set(id, { kind: 'unavailable', reason: 'context_budget' })
   for (const id of ids) {
     check()
     const image = await resolverFor(store).resolve(session, id, signal, isCurrent)
@@ -581,7 +709,7 @@ export async function reclaimAgentImageOrphans(
   isCurrent: () => boolean,
   onDeleted?: () => void,
 ) {
-  // A commit can release its draft lease after the record snapshot was read.
+  // 读取记录快照后提交可能释放草稿占用，因此清理过程还需保留这份原图保护集合。
   const protectedOriginals = new Set([...activeOriginals, ...heldOriginals.keys()])
   orphanSweepProtections.add(protectedOriginals)
   try {
@@ -656,7 +784,7 @@ export async function reclaimWorkspaceAgentImageOrphans(
       signal.throwIfAborted()
     }
     try {
-      // Other editor tabs hold shared leases; skip busy projects instead of deleting their drafts.
+      // 其他编辑器标签页可能仍持有共享锁；跳过占用中的工程，保留其未提交草稿。
       if (typeof navigator !== 'undefined' && navigator.locks) {
         await navigator.locks.request(
           projectLockName(project.name),

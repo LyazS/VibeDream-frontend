@@ -16,6 +16,7 @@ export default defineConfig({
     include: [
       'test/transition-catalog.test.ts',
       'test/transition-search.test.ts',
+      'test/transition-edge-frame.test.ts',
       'test/timeline-frame-capture.test.ts',
     ],
   },

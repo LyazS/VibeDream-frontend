@@ -42,7 +42,7 @@ export async function executeImportAttachment(
       { requireUserReference: true },
     )
     assertCurrent()
-    if (!image) {
+    if (!image || image.recordKind !== 'user_attachment') {
       return buildToolError(
         'import_attachment',
         'attachment_not_found',

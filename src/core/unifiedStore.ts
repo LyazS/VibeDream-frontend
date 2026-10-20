@@ -423,6 +423,7 @@ export const useUnifiedStore = defineStore('unified', () => {
     agentUsage: unifiedAgentModule.usage,
     agentContextUsage: unifiedAgentModule.contextUsage,
     agentToolExecutions: unifiedAgentModule.toolExecutions,
+    agentToolResults: unifiedAgentModule.toolResults,
     agentPendingInteraction: unifiedAgentModule.pendingInteraction,
     answerAgentQuestion: unifiedAgentModule.answerQuestion,
     agentConnection: unifiedAgentModule.connection,
@@ -669,6 +670,7 @@ export const useUnifiedStore = defineStore('unified', () => {
     updateMediaBunnyTimelineDuration: unifiedMediaBunnyModule.updateTimelineDuration,
 
     // MediaBunny截帧功能
+    createTimelineFrameCaptureSession: unifiedMediaBunnyModule.createFrameCaptureSession,
     captureTimelineFrame: unifiedMediaBunnyModule.captureTimelineFrame,
     captureTimelineFrames: unifiedMediaBunnyModule.captureTimelineFrames,
     captureCanvasFrame: unifiedMediaBunnyModule.captureCanvasFrame,

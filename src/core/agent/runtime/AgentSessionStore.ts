@@ -1,9 +1,12 @@
+import { isAgentToolImage } from '../services/agentImageValidation'
 import { indexedDBService } from '@/core/storage/IndexedDBService'
 import {
   MessagePartType,
   type AgentAttachment,
   type AgentAttachmentRecord,
   type AgentSession,
+  type AgentToolImage,
+  type AgentUserAttachmentRecord,
 } from '../types'
 import { toolContractVersion } from './ToolRuntime'
 import { PathResolver } from '@/core/filesystem/core/PathResolver'
@@ -56,6 +59,38 @@ function isAttachment(value: unknown): value is AgentAttachment {
   }
 }
 
+/** 按记录类型选择校验方式，避免将工具观察图当成用户原图处理。 */
+function isRecord(value: unknown): value is AgentAttachmentRecord {
+  const record = value as Partial<AgentAttachmentRecord> | undefined
+  return record?.recordKind === 'user_attachment' ? isAttachment(record) : isAgentToolImage(record)
+}
+
+/** 从消息角色推导图片类型；消息 ID 同时用于阻止历史图片被新结果复用。 */
+function imageReferences(session: AgentSession) {
+  return session.messages.flatMap((message) =>
+    message.parts.flatMap((part) =>
+      part.type === MessagePartType.IMAGE
+        ? [
+            {
+              messageId: message.id,
+              id: part.attachmentId,
+              kind:
+                message.role === 'user'
+                  ? 'user_attachment'
+                  : message.role === 'tool'
+                    ? 'tool_image'
+                    : 'invalid',
+            },
+          ]
+        : [],
+    ),
+  )
+}
+
+function imageReferenceKey(ref: ReturnType<typeof imageReferences>[number]): string {
+  return JSON.stringify([ref.messageId, ref.id, ref.kind])
+}
+
 /** 会话快照与图片原子提交；诊断日志由 AgentTelemetry 独立管理。 */
 export class AgentSessionStore {
   private queue: Promise<void> = Promise.resolve()
@@ -66,7 +101,12 @@ export class AgentSessionStore {
   }
 
   /** 固定消息、用量及调用摘要，只保留恢复待回答问题所需的工具记录。 */
-  save(session: AgentSession, images: readonly AgentAttachment[] = []): Promise<void> {
+  save(
+    session: AgentSession,
+    images: readonly (AgentAttachment | AgentToolImage)[] = [],
+    isCurrent: () => boolean = () => true,
+    signal?: AbortSignal,
+  ): Promise<void> {
     const data = snapshot({
       ...session,
       toolExecutions: Object.fromEntries(
@@ -83,74 +123,124 @@ export class AgentSessionStore {
         ),
       ),
     })
-    const pending = images.map(({ id, userId, projectId, original, conversionParams }) =>
-      snapshot({ id, userId, projectId, original, conversionParams }),
-    )
+    // Blob 不经过 JSON 序列化；分别固定元数据快照和观察时的图片字节。
+    const pending = images.map((image) => {
+      if ('recordKind' in image && image.recordKind === 'tool_image')
+        return { ...snapshot({ ...image, blob: undefined }), blob: image.blob }
+      const { id, userId, projectId, original, conversionParams } = image as AgentAttachment
+      return {
+        ...snapshot({ id, userId, projectId, original, conversionParams }),
+        recordKind: 'user_attachment' as const,
+      }
+    })
+    const refs = imageReferences(data)
+    const ids = new Set<string>()
     for (const image of pending) {
-      if (!isAttachment(image)) return Promise.reject(new Error('INVALID_AGENT_ATTACHMENT'))
+      if (!isRecord(image) || ids.has(image.id))
+        return Promise.reject(new Error('INVALID_AGENT_ATTACHMENT'))
+      ids.add(image.id)
       if (image.userId !== data.userId || image.projectId !== data.projectId)
         return Promise.reject(new Error('INVALID_AGENT_ATTACHMENT_OWNER'))
+      if (!refs.some((ref) => ref.id === image.id && ref.kind === image.recordKind))
+        return Promise.reject(new Error('UNREFERENCED_AGENT_ATTACHMENT'))
     }
     return this.enqueue(async () => {
+      if (!isCurrent()) throw new Error('TOOL_CONTEXT_EXPIRED')
       const db = await indexedDBService.openDB()
+      if (!isCurrent()) throw new Error('TOOL_CONTEXT_EXPIRED')
       const owner = this.owner(data.userId, data.projectId)
       const key = JSON.stringify([owner, data.id])
       await new Promise<void>((resolve, reject) => {
+        // 消息与所有新增图片共用事务；任一写入失败或调用取消都整体回滚。
         const transaction = db.transaction(['agentSessions', 'agentAttachments'], 'readwrite')
-        transaction.oncomplete = () => resolve()
-        transaction.onerror = transaction.onabort = () =>
-          reject(transaction.error ?? new Error('对话图片存储事务失败'))
-        const sessionStore = transaction.objectStore('agentSessions')
-        const previous = sessionStore.get(key)
-        sessionStore.put({ key, owner, sessionKey: key, data })
-        const imageStore = transaction.objectStore('agentAttachments')
-        const imageIds = new Set(
-          data.messages
-            .filter((message) => message.role === 'user')
-            .flatMap((message) =>
-              message.parts.flatMap((part) =>
-                part.type === MessagePartType.IMAGE ? [part.attachmentId] : [],
-              ),
-            ),
-        )
-        for (const image of pending) {
-          if (!imageIds.has(image.id)) continue
-          const imageKey = JSON.stringify([key, image.id])
-          const request = imageStore.getKey(imageKey)
-          request.onsuccess = () => {
-            if (!request.result)
-              imageStore.add({
-                ...image,
-                key: imageKey,
-                owner,
-                sessionKey: key,
-              } satisfies AgentAttachmentRecord)
-          }
+        const cancel = () => transaction.abort()
+        const cleanup = () => signal?.removeEventListener('abort', cancel)
+        if (signal?.aborted) {
+          transaction.abort()
+          reject(signal.reason)
+          return
         }
-        // Only new references must exist: damaged history cannot block subsequent saves.
+        signal?.addEventListener('abort', cancel, { once: true })
+        transaction.oncomplete = () => {
+          cleanup()
+          resolve()
+        }
+        transaction.onerror = transaction.onabort = () => {
+          cleanup()
+          reject(transaction.error ?? new Error('对话图片存储事务失败'))
+        }
+        const sessionStore = transaction.objectStore('agentSessions')
+        const imageStore = transaction.objectStore('agentAttachments')
+        const previous = sessionStore.get(key)
         previous.onsuccess = () => {
+          if (!isCurrent()) {
+            transaction.abort()
+            return
+          }
           const saved = previous.result?.data as AgentSession | undefined
-          const existing = new Set(
-            saved?.messages.flatMap((message) =>
-              message.parts.flatMap((part) =>
-                part.type === MessagePartType.IMAGE
-                  ? [JSON.stringify([message.id, part.attachmentId])]
-                  : [],
-              ),
-            ),
-          )
-          for (const message of data.messages.filter((message) => message.role === 'user')) {
-            for (const part of message.parts) {
-              if (
-                part.type !== MessagePartType.IMAGE ||
-                existing.has(JSON.stringify([message.id, part.attachmentId])) ||
-                pending.some((image) => image.id === part.attachmentId)
-              )
-                continue
-              const request = imageStore.getKey(JSON.stringify([key, part.attachmentId]))
-              request.onsuccess = () => {
-                if (!request.result) transaction.abort()
+          const savedRefs = saved ? imageReferences(saved) : []
+          const oldRefs = new Set(savedRefs.map(imageReferenceKey))
+          const oldIds = new Set(savedRefs.map((ref) => ref.id))
+          sessionStore.put({ key, owner, sessionKey: key, data })
+          for (const image of pending) {
+            const imageKey = JSON.stringify([key, image.id])
+            const request = imageStore.get(imageKey)
+            request.onsuccess = () => {
+              if (!isCurrent()) {
+                transaction.abort()
+                return
               }
+              if (request.result) {
+                // 重试可以保留既有引用，但不能替换历史图片字节、记录类型或消息归属。
+                if (
+                  !oldIds.has(image.id) ||
+                  !isRecord(request.result) ||
+                  request.result.recordKind !== image.recordKind ||
+                  request.result.key !== imageKey ||
+                  request.result.owner !== owner ||
+                  request.result.sessionKey !== key ||
+                  request.result.userId !== data.userId ||
+                  request.result.projectId !== data.projectId ||
+                  refs.some((ref) => ref.id === image.id && !oldRefs.has(imageReferenceKey(ref)))
+                )
+                  transaction.abort()
+              } else {
+                try {
+                  imageStore.add({ ...image, key: imageKey, owner, sessionKey: key })
+                } catch (error) {
+                  transaction.abort()
+                  reject(error)
+                }
+              }
+            }
+          }
+          for (const ref of refs) {
+            if (ref.kind === 'invalid') {
+              transaction.abort()
+              return
+            }
+            // 旧引用缺少图片时由界面显示不可用，不阻塞后续保存；新增引用仍须完整校验。
+            if (
+              oldRefs.has(imageReferenceKey(ref)) ||
+              pending.some((image) => image.id === ref.id && image.recordKind === ref.kind)
+            )
+              continue
+            const imageKey = JSON.stringify([key, ref.id])
+            const request = imageStore.get(imageKey)
+            request.onsuccess = () => {
+              const record = request.result
+              if (
+                !isCurrent() ||
+                !isRecord(record) ||
+                record.recordKind !== ref.kind ||
+                record.key !== imageKey ||
+                record.owner !== owner ||
+                record.sessionKey !== key ||
+                record.id !== ref.id ||
+                record.userId !== data.userId ||
+                record.projectId !== data.projectId
+              )
+                transaction.abort()
             }
           }
         }
@@ -201,9 +291,10 @@ export class AgentSessionStore {
               record.sessionKey === key &&
               record.userId === session.userId &&
               record.projectId === session.projectId &&
-              record.key === cursor.primaryKey
+              record.key === cursor.primaryKey &&
+              record.key === JSON.stringify([key, record.id])
             ) {
-              if (isAttachment(record)) removed.push(record)
+              if (isRecord(record)) removed.push(record)
               cursor.delete()
             }
             cursor.continue()
@@ -213,6 +304,7 @@ export class AgentSessionStore {
     })
   }
 
+  /** 读取当前会话的图片；素材导入等入口可额外要求用户消息明确引用该原图。 */
   async readImage(
     session: Pick<AgentSession, 'id' | 'userId' | 'projectId'>,
     id: string,
@@ -234,7 +326,7 @@ export class AgentSessionStore {
         const image = request.result as AgentAttachmentRecord | undefined
         const saved = sessionRequest?.result?.data as AgentSession | undefined
         if (
-          !isAttachment(image) ||
+          !isRecord(image) ||
           image.key !== JSON.stringify([sessionKey, id]) ||
           image.owner !== owner ||
           image.sessionKey !== sessionKey ||
@@ -242,7 +334,8 @@ export class AgentSessionStore {
           image.projectId !== session.projectId ||
           image.id !== id ||
           (options.requireUserReference &&
-            (!saved ||
+            (image.recordKind !== 'user_attachment' ||
+              !saved ||
               saved.id !== session.id ||
               saved.userId !== session.userId ||
               saved.projectId !== session.projectId ||
@@ -261,6 +354,7 @@ export class AgentSessionStore {
     })
   }
 
+  /** 只更新仍属于当前调用的上传缓存，不改变已经保存的图片内容。 */
   updateImageUpload(
     image: AgentAttachmentRecord,
     upload: AgentAttachmentRecord['upload'],
@@ -279,7 +373,9 @@ export class AgentSessionStore {
           const existing = request.result as AgentAttachmentRecord | undefined
           if (
             isCurrent() &&
-            existing?.owner === image.owner &&
+            isRecord(existing) &&
+            existing.recordKind === image.recordKind &&
+            existing.owner === image.owner &&
             existing.sessionKey === image.sessionKey &&
             existing.id === image.id &&
             existing.userId === image.userId &&
@@ -295,7 +391,8 @@ export class AgentSessionStore {
     })
   }
 
-  async listProjectAttachments(projectId: string): Promise<AgentAttachmentRecord[]> {
+  /** 仅列出需要文件系统清理的用户原图；工具观察图随会话在数据库中删除。 */
+  async listProjectAttachments(projectId: string): Promise<AgentUserAttachmentRecord[]> {
     await this.queue
     const db = await indexedDBService.openDB()
     return new Promise((resolve, reject) => {
@@ -304,7 +401,10 @@ export class AgentSessionStore {
       transaction.oncomplete = () =>
         resolve(
           (request.result as AgentAttachmentRecord[]).filter(
-            (item) => isAttachment(item) && item.projectId === projectId,
+            (item): item is AgentUserAttachmentRecord =>
+              item.recordKind === 'user_attachment' &&
+              isAttachment(item) &&
+              item.projectId === projectId,
           ),
         )
       transaction.onerror = transaction.onabort = () => reject(transaction.error)

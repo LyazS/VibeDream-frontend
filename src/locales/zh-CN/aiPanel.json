@@ -171,7 +171,9 @@
       "trim_clip": "裁剪片段",
       "update_item": "修改时间轴项目",
       "update_track_properties": "修改轨道属性",
-      "write_clip_keyframe": "重写关键帧"
+      "write_clip_keyframe": "重写关键帧",
+      "view_media": "查看素材画面",
+      "view_timeline": "查看时间轴画面"
     },
     "toolsState": {
       "stop": "停止",

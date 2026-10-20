@@ -19,6 +19,8 @@ export interface ToolExecutionContext {
   signal: AbortSignal
   /** 实时检查执行归属及工具取消状态。 */
   isCurrent: () => boolean
+  /** 暂存当前调用的观察图片，提交时与对应工具消息一起原子保存。 */
+  stageImage?: (image: ToolImageInput) => ToolAttachmentRef
 }
 
 export interface ToolDefinition {
@@ -30,4 +32,17 @@ export interface ToolResult {
   success: boolean
   output: string
   error?: string
+  /** 按展示顺序引用本次调用暂存的图片；图片字节不写入消息正文。 */
+  attachIds?: ToolAttachmentRef[]
+}
+
+/** 工具结果中的图片引用；该 ID 仅标识观察图片，不能用作素材 ID。 */
+export type ToolAttachmentRef = { type: 'image'; image: { id: string } }
+
+/** 供工具提交暂存的编码图片；身份及归属由运行时分配。 */
+export type ToolImageInput = {
+  blob: Blob
+  width: number
+  height: number
+  description: string
 }

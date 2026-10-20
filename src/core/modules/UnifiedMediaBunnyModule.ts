@@ -35,9 +35,7 @@ import type { MediaType } from '@/core/mediaitem/types'
 import type { WrappedAudioBuffer } from 'mediabunny'
 import { applyAnimationToConfig } from '@/core/utils/animationInterpolation'
 import { TimelineItemQueries } from '@/core/timelineitem/queries'
-import {
-  type FrameData,
-} from '@/core/webgl2/types'
+import { type FrameData } from '@/core/webgl2/types'
 import { TimelineItemsBufferManager } from '@/core/mediabunny/TimelineItemsBufferManager'
 import { TimelineWebGLRenderer } from '@/core/webgl2/renderer/TimelineWebGLRenderer'
 import { TransitionEdgeFrameResolver } from '@/core/webgl2/transition/TransitionEdgeFrameResolver'
@@ -447,13 +445,13 @@ export function createUnifiedMediaBunnyModule(
     ) {
       // 异步更新后台缓冲，不阻塞当前渲染。
       // 这里先预热 render chain 和转场边界帧，减少进入播放窗口后的首次准备成本。
-      void mBufferManager.updateBackBuffer(timelineItems, currentTime).then(
-        ({ bufferedItems, newlyPreparedItems }) => {
+      void mBufferManager
+        .updateBackBuffer(timelineItems, currentTime)
+        .then(({ bufferedItems, newlyPreparedItems }) => {
           mWebGLRenderer?.prepareRenderChains(bufferedItems)
           void mTransitionEdgeFrameResolver?.prepareItems(bufferedItems)
           void warmPreparedClipStartFrames(newlyPreparedItems, currentTime)
-        },
-      )
+        })
     }
 
     if (playbackModule.isPlaying.value) {
@@ -493,14 +491,12 @@ export function createUnifiedMediaBunnyModule(
         const isItemMuted = config.audio.isMuted ?? false
         const itemVolume = config.audio.volume ?? 1.0
         const shouldRenderSelectedVideoBoundaryFrame =
-          shouldPreviewSelectedBoundaryFrame &&
-          TimelineItemQueries.isVideoTimelineItem(item)
+          shouldPreviewSelectedBoundaryFrame && TimelineItemQueries.isVideoTimelineItem(item)
         const shouldPlayAudioForItem =
-          !shouldRenderSelectedVideoBoundaryFrame &&
-          playAudio &&
-          !isTrackMuted &&
-          !isItemMuted
-        const sampleFrame = shouldRenderSelectedVideoBoundaryFrame ? boundarySampleFrame : currentTime
+          !shouldRenderSelectedVideoBoundaryFrame && playAudio && !isTrackMuted && !isItemMuted
+        const sampleFrame = shouldRenderSelectedVideoBoundaryFrame
+          ? boundarySampleFrame
+          : currentTime
 
         // 更新 clip 帧数据（不等待完成，使用 void）
         // 这里不等待，因此会后台执行，飞快地跳过这里，导致整个 updateClips 都会快速执行一遍
@@ -711,11 +707,18 @@ export function createUnifiedMediaBunnyModule(
 
   // ==================== 截帧功能 ====================
 
-  function createFrameCaptureSession(): TimelineFrameCaptureSession {
+  /** 创建独立的离屏截帧会话，构造时固定工程数据并传递取消与素材准备入口。 */
+  function createFrameCaptureSession(
+    options: CaptureTimelineFrameOptions = {},
+  ): TimelineFrameCaptureSession {
     return new TimelineFrameCaptureSession({
       videoWidth: configModule.videoResolution.value.width,
       videoHeight: configModule.videoResolution.value.height,
-      timelineItems: [...timelineModule.timelineItems.value],
+      timelineItems: timelineModule.timelineItems.value,
+      assets: mediaModule.getAllAssets(),
+      signal: options.signal,
+      timeoutMs: options.timeoutMs,
+      prepareMedia: options.prepareMedia,
       tracks: trackModule.tracks.value.map((track) => ({
         id: track.id,
         isVisible: track.isVisible,
@@ -734,7 +737,7 @@ export function createUnifiedMediaBunnyModule(
     frameNumber: number,
     options: CaptureTimelineFrameOptions = {},
   ): Promise<Blob> {
-    const session = createFrameCaptureSession()
+    const session = createFrameCaptureSession(options)
 
     try {
       return await session.captureFrame(frameNumber, options)
@@ -747,7 +750,7 @@ export function createUnifiedMediaBunnyModule(
     frameNumbers: number[],
     options: CaptureTimelineFrameOptions = {},
   ): Promise<Blob[]> {
-    const session = createFrameCaptureSession()
+    const session = createFrameCaptureSession(options)
 
     try {
       return await session.captureFrames(frameNumbers, options)
@@ -798,6 +801,7 @@ export function createUnifiedMediaBunnyModule(
     updateTimelineDuration,
 
     // 截帧功能
+    createFrameCaptureSession,
     captureTimelineFrame,
     captureTimelineFrames,
     captureCanvasFrame,

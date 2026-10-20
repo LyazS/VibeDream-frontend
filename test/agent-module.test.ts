@@ -822,7 +822,7 @@ describe('persisted Agent sessions', () => {
       { type: 'background_context', text: expect.any(String) },
     ])
 
-    // Simulate a persisted message from the preceding text-first implementation.
+    // 模拟旧实现按文字优先顺序保存的消息，验证恢复后仍按协议发送图片。
     session.messages[0]!.parts = [parts[2]!, parts[0]!, parts[1]!, parts[3]!]
     const previousParts = structuredClone(session.messages[0]!.parts)
     await store.save(session)
@@ -1796,7 +1796,6 @@ describe('text Agent orchestration', () => {
       { type: MessagePartType.TEXT, text: '第一段 ' },
       { type: MessagePartType.TEXT, text: '\n' },
       { type: MessagePartType.TEXT, text: '第二段' },
-      { type: MessagePartType.IMAGE, attachmentId: 'ui-only' },
       { type: MessagePartType.BACKGROUND_CONTEXT, text: '界面上下文' },
     )
     await agent.send('second')
@@ -1862,7 +1861,7 @@ describe('text Agent orchestration', () => {
     expect(calls[1].messages.slice(0, 2)).toEqual(calls[0].messages)
     expect(calls[2].messages.slice(0, 2)).toEqual(calls[0].messages)
     expect(new Set(calls.map((call) => call.modelCallId)).size).toBe(3)
-    expect(calls[0].tools).toHaveLength(31)
+    expect(calls[0].tools).toHaveLength(33)
     expect(calls[2].messages.slice(1).map((message) => message.role)).toEqual([
       'user',
       'assistant',
@@ -2234,7 +2233,7 @@ describe('text Agent orchestration', () => {
   })
   it('shares full original schemas and rejects type coercion before executing', () => {
     const runtime = createToolRuntime()
-    expect(agentTools).toHaveLength(31)
+    expect(agentTools).toHaveLength(33)
     expect(agentTools.some((tool) => tool.name === 'inspect_timeline_frames')).toBe(false)
     expect(() =>
       runtime.validate({
@@ -3153,4 +3152,120 @@ describe('text Agent orchestration', () => {
     windowTarget.dispatchEvent(new Event('pagehide'))
     expect(transport.close).not.toHaveBeenCalled()
   })
+})
+
+it('atomically commits generic tool images, preserves role and ordered captions, and restores the saved Blob', async () => {
+  const bytes = new Blob(['tool observation'], { type: 'image/webp' })
+  let imageId = ''
+  toolExecution.mockImplementationOnce(async (_name, _args, context) => {
+    const ref = context.stageImage({
+      blob: bytes,
+      width: 120,
+      height: 80,
+      description: '素材 source，at=00:00:01+00，完整画面。',
+    })
+    imageId = ref.image.id
+    return { success: true, output: '额外说明', attachIds: [ref] }
+  })
+  transport.calls.mockImplementation(async (request: StreamParams) =>
+    output(
+      request,
+      Promise.resolve({
+        modelCallId: request.modelCallId,
+        usage: null,
+        message:
+          transport.calls.mock.calls.length === 1
+            ? {
+                role: 'assistant',
+                content: '',
+                tool_calls: [{ id: 'image-call', name: 'read_project_info', args: {} }],
+              }
+            : { role: 'assistant', content: 'done' },
+      }),
+    ),
+  )
+  const upload = vi.spyOn(CloudflareTemporaryFileUploader, 'uploadBlob').mockResolvedValue({
+    success: true,
+    url: 'oss://dashscope-instant/test/tool.webp',
+    expiresAt: new Date(Date.now() + 3600000).toISOString(),
+  })
+  await agent.send('inspect')
+  const request = transport.calls.mock.calls[1]![0] as StreamParams
+  expect(request.messages.at(-1)).toEqual({
+    role: 'tool',
+    name: 'read_project_info',
+    tool_call_id: 'image-call',
+    content: [
+      { type: 'image_url', image_url: { url: 'oss://dashscope-instant/test/tool.webp' } },
+      { type: 'text', text: `${imageId}：素材 source，at=00:00:01+00，完整画面。` },
+      { type: 'text', text: '额外说明' },
+    ],
+  })
+  expect(agent.toolResults.value['image-call']!.parts).toEqual([
+    { type: 'image', attachmentId: imageId },
+    { type: 'text', text: '额外说明' },
+  ])
+  expect(agent.currentMessages.value.every((m) => m.role !== 'tool')).toBe(true)
+  const sessionId = agent.currentSessionId.value
+  scope.stop()
+  await Promise.allSettled(backgroundWrites)
+  mountAgent()
+  await vi.waitFor(() => expect(agent.historyLoading.value).toBe(false))
+  agent.selectSession(sessionId)
+  expect(await (await agent.getImage(imageId)).blob.text()).toBe(await bytes.text())
+  await agent.send('continue')
+  const next = transport.calls.mock.lastCall![0] as StreamParams
+  expect(next.messages.filter((m) => m.role === 'tool')).toHaveLength(1)
+  expect(upload).toHaveBeenCalledOnce()
+})
+
+it('replaces a failed tool image transaction with a persisted text error before continuing the model', async () => {
+  toolExecution.mockImplementationOnce(async (_name, _args, context) => ({
+    success: true,
+    output: '',
+    attachIds: [
+      context.stageImage({
+        blob: new Blob(['observed'], { type: 'image/webp' }),
+        width: 100,
+        height: 100,
+        description: '观察',
+      }),
+    ],
+  }))
+  transport.calls.mockImplementation(async (request: StreamParams) =>
+    output(
+      request,
+      Promise.resolve({
+        modelCallId: request.modelCallId,
+        usage: null,
+        message:
+          transport.calls.mock.calls.length === 1
+            ? {
+                role: 'assistant',
+                content: '',
+                tool_calls: [{ id: 'quota-call', name: 'read_project_info', args: {} }],
+              }
+            : { role: 'assistant', content: 'handled' },
+      }),
+    ),
+  )
+  vi.mocked(AgentSessionStore.prototype.save).mockImplementation(
+    function (session, images, isCurrent) {
+      if (images?.some((image) => 'recordKind' in image && image.recordKind === 'tool_image'))
+        return Promise.reject(new DOMException('quota', 'QuotaExceededError'))
+      return saveSession.call(this, session, images, isCurrent)
+    },
+  )
+  await agent.send('inspect')
+  const result = (transport.calls.mock.calls[1]![0] as StreamParams).messages.at(-1)!
+  expect(result.role).toBe('tool')
+  expect(result.content).toEqual([
+    { type: 'text', text: expect.stringContaining('tool_image_save_failed') },
+  ])
+  expect(
+    agent.toolResults.value['quota-call']!.parts.every((p) => p.type !== MessagePartType.IMAGE),
+  ).toBe(true)
+  expect(
+    await indexedDBService.transaction('agentAttachments', 'readonly', (table) => table.getAll()),
+  ).toEqual([])
 })

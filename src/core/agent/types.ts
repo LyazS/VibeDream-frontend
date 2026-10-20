@@ -57,17 +57,40 @@ export type AgentAttachment = AgentAttachmentScope & {
   conversionParams: AgentImageConversionParams
 }
 
-/** The encoded image is a disposable runtime cache, never part of the stored record. */
+/** 用户原图的编码结果仅作为可释放的运行时缓存，不写入用户附件记录。 */
 export type AgentImage = AgentAttachment & {
   blob: Blob
 }
 
-export type AgentAttachmentRecord = AgentAttachment & {
+/** 图片记录的存储索引及临时上传缓存，统一限定到账户、工程和会话。 */
+export type AgentAttachmentRecordBase = AgentAttachmentScope & {
   key: string
   owner: string
   sessionKey: string
+  id: string
   upload?: { url: string; expiresAt: string }
 }
+
+/** 用户附件保留原文件位置，导入素材时仍读取完整原图。 */
+export type AgentUserAttachmentRecord = AgentAttachmentRecordBase &
+  AgentAttachment & {
+    recordKind: 'user_attachment'
+  }
+
+/** 工具观察图保存当次编码结果；图片字节及描述完整存入 IndexedDB。 */
+export type AgentToolImage = AgentAttachmentScope & {
+  recordKind: 'tool_image'
+  id: string
+  blob: Blob
+  description: string
+  mimeType: AgentImageMimeType
+  byteSize: number
+  width: number
+  height: number
+}
+
+export type AgentToolImageRecord = AgentAttachmentRecordBase & AgentToolImage
+export type AgentAttachmentRecord = AgentUserAttachmentRecord | AgentToolImageRecord
 
 export interface BackgroundContextPart {
   type: MessagePartType.BACKGROUND_CONTEXT

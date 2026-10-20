@@ -347,7 +347,14 @@ describe('import_attachment integration', () => {
       const changed = session()
       if (kind === 'unreferenced') changed.messages = []
       else changed.messages[0]!.role = AgentMessageRole.ASSISTANT
-      await sessions.save(changed)
+      if (kind === 'assistant') {
+        await expect(sessions.save(changed)).rejects.toThrow()
+        const owner = sessions.owner(changed.userId, changed.projectId)
+        const key = JSON.stringify([owner, changed.id])
+        await indexedDBService.transaction('agentSessions', 'readwrite', (table) =>
+          table.put({ key, owner, sessionKey: key, data: changed }),
+        )
+      } else await sessions.save(changed)
       expect(await sessions.readImage(changed, 'image')).toBeDefined()
       expect(
         payload(await executeImportAttachment({ attachmentId: 'image' }, context())),

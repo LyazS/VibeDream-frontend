@@ -125,6 +125,17 @@ export class BunnyMedia {
     return (await this.input?.getMetadataTags()) ?? null
   }
 
+  /** 返回视频可显示的时间范围；素材观察的相对时间从首个可显示时间戳起算。 */
+  async getVideoDisplayRange(): Promise<{ start: number; end: number }> {
+    await this.ready
+    if (!this.videoTrack) throw new Error('frame_unavailable：素材没有视频轨道。')
+    const [first, end] = await Promise.all([
+      this.videoTrack.getFirstTimestamp(),
+      this.videoTrack.computeDuration(),
+    ])
+    return { start: Math.max(0, first), end }
+  }
+
   videoSamplesAtTimestamps():
     | ((timestamps: AnyIterable<number>) => AsyncGenerator<VideoSample | null, void, unknown>)
     | null {
@@ -186,7 +197,6 @@ export class BunnyMedia {
     return this.oriFile
   }
 
-  
   /**
    * 释放所有资源
    */

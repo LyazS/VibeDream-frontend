@@ -4,6 +4,7 @@ import { enabledApiCapabilities } from '@/config/apiCapabilities'
 import { buildTextMessages } from '@/core/agent/prompts/textMessages'
 import { captureBackgroundContext } from '@/core/agent/prompts/backgroundContext'
 import { agentTools, createToolRuntime } from '@/core/agent/runtime/ToolRuntime'
+import { createToolImageStaging } from '@/core/agent/runtime/ToolImageStaging'
 import { AgentSessionStore } from '@/core/agent/runtime/AgentSessionStore'
 import {
   AGENT_IMAGE_LIMITS,
@@ -44,6 +45,7 @@ import {
   type ModelCallSummary,
   type ToolExecution,
   type AgentImage,
+  type AgentToolImage,
 } from '@/core/agent/types'
 import { MODULE_NAMES, type ModuleMap, type ModuleRegistry } from './ModuleRegistry'
 
@@ -92,6 +94,14 @@ type LocalSubmission = {
   rollback: (error: unknown) => void
 }
 
+const cancellableTools = new Set([
+  'read_media',
+  'search_media',
+  'import_attachment',
+  'view_media',
+  'view_timeline',
+])
+
 /** 创建工程级 Agent 模块，管理本地会话、模型调用及生命周期，并导出只读状态和操作。 */
 export function createUnifiedAgentModule(registry: ModuleRegistry) {
   // 当前账户来源，用于发送准入、身份变化监听和异步结果归属检查。
@@ -108,6 +118,8 @@ export function createUnifiedAgentModule(registry: ModuleRegistry) {
   const disposed = ref(false)
   // 会话存储和当前账户/工程的内存索引。
   const sessionStore = new AgentSessionStore()
+  // 会话的普通保存等待工具图片事务结束，避免用旧内存快照覆盖刚提交的结果。
+  const toolCommits = new Map<string, Promise<void>>()
   const pendingImages = new Map<string, AgentImage[]>()
   const emptyDraft = (): AgentDraft => ({
     text: '',
@@ -312,7 +324,7 @@ export function createUnifiedAgentModule(registry: ModuleRegistry) {
         image &&
         submission?.images.some((submitted) => submitted.id === image.id)
       ) {
-        // Account/project cleanup must wait until the atomic local commit decides file ownership.
+        // 账户或工程清理须等待本地原子提交确定原图归属后再释放占用。
         void submission.settled.then(async () => {
           if (!submission.committed) await deleteAgentImageSource(image).catch(() => {})
           task.release()
@@ -373,6 +385,11 @@ export function createUnifiedAgentModule(registry: ModuleRegistry) {
 
   /** 保存固定会话快照；存储异常阻止新请求，详细恢复策略留待阶段 3.4。 */
   async function persistSession(session: AgentSession, submission?: LocalSubmission) {
+    const toolCommit = toolCommits.get(session.id)
+    if (toolCommit) {
+      await toolCommit
+      if (sessions.value[session.id] !== session) return
+    }
     const pending = localSubmission.value
     if (pending?.session === session && pending !== submission) {
       await pending.settled
@@ -487,11 +504,7 @@ export function createUnifiedAgentModule(registry: ModuleRegistry) {
     run.stopped = true
     run.model.abort()
     const cancellable = Object.values(run.session.toolExecutions).some(
-      (execution) =>
-        execution.status === 'pending' &&
-        (execution.call.name === 'read_media' ||
-          execution.call.name === 'search_media' ||
-          execution.call.name === 'import_attachment'),
+      (execution) => execution.status === 'pending' && cancellableTools.has(execution.call.name),
     )
     if (cancellable) run.tool.abort()
     if (run.committed) finalizeRun(run, 'cancelled')
@@ -551,7 +564,11 @@ export function createUnifiedAgentModule(registry: ModuleRegistry) {
       sessionStore.delete(session),
       telemetry.delete(session),
     ])
-    await Promise.all(attachments.map((image) => deleteAgentImageSource(image)))
+    await Promise.all(
+      attachments
+        .filter((image) => image.recordKind === 'user_attachment')
+        .map((image) => deleteAgentImageSource(image)),
+    )
     return true
   }
 
@@ -575,7 +592,7 @@ export function createUnifiedAgentModule(registry: ModuleRegistry) {
     const history: ModelMessage[] = []
     for (const message of session.messages) {
       // 用户图片按原顺序放在文字之前，兼容此前按文字优先保存的消息；背景快照放在最后。
-      // 其他角色只映射文本；工具调用另行映射，进度和交互元数据不转成正文。
+      // 工具结果按原始部件顺序映射图文；助手仅映射文本，进度和交互元数据不转成正文。
       const parts =
         message.role === AgentMessageRole.USER
           ? [
@@ -586,12 +603,43 @@ export function createUnifiedAgentModule(registry: ModuleRegistry) {
       const content: (TextContentPart | ImageContentPart)[] = parts.flatMap(
         (part): (TextContentPart | ImageContentPart)[] => {
           if (part.type === MessagePartType.TEXT) return [{ type: 'text', text: part.text }]
-          if (part.type === MessagePartType.IMAGE && message.role === AgentMessageRole.USER) {
+          if (
+            part.type === MessagePartType.IMAGE &&
+            (message.role === AgentMessageRole.USER || message.role === 'tool')
+          ) {
             if (!part.attachmentId) return []
             const image: ResolvedAgentImage = images.get(part.attachmentId) ?? {
               kind: 'unavailable',
               reason: 'record_missing',
             }
+            if (message.role === 'tool') {
+              // 图片后紧跟含 ID 的描述；缺失或预算省略时用文本保留历史引用语义。
+              if (image.kind === 'unavailable' || image.recordKind !== 'tool_image')
+                return [
+                  {
+                    type: 'text',
+                    text: `${part.attachmentId}：${
+                      image.kind === 'unavailable' && image.reason === 'context_budget'
+                        ? '历史图片因视觉上下文预算在本次请求中省略。'
+                        : '历史图片不可用，保存的图片记录或 Blob 缺失。'
+                    }`,
+                  },
+                ]
+              return [
+                { type: 'image_url', image_url: { url: image.url } },
+                {
+                  type: 'text',
+                  text: `${part.attachmentId}：${image.description}`,
+                },
+              ]
+            }
+            if (image.kind === 'unavailable' && image.reason === 'context_budget')
+              return [
+                {
+                  type: 'text',
+                  text: `attachmentId=${part.attachmentId}：历史图片因视觉上下文预算在本次请求中省略。`,
+                },
+              ]
             const identity = `attachmentId=${encodeURIComponent(part.attachmentId)}, name=${encodeURIComponent(image.fileName ?? 'unknown')}`
             if (image.kind === 'unavailable')
               return [
@@ -627,7 +675,7 @@ export function createUnifiedAgentModule(registry: ModuleRegistry) {
       if (message.role === 'tool') {
         history.push({
           role: 'tool',
-          content: textContent,
+          content,
           // tool_call_id 对应前一条助手消息的调用 ID，name 对应工具名。
           // 非空断言依赖 commitToolResult() 创建结果时填写这两个字段，本函数不再次校验配对。
           tool_call_id: message.toolCallId!,
@@ -677,7 +725,13 @@ export function createUnifiedAgentModule(registry: ModuleRegistry) {
    * 用 success 区分成功/失败，错误结果也进入模型历史；同一记录只提交一次，提交后移除执行记录。
    * 保留原 output，只有失败且没有 output 时才使用 error 正文，避免下一轮收不到失败原因。
    */
-  function commitToolResult(session: AgentSession, execution: ToolExecution, result: ToolResult) {
+  function commitToolResult(
+    session: AgentSession,
+    execution: ToolExecution,
+    result: ToolResult,
+    prepared?: AgentMessage,
+    recordTelemetry = true,
+  ) {
     // 同一执行记录已有结果就不再提交，避免重复追加工具调用和结果消息；失败结果也算已提交。
     if (execution.result) return
     // 通过执行记录保存的助手消息 ID 定位原消息，不依赖 latestModelCall，避免写到其他轮次的回复中。
@@ -695,32 +749,41 @@ export function createUnifiedAgentModule(registry: ModuleRegistry) {
     const content = result.success
       ? result.output
       : result.output || result.error || 'TOOL_EXECUTION_FAILED'
-    const source = newLogSource(execution.status, {
-      name: execution.call.name,
-      args: execution.call.args,
-    })
-    source.started_at = execution.startedAt ?? source.started_at
-    source.ended_at = new Date().toISOString()
-    source.duration_ms = Date.parse(source.ended_at) - Date.parse(source.started_at)
-    source.output = {
-      content,
-      result,
-      ...(assistant.interaction?.result ? { interaction: assistant.interaction.result } : {}),
+    if (recordTelemetry) {
+      const source = newLogSource(execution.status, {
+        name: execution.call.name,
+        args: execution.call.args,
+      })
+      source.started_at = execution.startedAt ?? source.started_at
+      source.ended_at = new Date().toISOString()
+      source.duration_ms = Date.parse(source.ended_at) - Date.parse(source.started_at)
+      source.output = {
+        content,
+        result,
+        ...(assistant.interaction?.result ? { interaction: assistant.interaction.result } : {}),
+      }
+      source.error = result.success ? null : (result.error ?? content)
+      // 工具结果固定使用同一节点 ID；重复提交或恢复执行只更新该节点版本。
+      execution.resultSpanId ??= crypto.randomUUID()
+      void telemetry.record(
+        session,
+        execution.resultSpanId,
+        'tool_result',
+        source,
+        execution.modelCallId,
+        execution.call.id,
+      )
     }
-    source.error = result.success ? null : (result.error ?? content)
-    // 工具结果固定使用同一节点 ID；重复提交或恢复执行只更新该节点版本。
-    execution.resultSpanId ??= crypto.randomUUID()
-    void telemetry.record(
-      session,
-      execution.resultSpanId,
-      'tool_result',
-      source,
-      execution.modelCallId,
-      execution.call.id,
-    )
     // 新建独立的 tool 角色消息；其消息 ID 与调用 ID 不同，调用 ID 用于关联原助手的工具调用。
     // ask_user 的回答也走这里，content 已由回答入口构造成 [ASK_RESULT] 正文。
-    const message = buildDisplayMessage(crypto.randomUUID(), 'tool', content)
+    const message = prepared ?? buildDisplayMessage(crypto.randomUUID(), 'tool', content)
+    message.parts = [
+      ...(result.attachIds ?? []).map((ref) => ({
+        type: MessagePartType.IMAGE as const,
+        attachmentId: ref.image.id,
+      })),
+      ...(content ? [{ type: MessagePartType.TEXT as const, text: content }] : []),
+    ]
     message.toolCallId = execution.call.id
     message.toolName = execution.call.name
     // 按原助手消息的位置插入结果，再一次替换实际消息列表，避免先写入未配对调用。
@@ -749,6 +812,48 @@ export function createUnifiedAgentModule(registry: ModuleRegistry) {
     // 成功、失败及 ask_user 回答都已保存为配对消息，不再保留完成记录，避免随聊天持续积累。
     // 必须在消息写入之后移除，执行中或待回答的问题记录仍保留，供进度展示和回答入口使用。
     delete session.toolExecutions[execution.assistantMessageId]
+  }
+
+  /** 先将配对消息与观察图原子保存，成功后再发布到内存历史和界面。 */
+  function commitToolResultAndImages(
+    session: AgentSession,
+    execution: ToolExecution,
+    result: ToolResult,
+    images: AgentToolImage[],
+    isCurrent: () => boolean,
+    signal: AbortSignal,
+  ): Promise<void> {
+    const save = async (value: ToolResult, pending: AgentToolImage[]) => {
+      if (!isCurrent()) return
+      // 使用临时会话构造配对结果，事务成功前不修改当前展示的消息列表。
+      const draft: AgentSession = {
+        ...session,
+        messages: [...session.messages],
+        toolExecutions: { ...session.toolExecutions },
+      }
+      const draftExecution = { ...execution }
+      commitToolResult(draft, draftExecution, value, undefined, false)
+      const message = draft.messages.find(
+        (m) => m.role === 'tool' && m.toolCallId === execution.call.id,
+      )!
+      await sessionStore.save(draft, pending, isCurrent, signal)
+      if (isCurrent()) commitToolResult(session, execution, value, message)
+    }
+    const pending = (async () => {
+      try {
+        await save(result, images)
+      } catch (error) {
+        if (!isCurrent()) return
+        if (!images.length) throw error
+        // 图片事务失败时只提交明确的文本错误，不能留下指向未保存图片的消息。
+        const detail = 'tool_image_save_failed：工具图片与消息保存失败，本次观察未提交。'
+        await save({ success: false, output: detail, error: detail }, [])
+      }
+    })()
+    toolCommits.set(session.id, pending)
+    return pending.finally(() => {
+      if (toolCommits.get(session.id) === pending) toolCommits.delete(session.id)
+    })
   }
 
   /** 数据归属不依赖展示选择、活动位或存储就绪状态。 */
@@ -1000,6 +1105,15 @@ export function createUnifiedAgentModule(registry: ModuleRegistry) {
         await persistSession(session)
         if (!isRunCurrent()) return
         let result: ToolResult
+        let toolImages: AgentToolImage[] = []
+        const toolSignal = AbortSignal.any([control.tool.signal, control.lifecycle])
+        // 每个工具调用独占暂存区，执行结束后统一取出合法引用并释放其余图片。
+        const imageStaging = createToolImageStaging({
+          userId,
+          projectId,
+          signal: toolSignal,
+          isCurrent: isRunCurrent,
+        })
         try {
           // 校验位于工具处理范围内：参数非法时不执行工具，而是生成错误结果供模型下一轮修正。
           toolRuntime.validate(call)
@@ -1028,21 +1142,35 @@ export function createUnifiedAgentModule(registry: ModuleRegistry) {
             projectId,
             sessionId,
             modelCallId: current.id,
-            signal: AbortSignal.any([control.tool.signal, control.lifecycle]),
+            signal: toolSignal,
             isCurrent: isRunCurrent,
+            stageImage: imageStaging.stageImage,
           })
+          toolImages = imageStaging.take(result)
         } catch (error) {
           // 停止或会话失效后丢弃错误；活动工具的真实错误仍作为结果提交。
           if (!isRunCurrent()) return
           // 校验异常或执行异常转换为失败结果，保留错误正文；不重放原调用、不自动修改参数。
           const message = error instanceof Error ? error.message : String(error)
           result = { success: false, output: message, error: message }
+        } finally {
+          imageStaging.dispose()
         }
         // 停止后的所有工具结果只被消费，不再写入聊天和日志。
         if (!isRunCurrent()) return
-        commitToolResult(session, execution, result)
-        // 已完成工具只作为配对消息保存，执行详情由诊断日志记录。
-        await persistSession(session)
+        try {
+          await commitToolResultAndImages(
+            session,
+            execution,
+            result,
+            toolImages,
+            isRunCurrent,
+            toolSignal,
+          )
+        } catch (error) {
+          reportStorageError(session, error)
+          throw error
+        }
         // 8. 回到 while 顶部；停止后不再进入下一轮，否则用新 modelCall 和结果继续，由模型决定修正或结束。
       }
     } catch (error) {
@@ -1239,13 +1367,18 @@ export function createUnifiedAgentModule(registry: ModuleRegistry) {
     }
   }
 
-  async function getImage(id: string): Promise<{ blob: Blob; fileName: string }> {
+  /** 用户图读取原文件，工具图读取保存的 Blob；历史预览不重新生成观察结果。 */
+  async function getImage(
+    id: string,
+  ): Promise<{ blob: Blob; fileName: string; description?: string }> {
     const session = currentSession.value
     if (!session) throw new Error('无法读取对话图片')
     const image =
       pendingImages.get(session.id)?.find((image) => image.id === id) ??
       (await sessionStore.readImage(session, id))
     if (!image) throw new AgentImageSourceError('AGENT_IMAGE_RECORD_MISSING')
+    if ('recordKind' in image && image.recordKind === 'tool_image')
+      return { blob: image.blob, fileName: image.id, description: image.description }
     return { blob: await readAgentImageSource(image), fileName: image.original.fileName }
   }
 
@@ -1350,6 +1483,13 @@ export function createUnifiedAgentModule(registry: ModuleRegistry) {
     storageError: readonly(storageError),
     currentSessionId: readonly(currentSessionId),
     currentMessages: readonly(displayMessages),
+    toolResults: computed(() =>
+      Object.fromEntries(
+        currentMessages.value
+          .filter((message) => message.role === 'tool' && message.toolCallId)
+          .map((message) => [message.toolCallId!, message]),
+      ),
+    ),
     latestModelCall: readonly(latestModelCall),
     usage: readonly(usage),
     contextUsage: readonly(contextUsage),

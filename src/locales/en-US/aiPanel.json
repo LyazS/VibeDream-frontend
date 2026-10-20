@@ -171,7 +171,9 @@
       "trim_clip": "Trim Clip",
       "update_item": "Update Item",
       "update_track_properties": "Update Track Properties",
-      "write_clip_keyframe": "Rewrite Clip Keyframe"
+      "write_clip_keyframe": "Rewrite Clip Keyframe",
+      "view_media": "View media",
+      "view_timeline": "View timeline"
     },
     "toolsState": {
       "stop": "Stop",

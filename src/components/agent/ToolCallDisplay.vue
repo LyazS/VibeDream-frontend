@@ -38,11 +38,24 @@
     <div v-if="isExpanded" class="tool-params-expanded">
       <IndexingRuntimeCard v-if="progressState" :state="progressState" />
       <pre>{{ formattedArgs }}</pre>
+
+      <!-- 根据结果中的图片部件展示观察图，所有工具共用该入口。 -->
+      <div v-if="resultImages.length" class="tool-result-images">
+        <AgentImage
+          v-for="image in resultImages"
+          :key="image.attachmentId"
+          :attachment-id="image.attachmentId"
+          class="tool-result-image"
+        />
+      </div>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
+import AgentImage from './AgentImage.vue'
+import { useUnifiedStore } from '@/core/unifiedStore'
+import { MessagePartType } from '@/core/agent/types'
 import { computed, ref } from 'vue'
 import 'github-markdown-css/github-markdown.css'
 import { useAppI18n } from '@/core/composables/useI18n'
@@ -57,10 +70,17 @@ const props = defineProps<{
   item: ToolCallPart
 }>()
 
+const store = useUnifiedStore()
+const resultImages = computed(
+  () =>
+    store.agentToolResults[props.item.tool_call_id]?.parts.filter(
+      (part) => part.type === MessagePartType.IMAGE,
+    ) ?? [],
+)
 const { t } = useAppI18n()
 const isExpanded = ref(false)
 
-const formattedArgs = computed(() => JSON.stringify(props.item.args || {}, null, 2))
+const formattedArgs = computed(() => JSON.stringify(props.item.args, null, 2))
 const readMediaExecutionState = useReadMediaExecutionState(props.item.tool_call_id)
 const searchMediaExecutionState = useSearchMediaExecutionState(props.item.tool_call_id)
 const progressState = computed(
@@ -95,7 +115,7 @@ const progressPercent = computed(() => {
     const resolvedCount = readState.completedCount + readState.failedCount
     const ratio = resolvedCount / readState.totalCount
     if (!readState.active) {
-      return Math.max(0, Math.min(100, ratio * 100 || 100))
+      return Math.max(0, Math.min(100, ratio * 100))
     }
 
     return Math.max(12, Math.min(92, ratio * 100))
@@ -106,7 +126,7 @@ const progressPercent = computed(() => {
     if (searchState.currentStage === 'indexing' && searchState.indexingTotalCount > 0) {
       const ratio = searchState.indexingResolvedCount / searchState.indexingTotalCount
       if (!searchState.active) {
-        return Math.max(0, Math.min(100, ratio * 100 || 100))
+        return Math.max(0, Math.min(100, ratio * 100))
       }
 
       return Math.max(12, Math.min(92, ratio * 100))
@@ -115,7 +135,7 @@ const progressPercent = computed(() => {
     if (searchState.totalSteps <= 0) return 0
     const ratio = searchState.completedSteps / searchState.totalSteps
     if (!searchState.active) {
-      return Math.max(0, Math.min(100, ratio * 100 || 100))
+      return Math.max(0, Math.min(100, ratio * 100))
     }
 
     return Math.max(12, Math.min(92, ratio * 100))
@@ -139,6 +159,19 @@ const handleCancelToolExecution = async () => {
 </script>
 
 <style scoped>
+.tool-result-images {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 8px 0;
+}
+
+.tool-result-images .tool-result-image {
+  width: 180px;
+  height: 112px;
+  aspect-ratio: auto;
+}
+
 .tool-call-display {
   margin: 4px 0;
   padding: 0;

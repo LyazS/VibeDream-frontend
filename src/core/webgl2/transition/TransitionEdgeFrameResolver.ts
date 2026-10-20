@@ -53,7 +53,9 @@ export class TransitionEdgeFrameResolver {
       return
     }
 
-    const rightItem = timelineItems.find((candidate) => candidate.id === transitionRuntime.rightItemId)
+    const rightItem = timelineItems.find(
+      (candidate) => candidate.id === transitionRuntime.rightItemId,
+    )
     if (!rightItem || !TimelineItemQueries.supportsClipTransitionOut(rightItem)) {
       return
     }
@@ -108,10 +110,19 @@ export class TransitionEdgeFrameResolver {
     const leftBoundaryFrames = resolveTransitionBoundaryFrames(leftItem)
     const rightBoundaryFrames = resolveTransitionBoundaryFrames(rightItem)
 
-    const [leftTail, rightHead] = await Promise.all([
+    // 等待两侧解码结果；任一侧失败时也能关闭另一侧已生成的边界帧。
+    const sources = await Promise.allSettled([
       this.createEdgeFrameSource(leftItem, leftBoundaryFrames.clipTailFrame),
       this.createEdgeFrameSource(rightItem, rightBoundaryFrames.clipHeadFrame),
     ])
+    const failure = sources.find((source) => source.status === 'rejected')
+    if (failure?.status === 'rejected') {
+      for (const source of sources) if (source.status === 'fulfilled') source.value?.close()
+      throw failure.reason
+    }
+    const [leftTail, rightHead] = sources.map((source) =>
+      source.status === 'fulfilled' ? source.value : null,
+    )
 
     if (!leftTail || !rightHead) {
       leftTail?.close()

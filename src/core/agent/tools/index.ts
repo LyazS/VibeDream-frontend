@@ -13,6 +13,8 @@ import { listTracksTool } from './listTracks'
 import { modifyProjectInfoTool } from './modifyProjectInfo'
 import { insertClipTool } from './insertClip'
 import { importAttachmentTool } from './importAttachment'
+import { viewMediaTool } from './viewMedia'
+import { viewTimelineTool } from './viewTimeline'
 import { moveClipTool } from './moveClip'
 import { moveLibraryItemsTool } from './moveLibraryItems'
 import { moveTrackTool } from './moveTrack'
@@ -89,6 +91,8 @@ registerTool(readProjectInfoTool)
 registerTool(modifyProjectInfoTool)
 registerTool(insertClipTool)
 registerTool(importAttachmentTool)
+registerTool(viewMediaTool)
+registerTool(viewTimelineTool)
 registerTool(moveClipTool)
 registerTool(moveLibraryItemsTool)
 registerTool(moveTrackTool)
