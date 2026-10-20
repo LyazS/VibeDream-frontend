@@ -8,6 +8,13 @@
     "error": {
       "unsupported": "The current browser does not support local file access functionality. Please use Chrome, Edge, or other modern browsers that support the File System Access API.",
       "permission": "Workspace directory permission is lost or the directory does not exist. Please select a workspace directory again."
+    },
+    "browser": {
+      "title": "Browser Workspace",
+      "description": "Projects are stored in this browser. If access fails, try again.",
+      "retry": "Retry access",
+      "unsupported": "This browser does not support browser workspaces. Use a modern browser with private file storage support.",
+      "error": "Browser storage is unavailable. Check available storage and browser settings, then try again."
     }
   }
 }

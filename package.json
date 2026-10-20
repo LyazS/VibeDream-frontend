@@ -28,7 +28,9 @@
     "type-check": "npm run type-check:no-generate",
     "type-check:no-generate": "vue-tsc --build",
     "lint": "eslint . --fix",
-    "format": "prettier --write src/"
+    "format": "prettier --write src/",
+    "test:filesystem": "vitest run --config vitest.filesystem.config.ts",
+    "test:filesystem:browser": "playwright test --config playwright.filesystem.config.ts"
   },
   "dependencies": {
     "@imengyu/vue3-context-menu": "^1.5.2",
@@ -55,6 +57,7 @@
     "vue-router": "^4.5.1"
   },
   "devDependencies": {
+    "@playwright/test": "^1.64.1",
     "@tsconfig/node22": "^22.0.2",
     "@types/lodash": "^4.17.20",
     "@types/node": "^24.2.1",

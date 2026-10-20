@@ -46,7 +46,7 @@
             </template>
           </HoverButton>
           <HoverButton
-            v-if="workspaceInfo"
+            v-if="workspaceInfo && workspaceInfo.canChangeWorkspace !== false"
             @click="changeWorkspace"
             :title="t('workspace.change')"
             :disabled="isCleaningAttachments"
@@ -56,6 +56,10 @@
             </template>
             <span>{{ workspaceInfo.name }}</span>
           </HoverButton>
+          <span v-else-if="workspaceInfo" class="workspace-name">
+            <component :is="IconComponents.HomeOfficeFill" size="16px" />
+            <span>{{ workspaceInfo.name }}</span>
+          </span>
         </div>
       </div>
     </header>
@@ -70,24 +74,64 @@
             <section v-if="!hasWorkspaceAccess" class="workspace-setup">
               <div
                 class="setup-card"
-                :class="{ 'clickable-card': isApiSupported && !permissionError }"
-                @click="isApiSupported && !permissionError && !isLoading ? setupWorkspace() : null"
+                :class="{
+                  'clickable-card': isApiSupported && (!permissionError || isBrowserWorkspace),
+                }"
+                @click="
+                  isApiSupported && (!permissionError || isBrowserWorkspace) && !isLoading
+                    ? setupWorkspace()
+                    : null
+                "
               >
                 <div class="setup-icon">
                   <component :is="IconComponents.FOLDER_LINE" size="48px" />
                 </div>
-                <h2>{{ t('workspace.setup.title') }}</h2>
-                <p>{{ t('workspace.setup.description') }}</p>
+                <h2>
+                  {{ t(isBrowserWorkspace ? 'workspace.browser.title' : 'workspace.setup.title') }}
+                </h2>
+                <p>
+                  {{
+                    t(
+                      isBrowserWorkspace
+                        ? 'workspace.browser.description'
+                        : 'workspace.setup.description',
+                    )
+                  }}
+                </p>
+                <HoverButton
+                  v-if="isBrowserWorkspace && isApiSupported"
+                  variant="primary"
+                  :disabled="isLoading"
+                  @click.stop="setupWorkspace"
+                >
+                  {{ t('workspace.browser.retry') }}
+                </HoverButton>
 
                 <div v-if="!isApiSupported" class="error-message">
                   <component :is="IconComponents.WARNING" size="16px" />
-                  <span>{{ t('workspace.error.unsupported') }}</span>
+                  <span>
+                    {{
+                      t(
+                        isBrowserWorkspace
+                          ? 'workspace.browser.unsupported'
+                          : 'workspace.error.unsupported',
+                      )
+                    }}
+                  </span>
                 </div>
 
                 <!-- 权限丢失提示 -->
                 <div v-else-if="permissionError" class="error-message">
                   <component :is="IconComponents.ERROR" size="16px" />
-                  <span>{{ t('workspace.error.permission') }}</span>
+                  <span>
+                    {{
+                      t(
+                        isBrowserWorkspace
+                          ? 'workspace.browser.error'
+                          : 'workspace.error.permission',
+                      )
+                    }}
+                  </span>
                 </div>
               </div>
             </section>
@@ -278,6 +322,7 @@ import MarkdownIt from 'markdown-it'
 import { fileSystemService, unifiedProjectManager } from '@/core/managers'
 import { useUnifiedStore } from '@/core/unifiedStore'
 import type { UnifiedProjectConfig } from '@/core/project'
+import type { WorkspaceInfo } from '@/core/filesystem/core/types'
 import { ContextMenu, ContextMenuItem } from '@imengyu/vue3-context-menu'
 import EditProjectModal from '@/components/modals/EditProjectModal.vue'
 import WorkspaceSettingsModal from '@/components/modals/WorkspaceSettingsModal.vue'
@@ -311,7 +356,7 @@ const viewMode = ref<'grid' | 'list'>('grid')
 const projects = ref<UnifiedProjectConfig[]>([])
 const isLoading = ref(false)
 const hasWorkspaceAccess = ref(false)
-const workspaceInfo = ref<{ name: string; path?: string } | null>(null)
+const workspaceInfo = ref<WorkspaceInfo | null>(null)
 const permissionError = ref(false)
 const showWorkspaceSettings = ref(false)
 const isCleaningAttachments = ref(false)
@@ -341,6 +386,7 @@ const unifiedStore = useUnifiedStore()
 const isUserLogin = computed(() => unifiedStore.isLoggedIn)
 const currentUser = computed(() => unifiedStore.getCurrentUser())
 const isApiSupported = computed(() => fileSystemService.isSupported())
+const isBrowserWorkspace = fileSystemService.getAdapterName() === 'OPFS'
 
 // 权限和工作目录管理
 async function checkWorkspaceAccess() {
@@ -375,6 +421,10 @@ async function checkWorkspaceAccess() {
 
 // 显示权限错误信息
 function showPermissionError(error: unknown) {
+  if (isBrowserWorkspace) {
+    permissionError.value = true
+    return
+  }
   const errorMessage = error instanceof Error ? error.message : '未知错误'
 
   if (errorMessage.includes('权限') || errorMessage.includes('permission')) {
@@ -406,6 +456,7 @@ async function setupWorkspace() {
     }
   } catch (error) {
     console.error('设置工作目录失败:', error)
+    hasWorkspaceAccess.value = false
     showPermissionError(error)
   } finally {
     isLoading.value = false
@@ -413,7 +464,7 @@ async function setupWorkspace() {
 }
 
 async function changeWorkspace() {
-  if (isCleaningAttachments.value) return
+  if (isCleaningAttachments.value || workspaceInfo.value?.canChangeWorkspace === false) return
   try {
     // 强制弹窗让用户选择新的工作空间
     const result = await fileSystemService.checkPermission(true)
@@ -657,6 +708,13 @@ onMounted(async () => {
   height: 40px;
   padding: 8px;
   transition-property: background-color, color, transform;
+}
+
+.workspace-name {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--color-text-secondary);
 }
 
 .workspace-config-button:active:not(:disabled) {

@@ -4,11 +4,12 @@ export type { IFileSystemAdapter, PermissionCheckResult, FileSystemEntry } from 
 // 核心服务
 export { FileSystemService } from './core/FileSystemService'
 export { PathResolver } from './core/PathResolver'
-export type { ParsedPath } from './core/types'
+export type { ParsedPath, WorkspaceInfo } from './core/types'
+export { createFileSystemAdapter } from './createFileSystemAdapter'
 
 // 错误处理
 export { FileSystemError } from './errors/FileSystemError'
 export { ErrorCode } from './errors/ErrorCodes'
 
 // 适配器
-export { FileSystemAccessAdapter } from './adapters'
+export { FileSystemAccessAdapter, OPFSAdapter, type OPFSAdapterOptions } from './adapters'

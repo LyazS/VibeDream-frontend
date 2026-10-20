@@ -11,6 +11,8 @@ declare module '*.frag?raw' {
 }
 
 interface ImportMetaEnv {
+  readonly VITE_FILE_SYSTEM_ADAPTER: string
+  readonly VITE_OPFS_WORKSPACE_ID?: string
   readonly VITE_API_BASE_URL?: string
   readonly VITE_API_CAPABILITIES?: string
   readonly VITE_SHOW_MEDIA_SEARCH_TEST?: string

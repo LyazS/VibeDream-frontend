@@ -39,15 +39,9 @@ export interface IFileSystemAdapter {
   // ==================== 工作空间管理 ====================
 
   /**
-   * 检查并确保工作空间访问权限
+   * 检查并确保工作空间可访问，允许适配器在首次访问时初始化工作空间。
    *
-   * 执行流程：
-   * 1. 如果 forcePrompt=true，直接弹窗让用户选择
-   * 2. 否则，先检查内存中的句柄
-   * 3. 如果内存中没有，尝试从 IndexedDB 恢复
-   * 4. 如果都失败，返回 hasAccess: false（不自动弹窗）
-   *
-   * @param forcePrompt 是否强制弹窗选择（跳过恢复步骤）
+   * @param forcePrompt 对支持目录选择的适配器，强制重新选择；其他适配器仅重新检查访问。
    * @returns 权限检查结果
    */
   checkPermission(forcePrompt?: boolean): Promise<PermissionCheckResult>

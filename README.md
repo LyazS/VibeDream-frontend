@@ -9,6 +9,28 @@
 编辑器入口为 `http://localhost:5173`。开发环境连接本地 API，模型资源来自共享 R2，
 转场资源来自独立的 local R2。资源初始化和 Secret 配置见[本地完整联调](../docs/cloudflare-development-workflow.md#日常开发local)。
 
+## 浏览器工作空间（OPFS）
+
+使用浏览器私有存储管理工程，可跳过电脑工作目录选择和授权：
+
+```bash
+VITE_FILE_SYSTEM_ADAPTER=opfs VITE_OPFS_WORKSPACE_ID=automation npm run dev:local
+```
+
+公共 `.env` 显式配置 `VITE_FILE_SYSTEM_ADAPTER=file-system-access`。适配器配置必填，选择 OPFS 时还必须指定 `VITE_OPFS_WORKSPACE_ID`；缺失或无效会直接报错。配置在启动时固定；同一浏览器上下文、地址和工作空间 ID 下刷新会保留工程，清除站点数据会删除浏览器内的工程。Agent 能力和登录仍按现有配置控制。
+
+文件系统验证在本目录执行：
+
+```bash
+npm run test:filesystem
+npx playwright install chromium
+npm run test:filesystem:browser
+```
+
+已安装 Google Chrome 时，可使用 `PLAYWRIGHT_CHANNEL=chrome npm run test:filesystem:browser`，无需下载测试浏览器。浏览器测试会启动独立的 Vite 服务（端口 5183），使用隔离上下文和仓库内小型视频素材，验证导入解码、刷新恢复、Agent 附件文件、IndexedDB 隔离与访问失败重试；不调用真实模型。
+
+设计与验收范围见 [OPFSAdapter 文档](../docs/opfs-adapter-design.md)。
+
 ## 项目简介
 
 本菌梦是一个现代化的视频编辑平台，采用前后端分离架构，前端使用Vue 3和TypeScript构建，后端使用Python FastAPI提供API服务。项目实现了统一异步源架构，支持多种媒体格式的处理和编辑。

@@ -8,6 +8,13 @@
     "error": {
       "unsupported": "当前浏览器不支持本地文件访问功能，请使用Chrome、Edge或其他支持File System Access API的现代浏览器。",
       "permission": "工作目录权限已丢失或目录不存在，请重新选择工作目录。"
+    },
+    "browser": {
+      "title": "浏览器工作空间",
+      "description": "工程保存在当前浏览器中。访问失败时，可点击重试。",
+      "retry": "重试访问",
+      "unsupported": "当前浏览器不支持浏览器工作空间，请使用支持私有文件存储的现代浏览器。",
+      "error": "浏览器存储暂不可用，请检查存储空间或浏览器设置后重试。"
     }
   }
 }

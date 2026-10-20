@@ -6,6 +6,8 @@
     "cypress.config.*",
     "nightwatch.conf.*",
     "playwright.config.*",
+    "playwright.filesystem.config.ts",
+    "vitest.filesystem.config.ts",
     "eslint.config.*"
   ],
   "compilerOptions": {

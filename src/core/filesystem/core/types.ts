@@ -20,4 +20,6 @@ export interface WorkspaceInfo {
   name: string
   /** 工作空间路径（可选，某些适配器可能不提供） */
   path?: string
+  /** 是否允许用户重新选择工作目录；未提供时沿用可选择目录的行为。 */
+  canChangeWorkspace?: boolean
 }

@@ -25,7 +25,8 @@ export class FileSystemAccessAdapter implements IFileSystemAdapter {
   }
 
   /**
-   * 检查并确保工作空间访问权限
+   * 强制选择目录，或依次检查内存句柄、IndexedDB 句柄及其权限。
+   * 没有可用句柄时返回无访问权限，不自动弹出目录选择器。
    */
   async checkPermission(forcePrompt: boolean = false): Promise<PermissionCheckResult> {
     const hadAccessBefore = this.workspaceHandle !== null
@@ -117,6 +118,7 @@ export class FileSystemAccessAdapter implements IFileSystemAdapter {
     return {
       name: this.workspaceHandle!.name,
       path: undefined, // File System Access API 不提供完整路径
+      canChangeWorkspace: true,
     }
   }
 

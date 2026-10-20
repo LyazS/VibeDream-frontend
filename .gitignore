@@ -38,3 +38,7 @@ src/generated/*
 model-sources/music-analysis/*.onnx
 src/core/utils/music-analysis/dsp-engine.wasm
 src/core/utils/music-analysis/wasm/target/
+
+# Browser regression artifacts
+/test-results/
+/playwright-report/
