@@ -216,6 +216,14 @@
       "failed": "Failed",
       "cancelled": "Cancelled"
     },
+    "preview": {
+      "title": "Media preview",
+      "loadFailed": "Unable to preview this file.",
+      "zoomIn": "Zoom in",
+      "zoomOut": "Zoom out",
+      "resetZoom": "Fit to window",
+      "interactionHint": "Drag or scroll to pan · Pinch or Ctrl/⌘/Alt + scroll to zoom · Double-click to reset"
+    },
     "mediaNotFound": "Media not found",
     "previewNotReady": "Media \"{name}\" is not ready yet and cannot be previewed",
     "character": {

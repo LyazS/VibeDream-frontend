@@ -1,27 +1,40 @@
 <template>
   <div ref="element" class="agent-image" :title="error ? t(error) : description || fileName">
-    <NImage
+    <button
       v-if="url && !error"
-      :src="url"
-      :alt="description || fileName || t('common.chat.image')"
-      object-fit="contain"
-      @error="error = 'aiPanel.errors.imageReadFailed'"
-    />
+      type="button"
+      class="image-preview-trigger"
+      :aria-label="description || fileName || t('common.chat.image')"
+      @click="showPreview = true"
+    >
+      <img
+        :src="url"
+        :alt="description || fileName || t('common.chat.image')"
+        @error="error = 'aiPanel.errors.imageReadFailed'"
+      />
+    </button>
     <span v-else-if="error" class="image-error" role="alert" :aria-label="t(error)">
       <RiFileDamageLine aria-hidden="true" />
     </span>
     <NSpin v-else :size="20" :aria-label="t('common.loading')" />
+    <MediaPreview
+      v-if="showPreview && previewSource"
+      v-model:show="showPreview"
+      :source="previewSource"
+    />
   </div>
 </template>
 
 <script setup lang="ts">
-import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { NImage, NSpin } from 'naive-ui'
+import { computed, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
+import { NSpin } from 'naive-ui'
 import { RiFileDamageLine } from '@remixicon/vue'
 import { createAgentImagePreview } from '@/core/agent/services/agentImageService'
 import { useUnifiedStore } from '@/core/unifiedStore'
 import { useAppI18n } from '@/core/composables/useI18n'
 import { getAgentErrorKey } from './agentErrorMessage'
+import MediaPreview from '@/components/preview/MediaPreview.vue'
+import type { MediaPreviewSource } from '@/components/preview/mediaPreview'
 
 const props = defineProps<{ attachmentId: string }>()
 const store = useUnifiedStore()
@@ -31,6 +44,13 @@ const error = ref('')
 const fileName = ref('')
 // 工具图片使用观察描述；用户附件没有描述时继续展示原文件名。
 const description = ref('')
+const imageBlob = shallowRef<Blob>()
+const showPreview = ref(false)
+const previewSource = computed<MediaPreviewSource | null>(() =>
+  imageBlob.value
+    ? { type: 'image', blob: imageBlob.value, name: description.value || fileName.value }
+    : null,
+)
 const element = ref<HTMLElement>()
 const previewActive = ref(typeof IntersectionObserver === 'undefined')
 let withinBuffer = previewActive.value
@@ -63,12 +83,17 @@ watch(
   () => [props.attachmentId, store.agentSessionId],
   () => {
     clearReleaseTimer()
+    showPreview.value = false
     previewActive.value = withinBuffer
   },
   { flush: 'sync' },
 )
 watch(
-  () => [props.attachmentId, store.agentSessionId, previewActive.value],
+  [
+    () => props.attachmentId,
+    () => store.agentSessionId,
+    () => previewActive.value || showPreview.value,
+  ],
   (_value, _old, onCleanup) => {
     let current = true
     let preview: ReturnType<typeof createAgentImagePreview> | undefined
@@ -76,11 +101,12 @@ watch(
     error.value = ''
     fileName.value = ''
     description.value = ''
+    imageBlob.value = undefined
     onCleanup(() => {
       current = false
       preview?.dispose()
     })
-    if (!previewActive.value) return
+    if (!previewActive.value && !showPreview.value) return
     void store
       .getAgentImage(props.attachmentId)
       .then((image) => {
@@ -89,6 +115,7 @@ watch(
         url.value = preview.url
         fileName.value = image.fileName
         description.value = image.description ?? ''
+        imageBlob.value = image.blob
       })
       .catch((reason: unknown) => {
         if (current) error.value = getAgentErrorKey(reason, 'aiPanel.errors.imageReadFailed')
@@ -115,12 +142,25 @@ onBeforeUnmount(() => {
   overflow: hidden;
   border-radius: 6px;
 }
-.agent-image :deep(.n-image),
-.agent-image :deep(img) {
+.image-preview-trigger,
+.image-preview-trigger img {
   width: 100%;
   height: 100%;
 }
-.agent-image :deep(img) {
+.image-preview-trigger {
+  display: block;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: zoom-in;
+}
+.image-preview-trigger:focus-visible {
+  outline: 2px solid var(--color-accent-primary);
+  outline-offset: -2px;
+}
+.image-preview-trigger img {
+  display: block;
+  object-fit: contain;
   border-radius: 6px;
 }
 .image-error {

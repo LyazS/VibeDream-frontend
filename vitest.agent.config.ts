@@ -24,7 +24,7 @@ export default defineConfig({
         test: {
           name: 'agent-input',
           environment: './test/vue-host.environment.ts',
-          include: ['test/agent-input.test.ts'],
+          include: ['test/agent-input.test.ts', 'test/media-preview.test.ts'],
         },
       },
     ],

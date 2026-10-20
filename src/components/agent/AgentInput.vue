@@ -8,12 +8,15 @@
     <div class="chat-input-shell">
       <div v-if="draftImages.length" class="draft-images">
         <div v-for="draft in draftImages" :key="draft.id" class="draft-image">
-          <NImage
+          <button
             v-if="previews.get(draft.id)"
-            :src="previews.get(draft.id)!.url"
-            :alt="t('common.chat.image')"
-            object-fit="cover"
-          />
+            type="button"
+            class="draft-preview-trigger"
+            :aria-label="draft.image?.original.fileName || t('common.chat.image')"
+            @click="openDraftPreview(draft)"
+          >
+            <img :src="previews.get(draft.id)!.url" :alt="t('common.chat.image')" />
+          </button>
           <div
             v-else
             class="draft-image-status"
@@ -101,12 +104,17 @@
         />
       </div>
     </div>
+    <MediaPreview
+      v-if="selectedPreview"
+      :show="true"
+      :source="selectedPreview"
+      @close="selectedPreview = null"
+    />
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, shallowRef, computed, nextTick, onBeforeUnmount, watch } from 'vue'
-import { NImage } from 'naive-ui'
 import type { AgentDraftImage } from '@/core/modules/UnifiedAgentModule'
 import {
   AGENT_IMAGE_LIMITS,
@@ -118,9 +126,26 @@ import AgentUsageIndicator from './AgentUsageIndicator.vue'
 import { useUnifiedStore } from '@/core/unifiedStore'
 import { useAppI18n } from '@/core/composables/useI18n'
 import { getAgentErrorKey } from './agentErrorMessage'
+import MediaPreview from '@/components/preview/MediaPreview.vue'
+import type { MediaPreviewSource } from '@/components/preview/mediaPreview'
 
 const { t } = useAppI18n()
 const store = useUnifiedStore()
+const selectedPreview = shallowRef<MediaPreviewSource | null>(null)
+function openDraftPreview(draft: AgentDraftImage) {
+  if (draft.status === 'ready' && draft.image)
+    selectedPreview.value = {
+      type: 'image',
+      blob: draft.image.blob,
+      name: draft.image.original.fileName,
+    }
+}
+watch(
+  () => store.agentSessionId,
+  () => {
+    selectedPreview.value = null
+  },
+)
 
 const inputMessage = computed({
   get: () => store.agentDraft.text,
@@ -381,14 +406,26 @@ const handleStop = () => {
   left: 20px;
   bottom: 0;
 }
-.draft-image :deep(.n-image),
-.draft-image :deep(img) {
+.draft-preview-trigger,
+.draft-preview-trigger img {
   width: 100%;
   height: 100%;
   border-radius: 6px;
 }
-.draft-image :deep(img) {
-  outline: 1px solid rgba(255, 255, 255, 0.1);
+.draft-preview-trigger {
+  display: block;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: zoom-in;
+}
+.draft-preview-trigger:focus-visible {
+  outline: 2px solid var(--color-accent-primary);
+  outline-offset: 2px;
+}
+.draft-preview-trigger img {
+  display: block;
+  object-fit: cover;
 }
 .remove-image,
 .attach-image,

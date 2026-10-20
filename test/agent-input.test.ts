@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import { createRenderer, nextTick, reactive, ref, toRaw } from 'vue'
+import { createRenderer, h, nextTick, reactive, ref, toRaw } from 'vue'
 import { createI18n } from 'vue-i18n'
 import AgentInput from '../src/components/agent/AgentInput.vue'
 import ToolCallDisplay from '../src/components/agent/ToolCallDisplay.vue'
@@ -68,7 +68,15 @@ vi.mock('@/core/agent/tools/searchMedia', () => ({
 vi.mock('../src/components/agent/IndexingRuntimeCard.vue', () => ({
   default: { render: () => null },
 }))
-vi.mock('naive-ui', () => ({ NImage: { render: () => null }, NSpin: { render: () => null } }))
+vi.mock('naive-ui', () => ({ NSpin: { render: () => null } }))
+vi.mock('@/components/modals/ModalOverlay.vue', () => ({
+  default: {
+    setup:
+      (_props: unknown, { slots }: { slots: { default: () => unknown } }) =>
+      () =>
+        h('div', slots.default()),
+  },
+}))
 vi.mock('../src/components/agent/AgentUsageIndicator.vue', () => ({
   default: { render: () => null },
 }))
@@ -274,6 +282,43 @@ function mockPreviewIntersection() {
     setVisible: (isIntersecting: boolean) => intersect([{ isIntersecting }]),
   }
 }
+
+it('opens draft images in the common preview and closes it when switching sessions', async () => {
+  const draftImage = image('draft')
+  mocks.store.agentDraft.images = [{ id: 'draft', status: 'ready', image: draftImage }]
+  await nextTick()
+  ;(findNode((node) => node.props.class === 'draft-preview-trigger').props.onClick as () => void)()
+  await nextTick()
+  expect(findNode((node) => node.props.role === 'dialog').props['aria-label']).toBe(
+    draftImage.original.fileName,
+  )
+  mocks.store.agentSessionId = 'another-session'
+  await nextTick()
+  expect(findOptional((node) => node.props.role === 'dialog', root)).toBeUndefined()
+})
+
+it('keeps an open sent-image preview alive outside the chat buffer until closed', async () => {
+  vi.useFakeTimers()
+  const intersection = mockPreviewIntersection()
+  mocks.store.getAgentImage.mockResolvedValue({
+    blob: new Blob(['source']),
+    fileName: 'source.png',
+  })
+  mountSentImage()
+  intersection.setVisible(true)
+  await vi.advanceTimersByTimeAsync(0)
+  ;(findNode((node) => node.props.class === 'image-preview-trigger').props.onClick as () => void)()
+  await nextTick()
+  intersection.setVisible(false)
+  await vi.advanceTimersByTimeAsync(2000)
+  expect(findNode((node) => node.props.role === 'dialog').props['aria-label']).toBe('source.png')
+  expect(mocks.store.getAgentImage).toHaveBeenCalledOnce()
+  expect(mocks.disposePreview).not.toHaveBeenCalled()
+  ;(findNode((node) => node.props['aria-label'] === 'Close').props.onClick as () => void)()
+  await nextTick()
+  expect(findOptional((node) => node.props.role === 'dialog', root)).toBeUndefined()
+  expect(mocks.disposePreview).toHaveBeenCalledOnce()
+})
 
 it('recreates local sent-image previews after remount and releases their URLs on leaving the view', async () => {
   const blob = new Blob(['original bytes'], { type: 'image/png' })

@@ -216,6 +216,14 @@
       "failed": "失败",
       "cancelled": "已取消"
     },
+    "preview": {
+      "title": "媒体预览",
+      "loadFailed": "无法预览此文件。",
+      "zoomIn": "放大",
+      "zoomOut": "缩小",
+      "resetZoom": "适应窗口",
+      "interactionHint": "拖拽或双指滑动平移 · 捏合或 Ctrl/⌘/Alt + 滚轮缩放 · 双击复位"
+    },
     "mediaNotFound": "未找到媒体",
     "previewNotReady": "素材 \"{name}\" 尚未就绪，无法预览",
     "character": {
