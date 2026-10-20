@@ -1,4 +1,4 @@
-import { CloudflareTemporaryFileUploader } from '@/core/utils/cloudflareTemporaryFileUploader'
+import { CfBailianTempFileUploader } from '@/core/utils/cfBailianTempFileUploader'
 import { runAiTask } from '@/core/ai-tasks/taskApi'
 import { exportTimelineItem, exportMediaItem } from '@/core/utils/mediaExporter'
 import { timecodeToFrames } from '@/core/utils/timeUtils'
@@ -14,10 +14,7 @@ import {
   drawImageOnCanvas,
 } from '@/core/bunnyUtils/thumbUtils'
 import { ThumbnailMode } from '@/constants/ThumbnailConstants'
-import {
-  AGENT_MEDIA_INDEX_LIMITS,
-  AGENT_SEARCH_TOP_K,
-} from '../constants/search'
+import { AGENT_MEDIA_INDEX_LIMITS, AGENT_SEARCH_TOP_K } from '../constants/search'
 
 const {
   retrievalTopK: RETRIEVAL_TOP_K,
@@ -264,7 +261,7 @@ async function prepareVideoCandidate(
   })
 
   const fileName = `rerank-${mediaItem.id}-seg-${segment.segment_index}-${Date.now()}.mp4`
-  const uploadResult = await CloudflareTemporaryFileUploader.uploadBlob(videoBlob, {
+  const uploadResult = await CfBailianTempFileUploader.uploadBlob(videoBlob, {
     capability: 'rerank',
     purpose: 'rerank',
     fileName,
@@ -293,7 +290,7 @@ async function prepareImageCandidate(
   })
 
   const fileName = `rerank-${mediaItem.id}-${Date.now()}.png`
-  const uploadResult = await CloudflareTemporaryFileUploader.uploadBlob(imageBlob, {
+  const uploadResult = await CfBailianTempFileUploader.uploadBlob(imageBlob, {
     capability: 'rerank',
     purpose: 'rerank',
     fileName,
@@ -375,7 +372,7 @@ async function prepareVideoValidationImage(
       const blob = await canvasToPngBlob(canvas)
 
       const fileName = `validate-${mediaItem.id}-seg-${segment.segment_index}-${Date.now()}.png`
-      const uploadResult = await CloudflareTemporaryFileUploader.uploadBlob(blob, {
+      const uploadResult = await CfBailianTempFileUploader.uploadBlob(blob, {
         capability: 'validate',
         purpose: 'validate',
         fileName,
@@ -408,7 +405,7 @@ async function prepareImageValidationImage(
     ...buildSearchImageExportOptions(mediaItem as UnifiedMediaItemData & { mediaType: 'image' }),
   })
   const fileName = `validate-${mediaItem.id}-${Date.now()}.png`
-  const uploadResult = await CloudflareTemporaryFileUploader.uploadBlob(imageBlob, {
+  const uploadResult = await CfBailianTempFileUploader.uploadBlob(imageBlob, {
     capability: 'validate',
     purpose: 'validate',
     fileName,

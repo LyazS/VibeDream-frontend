@@ -4,7 +4,7 @@ import { fetchClient } from '@/utils/fetchClient'
 export type MediaUploadCapability = 'indexing' | 'rerank' | 'validate' | 'agent'
 export type MediaUploadPurpose = 'tagging' | 'embedding' | 'rerank' | 'validate' | 'agent-image'
 
-export interface TemporaryFileUploadRequest {
+export interface CfBailianTempFileUploadRequest {
   capability: MediaUploadCapability
   purpose: MediaUploadPurpose
   fileName: string
@@ -33,7 +33,7 @@ interface UploadPolicyResponse {
   expires_at?: string
 }
 
-export interface TemporaryFileUploadResult {
+export interface CfBailianTempFileUploadResult {
   success: boolean
   url?: string
   uploadRef?: string
@@ -42,12 +42,12 @@ export interface TemporaryFileUploadResult {
 }
 
 /**
- * 通过 Cloudflare Worker 申请短期 OSS policy 后直传文件。
+ * 通过 Cloudflare Worker 申请百炼临时 OSS 上传凭证，浏览器随后直传文件。
  * Worker 从不代理文件字节：大文件不占用 Worker 执行时间，且 DashScope API Key 不会暴露到浏览器。
  */
-export class CloudflareTemporaryFileUploader {
+export class CfBailianTempFileUploader {
   private static async getUploadPolicy(
-    request: TemporaryFileUploadRequest,
+    request: CfBailianTempFileUploadRequest,
     signal?: AbortSignal,
   ): Promise<UploadPolicyResponse> {
     if (
@@ -132,10 +132,10 @@ export class CloudflareTemporaryFileUploader {
 
   static async uploadBlob(
     blob: Blob,
-    request: TemporaryFileUploadRequest,
+    request: CfBailianTempFileUploadRequest,
     onProgress?: (progress: number) => void,
     signal?: AbortSignal,
-  ): Promise<TemporaryFileUploadResult> {
+  ): Promise<CfBailianTempFileUploadResult> {
     try {
       signal?.throwIfAborted()
       // 进度前 20% 表示申请 policy，剩余 80% 映射到实际 OSS 上传，供调用方组合任务总进度。

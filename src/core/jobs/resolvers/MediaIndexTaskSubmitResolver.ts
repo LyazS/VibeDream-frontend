@@ -2,7 +2,7 @@ import { exportMediaItem } from '@/core/utils/mediaExporter'
 import type { ImageMediaItem, VideoMediaItem } from '@/core/mediaitem/types'
 import type { ResolveCheckContext, ResolveContext, ResourceResolver } from '../ResourceResolver'
 import type { ResourceRequest } from '../ResourceTypes'
-import { CloudflareTemporaryFileUploader } from '@/core/utils/cloudflareTemporaryFileUploader'
+import { CfBailianTempFileUploader } from '@/core/utils/cfBailianTempFileUploader'
 import { createAiTaskIdempotencyKey, submitAiTask } from '@/core/ai-tasks/taskApi'
 import type { MediaIndexingTask, MediaIndexingTaskSubmission } from './mediaIndexingTask'
 import {
@@ -189,7 +189,7 @@ export class MediaIndexTaskSubmitResolver
 
       // DashScope 的视觉打标与多模态 embedding 分别申请用途受限的 OSS policy，
       // 即使当前 Blob 相同也不复用 URL，避免模型资源用途混淆。
-      const taggingResult = await CloudflareTemporaryFileUploader.uploadBlob(
+      const taggingResult = await CfBailianTempFileUploader.uploadBlob(
         imageBlob,
         { capability: 'indexing', purpose: 'tagging', fileName },
         (progress) => {
@@ -212,7 +212,7 @@ export class MediaIndexTaskSubmitResolver
         message: `正在上传图片素材（向量化）: ${mediaItem.name}`,
       })
 
-      const embeddingResult = await CloudflareTemporaryFileUploader.uploadBlob(
+      const embeddingResult = await CfBailianTempFileUploader.uploadBlob(
         imageBlob,
         { capability: 'indexing', purpose: 'embedding', fileName },
         (progress) => {

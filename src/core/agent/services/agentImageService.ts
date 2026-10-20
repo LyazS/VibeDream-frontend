@@ -17,9 +17,9 @@ import type {
 import { MessagePartType } from '../types'
 import type { AgentSessionStore } from '../runtime/AgentSessionStore'
 import {
-  CloudflareTemporaryFileUploader,
-  type TemporaryFileUploadRequest,
-} from '@/core/utils/cloudflareTemporaryFileUploader'
+  CfBailianTempFileUploader,
+  type CfBailianTempFileUploadRequest,
+} from '@/core/utils/cfBailianTempFileUploader'
 import { fileSystemService } from '@/core/managers/filesystem/fileSystemService'
 import { FileSystemError } from '@/core/filesystem/errors/FileSystemError'
 import { ErrorCode } from '@/core/filesystem/errors/ErrorCodes'
@@ -548,11 +548,11 @@ class AgentImageResolver {
     const uploadImage = async (
       blob: Blob,
       metadata: Pick<
-        TemporaryFileUploadRequest,
+        CfBailianTempFileUploadRequest,
         'fileName' | 'mimeType' | 'byteSize' | 'width' | 'height'
       >,
     ): Promise<string> => {
-      const result = await CloudflareTemporaryFileUploader.uploadBlob(
+      const result = await CfBailianTempFileUploader.uploadBlob(
         blob,
         {
           capability: 'agent',

@@ -14,7 +14,7 @@ import {
   prepareAgentImages,
   invalidateAgentImageUploads,
 } from '@/core/agent/services/agentImageService'
-import { CloudflareTemporaryFileUploader } from '@/core/utils/cloudflareTemporaryFileUploader'
+import { CfBailianTempFileUploader } from '@/core/utils/cfBailianTempFileUploader'
 import { agentImageFixture } from './helpers/agent-files'
 
 vi.mock('@/core/managers/filesystem/fileSystemService', async () => ({
@@ -162,7 +162,7 @@ it('refreshes expired tool uploads using the saved Blob and preserves it on cach
     data = session(),
     observed = image()
   await store.save(data, [observed])
-  const upload = vi.spyOn(CloudflareTemporaryFileUploader, 'uploadBlob').mockResolvedValue({
+  const upload = vi.spyOn(CfBailianTempFileUploader, 'uploadBlob').mockResolvedValue({
     success: true,
     url: 'oss://dashscope-instant/test/observation.webp',
     expiresAt: new Date(Date.now() + 3600000).toISOString(),
@@ -199,7 +199,7 @@ it('uploads all historical observations once and does not mutate persistent hist
     parts: [{ type: MessagePartType.IMAGE, attachmentId: observed.id }],
   }))
   await store.save(data, observations)
-  const upload = vi.spyOn(CloudflareTemporaryFileUploader, 'uploadBlob').mockResolvedValue({
+  const upload = vi.spyOn(CfBailianTempFileUploader, 'uploadBlob').mockResolvedValue({
     success: true,
     url: 'oss://dashscope-instant/test/observation.webp',
     expiresAt: new Date(Date.now() + 3600000).toISOString(),

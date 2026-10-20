@@ -19,7 +19,7 @@ import {
 } from '@/core/jobs/resolvers/mediaIndexingShared'
 import { exportMediaItem, exportTimelineItem, exportVideoFrames } from '@/core/utils/mediaExporter'
 import { submitAiTask } from '@/core/ai-tasks/taskApi'
-import { CloudflareTemporaryFileUploader } from '@/core/utils/cloudflareTemporaryFileUploader'
+import { CfBailianTempFileUploader } from '@/core/utils/cfBailianTempFileUploader'
 import { RENDERER_FPS } from '@/core/mediabunny/constant'
 
 vi.mock('@/core/managers/media/globalMetaFileManager', () => ({
@@ -40,8 +40,8 @@ vi.mock('@/core/utils/mediaExporter', () => ({
   exportTimelineItem: vi.fn(),
   exportVideoFrames: vi.fn(),
 }))
-vi.mock('@/core/utils/cloudflareTemporaryFileUploader', () => ({
-  CloudflareTemporaryFileUploader: { uploadBlob: vi.fn() },
+vi.mock('@/core/utils/cfBailianTempFileUploader', () => ({
+  CfBailianTempFileUploader: { uploadBlob: vi.fn() },
 }))
 vi.mock('@/core/ai-tasks/taskApi', () => ({
   submitAiTask: vi.fn(),
@@ -115,7 +115,7 @@ describe('local music analysis', () => {
     expect(item.metadata?.musicAnalysis).toBe(result.musicAnalysis)
     expect(globalMetaFileManager.saveMetaFile).toHaveBeenCalledExactlyOnceWith(item)
     expect(fetch).not.toHaveBeenCalled()
-    expect(CloudflareTemporaryFileUploader.uploadBlob).not.toHaveBeenCalled()
+    expect(CfBailianTempFileUploader.uploadBlob).not.toHaveBeenCalled()
   })
 })
 
@@ -143,12 +143,10 @@ describe('video indexing exports', () => {
     const frames = Array.from({ length: 4 }, () => new Blob(['frame']))
     vi.mocked(exportTimelineItem).mockResolvedValue(videoBlob)
     vi.mocked(exportVideoFrames).mockResolvedValue(frames)
-    vi.mocked(CloudflareTemporaryFileUploader.uploadBlob).mockImplementation(
-      async (_, options) => ({
-        success: true,
-        url: `https://upload.example/${options.purpose}/${options.fileName}`,
-      }),
-    )
+    vi.mocked(CfBailianTempFileUploader.uploadBlob).mockImplementation(async (_, options) => ({
+      success: true,
+      url: `https://upload.example/${options.purpose}/${options.fileName}`,
+    }))
     const uploadCtx = context(createVideoSegmentOssUploadsRequest(item.id))
     vi.mocked(uploadCtx.ensure).mockResolvedValue(plans)
 
@@ -173,7 +171,7 @@ describe('video indexing exports', () => {
     ])
     expect(exportTimelineItem).toHaveBeenCalledTimes(2)
     expect(exportVideoFrames).toHaveBeenCalledOnce()
-    expect(CloudflareTemporaryFileUploader.uploadBlob).toHaveBeenCalledTimes(7)
+    expect(CfBailianTempFileUploader.uploadBlob).toHaveBeenCalledTimes(7)
     expect(
       vi.mocked(exportTimelineItem).mock.calls.map(([options]) => options.timelineItem.timeRange),
     ).toEqual([
@@ -210,12 +208,10 @@ describe('image indexing exports', () => {
     }
     const imageBlob = new Blob(['image'], { type: 'image/png' })
     vi.mocked(exportMediaItem).mockResolvedValue(imageBlob)
-    vi.mocked(CloudflareTemporaryFileUploader.uploadBlob).mockImplementation(
-      async (_, options) => ({
-        success: true,
-        url: `https://upload.example/${options.purpose}/${options.fileName}`,
-      }),
-    )
+    vi.mocked(CfBailianTempFileUploader.uploadBlob).mockImplementation(async (_, options) => ({
+      success: true,
+      url: `https://upload.example/${options.purpose}/${options.fileName}`,
+    }))
     vi.mocked(submitAiTask).mockResolvedValue({ type: 'media.indexing', task_id: 'task-image' })
     const ctx = context(createMediaIndexTaskSubmitRequest(item.id))
 
@@ -224,8 +220,8 @@ describe('image indexing exports', () => {
       taskId: 'task-image',
     })
 
-    expect(CloudflareTemporaryFileUploader.uploadBlob).toHaveBeenCalledTimes(2)
-    expect(CloudflareTemporaryFileUploader.uploadBlob).toHaveBeenCalledWith(
+    expect(CfBailianTempFileUploader.uploadBlob).toHaveBeenCalledTimes(2)
+    expect(CfBailianTempFileUploader.uploadBlob).toHaveBeenCalledWith(
       imageBlob,
       { capability: 'indexing', purpose: 'tagging', fileName: 'media_image.png' },
       expect.any(Function),

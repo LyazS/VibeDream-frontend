@@ -17,7 +17,7 @@ import {
   type VideoSegmentOssUploadsResult,
   VIDEO_SEGMENT_OSS_UPLOADS_RESOURCE_TYPE,
 } from './mediaIndexingShared'
-import { CloudflareTemporaryFileUploader } from '@/core/utils/cloudflareTemporaryFileUploader'
+import { CfBailianTempFileUploader } from '@/core/utils/cfBailianTempFileUploader'
 
 export class VideoSegmentOssUploadsResolver
   implements ResourceResolver<VideoSegmentOssUploadsInput, VideoSegmentOssUploadsResult>
@@ -83,7 +83,7 @@ export class VideoSegmentOssUploadsResolver
 
         // 视觉 embedding 需要保持时间连续性，因此短片段仍上传视频；
         // 视觉打标改用抽帧，以控制模型输入量并保留关键时间点。
-        const embeddingVideoResult = await CloudflareTemporaryFileUploader.uploadBlob(
+        const embeddingVideoResult = await CfBailianTempFileUploader.uploadBlob(
           videoBlob,
           { capability: 'indexing', purpose: 'embedding', fileName: plan.fileName },
           (progress) => {
@@ -114,7 +114,7 @@ export class VideoSegmentOssUploadsResolver
         const taggingImageUrls: string[] = []
         for (let frameIdx = 0; frameIdx < frameBlobs.length; frameIdx += 1) {
           const frameName = buildFrameFileName(mediaItem.id, plan.segment.segmentIndex, frameIdx)
-          const frameUploadResult = await CloudflareTemporaryFileUploader.uploadBlob(
+          const frameUploadResult = await CfBailianTempFileUploader.uploadBlob(
             frameBlobs[frameIdx],
             { capability: 'indexing', purpose: 'tagging', fileName: frameName },
             (progress) => {
@@ -163,7 +163,7 @@ export class VideoSegmentOssUploadsResolver
         })
 
         // 两次上传携带不同 purpose，即使媒体内容相同也不能混用模型用途对应的临时资源。
-        const taggingResult = await CloudflareTemporaryFileUploader.uploadBlob(
+        const taggingResult = await CfBailianTempFileUploader.uploadBlob(
           videoBlob,
           { capability: 'indexing', purpose: 'tagging', fileName: plan.fileName },
           (progress) => {
@@ -182,7 +182,7 @@ export class VideoSegmentOssUploadsResolver
           throw new Error(taggingResult.error || `上传打标视频分片失败: ${plan.fileName}`)
         }
 
-        const embeddingResult = await CloudflareTemporaryFileUploader.uploadBlob(
+        const embeddingResult = await CfBailianTempFileUploader.uploadBlob(
           videoBlob,
           { capability: 'indexing', purpose: 'embedding', fileName: plan.fileName },
           (progress) => {
