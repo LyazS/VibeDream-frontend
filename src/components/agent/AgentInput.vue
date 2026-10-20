@@ -90,7 +90,7 @@
           class="attach-image"
           :title="t('common.chat.attachImage')"
           :aria-label="t('common.chat.attachImage')"
-          :disabled="!store.agentDraftEditable || draftImages.length >= AGENT_IMAGE_LIMITS.count"
+          :disabled="!store.agentDraftEditable || draftImages.length >= AGENT_MAX_IMAGE_COUNT"
           @click="fileInput?.click()"
         >
           <component :is="IconComponents.IMAGE_SMALL" size="18px" />
@@ -117,7 +117,7 @@
 import { ref, shallowRef, computed, nextTick, onBeforeUnmount, watch } from 'vue'
 import type { AgentDraftImage } from '@/core/modules/UnifiedAgentModule'
 import {
-  AGENT_IMAGE_LIMITS,
+  AGENT_MAX_IMAGE_COUNT,
   createAgentImagePreview,
 } from '@/core/agent/services/agentImageService'
 import { IconComponents } from '@/constants/iconComponents'
@@ -157,7 +157,7 @@ const failedImages = computed(() => draftImages.value.filter((item) => item.stat
 const previews = shallowRef(new Map<string, ReturnType<typeof createAgentImagePreview>>())
 const imageErrorMessage = computed(() =>
   store.agentDraft.imageError
-    ? t(`common.chat.${store.agentDraft.imageError}`, { count: AGENT_IMAGE_LIMITS.count })
+    ? t(`common.chat.${store.agentDraft.imageError}`, { count: AGENT_MAX_IMAGE_COUNT })
     : '',
 )
 watch(

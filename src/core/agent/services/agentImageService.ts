@@ -1,4 +1,9 @@
-import { AGENT_IMAGE_LIMITS, AGENT_VISUAL_CONTEXT_IMAGE_LIMIT } from './agentImageValidation'
+import {
+  AGENT_MAX_IMAGE_EDGE,
+  AGENT_MAX_IMAGE_ENCODED_BYTES,
+  AGENT_MAX_IMAGE_ORIGINAL_BYTES,
+  AGENT_MAX_IMAGE_PIXELS,
+} from './agentImageValidation'
 import { abortable } from '@/core/utils/abortable'
 import type {
   AgentAttachment,
@@ -19,7 +24,13 @@ import { fileSystemService } from '@/core/managers/filesystem/fileSystemService'
 import { FileSystemError } from '@/core/filesystem/errors/FileSystemError'
 import { ErrorCode } from '@/core/filesystem/errors/ErrorCodes'
 
-export { AGENT_IMAGE_LIMITS, AGENT_VISUAL_CONTEXT_IMAGE_LIMIT } from './agentImageValidation'
+export {
+  AGENT_MAX_IMAGE_COUNT,
+  AGENT_MAX_IMAGE_EDGE,
+  AGENT_MAX_IMAGE_ENCODED_BYTES,
+  AGENT_MAX_IMAGE_ORIGINAL_BYTES,
+  AGENT_MAX_IMAGE_PIXELS,
+} from './agentImageValidation'
 
 export type AgentImageErrorCode =
   | 'imageInvalid'
@@ -63,7 +74,7 @@ export type ResolvedAgentImage =
       | { recordKind: 'tool_image'; source: 'available'; description: string }
     ))
   | { kind: 'unavailable'; reason: 'source_missing'; fileName: string }
-  | { kind: 'unavailable'; reason: 'record_missing' | 'context_budget'; fileName?: never }
+  | { kind: 'unavailable'; reason: 'record_missing'; fileName?: never }
 
 // 图片准备、共享草稿和本地提交期间都保护原图，避免被孤立文件清理误删。
 const activeOriginals = new Set<string>()
@@ -201,7 +212,7 @@ export function inspectAgentImage(bytes: Uint8Array): {
     }
   }
   if (!mimeType || !width || !height) throw new AgentImageProcessingError('imageInvalid')
-  if (width * height > AGENT_IMAGE_LIMITS.pixels)
+  if (width * height > AGENT_MAX_IMAGE_PIXELS)
     throw new AgentImageProcessingError('imagePixelLimit')
   return { mimeType, width, height }
 }
@@ -212,7 +223,7 @@ export async function processAgentImage(
   target: AgentAttachmentScope & { id: string },
 ): Promise<AgentImage> {
   signal?.throwIfAborted()
-  if (file.size > AGENT_IMAGE_LIMITS.originalBytes)
+  if (file.size > AGENT_MAX_IMAGE_ORIGINAL_BYTES)
     throw new AgentImageProcessingError('imageOriginalSizeLimit')
   const bytes = await file.arrayBuffer()
   signal?.throwIfAborted()
@@ -280,7 +291,7 @@ async function encodeAgentImage(
     (late) => late.close(),
   )
   try {
-    if (bitmap.width * bitmap.height > AGENT_IMAGE_LIMITS.pixels)
+    if (bitmap.width * bitmap.height > AGENT_MAX_IMAGE_PIXELS)
       throw new AgentImageProcessingError('imagePixelLimit')
     return await encodeAgentVisual(bitmap, bitmap.width, bitmap.height, signal, undefined, params)
   } finally {
@@ -334,7 +345,7 @@ export async function encodeAgentVisual(
 ): Promise<Pick<AgentImage, 'blob' | 'conversionParams'>> {
   signal?.throwIfAborted()
   const crop = visualCrop(width, height, region)
-  const scale = Math.min(1, AGENT_IMAGE_LIMITS.edge / Math.max(crop.width, crop.height))
+  const scale = Math.min(1, AGENT_MAX_IMAGE_EDGE / Math.max(crop.width, crop.height))
   const canvas = document.createElement('canvas')
   canvas.width = params?.width ?? Math.max(1, Math.round(crop.width * scale))
   canvas.height = params?.height ?? Math.max(1, Math.round(crop.height * scale))
@@ -377,7 +388,7 @@ export async function encodeAgentVisual(
       signal?.throwIfAborted()
       if (blob.type !== outputMimeType || !blob.size)
         throw new AgentImageProcessingError('imageEncodingFailed')
-      if (blob.size <= AGENT_IMAGE_LIMITS.encodedBytes)
+      if (blob.size <= AGENT_MAX_IMAGE_ENCODED_BYTES)
         return {
           blob,
           conversionParams: {
@@ -650,7 +661,7 @@ export function forgetAgentImages(store: AgentSessionStore, session?: AgentSessi
   resolvers.get(store)?.forget(session)
 }
 
-/** 准备本轮模型需要的用户附件和工具观察图，超出预算的历史引用保留文本占位。 */
+/** 准备本轮模型需要的全部用户附件和工具观察图，重复引用只解析和上传一次。 */
 export async function prepareAgentImages(
   session: AgentSession,
   store: AgentSessionStore,
@@ -661,7 +672,7 @@ export async function prepareAgentImages(
     signal.throwIfAborted()
     if (!isCurrent()) throw new DOMException('图片准备已取消', 'AbortError')
   }
-  // 先按最近引用去重并选出预算内图片，再解析或上传地址，避免为省略图片产生上传。
+  // 按引用去重后解析或上传全部历史图片，避免同一图片在多条消息中重复上传。
   const candidates = session.messages.flatMap((message) =>
     message.role === 'user' || message.role === 'tool'
       ? message.parts.flatMap((part) =>
@@ -669,12 +680,8 @@ export async function prepareAgentImages(
         )
       : [],
   )
-  const ids = new Set(
-    [...new Set(candidates.slice().reverse())].slice(0, AGENT_VISUAL_CONTEXT_IMAGE_LIMIT),
-  )
+  const ids = new Set(candidates)
   const images = new Map<string, ResolvedAgentImage>()
-  for (const id of candidates)
-    if (!ids.has(id)) images.set(id, { kind: 'unavailable', reason: 'context_budget' })
   for (const id of ids) {
     check()
     const image = await resolverFor(store).resolve(session, id, signal, isCurrent)

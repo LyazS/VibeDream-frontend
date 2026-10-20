@@ -1,5 +1,5 @@
 import Ajv from 'ajv'
-import { AGENT_VIEW_DEFAULT_FRAME_COUNT } from '@/constants/AgentConstants'
+import { FRAME_RATE } from '@/constants/TimeConstants'
 import { viewMediaDefinition } from '../runtime/toolDefinitions/viewMedia'
 import { viewTimelineDefinition } from '../runtime/toolDefinitions/viewTimeline'
 import {
@@ -8,7 +8,8 @@ import {
   isAgentImageSourceMissing,
   type AgentViewRegion,
 } from '../services/agentImageService'
-import { AGENT_IMAGE_LIMITS } from '../services/agentImageValidation'
+import { AGENT_MAX_IMAGE_COUNT } from '../services/agentImageValidation'
+import { AGENT_VIEW_DEFAULT_FRAME_COUNT } from '../constants/visual'
 import type { ToolExecutionContext, ToolImageInput, ToolResult } from './types'
 import { buildToolException } from './utils/result'
 import { isValidAgentToolTimecode, parseAgentToolTimecode } from './utils/timecode'
@@ -56,11 +57,11 @@ function parseViewItems<T extends ViewOptions>(
       throw viewError('invalid_arguments', '裁剪区域越界。')
   }
   if (
-    items.reduce((count, item) => count + requestedFrameCount(item), 0) > AGENT_IMAGE_LIMITS.count
+    items.reduce((count, item) => count + requestedFrameCount(item), 0) > AGENT_MAX_IMAGE_COUNT
   )
     throw viewError(
       'visual_budget_exceeded',
-      '每次调用最多输出 4 张图片，请减少目标或 frameCount。',
+      `每次调用最多输出 ${AGENT_MAX_IMAGE_COUNT} 张图片，请减少目标或 frameCount。`,
     )
   return items
 }
@@ -75,11 +76,11 @@ export function parseViewTimelineItems(args: Record<string, unknown>): ViewOptio
   return parseViewItems<ViewOptions>(args, 'view_timeline')
 }
 
-/** 按 30 fps 生成观察帧号；duration 使用同一帧单位，时间范围为左闭右开区间。 */
+/** 按统一帧率生成观察帧号；duration 使用同一帧单位，时间范围为左闭右开区间。 */
 export function viewSampleFrames(item: ViewOptions, duration: number): number[] {
   const parse = (value: string) => {
     if (!isValidAgentToolTimecode(value))
-      throw viewError('invalid_arguments', '时间码必须为 HH:MM:SS+FF（30 fps）。')
+      throw viewError('invalid_arguments', `时间码必须为 HH:MM:SS+FF（${FRAME_RATE} fps）。`)
     return parseAgentToolTimecode(value)
   }
   if (!Number.isFinite(duration) || duration <= 0)

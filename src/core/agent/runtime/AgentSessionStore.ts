@@ -10,6 +10,11 @@ import {
 } from '../types'
 import { toolContractVersion } from './ToolRuntime'
 import { PathResolver } from '@/core/filesystem/core/PathResolver'
+import {
+  AGENT_MAX_IMAGE_EDGE,
+  AGENT_MAX_IMAGE_ORIGINAL_BYTES,
+  AGENT_MAX_IMAGE_PIXELS,
+} from '../constants/visual'
 
 /** 固定快照：剥离 Vue 代理，排队后不再读取正在变化的响应式对象。 */
 function snapshot<T>(value: T): T {
@@ -32,17 +37,17 @@ function isAttachment(value: unknown): value is AgentAttachment {
     typeof original.fileName !== 'string' ||
     !Number.isInteger(original.byteSize) ||
     original.byteSize <= 0 ||
-    original.byteSize > 10 * 1024 * 1024 ||
+    original.byteSize > AGENT_MAX_IMAGE_ORIGINAL_BYTES ||
     !Number.isInteger(original.width) ||
     !Number.isInteger(original.height) ||
     original.width <= 0 ||
     original.height <= 0 ||
-    original.width * original.height > 40_000_000 ||
+    original.width * original.height > AGENT_MAX_IMAGE_PIXELS ||
     !Number.isInteger(params.width) ||
     !Number.isInteger(params.height) ||
     params.width <= 0 ||
     params.height <= 0 ||
-    Math.max(params.width, params.height) > 2048 ||
+    Math.max(params.width, params.height) > AGENT_MAX_IMAGE_EDGE ||
     params.mimeType !== 'image/webp' ||
     !Number.isFinite(params.quality) ||
     params.quality <= 0 ||

@@ -1,4 +1,5 @@
 import type { ModelTool } from '../../transport/AgentClient'
+import { AGENT_SEARCH_TOP_K } from '../../constants/search'
 
 export const searchTransitionsDefinition: ModelTool = {
   name: 'search_transitions',
@@ -46,9 +47,9 @@ Limitations
       },
       topK: {
         type: 'integer',
-        minimum: 1,
-        maximum: 10,
-        description: '返回候选数量，默认 5。',
+        minimum: AGENT_SEARCH_TOP_K.min,
+        maximum: AGENT_SEARCH_TOP_K.max,
+        description: `返回候选数量，默认 ${AGENT_SEARCH_TOP_K.default}。`,
       },
     },
     required: ['query'],

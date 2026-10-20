@@ -7,7 +7,9 @@ import { agentTools, createToolRuntime } from '@/core/agent/runtime/ToolRuntime'
 import { createToolImageStaging } from '@/core/agent/runtime/ToolImageStaging'
 import { AgentSessionStore } from '@/core/agent/runtime/AgentSessionStore'
 import {
-  AGENT_IMAGE_LIMITS,
+  AGENT_MAX_IMAGE_COUNT,
+  AGENT_MAX_IMAGE_EDGE,
+  AGENT_MAX_IMAGE_ENCODED_BYTES,
   AgentImageProcessingError,
   type AgentImageErrorCode,
   processAgentImage,
@@ -272,7 +274,7 @@ export function createUnifiedAgentModule(registry: ModuleRegistry) {
   function addDraftImages(files: readonly Blob[]) {
     const userId = user.currentUser.value?.id
     if (!draftEditable.value || !userId) return
-    const available = Math.max(0, AGENT_IMAGE_LIMITS.count - draft.value.images.length)
+    const available = Math.max(0, AGENT_MAX_IMAGE_COUNT - draft.value.images.length)
     const images = files.slice(0, available).map((input): AgentDraftImage => {
       const id = crypto.randomUUID()
       draftImageTasks.set(id, {
@@ -613,16 +615,12 @@ export function createUnifiedAgentModule(registry: ModuleRegistry) {
               reason: 'record_missing',
             }
             if (message.role === 'tool') {
-              // 图片后紧跟含 ID 的描述；缺失或预算省略时用文本保留历史引用语义。
+              // 图片后紧跟含 ID 的描述；图片不可用时用文本保留历史引用语义。
               if (image.kind === 'unavailable' || image.recordKind !== 'tool_image')
                 return [
                   {
                     type: 'text',
-                    text: `${part.attachmentId}：${
-                      image.kind === 'unavailable' && image.reason === 'context_budget'
-                        ? '历史图片因视觉上下文预算在本次请求中省略。'
-                        : '历史图片不可用，保存的图片记录或 Blob 缺失。'
-                    }`,
+                    text: `${part.attachmentId}：历史图片不可用，保存的图片记录或 Blob 缺失。`,
                   },
                 ]
               return [
@@ -633,13 +631,6 @@ export function createUnifiedAgentModule(registry: ModuleRegistry) {
                 },
               ]
             }
-            if (image.kind === 'unavailable' && image.reason === 'context_budget')
-              return [
-                {
-                  type: 'text',
-                  text: `attachmentId=${part.attachmentId}：历史图片因视觉上下文预算在本次请求中省略。`,
-                },
-              ]
             const identity = `attachmentId=${encodeURIComponent(part.attachmentId)}, name=${encodeURIComponent(image.fileName ?? 'unknown')}`
             if (image.kind === 'unavailable')
               return [
@@ -1253,7 +1244,7 @@ export function createUnifiedAgentModule(registry: ModuleRegistry) {
     )
       return false
     if (
-      images.length > AGENT_IMAGE_LIMITS.count ||
+      images.length > AGENT_MAX_IMAGE_COUNT ||
       images.some(
         (image) =>
           !image.id ||
@@ -1262,7 +1253,7 @@ export function createUnifiedAgentModule(registry: ModuleRegistry) {
           !image.original?.relativePath ||
           !image.conversionParams ||
           !image.blob.size ||
-          image.blob.size > AGENT_IMAGE_LIMITS.encodedBytes ||
+          image.blob.size > AGENT_MAX_IMAGE_ENCODED_BYTES ||
           image.conversionParams.mimeType !== 'image/webp' ||
           image.blob.type !== image.conversionParams.mimeType ||
           !Number.isInteger(image.conversionParams.width) ||
@@ -1270,7 +1261,7 @@ export function createUnifiedAgentModule(registry: ModuleRegistry) {
           image.conversionParams.width <= 0 ||
           image.conversionParams.height <= 0 ||
           Math.max(image.conversionParams.width, image.conversionParams.height) >
-            AGENT_IMAGE_LIMITS.edge,
+            AGENT_MAX_IMAGE_EDGE,
       )
     )
       return false

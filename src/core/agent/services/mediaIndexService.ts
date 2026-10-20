@@ -14,15 +14,21 @@ import {
   drawImageOnCanvas,
 } from '@/core/bunnyUtils/thumbUtils'
 import { ThumbnailMode } from '@/constants/ThumbnailConstants'
+import {
+  AGENT_MEDIA_INDEX_LIMITS,
+  AGENT_SEARCH_TOP_K,
+} from '../constants/search'
 
-const RETRIEVAL_TOP_K = 30
-const RERANK_TOP_K = 10
-const RERANK_SCORE_THRESHOLD = 0.55
-const SEARCH_TOP_K_MIN = 1
-const SEARCH_TOP_K_MAX = 10
-const SEARCH_VIDEO_EXPORT_MAX_SIDE = 480
-const SEARCH_VIDEO_EXPORT_FPS = 6
-const SEARCH_IMAGE_EXPORT_MAX_SIDE = 768
+const {
+  retrievalTopK: RETRIEVAL_TOP_K,
+  rerankTopK: RERANK_TOP_K,
+  rerankScoreThreshold: RERANK_SCORE_THRESHOLD,
+  videoExportMaxSide: SEARCH_VIDEO_EXPORT_MAX_SIDE,
+  videoExportFps: SEARCH_VIDEO_EXPORT_FPS,
+  imageExportMaxSide: SEARCH_IMAGE_EXPORT_MAX_SIDE,
+} = AGENT_MEDIA_INDEX_LIMITS
+const SEARCH_TOP_K_MIN = AGENT_SEARCH_TOP_K.min
+const SEARCH_TOP_K_MAX = AGENT_SEARCH_TOP_K.max
 
 export interface RetrievalKeywordMatch {
   field: string
@@ -495,7 +501,7 @@ export async function callRerankApi(
   projectId: string,
   retrievalTaskId: string,
   candidates: PreparedRerankCandidate[],
-  topK: number = 10,
+  topK: number = AGENT_MEDIA_INDEX_LIMITS.rerankTopK,
   signal?: AbortSignal,
 ): Promise<{ taskId: string; result: RerankTaskResult }> {
   return submitSearchTask<RerankTaskResult>(
@@ -564,7 +570,7 @@ export async function callValidateApi(
   projectId: string,
   rerankTaskId: string,
   candidates: PreparedValidationCandidate[],
-  topK: number = 10,
+  topK: number = AGENT_MEDIA_INDEX_LIMITS.rerankTopK,
   signal?: AbortSignal,
 ): Promise<{ taskId: string; result: ValidateTaskResult }> {
   return submitSearchTask<ValidateTaskResult>(

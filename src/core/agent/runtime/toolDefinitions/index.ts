@@ -32,8 +32,9 @@ import { updateItemDefinition } from './updateItem'
 import { readClipKeyframeDefinition } from './readClipKeyframe'
 import { writeClipKeyframeDefinition } from './writeClipKeyframe'
 import { patchClipKeyframeDefinition } from './patchClipKeyframe'
+import { AGENT_TOOL_CONTRACT_VERSION } from '../../constants/protocol'
 
-export const toolContractVersion = 'editor-tools-v2'
+export const toolContractVersion = AGENT_TOOL_CONTRACT_VERSION
 
 /** 模型调用和本地参数校验共享的公开工具契约。 */
 export const agentTools: ModelTool[] = [

@@ -3,14 +3,23 @@
  * 对应实现：cloudflare-backend/src/modules/agent/telemetry/protocol/agent-log.ts、admin-frontend/src/types/agentLogProtocol.ts。
  * 修改协议字段、版本、限制或工具分类时，需核对对应端的兼容性并同步相关变更。
  */
-export const AGENT_LOG_PROTOCOL = 'lightcut-agent-log-v1'
-export const LOG_OWNER_HEADER = 'X-Lightcut-Log-Owner'
-export const LOG_RETENTION_MS = 7 * 24 * 60 * 60 * 1000
-export const MAX_SPAN_BYTES = 256 * 1024
-export const MAX_BATCH_BYTES = 512 * 1024
-export const MAX_EXPANDED_BATCH_BYTES = 2 * 1024 * 1024
-export const MAX_LOCAL_LOG_BYTES = 16 * 1024 * 1024
-export const LOG_ID = /^[A-Za-z0-9._:-]{1,128}$/
+import {
+  AGENT_LOG_SIZE_MARGIN_BYTES,
+  LOG_ID,
+  MAX_SPAN_BYTES,
+} from '../constants/telemetry'
+import { AGENT_LOG_PROTOCOL } from '../constants/protocol'
+
+export { AGENT_LOG_PROTOCOL } from '../constants/protocol'
+export {
+  LOG_ID,
+  LOG_OWNER_HEADER,
+  LOG_RETENTION_MS,
+  MAX_BATCH_BYTES,
+  MAX_EXPANDED_BATCH_BYTES,
+  MAX_LOCAL_LOG_BYTES,
+  MAX_SPAN_BYTES,
+} from '../constants/telemetry'
 export type SpanKind = 'user_message' | 'model_call' | 'tool_result' | 'diagnostic'
 export type StopStatus = 'completed' | 'waiting' | 'cancelled' | 'failed' | 'interrupted'
 export type LogIdentity = {
@@ -194,13 +203,13 @@ export function boundedSource(source: LogSource): LogSource {
   if (sanitized.truncated && !result.completeness.missing.includes('source:DEPTH_LIMIT'))
     result.completeness.missing.push('source:DEPTH_LIMIT')
   for (const field of ['events', 'input', 'output', 'error'] as const) {
-    if (logBytes(result) <= MAX_SPAN_BYTES - 2048) break
+    if (logBytes(result) <= MAX_SPAN_BYTES - AGENT_LOG_SIZE_MARGIN_BYTES) break
     if (result[field] !== undefined) {
       delete result[field]
       result.completeness.missing.push(`${field}:BYTE_LIMIT`)
     }
   }
-  if (logBytes(result) > MAX_SPAN_BYTES - 2048)
+  if (logBytes(result) > MAX_SPAN_BYTES - AGENT_LOG_SIZE_MARGIN_BYTES)
     return {
       status: 'unknown',
       started_at: source.started_at,

@@ -1,7 +1,14 @@
-import { AGENT_VIEW_DEFAULT_FRAME_COUNT } from '@/constants/AgentConstants'
+import { FRAME_RATE } from '@/constants/TimeConstants'
+import {
+  AGENT_MAX_IMAGE_COUNT,
+  AGENT_VIEW_DEFAULT_FRAME_COUNT,
+  AGENT_VIEW_MAX_FRAME_COUNT,
+  AGENT_VIEW_MAX_ITEMS,
+  AGENT_VIEW_MIN_FRAME_COUNT,
+} from '../../constants/visual'
 import type { ModelTool } from '../../transport/AgentClient'
 
-/** 时间轴采用 30 fps 的绝对时间码；工程有效时长由执行器校验。 */
+/** 时间轴采用统一帧率的绝对时间码；工程有效时长由执行器校验。 */
 const timecode = { type: 'string', pattern: '^\\d{2}:[0-5]\\d:[0-5]\\d\\+[0-2]\\d$' }
 const viewOptionProperties = {
   region: {
@@ -22,7 +29,11 @@ const viewOptionProperties = {
     properties: {
       start: timecode,
       end: timecode,
-      frameCount: { type: 'integer', minimum: 2, maximum: 4 },
+      frameCount: {
+        type: 'integer',
+        minimum: AGENT_VIEW_MIN_FRAME_COUNT,
+        maximum: AGENT_VIEW_MAX_FRAME_COUNT,
+      },
     },
     required: ['start', 'end'],
   },
@@ -38,7 +49,7 @@ function viewTimelineParameters() {
       items: {
         type: 'array',
         minItems: 1,
-        maxItems: 4,
+        maxItems: AGENT_VIEW_MAX_ITEMS,
         items: {
           type: 'object',
           additionalProperties: false,
@@ -50,9 +61,9 @@ function viewTimelineParameters() {
   }
 }
 
-const viewTimelineInstructions = `每次 1～4 个 items，合计最多 4 张图，范围按 frameCount（默认 ${AGENT_VIEW_DEFAULT_FRAME_COUNT}，整数 2～4）预留预算。
+const viewTimelineInstructions = `每次 1～${AGENT_VIEW_MAX_ITEMS} 个 items，合计最多 ${AGENT_MAX_IMAGE_COUNT} 张图，范围按 frameCount（默认 ${AGENT_VIEW_DEFAULT_FRAME_COUNT}，整数 ${AGENT_VIEW_MIN_FRAME_COUNT}～${AGENT_VIEW_MAX_FRAME_COUNT}）预留预算。
 region 是相对于完整工程画布的归一化矩形，左上原点，先裁剪再缩放；不可越界。
-时间轴必须选择 at 或 timeRange 之一；时间码严格 HH:MM:SS+FF，30 fps。at 满足 0 <= at < duration，timeRange 为 [start,end)，end <= duration。
+时间轴必须选择 at 或 timeRange 之一；时间码严格 HH:MM:SS+FF，${FRAME_RATE} fps。at 满足 0 <= at < duration，timeRange 为 [start,end)，end <= duration。
 范围等距抽帧并去重，短区间可能返回更少图片。结果为带独立图片 ID、逐图时间码和区域说明的图文工具消息。
 所有帧来自同一份固定工程快照；只读观察，不改变播放头、播放状态、素材或时间轴。历史图片是当次观察的固定结果。`
 

@@ -1,2 +1,2 @@
-/** Agent 视觉观察在省略 frameCount 时采用的默认抽帧数。 */
-export const AGENT_VIEW_DEFAULT_FRAME_COUNT = 4
+/** @deprecated Agent 常量已迁移到 core/agent/constants/visual。 */
+export { AGENT_VIEW_DEFAULT_FRAME_COUNT } from '@/core/agent/constants/visual'

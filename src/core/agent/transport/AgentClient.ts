@@ -1,7 +1,8 @@
 import type { LogIdentity } from '../telemetry/agent-log'
 import type { AgentTokenUsage, AgentUsageRecord } from '../runtime/AgentUsage'
+import { AGENT_MODEL_CALL_PROTOCOL_VERSION } from '../constants/protocol'
 // 单轮文本及工具协议，客户端与服务端必须使用同一版本。
-export const AGENT_PROTOCOL_VERSION = 'agent-model-calls-v1'
+export const AGENT_PROTOCOL_VERSION = AGENT_MODEL_CALL_PROTOCOL_VERSION
 export type Acceptance = 'not_accepted' | 'accepted' | 'unknown'
 export class AgentClientError extends Error {
   /** 携带轮次 ID 与受理状态，便于界面区分未受理、已受理及结果未知。 */

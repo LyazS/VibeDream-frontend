@@ -1,6 +1,6 @@
 import type { AgentToolImage } from '../types'
 import type { ToolExecutionContext, ToolResult } from '../tools/types'
-import { AGENT_IMAGE_LIMITS, isAgentToolImage } from '../services/agentImageValidation'
+import { AGENT_MAX_IMAGE_COUNT, isAgentToolImage } from '../services/agentImageValidation'
 
 /** 暂存单次工具调用的观察图片；只有被结果按顺序引用的图片才能交给存储层。 */
 export function createToolImageStaging(
@@ -21,7 +21,7 @@ export function createToolImageStaging(
       mimeType: input.blob.type as AgentToolImage['mimeType'],
       byteSize: input.blob.size,
     }
-    if (!isAgentToolImage(image) || images.length >= AGENT_IMAGE_LIMITS.count)
+    if (!isAgentToolImage(image) || images.length >= AGENT_MAX_IMAGE_COUNT)
       throw new Error('INVALID_TOOL_IMAGE')
     images.push(image)
     return { type: 'image', image: { id: image.id } }

@@ -275,15 +275,15 @@ describe('shared Agent draft', () => {
       .spyOn(imageService, 'processAgentImage')
       .mockReturnValueOnce(pending.promise)
       .mockResolvedValue(image())
-    const files = Array.from({ length: 5 }, () => new Blob(['original']))
+    const files = Array.from({ length: 10 }, () => new Blob(['original']))
     agent.setDraftText('inspect all')
     agent.addDraftImages(files)
-    expect(agent.draft.value.images).toHaveLength(4)
+    expect(agent.draft.value.images).toHaveLength(9)
     expect(agent.draft.value.imageError).toBe('imageCountLimit')
     expect(agent.draftSendable.value).toBe(false)
     expect(await agent.sendDraft()).toBe(false)
     pending.reject(new Error('decode failure'))
-    await vi.waitFor(() => expect(agent.draft.value.images[3]?.status).toBe('ready'))
+    await vi.waitFor(() => expect(agent.draft.value.images[8]?.status).toBe('ready'))
     expect(agent.draft.value.images[0]).toMatchObject({
       status: 'failed',
       error: 'imageProcessingFailed',
@@ -296,7 +296,7 @@ describe('shared Agent draft', () => {
     expect(prepare.mock.lastCall?.[0]).toBe(files[0])
     expect(agent.draftSendable.value).toBe(true)
     agent.retryDraftImage(failedId)
-    expect(prepare).toHaveBeenCalledTimes(5)
+    expect(prepare).toHaveBeenCalledTimes(10)
   })
 
   it('cancels removed processing and queued images and ignores their late results', async () => {

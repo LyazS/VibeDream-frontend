@@ -1,4 +1,5 @@
 import type { ModelTool } from '../../transport/AgentClient'
+import { AGENT_SEARCH_TOP_K } from '../../constants/search'
 
 export const searchMediaDefinition: ModelTool = {
   name: 'search_media',
@@ -67,9 +68,9 @@ evidence 是检索校验依据，不是正式素材摘要；需要素材完整�
       },
       top_k: {
         type: 'integer',
-        description: '希望返回的候选数量，范围 1-10。默认 5；用户要求多个备选时适当增大。',
-        minimum: 1,
-        maximum: 10,
+        description: `希望返回的候选数量，范围 ${AGENT_SEARCH_TOP_K.min}-${AGENT_SEARCH_TOP_K.max}。默认 ${AGENT_SEARCH_TOP_K.default}；用户要求多个备选时适当增大。`,
+        minimum: AGENT_SEARCH_TOP_K.min,
+        maximum: AGENT_SEARCH_TOP_K.max,
       },
     },
     required: ['query'],

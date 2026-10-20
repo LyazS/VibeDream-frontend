@@ -15,11 +15,14 @@ import {
   type IndexingRuntimeState,
 } from './indexingRuntime'
 import { registerToolCancellationHook, unregisterToolCancellationHook } from './cancellation'
+import {
+  AGENT_SEARCH_MEDIA_TOTAL_STEPS as SEARCH_MEDIA_TOTAL_STEPS,
+  AGENT_SEARCH_TOP_K,
+} from '../constants/search'
 
-const DEFAULT_TOP_K = 5
-const MIN_TOP_K = 1
-const MAX_TOP_K = 10
-const SEARCH_MEDIA_TOTAL_STEPS = 4
+const DEFAULT_TOP_K = AGENT_SEARCH_TOP_K.default
+const MIN_TOP_K = AGENT_SEARCH_TOP_K.min
+const MAX_TOP_K = AGENT_SEARCH_TOP_K.max
 
 export interface SearchMediaExecutionState extends IndexingRuntimeState {
   toolCallId: string

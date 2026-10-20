@@ -145,7 +145,7 @@ it('enforces a strict shared schema and reserves the entire image budget before 
       items: [
         {
           source: { kind: 'media', mediaId: 'video' },
-          timeRange: { start: '00:00:00+00', end: '00:00:01+00' },
+          timeRange: { start: '00:00:00+00', end: '00:00:01+00', frameCount: 9 },
         },
         { source: { kind: 'attachment', attachmentId: 'a' } },
       ],
@@ -237,10 +237,10 @@ it('samples half-open editing ticks, deduplicates actual video frames and labels
   )
   expect(result.success).toBe(true)
   expect(result.attachIds).toHaveLength(1)
-  expect(result.output).toContain('请求 4 帧，去重后返回 1 帧')
+  expect(result.output).toContain('请求 9 帧，去重后返回 1 帧')
   expect(staged[0]!.description).toContain('at=00:00:00+00')
   expect(mocks.sampleDraw).toHaveBeenCalledOnce()
-  expect(mocks.sampleClose).toHaveBeenCalledTimes(4)
+  expect(mocks.sampleClose).toHaveBeenCalledTimes(9)
 })
 
 it('keeps successful targets but drops an entire range if any necessary frame fails', async () => {

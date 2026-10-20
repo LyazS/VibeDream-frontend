@@ -3,9 +3,11 @@
  * 修改版本、基准哈希或数组差分规则时，需同步核对另一端的编码和还原逻辑。
  */
 import { canonicalLog, LOG_ID, logBytes, type LogSpan, type LogUploadSpan } from './agent-log'
+import { AGENT_LOG_MAX_ITEMS } from '../constants/telemetry'
+import { AGENT_LOG_INPUT_DELTA_PROTOCOL_VERSION } from '../constants/protocol'
 
-const VERSION = 'lightcut-agent-input-delta-v1'
-const MAX_ITEMS = 8192
+const VERSION = AGENT_LOG_INPUT_DELTA_PROTOCOL_VERSION
+const MAX_ITEMS = AGENT_LOG_MAX_ITEMS
 type ArrayDelta = { length: number; changes: { index: number; value: unknown }[] }
 export type LogInputDelta = {
   version: typeof VERSION

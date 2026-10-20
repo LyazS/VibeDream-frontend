@@ -18,6 +18,10 @@ import {
   type StopStatus,
 } from '../telemetry/agent-log'
 import { encodeLogInput, hasLogInput } from '../telemetry/agent-log-delta'
+import {
+  AGENT_LOG_LOCAL_QUEUE_WARN_RATIO,
+  AGENT_LOG_MAX_ITEMS,
+} from '../constants/telemetry'
 
 type Owner = { id: string; userId: string; projectId: string }
 export type LocalAgentLog = {
@@ -198,7 +202,10 @@ export class AgentTelemetry {
         state.spans.push(span)
         state.next_sequence++
       }
-      if (logBytes(state.spans) > MAX_LOCAL_LOG_BYTES * 0.45 || state.spans.length > 8192) {
+      if (
+        logBytes(state.spans) > MAX_LOCAL_LOG_BYTES * AGENT_LOG_LOCAL_QUEUE_WARN_RATIO ||
+        state.spans.length > AGENT_LOG_MAX_ITEMS
+      ) {
         // 超限时先保留节点及缺失标记；仍放不下才撤回本次更新，不静默截断正文。
         span.source = {
           ...newLogSource(source.status),
@@ -209,7 +216,10 @@ export class AgentTelemetry {
         }
         if (!state.missing.includes('queue:LOCAL_QUEUE_LIMIT'))
           state.missing.push('queue:LOCAL_QUEUE_LIMIT')
-        if (logBytes(state.spans) > MAX_LOCAL_LOG_BYTES * 0.45 || state.spans.length > 8192) {
+        if (
+          logBytes(state.spans) > MAX_LOCAL_LOG_BYTES * AGENT_LOG_LOCAL_QUEUE_WARN_RATIO ||
+          state.spans.length > AGENT_LOG_MAX_ITEMS
+        ) {
           if (existing) state.spans[state.spans.indexOf(span)] = existing
           else state.spans.pop()
           return undefined
@@ -244,7 +254,7 @@ export class AgentTelemetry {
       ended_at: end,
       duration_ms: Date.parse(end) - Date.parse(span.source.started_at),
     })
-    if (logBytes(state.spans) > MAX_LOCAL_LOG_BYTES * 0.45) {
+    if (logBytes(state.spans) > MAX_LOCAL_LOG_BYTES * AGENT_LOG_LOCAL_QUEUE_WARN_RATIO) {
       delete span.source.output
       delete span.source.events
       span.source.completeness.missing.push('output:LOCAL_QUEUE_LIMIT')

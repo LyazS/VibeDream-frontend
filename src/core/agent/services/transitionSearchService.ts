@@ -1,5 +1,6 @@
 import { runAiTask } from '@/core/ai-tasks/taskApi'
 import type { LocalizedTagList, LocalizedText } from '@/core/effect-template/catalogTypes'
+import { AGENT_SEARCH_TOP_K } from '../constants/search'
 
 export interface TransitionSearchResult {
   id: string
@@ -21,7 +22,7 @@ export interface TransitionSearchResponse {
 
 export async function searchTransitions(
   query: string,
-  topK = 5,
+  topK: number = AGENT_SEARCH_TOP_K.default,
   options: { signal?: AbortSignal; projectId?: string } = {},
 ): Promise<TransitionSearchResponse> {
   const { result } = await runAiTask<TransitionSearchResponse>(

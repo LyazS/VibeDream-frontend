@@ -497,13 +497,13 @@ it('updates the visible image count warning when the language changes', async ()
   mocks.store.agentDraft.imageError = 'imageCountLimit'
   await nextTick()
   const alert = findNode((node) => node.props.role === 'alert')
-  expect(alert.value).toBe('Up to 4 images per message')
+  expect(alert.value).toBe('Up to 9 images per message')
   i18n.global.locale.value = 'zh-CN'
   await nextTick()
-  expect(alert.value).toBe('每条消息最多添加 4 张图片')
+  expect(alert.value).toBe('每条消息最多添加 9 张图片')
   i18n.global.locale.value = 'en-US'
   await nextTick()
-  expect(alert.value).toBe('Up to 4 images per message')
+  expect(alert.value).toBe('Up to 9 images per message')
 })
 
 it('restores shared text and images after unmount, recreating only component preview URLs', async () => {

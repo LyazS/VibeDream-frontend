@@ -187,10 +187,10 @@ it('refreshes expired tool uploads using the saved Blob and preserves it on cach
   expect((await store.readImage(data, observed.id))?.recordKind).toBe('tool_image')
 })
 
-it('selects the latest 12 observations before uploading and does not mutate persistent history', async () => {
+it('uploads all historical observations once and does not mutate persistent history', async () => {
   const store = new AgentSessionStore(),
     data = session()
-  // 历史可完整保留十六张图，本轮只上传最近十二张，不能裁剪持久化消息。
+  // 历史消息可以完整保留十六张图，本轮全部上传且不能裁剪持久化消息。
   const observations = Array.from({ length: 16 }, (_, i) => image(`image_${i}`))
   data.messages = observations.map((observed, i) => ({
     ...data.messages[1]!,
@@ -205,8 +205,8 @@ it('selects the latest 12 observations before uploading and does not mutate pers
     expiresAt: new Date(Date.now() + 3600000).toISOString(),
   })
   const resolved = await prepareAgentImages(data, store, new AbortController().signal, () => true)
-  expect(upload).toHaveBeenCalledTimes(12)
-  expect(resolved.get('image_0')).toMatchObject({ reason: 'context_budget' })
+  expect(upload).toHaveBeenCalledTimes(16)
+  expect(resolved.get('image_0')).toMatchObject({ kind: 'image' })
   expect(resolved.get('image_15')).toMatchObject({ kind: 'image' })
   expect((await store.load('user', 'project'))[0]!.messages).toHaveLength(16)
   expect(await store.readImage(data, 'image_0')).toBeDefined()
