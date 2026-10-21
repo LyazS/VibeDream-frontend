@@ -133,7 +133,6 @@ import { NButton, NInput, NInputNumber, NSelect } from 'naive-ui'
 import { IconComponents } from '@/constants/iconComponents'
 import { useAppI18n } from '@/core/composables/useI18n'
 import { getAgentErrorKey } from '@/components/agent/agentErrorMessage'
-import { fetchClient } from '@/utils/fetchClient'
 import { transitionTemplateCatalogService } from '@/core/effect-template/TransitionTemplateCatalogService'
 import type { TransitionTemplateListResponse } from '@/core/effect-template/catalogTypes'
 import { framesToTimecode } from '@/core/utils/timeUtils'
@@ -141,6 +140,7 @@ import { supportsClipTransitionOut } from '@/core/timelineitem/features/transiti
 import { useUnifiedStore } from '@/core/unifiedStore'
 import { executeApplyTransition } from '@/core/agent/tools/transitionTools'
 import { getTrackItems, resolveTransitionTemplate } from '@/core/agent/tools/transitionItemShared'
+import { searchTransitions } from '@/core/agent/services/transitionSearchService'
 
 interface TransitionHit {
   templateId: string
@@ -245,11 +245,18 @@ async function runSearch(): Promise<void> {
   message.value = null
   results.value = []
   try {
-    const response = await fetchClient.post<{ results: TransitionHit[] }>(
-      '/api/transitions/test-search',
-      { query: query.value.trim(), topK: topK.value ?? 5 },
-    )
-    results.value = response.data.results
+    const response = await searchTransitions(query.value.trim(), topK.value ?? 5, {
+      projectId: store.projectId || undefined,
+    })
+    results.value = response.results.map((item) => ({
+      templateId: item.id,
+      catalog_version: item.catalog_version,
+      name: item.name[language.value] || item.name.en || item.id,
+      description:
+        item.agent_description || item.summary[language.value] || item.summary.en || '',
+      matchedTraits: item.matched_traits,
+      score: item.score,
+    }))
     if (
       catalog.value &&
       results.value.some((hit) => hit.catalog_version !== catalog.value?.catalog_version)

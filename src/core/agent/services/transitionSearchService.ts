@@ -4,6 +4,7 @@ import { AGENT_SEARCH_TOP_K } from '../constants/search'
 
 export interface TransitionSearchResult {
   id: string
+  catalog_version: string
   package_version: string
   name: LocalizedText
   summary: LocalizedText
