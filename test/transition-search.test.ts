@@ -103,7 +103,7 @@ describe('shared AI task client', () => {
   })
 
   it.each([
-    ['/api/media/upload-policies', 'ai-tasks'],
+    ['/api/providers/dashscope/uploads/policy', 'ai-tasks'],
     ['/api/media/indexing/reconcile', 'media.indexing'],
     ['/api/transitions/test-search', 'transition.search'],
   ])('maps support endpoint %s to %s', (path, capability) => {

@@ -25,6 +25,7 @@ interface UploadPolicyData {
   x_oss_object_acl: string
   x_oss_forbid_overwrite: string
   key: string
+  object_ref: string
 }
 
 interface UploadPolicyResponse {
@@ -42,7 +43,7 @@ export interface CfBailianTempFileUploadResult {
 }
 
 /**
- * 通过 Cloudflare Worker 申请百炼临时 OSS 上传凭证，浏览器随后直传文件。
+ * 通过 DashScope 专属 Cloudflare Worker 接口申请临时 OSS 上传凭证，浏览器随后直传文件。
  * Worker 从不代理文件字节：大文件不占用 Worker 执行时间，且 DashScope API Key 不会暴露到浏览器。
  */
 export class CfBailianTempFileUploader {
@@ -57,7 +58,7 @@ export class CfBailianTempFileUploader {
       throw new Error('搜索候选上传必须关联项目和索引点')
     }
     const response = await fetchClient.post<UploadPolicyResponse>(
-      '/api/media/upload-policies',
+      '/api/providers/dashscope/uploads/policy',
       {
         capability: request.capability,
         purpose: request.purpose,
@@ -127,7 +128,7 @@ export class CfBailianTempFileUploader {
     if (xhr.status < 200 || xhr.status >= 300) {
       throw new Error(`临时文件 OSS 直传失败: HTTP ${xhr.status} ${xhr.responseText}`)
     }
-    return `oss://${policyData.key}`
+    return policyData.object_ref
   }
 
   static async uploadBlob(

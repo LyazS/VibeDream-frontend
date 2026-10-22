@@ -78,7 +78,7 @@ export function getApiPath(url: string): string | undefined {
 export function getApiCapability(path: string, body?: BodyInit | null): ApiCapability {
   if (path === '/api/agent/tools/describe-item-property') return 'item-properties'
   if (path === '/api/transitions/test-search') return 'transition.search'
-  if (path === '/api/media/upload-policies') {
+  if (path === '/api/providers/dashscope/uploads/policy') {
     if (typeof body === 'string') {
       try {
         if (JSON.parse(body)?.capability === 'agent') return 'agent'

@@ -280,13 +280,13 @@ it('rolls back both stores when deletion fails and refuses late upload cache cre
 it('allows image policies with only agent enabled, and redacts temporary image URLs from logs', () => {
   expect(() =>
     assertApiCapabilityEnabled(
-      '/api/media/upload-policies',
+      '/api/providers/dashscope/uploads/policy',
       JSON.stringify({ capability: 'agent' }),
     ),
   ).not.toThrow()
   expect(() =>
     assertApiCapabilityEnabled(
-      '/api/media/upload-policies',
+      '/api/providers/dashscope/uploads/policy',
       JSON.stringify({ capability: 'indexing' }),
     ),
   ).toThrow()
