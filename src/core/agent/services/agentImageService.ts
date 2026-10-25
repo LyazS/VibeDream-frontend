@@ -7,19 +7,21 @@ import {
 import { abortable } from '@/core/utils/abortable'
 import type {
   AgentAttachment,
-  AgentAttachmentRecord,
   AgentAttachmentScope,
   AgentImage,
   AgentImageConversionParams,
   AgentImageMimeType,
   AgentSession,
+  ProviderUpload,
 } from '../types'
 import { MessagePartType } from '../types'
 import type { AgentSessionStore } from '../runtime/AgentSessionStore'
 import {
-  CfBailianTempFileUploader,
-  type CfBailianTempFileUploadRequest,
-} from '@/core/utils/cfBailianTempFileUploader'
+  uploadAgentImage,
+  validProviderUpload,
+  type AgentImageUploadScope,
+  type AgentImageUploadInput,
+} from './agentProviderService'
 import { fileSystemService } from '@/core/managers/filesystem/fileSystemService'
 import { FileSystemError } from '@/core/filesystem/errors/FileSystemError'
 import { ErrorCode } from '@/core/filesystem/errors/ErrorCodes'
@@ -52,7 +54,7 @@ export class AgentImageUploadError extends Error {
   readonly code = 'AGENT_IMAGE_UPLOAD_FAILED'
 
   constructor(detail?: string) {
-    super(detail || 'Upload service did not return a valid image URL')
+    super(detail || 'Upload service did not return a valid image reference')
     this.name = 'AgentImageUploadError'
   }
 }
@@ -68,6 +70,7 @@ export type ResolvedAgentImage =
   | ({
       kind: 'image'
       url: string
+      upload: ProviderUpload
       fileName: string
     } & (
       | { recordKind: 'user_attachment'; source: 'available' | 'missing' }
@@ -426,22 +429,6 @@ export async function readAgentImageSource(image: AgentAttachment): Promise<Blob
   }
 }
 
-const uploadWindowMs = 11 * 60_000
-type AgentImageUpload = NonNullable<AgentAttachmentRecord['upload']>
-function validUpload(upload: Partial<AgentImageUpload> | undefined): upload is AgentImageUpload {
-  return Boolean(
-    typeof upload?.url === 'string' &&
-      typeof upload.expiresAt === 'string' &&
-      /^oss:\/\/dashscope-instant\/[A-Za-z0-9_./-]+$/.test(upload.url) &&
-      !upload.url
-        .slice(6)
-        .split('/')
-        .some((part) => part === '.' || part === '..') &&
-      Number.isFinite(Date.parse(upload.expiresAt)) &&
-      Date.parse(upload.expiresAt) > Date.now() + uploadWindowMs,
-  )
-}
-
 type ImageWaiter = { signal: AbortSignal; isCurrent: () => boolean }
 type ImagePreparation = {
   controller: AbortController
@@ -478,10 +465,16 @@ class AgentImageResolver {
     for (const key of this.images.keys()) if (key.startsWith(prefix)) this.images.delete(key)
   }
 
-  resolve(session: AgentSession, id: string, signal: AbortSignal, isCurrent: () => boolean) {
+  resolve(
+    session: AgentSession,
+    id: string,
+    scope: AgentImageUploadScope,
+    signal: AbortSignal,
+    isCurrent: () => boolean,
+  ) {
     signal.throwIfAborted()
     if (!isCurrent()) return Promise.reject(new DOMException('图片准备已取消', 'AbortError'))
-    const key = this.key(session, id)
+    const key = `${this.key(session, id)}:${JSON.stringify(scope.provider)}`
     let task = this.preparations.get(key)
     if (!task) {
       const controller = new AbortController()
@@ -496,7 +489,7 @@ class AgentImageResolver {
         controller,
         waiters,
         result: Promise.resolve().then(() =>
-          this.prepare(session, id, key, controller.signal, check, current),
+          this.prepare(session, id, scope, controller.signal, check, current),
         ),
       }
       this.preparations.set(key, task)
@@ -536,7 +529,7 @@ class AgentImageResolver {
   private async prepare(
     session: AgentSession,
     id: string,
-    key: string,
+    scope: AgentImageUploadScope,
     signal: AbortSignal,
     check: () => void,
     isCurrent: () => boolean,
@@ -547,44 +540,39 @@ class AgentImageResolver {
     if (!image) return { kind: 'unavailable', reason: 'record_missing' }
     const uploadImage = async (
       blob: Blob,
-      metadata: Pick<
-        CfBailianTempFileUploadRequest,
-        'fileName' | 'mimeType' | 'byteSize' | 'width' | 'height'
-      >,
-    ): Promise<string> => {
-      const result = await CfBailianTempFileUploader.uploadBlob(
-        blob,
-        {
-          capability: 'agent',
-          purpose: 'agent-image',
-          projectId: session.projectId,
-          ...metadata,
-        },
-        undefined,
-        signal,
-      )
+      metadata: AgentImageUploadInput,
+    ): Promise<ProviderUpload> => {
+      let upload
+      try {
+        upload = await uploadAgentImage(blob, metadata, scope, signal)
+      } catch (error) {
+        if (signal.aborted || (error instanceof Error && 'code' in error)) throw error
+        throw new AgentImageUploadError(error instanceof Error ? error.message : undefined)
+      }
       check()
-      const upload = { url: result.url, expiresAt: result.expiresAt }
-      if (!result.success || !validUpload(upload)) throw new AgentImageUploadError(result.error)
-      if (!(await this.store.updateImageUpload(image, upload, isCurrent)))
+      if (!validProviderUpload(upload, scope.provider.id)) throw new AgentImageUploadError()
+      if (!(await this.store.updateImageUpload(image, scope.provider.id, upload, isCurrent)))
         throw new DOMException('图片准备已取消', 'AbortError')
       check()
-      return upload.url
+      return upload
     }
+    const cached = image.providerUploads?.[scope.provider.id]
     if (image.recordKind === 'tool_image') {
       // 临时地址过期后重新上传已保存的 Blob，不能按最新素材或时间轴重做历史观察。
       const fileName = image.id
-      if (validUpload(image.upload))
+      if (validProviderUpload(cached, scope.provider.id))
         return {
           kind: 'image',
           recordKind: image.recordKind,
-          url: image.upload.url,
+          url: cached.reference,
+          upload: cached,
           source: 'available',
           fileName,
           description: image.description,
         }
-      const url = await uploadImage(image.blob, {
-        fileName: `${image.id}.${image.mimeType.split('/')[1]}`,
+      const upload = await uploadImage(image.blob, {
+        // DashScope 的 JPEG 上传策略使用 .jpg；MIME 的标准后缀是 .jpeg，不能直接拼接。
+        fileName: `${image.id}.${image.mimeType === 'image/jpeg' ? 'jpg' : image.mimeType.split('/')[1]}`,
         mimeType: image.mimeType,
         byteSize: image.byteSize,
         width: image.width,
@@ -593,7 +581,8 @@ class AgentImageResolver {
       return {
         kind: 'image',
         recordKind: image.recordKind,
-        url,
+        url: upload.reference,
+        upload,
         source: 'available',
         fileName,
         description: image.description,
@@ -607,16 +596,17 @@ class AgentImageResolver {
       if (!(error instanceof AgentImageSourceError)) throw error
     }
     check()
-    if (validUpload(image.upload))
+    if (validProviderUpload(cached, scope.provider.id))
       return {
         kind: 'image',
         recordKind: image.recordKind,
-        url: image.upload.url,
+        url: cached.reference,
+        upload: cached,
         source: source ? 'available' : 'missing',
         fileName,
       }
     if (!source) return { kind: 'unavailable', reason: 'source_missing', fileName }
-    let blob = this.images.get(key)
+    let blob = this.images.get(this.key(session, id))
     if (!blob) {
       const rebuilt = await encodeAgentImage(
         source,
@@ -626,16 +616,23 @@ class AgentImageResolver {
       )
       check()
       blob = rebuilt.blob
-      this.images.set(key, blob)
+      this.images.set(this.key(session, id), blob)
     }
-    const url = await uploadImage(blob, {
+    const upload = await uploadImage(blob, {
       fileName: `${crypto.randomUUID()}.webp`,
       mimeType: image.conversionParams.mimeType,
       byteSize: blob.size,
       width: image.conversionParams.width,
       height: image.conversionParams.height,
     })
-    return { kind: 'image', recordKind: image.recordKind, url, source: 'available', fileName }
+    return {
+      kind: 'image',
+      recordKind: image.recordKind,
+      url: upload.reference,
+      upload,
+      source: 'available',
+      fileName,
+    }
   }
 }
 
@@ -665,6 +662,7 @@ export function forgetAgentImages(store: AgentSessionStore, session?: AgentSessi
 export async function prepareAgentImages(
   session: AgentSession,
   store: AgentSessionStore,
+  scope: AgentImageUploadScope,
   signal: AbortSignal,
   isCurrent: () => boolean,
 ): Promise<Map<string, ResolvedAgentImage>> {
@@ -684,7 +682,7 @@ export async function prepareAgentImages(
   const images = new Map<string, ResolvedAgentImage>()
   for (const id of ids) {
     check()
-    const image = await resolverFor(store).resolve(session, id, signal, isCurrent)
+    const image = await resolverFor(store).resolve(session, id, scope, signal, isCurrent)
     check()
     images.set(id, image)
   }
@@ -694,6 +692,7 @@ export async function prepareAgentImages(
 export async function invalidateAgentImageUploads(
   session: AgentSession,
   store: AgentSessionStore,
+  providerId: string,
   isCurrent: () => boolean,
 ) {
   const ids = new Set(
@@ -706,7 +705,7 @@ export async function invalidateAgentImageUploads(
   for (const id of ids) {
     if (!isCurrent()) return
     const image = await store.readImage(session, id)
-    if (image) await store.updateImageUpload(image, undefined, isCurrent)
+    if (image) await store.updateImageUpload(image, providerId, undefined, isCurrent)
   }
 }
 

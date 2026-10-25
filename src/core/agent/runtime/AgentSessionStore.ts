@@ -4,6 +4,7 @@ import {
   MessagePartType,
   type AgentAttachment,
   type AgentAttachmentRecord,
+  type ProviderUpload,
   type AgentSession,
   type AgentToolImage,
   type AgentUserAttachmentRecord,
@@ -362,7 +363,8 @@ export class AgentSessionStore {
   /** 只更新仍属于当前调用的上传缓存，不改变已经保存的图片内容。 */
   updateImageUpload(
     image: AgentAttachmentRecord,
-    upload: AgentAttachmentRecord['upload'],
+    providerId: string,
+    upload: ProviderUpload | undefined,
     isCurrent: () => boolean,
   ): Promise<boolean> {
     return this.enqueue(async () => {
@@ -386,7 +388,12 @@ export class AgentSessionStore {
             existing.userId === image.userId &&
             existing.projectId === image.projectId
           ) {
-            store.put({ ...existing, upload })
+            const providerUploads = {
+              ...existing.providerUploads,
+              ...(upload ? { [providerId]: upload } : {}),
+            }
+            if (!upload) delete providerUploads[providerId]
+            store.put({ ...existing, providerUploads })
             updated = true
           }
         }

@@ -1,3 +1,7 @@
+const uploadScope = {
+  provider: { id: 'dashscope', route_hash: 'a'.repeat(64) },
+  projectId: 'project',
+}
 /** 覆盖工具观察图的原子存储、归属隔离、上传缓存和单次调用暂存规则。 */
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { IDBFactory, IDBObjectStore } from 'fake-indexeddb'
@@ -14,7 +18,7 @@ import {
   prepareAgentImages,
   invalidateAgentImageUploads,
 } from '@/core/agent/services/agentImageService'
-import { CfBailianTempFileUploader } from '@/core/utils/cfBailianTempFileUploader'
+import * as agentProvider from '@/core/agent/services/agentProviderService'
 import { agentImageFixture } from './helpers/agent-files'
 
 vi.mock('@/core/managers/filesystem/fileSystemService', async () => ({
@@ -162,29 +166,61 @@ it('refreshes expired tool uploads using the saved Blob and preserves it on cach
     data = session(),
     observed = image()
   await store.save(data, [observed])
-  const upload = vi.spyOn(CfBailianTempFileUploader, 'uploadBlob').mockResolvedValue({
-    success: true,
-    url: 'oss://dashscope-instant/test/observation.webp',
+  const upload = vi.spyOn(agentProvider, 'uploadAgentImage').mockResolvedValue({
+    providerId: 'dashscope',
+    reference: 'oss://dashscope-instant/test/observation.webp',
     expiresAt: new Date(Date.now() + 3600000).toISOString(),
   })
-  const resolved = await prepareAgentImages(data, store, new AbortController().signal, () => true)
+  const resolved = await prepareAgentImages(
+    data,
+    store,
+    uploadScope,
+    new AbortController().signal,
+    () => true,
+  )
   expect(resolved.get(observed.id)).toMatchObject({
     kind: 'image',
     description: observed.description,
   })
   expect(await (upload.mock.calls[0]![0] as Blob).text()).toBe(await observed.blob.text())
-  await prepareAgentImages(data, store, new AbortController().signal, () => true)
+  await prepareAgentImages(data, store, uploadScope, new AbortController().signal, () => true)
   expect(upload).toHaveBeenCalledOnce()
-  await invalidateAgentImageUploads(data, store, () => true)
+  await invalidateAgentImageUploads(data, store, 'dashscope', () => true)
   const record = await store.readImage(data, observed.id)
-  expect(record?.upload).toBeUndefined()
+  expect(record?.providerUploads?.dashscope).toBeUndefined()
   if (record?.recordKind !== 'tool_image') throw new Error('missing Blob')
   expect(await record.blob.text()).toBe(await observed.blob.text())
-  upload.mockResolvedValue({ success: false, error: 'network' })
+  upload.mockRejectedValue(new Error('network'))
   await expect(
-    prepareAgentImages(data, store, new AbortController().signal, () => true),
+    prepareAgentImages(data, store, uploadScope, new AbortController().signal, () => true),
   ).rejects.toThrow()
   expect((await store.readImage(data, observed.id))?.recordKind).toBe('tool_image')
+})
+
+it('uses the DashScope-compatible .jpg suffix for JPEG tool observations', async () => {
+  const store = new AgentSessionStore()
+  const data = session()
+  const observed = {
+    ...image(),
+    blob: new Blob(['jpeg observation'], { type: 'image/jpeg' }),
+    mimeType: 'image/jpeg' as const,
+    byteSize: 16,
+  }
+  await store.save(data, [observed])
+  const upload = vi.spyOn(agentProvider, 'uploadAgentImage').mockResolvedValue({
+    providerId: 'dashscope',
+    reference: 'oss://dashscope-instant/test/observation.jpg',
+    expiresAt: new Date(Date.now() + 3600000).toISOString(),
+  })
+
+  await prepareAgentImages(data, store, uploadScope, new AbortController().signal, () => true)
+
+  expect(upload).toHaveBeenCalledWith(
+    expect.any(Blob),
+    expect.objectContaining({ fileName: 'observation.jpg', mimeType: 'image/jpeg' }),
+    uploadScope,
+    expect.any(AbortSignal),
+  )
 })
 
 it('uploads all historical observations once and does not mutate persistent history', async () => {
@@ -199,12 +235,18 @@ it('uploads all historical observations once and does not mutate persistent hist
     parts: [{ type: MessagePartType.IMAGE, attachmentId: observed.id }],
   }))
   await store.save(data, observations)
-  const upload = vi.spyOn(CfBailianTempFileUploader, 'uploadBlob').mockResolvedValue({
-    success: true,
-    url: 'oss://dashscope-instant/test/observation.webp',
+  const upload = vi.spyOn(agentProvider, 'uploadAgentImage').mockResolvedValue({
+    providerId: 'dashscope',
+    reference: 'oss://dashscope-instant/test/observation.webp',
     expiresAt: new Date(Date.now() + 3600000).toISOString(),
   })
-  const resolved = await prepareAgentImages(data, store, new AbortController().signal, () => true)
+  const resolved = await prepareAgentImages(
+    data,
+    store,
+    uploadScope,
+    new AbortController().signal,
+    () => true,
+  )
   expect(upload).toHaveBeenCalledTimes(16)
   expect(resolved.get('image_0')).toMatchObject({ kind: 'image' })
   expect(resolved.get('image_15')).toMatchObject({ kind: 'image' })

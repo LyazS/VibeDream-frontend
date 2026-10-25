@@ -321,7 +321,12 @@ describe('import_attachment integration', () => {
     const image = (await sessions.readImage(session(), 'image'))!
     await sessions.updateImageUpload(
       image,
-      { url: 'oss://dashscope-instant/image', expiresAt: '2099-01-01T00:00:00Z' },
+      'dashscope',
+      {
+        providerId: 'dashscope',
+        reference: 'oss://dashscope-instant/image',
+        expiresAt: '2099-01-01T00:00:00Z',
+      },
       () => true,
     )
     agentFiles.delete(image.original.relativePath)

@@ -75,19 +75,11 @@ export function getApiPath(url: string): string | undefined {
   return undefined
 }
 
-export function getApiCapability(path: string, body?: BodyInit | null): ApiCapability {
+export function getApiCapability(path: string, _body?: BodyInit | null): ApiCapability {
+  if (path === '/api/providers/dashscope/agent/uploads') return 'agent'
   if (path === '/api/agent/tools/describe-item-property') return 'item-properties'
   if (path === '/api/transitions/test-search') return 'transition.search'
-  if (path === '/api/providers/dashscope/uploads/policy') {
-    if (typeof body === 'string') {
-      try {
-        if (JSON.parse(body)?.capability === 'agent') return 'agent'
-      } catch {
-        /* Invalid JSON is rejected by the API. */
-      }
-    }
-    return 'ai-tasks'
-  }
+  if (path === '/api/providers/dashscope/uploads/policy') return 'ai-tasks'
   if (path === '/api/media/indexing/reconcile') return 'media.indexing'
   return capabilityPrefixes.find(([prefix]) => path.startsWith(prefix))?.[1] ?? 'other'
 }

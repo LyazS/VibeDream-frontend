@@ -43,6 +43,8 @@ class Socket extends EventTarget {
 // 每个用例共用的合法请求模板，特殊场景通过复制并覆盖字段构造。
 const params = {
   modelCallId: 'turn-1',
+
+  provider: { id: 'dashscope', route_hash: 'a'.repeat(64) },
   messages: [
     { role: 'system' as const, content: 'caller prompt' },
     { role: 'user' as const, content: 'hello' },
@@ -242,7 +244,7 @@ describe('project-scoped single-turn client', /** 组织工程范围内单轮客
     await started(c)
     const frame = JSON.parse(sockets[0].sent[0])
     expect(frame).toMatchObject({
-      protocol_version: 'agent-model-calls-v1',
+      protocol_version: 'agent-model-calls-v2',
       project_id: 'project-1',
       messages: params.messages,
       tools: [],
@@ -491,4 +493,30 @@ describe('project-scoped single-turn client', /** 组织工程范围内单轮客
       'CLIENT_DISPOSED',
     )
   })
+})
+
+it('reports provider changes as a recoverable unaccepted request and reuses the connection', async () => {
+  const c = client()
+  const pending = c.stream(params)
+  sockets[0].open()
+  await flush()
+  expect(JSON.parse(sockets[0].sent[0])).toMatchObject({
+    provider: params.provider,
+
+  })
+  const provider = { id: 'other', route_hash: 'b'.repeat(64) }
+  sockets[0].frame('request.rejected', { code: 'AGENT_PROVIDER_CHANGED', provider })
+  await expect(pending).rejects.toMatchObject({
+    code: 'AGENT_PROVIDER_CHANGED',
+    acceptance: 'not_accepted',
+    provider,
+  })
+  expect(sockets[0].readyState).toBe(1)
+  const next = c.stream({ ...params, modelCallId: 'turn-2', provider })
+  await flush()
+  sockets[0].frame('model_call.started', {}, 'turn-2')
+  const output = await next
+  complete(sockets[0], 'turn-2')
+  await expect(output.finalCompletion()).resolves.toMatchObject({ modelCallId: 'turn-2' })
+  expect(sockets).toHaveLength(1)
 })

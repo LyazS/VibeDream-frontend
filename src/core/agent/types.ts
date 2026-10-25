@@ -63,12 +63,19 @@ export type AgentImage = AgentAttachment & {
 }
 
 /** 图片记录的存储索引及临时上传缓存，统一限定到账户、工程和会话。 */
+export type ProviderUpload = {
+  providerId: string
+  reference: string
+  expiresAt: string
+  metadata?: Record<string, unknown>
+}
+
 export type AgentAttachmentRecordBase = AgentAttachmentScope & {
   key: string
   owner: string
   sessionKey: string
   id: string
-  upload?: { url: string; expiresAt: string }
+  providerUploads?: Record<string, ProviderUpload>
 }
 
 /** 用户附件保留原文件位置，导入素材时仍读取完整原图。 */

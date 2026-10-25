@@ -1,5 +1,10 @@
+import {
+  validAgentProviderSnapshot,
+  type AgentProviderSnapshot,
+} from '../services/agentProviderService'
 import type { LogIdentity } from '../telemetry/agent-log'
 import type { AgentTokenUsage, AgentUsageRecord } from '../runtime/AgentUsage'
+import type { ProviderUpload } from '../types'
 import { AGENT_MODEL_CALL_PROTOCOL_VERSION } from '../constants/protocol'
 // 单轮文本及工具协议，客户端与服务端必须使用同一版本。
 export const AGENT_PROTOCOL_VERSION = AGENT_MODEL_CALL_PROTOCOL_VERSION
@@ -11,6 +16,7 @@ export class AgentClientError extends Error {
     public readonly modelCallId: string | undefined,
     public readonly acceptance: Acceptance,
     message = code,
+    public readonly provider?: AgentProviderSnapshot,
   ) {
     super(message)
     this.name = 'AgentClientError'
@@ -26,7 +32,7 @@ export type ConnectionState = Readonly<{
 }>
 /** 用户和工具正文支持有序图文部件。 */
 export type TextContentPart = { type: 'text'; text: string }
-export type ImageContentPart = { type: 'image_url'; image_url: { url: string } }
+export type ImageContentPart = { type: 'image'; image: ProviderUpload }
 export type MessageContent = string | TextContentPart[]
 export type MultimodalContent = string | (TextContentPart | ImageContentPart)[]
 export type TextMessage = { role: 'system' | 'assistant'; content: MessageContent }
@@ -57,6 +63,7 @@ export type StreamParams = {
   /** 关联浏览器与服务端日志的身份；本地日志不可用时仍允许正常发起模型调用。 */
   telemetry?: LogIdentity
   modelCallId: string
+  provider: AgentProviderSnapshot
   messages: ModelMessage[]
   tools?: ModelTool[]
   projectId: string
@@ -334,6 +341,7 @@ export class AgentClient {
       protocol_version: AGENT_PROTOCOL_VERSION,
       model_call_id: params.modelCallId,
       project_id: params.projectId,
+      provider: params.provider,
       messages: params.messages,
       tools: params.tools ?? [],
       ...(params.telemetry ? { telemetry: params.telemetry } : {}),
@@ -568,11 +576,24 @@ export class AgentClient {
           this.close('PROTOCOL_INVALID')
           return
         }
+        if (v.code === 'AGENT_PROVIDER_CHANGED' && !validAgentProviderSnapshot(v.provider)) {
+          this.close('PROTOCOL_INVALID')
+          return
+        }
         this.options.onSettlement?.(call.params.modelCallId, {
           usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0, cachedInputTokens: 0 },
           chargedAmount: '0',
         })
-        this.fail(call, new AgentClientError(v.code, call.params.modelCallId, 'not_accepted'))
+        this.fail(
+          call,
+          new AgentClientError(
+            v.code,
+            call.params.modelCallId,
+            'not_accepted',
+            v.code,
+            v.provider as AgentProviderSnapshot | undefined,
+          ),
+        )
         this.release(call)
         return
       case 'model_call.failed':

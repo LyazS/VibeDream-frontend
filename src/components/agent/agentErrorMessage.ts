@@ -17,6 +17,8 @@ const errorKeys: Readonly<Record<string, string>> = {
   UNAUTHENTICATED: 'loginRequired',
   INSUFFICIENT_BALANCE: 'insufficientBalance',
   ACCOUNT_DISABLED: 'accountDisabled',
+  AGENT_PROVIDER_CHANGED: 'providerChanged',
+  AGENT_IMAGES_UNSUPPORTED: 'imagesUnsupported',
   AGENT_IMAGE_URL_EXPIRED: 'imageExpired',
   AGENT_IMAGE_UPLOAD_FAILED: 'imageUploadFailed',
   AGENT_IMAGE_SOURCE_MISSING: 'imageSourceMissing',

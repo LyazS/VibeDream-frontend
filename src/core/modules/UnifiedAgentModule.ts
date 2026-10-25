@@ -1,3 +1,7 @@
+import {
+  getAgentProvider,
+  type AgentProviderSnapshot,
+} from '@/core/agent/services/agentProviderService'
 import { computed, onScopeDispose, readonly, ref, shallowRef, watch } from 'vue'
 import { API_BASE_URL } from '@/config/runtimeConfig'
 import { enabledApiCapabilities } from '@/config/apiCapabilities'
@@ -62,6 +66,7 @@ type AgentRun = {
   modelCall: ModelCallSummary | null
   awaitingCompletion: boolean
   committed: boolean
+  provider?: AgentProviderSnapshot
 }
 
 export type AgentDraftImage = {
@@ -624,7 +629,7 @@ export function createUnifiedAgentModule(registry: ModuleRegistry) {
                   },
                 ]
               return [
-                { type: 'image_url', image_url: { url: image.url } },
+                { type: 'image', image: image.upload },
                 {
                   type: 'text',
                   text: `${part.attachmentId}：${image.description}`,
@@ -640,7 +645,7 @@ export function createUnifiedAgentModule(registry: ModuleRegistry) {
                 },
               ]
             return [
-              { type: 'image_url', image_url: { url: image.url } },
+              { type: 'image', image: image.upload },
               { type: 'text', text: `[ATTACHMENT ${identity}, original=${image.source}]` },
             ]
           }
@@ -696,7 +701,7 @@ export function createUnifiedAgentModule(registry: ModuleRegistry) {
             },
           ],
         })
-      } else if (content.some((part) => part.type === 'image_url' || part.text.trim())) {
+      } else if (content.some((part) => part.type === 'image' || part.text.trim())) {
         // 3. 普通用户/助手正文只要不是全空白就进入历史，不根据 modelCall 成功或中断状态过滤。
         // 所以失败前的用户输入、已经收到的部分助手回复都会进入用户下一次提交的请求。
         // 任意一段不是全空白就保留整条消息及全部文本部件；trim() 不修改实际发送的文本。
@@ -981,6 +986,7 @@ export function createUnifiedAgentModule(registry: ModuleRegistry) {
             })),
           }),
         )
+      let provider: AgentProviderSnapshot | undefined
       while (isRunCurrent()) {
         // 1. 等待旧模型调用释放槽位，再复核归属；只等待收口，不重放旧请求。
         await client.waitForIdle()
@@ -996,15 +1002,23 @@ export function createUnifiedAgentModule(registry: ModuleRegistry) {
         }
         const current = session.latestModelCall
         control.modelCall = current
+        provider ??= await getAgentProvider(
+          projectId,
+          AbortSignal.any([control.model.signal, control.lifecycle]),
+        )
+        if (!isRunCurrent()) return
+        control.provider = provider
         const imageUrls = await prepareAgentImages(
           session,
           sessionStore,
+          { provider, projectId },
           AbortSignal.any([control.model.signal, control.lifecycle]),
           isRunCurrent,
         )
         if (!isRunCurrent()) return
         const request: StreamParams = {
           modelCallId: current.id,
+          provider,
           projectId,
           tools: JSON.parse(JSON.stringify(agentTools)) as StreamParams['tools'],
           messages: buildTextMessages(buildModelHistory(session, imageUrls)),
@@ -1169,9 +1183,9 @@ export function createUnifiedAgentModule(registry: ModuleRegistry) {
       // 原会话已经删除或身份清理后，旧循环不能覆盖新运行的 modelCall 或消息。
       if (!ownsSession(control) || activeRun.value !== control || control.finalized) return
       if (error instanceof Error && 'code' in error && error.code === 'AGENT_IMAGE_URL_EXPIRED') {
-        await invalidateAgentImageUploads(session, sessionStore, () => ownsSession(control)).catch(
-          (storageFailure: unknown) => reportStorageError(session, storageFailure),
-        )
+        await invalidateAgentImageUploads(session, sessionStore, control.provider!.id, () =>
+          ownsSession(control),
+        ).catch((storageFailure: unknown) => reportStorageError(session, storageFailure))
         if (!ownsSession(control) || activeRun.value !== control || control.finalized) return
       }
       const diagnostic = newLogSource('failed', { phase: 'orchestration' })

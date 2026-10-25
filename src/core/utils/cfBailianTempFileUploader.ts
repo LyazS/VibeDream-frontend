@@ -1,8 +1,8 @@
 import { fetchClient } from '@/utils/fetchClient'
 
 // Worker 只为白名单能力签发 policy。搜索候选额外绑定 point_id，并返回只能在对应任务中使用的 upload_ref。
-export type MediaUploadCapability = 'indexing' | 'rerank' | 'validate' | 'agent'
-export type MediaUploadPurpose = 'tagging' | 'embedding' | 'rerank' | 'validate' | 'agent-image'
+export type MediaUploadCapability = 'indexing' | 'rerank' | 'validate'
+export type MediaUploadPurpose = 'tagging' | 'embedding' | 'rerank' | 'validate'
 
 export interface CfBailianTempFileUploadRequest {
   capability: MediaUploadCapability
@@ -16,7 +16,7 @@ export interface CfBailianTempFileUploadRequest {
   height?: number
 }
 
-interface UploadPolicyData {
+export interface UploadPolicyData {
   upload_host: string
   upload_dir: string
   oss_access_key_id: string
@@ -65,14 +65,6 @@ export class CfBailianTempFileUploader {
         file_name: request.fileName,
         ...(request.projectId ? { project_id: request.projectId } : {}),
         ...(request.pointId ? { point_id: request.pointId } : {}),
-        ...(request.capability === 'agent'
-          ? {
-              mime_type: request.mimeType,
-              byte_size: request.byteSize,
-              width: request.width,
-              height: request.height,
-            }
-          : {}),
       },
       { signal },
     )
@@ -80,7 +72,7 @@ export class CfBailianTempFileUploader {
     return response.data
   }
 
-  private static async uploadBlobToOss(
+  static async uploadBlobToOss(
     blob: Blob,
     policyData: UploadPolicyData,
     onProgress?: (progress: number) => void,
