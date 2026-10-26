@@ -77,6 +77,7 @@ export function getApiPath(url: string): string | undefined {
 
 export function getApiCapability(path: string, _body?: BodyInit | null): ApiCapability {
   if (path === '/api/providers/dashscope/agent/uploads') return 'agent'
+  if (path === '/api/providers/deepseek/agent/uploads') return 'agent'
   if (path === '/api/agent/tools/describe-item-property') return 'item-properties'
   if (path === '/api/transitions/test-search') return 'transition.search'
   if (path === '/api/providers/dashscope/uploads/policy') return 'ai-tasks'

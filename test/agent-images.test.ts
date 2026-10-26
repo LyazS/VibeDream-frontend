@@ -901,3 +901,29 @@ it('prepares historical user images for another provider and preserves both cach
   await prepareAgentImages(data, store, uploadScope, new AbortController().signal, () => true)
   expect(upload).toHaveBeenCalledTimes(3)
 })
+
+it('renews DeepSeek user images from local history after refresh and reuses the provider cache', async () => {
+  const store = new AgentSessionStore()
+  const data = session()
+  const image = attachment()
+  const scope = { ...uploadScope, provider: { id: 'deepseek', route_hash: 'c'.repeat(64) } }
+  const valid = {
+    providerId: 'deepseek', reference: 'file-api-history',
+    expiresAt: new Date(Date.now() + 48 * 3600_000).toISOString(),
+  }
+  await store.save(data, [image])
+  const record = (await store.readImage(data, image.id))!
+  await store.updateImageUpload(record, 'deepseek', {
+    ...valid, expiresAt: new Date(Date.now() + 10 * 60_000).toISOString(),
+  }, () => true)
+  forgetAgentImages(store)
+  const { decode } = stubEncoding()
+  const upload = vi.spyOn(agentProvider, 'uploadAgentImage').mockResolvedValue(valid)
+  const restored = (await store.load('user', 'project'))[0]!
+  await prepareAgentImages(restored, store, scope, new AbortController().signal, () => true)
+  await prepareAgentImages(restored, store, scope, new AbortController().signal, () => true)
+  expect(upload).toHaveBeenCalledOnce()
+  expect(decode).toHaveBeenCalledOnce()
+  expect((await store.readImage(restored, image.id))?.providerUploads?.deepseek).toEqual(valid)
+  expect(restored.messages).toEqual(data.messages)
+})

@@ -4,6 +4,10 @@ import {
   uploadDashScopeAgentImage,
   validDashScopeAgentReference,
 } from '../providers/dashscope/agentImages'
+import {
+  uploadDeepSeekAgentImage,
+  validDeepSeekAgentReference,
+} from '../providers/deepseek/agentImages'
 
 export type AgentProviderSnapshot = { id: string; route_hash: string }
 export type AgentImageUploadScope = {
@@ -54,6 +58,7 @@ export const agentImageAdapters: ReadonlyMap<
     ): Promise<ProviderUpload>
   }
 > = new Map([
+  ['deepseek', { validReference: validDeepSeekAgentReference, upload: uploadDeepSeekAgentImage }],
   [
     'dashscope',
     { validReference: validDashScopeAgentReference, upload: uploadDashScopeAgentImage },

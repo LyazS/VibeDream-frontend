@@ -63,7 +63,7 @@ export class FetchClient {
     return this.request<T>(url, {
       ...config,
       method: 'POST',
-      body: data === undefined ? undefined : JSON.stringify(data),
+      body: data instanceof FormData ? data : data === undefined ? undefined : JSON.stringify(data),
     })
   }
 
@@ -137,6 +137,11 @@ export class FetchClient {
     const notifyUnauthorized = this.captureUnauthorizedHandler()
     const fullUrl = this.buildURL(url, config.params)
     const headers = { ...this.defaultHeaders, ...config.headers }
+    if (config.body instanceof FormData) {
+      for (const key of Object.keys(headers)) {
+        if (key.toLowerCase() === 'content-type') delete headers[key]
+      }
+    }
     let timeoutId: ReturnType<typeof setTimeout> | undefined
     const controller = config.signal ? undefined : new AbortController()
     if (config.timeout) timeoutId = setTimeout(() => controller?.abort(), config.timeout)

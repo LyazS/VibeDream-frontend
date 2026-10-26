@@ -197,6 +197,27 @@ it('refreshes expired tool uploads using the saved Blob and preserves it on cach
   expect((await store.readImage(data, observed.id))?.recordKind).toBe('tool_image')
 })
 
+it('renews DeepSeek tool screenshots after refresh from the saved observation Blob', async () => {
+  const store = new AgentSessionStore()
+  const data = session()
+  const observed = image()
+  const scope = { ...uploadScope, provider: { id: 'deepseek', route_hash: 'c'.repeat(64) } }
+  const valid = { providerId: 'deepseek', reference: 'file-api-shot', expiresAt: new Date(Date.now() + 48 * 3600_000).toISOString() }
+  await store.save(data, [observed])
+  const upload = vi.spyOn(agentProvider, 'uploadAgentImage').mockResolvedValue(valid)
+  await prepareAgentImages(data, store, scope, new AbortController().signal, () => true)
+  const restoredStore = new AgentSessionStore()
+  const restored = (await restoredStore.load('user', 'project'))[0]!
+  await prepareAgentImages(restored, restoredStore, scope, new AbortController().signal, () => true)
+  expect(upload).toHaveBeenCalledOnce()
+  const record = (await restoredStore.readImage(restored, observed.id))!
+  await restoredStore.updateImageUpload(record, 'deepseek', { ...valid, expiresAt: new Date(Date.now() + 10 * 60_000).toISOString() }, () => true)
+  await prepareAgentImages(restored, restoredStore, scope, new AbortController().signal, () => true)
+  expect(upload).toHaveBeenCalledTimes(2)
+  expect(await (upload.mock.calls[1]![0] as Blob).text()).toBe(await observed.blob.text())
+  expect(restored.messages).toEqual(data.messages)
+})
+
 it('uses the DashScope-compatible .jpg suffix for JPEG tool observations', async () => {
   const store = new AgentSessionStore()
   const data = session()
