@@ -6,7 +6,6 @@
       <div class="tool-title-group">
         <div class="tool-title-stack">
           <span class="tool-title">{{ displayName }}</span>
-          <span class="tool-status">{{ t(`aiPanel.toolStatus.${item.status}`) }}</span>
         </div>
       </div>
       <button
@@ -37,6 +36,7 @@
     </div>
 
     <div v-if="isExpanded" class="tool-params-expanded">
+      <p class="tool-status">{{ t(`aiPanel.toolStatus.${item.status}`) }}</p>
       <IndexingRuntimeCard v-if="progressState" :state="progressState" />
       <pre>{{ formattedArgs }}</pre>
 
@@ -242,6 +242,7 @@ const handleCancelToolExecution = async () => {
   box-shadow: none;
 }
 .tool-status {
+  margin: 0 0 8px;
   font-size: 11px;
   color: var(--color-text-secondary);
 }
