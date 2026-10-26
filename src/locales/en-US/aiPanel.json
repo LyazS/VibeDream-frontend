@@ -177,6 +177,16 @@
       "view_media": "View media",
       "view_timeline": "View timeline"
     },
+    "toolStatus": {
+      "queued": "Queued",
+      "running": "Running",
+      "waiting": "Waiting for answer",
+      "completed": "Completed",
+      "failed": "Failed",
+      "skipped": "Skipped",
+      "cancelled": "Cancelled",
+      "interrupted": "Effect unknown"
+    },
     "toolsState": {
       "stop": "Stop",
       "indexing": "Indexing",

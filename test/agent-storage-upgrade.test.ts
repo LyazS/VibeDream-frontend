@@ -1,10 +1,72 @@
 import { afterEach, expect, it, vi } from 'vitest'
 import { IDBFactory } from 'fake-indexeddb'
 import { indexedDBService } from '../src/core/storage/IndexedDBService'
+import { AgentSessionStore } from '../src/core/agent/runtime/AgentSessionStore'
+import type { AgentSession } from '../src/core/agent/types'
 
 afterEach(() => {
   indexedDBService.close()
   vi.unstubAllGlobals()
+})
+
+it('isolates v3 sessions without loading or deleting v2 history, questions or attachments', async () => {
+  indexedDBService.close()
+  vi.stubGlobal('indexedDB', new IDBFactory())
+  const store = new AgentSessionStore()
+  const owner = JSON.stringify(['user', 'project', 'editor-tools-v2'])
+  const sessionKey = JSON.stringify([owner, 'old'])
+  const old = {
+    key: sessionKey,
+    owner,
+    sessionKey,
+    data: {
+      id: 'old',
+      userId: 'user',
+      projectId: 'project',
+      messages: [
+        {
+          id: 'assistant',
+          interaction: { interrupt: { interaction_id: 'old-ask' }, result: null },
+        },
+      ],
+      toolExecutions: {
+        assistant: { call: { id: 'old-ask', name: 'ask_user' }, status: 'pending' },
+      },
+    },
+  }
+  const attachment = { key: JSON.stringify([sessionKey, 'image']), owner, sessionKey, id: 'image' }
+  await indexedDBService.transaction('agentSessions', 'readwrite', (table) => table.put(old))
+  await indexedDBService.transaction('agentAttachments', 'readwrite', (table) =>
+    table.put(attachment),
+  )
+  expect(store.owner('user', 'project')).toBe(
+    JSON.stringify(['user', 'project', 'editor-tools-v3']),
+  )
+  expect(await store.load('user', 'project')).toEqual([])
+  const session: AgentSession = {
+    id: 'new',
+    userId: 'user',
+    projectId: 'project',
+    createdAt: '',
+    updatedAt: '',
+    messages: [],
+    latestModelCall: null,
+    usageRecords: {},
+    toolExecutions: {},
+  }
+  await store.save(session)
+  expect(await store.load('user', 'project')).toEqual([session])
+  expect(await store.load('other', 'project')).toEqual([])
+  expect(
+    await indexedDBService.transaction('agentSessions', 'readonly', (table) =>
+      table.get(sessionKey),
+    ),
+  ).toEqual(old)
+  expect(
+    await indexedDBService.transaction('agentAttachments', 'readonly', (table) =>
+      table.get(attachment.key),
+    ),
+  ).toEqual(attachment)
 })
 
 it('initializes the final attachment table directly in an empty database', async () => {

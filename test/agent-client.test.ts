@@ -106,6 +106,74 @@ afterEach(
 )
 
 describe('project-scoped single-turn client', /** 组织工程范围内单轮客户端的协议和生命周期测试。 */ () => {
+  it('accepts an ordered batch without a fixed call limit', async () => {
+    const c = client()
+    const tools = [{ name: 'read', description: '', parameters: { type: 'object' } }]
+    const pending = c.stream({ ...params, tools })
+    sockets[0].open()
+    await flush()
+    sockets[0].frame('model_call.started')
+    const stream = await pending
+    const tool_calls = Array.from({ length: 40 }, (_, index) => ({
+      id: `call-${index}`,
+      name: 'read',
+      args: { index },
+    }))
+    sockets[0].frame('model_call.completed', {
+      message: { role: 'assistant', content: '', tool_calls },
+      usage: null,
+    })
+    expect((await stream.finalCompletion()).message.tool_calls).toEqual(tool_calls)
+  })
+
+  it.each([
+    'empty',
+    'duplicate',
+    'history_duplicate',
+    'unknown',
+    'extra_field',
+    'invalid_id',
+    'invalid_args',
+  ])('rejects a %s tool batch before delivery', async (invalid) => {
+    const c = client()
+    const call = { id: 'next', name: 'read', args: {} }
+    const tool_calls =
+      invalid === 'empty'
+        ? []
+        : [
+            call,
+            invalid === 'duplicate'
+              ? call
+              : invalid === 'history_duplicate'
+                ? { ...call, id: 'previous' }
+                : invalid === 'unknown'
+                  ? { ...call, id: 'second', name: 'unknown' }
+                  : invalid === 'extra_field'
+                    ? { ...call, id: 'second', extra: true }
+                    : invalid === 'invalid_id'
+                      ? { ...call, id: 'bad id' }
+                      : { ...call, id: 'second', args: [] },
+          ]
+    const pending = c.stream({
+      ...params,
+      tools: [{ name: 'read', description: '', parameters: { type: 'object' } }],
+      messages: [
+        ...params.messages,
+        { role: 'assistant', content: '', tool_calls: [{ ...call, id: 'previous' }] },
+        { role: 'tool', content: 'done', tool_call_id: 'previous', name: 'read' },
+      ],
+    })
+    sockets[0].open()
+    await flush()
+    sockets[0].frame('model_call.started')
+    const stream = await pending
+    sockets[0].frame('model_call.completed', {
+      message: { role: 'assistant', content: '', tool_calls },
+      usage: null,
+    })
+    await expect(stream.finalCompletion()).rejects.toMatchObject({ code: 'PROTOCOL_INVALID' })
+  })
+
   it.each(['model_call.completed', 'model_call.cancelled', 'model_call.failed'])(
     'reports settled usage after local cancellation through %s',
     async (terminal) => {
@@ -244,7 +312,7 @@ describe('project-scoped single-turn client', /** 组织工程范围内单轮客
     await started(c)
     const frame = JSON.parse(sockets[0].sent[0])
     expect(frame).toMatchObject({
-      protocol_version: 'agent-model-calls-v2',
+      protocol_version: 'agent-model-calls-v3',
       project_id: 'project-1',
       messages: params.messages,
       tools: [],
@@ -502,7 +570,6 @@ it('reports provider changes as a recoverable unaccepted request and reuses the 
   await flush()
   expect(JSON.parse(sockets[0].sent[0])).toMatchObject({
     provider: params.provider,
-
   })
   const provider = { id: 'other', route_hash: 'b'.repeat(64) }
   sockets[0].frame('request.rejected', { code: 'AGENT_PROVIDER_CHANGED', provider })

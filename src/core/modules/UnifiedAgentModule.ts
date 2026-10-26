@@ -9,6 +9,7 @@ import { buildTextMessages } from '@/core/agent/prompts/textMessages'
 import { captureBackgroundContext } from '@/core/agent/prompts/backgroundContext'
 import { agentTools, createToolRuntime } from '@/core/agent/runtime/ToolRuntime'
 import { createToolImageStaging } from '@/core/agent/runtime/ToolImageStaging'
+import { registerToolBatchCancellation } from '@/core/agent/tools/cancellation'
 import { AgentSessionStore } from '@/core/agent/runtime/AgentSessionStore'
 import {
   AGENT_MAX_IMAGE_COUNT,
@@ -45,7 +46,6 @@ import {
   getMessageTextParts,
   type AgentMessage,
   ToolCallStatus,
-  type ToolCallPart,
   type InteractionSubmittedVia,
   type AgentSession,
   type ModelCallSummary,
@@ -100,14 +100,6 @@ type LocalSubmission = {
   commit: () => void
   rollback: (error: unknown) => void
 }
-
-const cancellableTools = new Set([
-  'read_media',
-  'search_media',
-  'import_attachment',
-  'view_media',
-  'view_timeline',
-])
 
 /** 创建工程级 Agent 模块，管理本地会话、模型调用及生命周期，并导出只读状态和操作。 */
 export function createUnifiedAgentModule(registry: ModuleRegistry) {
@@ -166,7 +158,7 @@ export function createUnifiedAgentModule(registry: ModuleRegistry) {
   const currentSessionId = ref<string>(crypto.randomUUID())
   // 当前展示数据的入口；loop 必须使用启动时捕获的 session，不从此处取得异步写入目标。
   const currentSession = computed(() => sessions.value[currentSessionId.value])
-  // 唯一对话记录：立即保存用户输入和助手增量，工具调用与结果成对写入；中断保留实际收到的文本。
+  // 唯一对话记录：完整工具批次先登记，结果按顺序提交；中断保留实际收到的文本。
   const currentMessages = computed(() => currentSession.value?.messages ?? [])
   // 最近一次调用只保存状态及消息关联；完整输入输出交给诊断日志。
   const latestModelCall = computed(() => currentSession.value?.latestModelCall ?? null)
@@ -186,7 +178,7 @@ export function createUnifiedAgentModule(registry: ModuleRegistry) {
   const currentRunning = computed(
     () => running.value && activeSessionId.value === currentSessionId.value,
   )
-  // 按助手消息 ID 保存未完成工具；执行中及待回答时保留，调用和结果成对写入消息后移除。
+  // 按工具调用 ID 保存未完成工具；结果提交后移除执行记录。
   const toolExecutions = computed(() => currentSession.value?.toolExecutions ?? {})
   // 从最后一条助手消息推导未回答问题；ask_user 等待期间不占运行槽，停止也保留问题。
   const pendingInteraction = computed(() => {
@@ -390,7 +382,7 @@ export function createUnifiedAgentModule(registry: ModuleRegistry) {
     }
   }
 
-  /** 保存固定会话快照；存储异常阻止新请求，详细恢复策略留待阶段 3.4。 */
+  /** 保存固定会话快照；存储异常阻止新请求。 */
   async function persistSession(session: AgentSession, submission?: LocalSubmission) {
     const toolCommit = toolCommits.get(session.id)
     if (toolCommit) {
@@ -466,43 +458,26 @@ export function createUnifiedAgentModule(registry: ModuleRegistry) {
     return message
   }
 
-  // UI 隐藏工具结果，仅从执行记录投影普通工具的待执行部件，实际消息历史始终没有未配对调用。
-  const displayMessages = computed(
-    /** 把普通工具的运行状态投影给 UI，不向 currentMessages 写入临时工具调用。 */ () => {
-      return currentMessages.value
-        .filter((message) => message.role !== 'tool')
-        .map((message) => {
-          const record = toolExecutions.value[message.id]
-          const execution =
-            record?.status === 'pending' && record.call.name !== 'ask_user' ? record : undefined
-          // ask_user 已由问题卡片展示，回答后补入历史的同一调用不再展示普通工具条。
-          // 只过滤 UI 投影；实际历史仍保留调用及结果，未生成问题卡片的参数错误调用仍显示错误。
-          const parts = message.interaction
-            ? message.parts.filter(
-                (part) =>
-                  part.type !== MessagePartType.TOOL_CALL ||
-                  part.tool_name !== 'ask_user' ||
-                  part.tool_call_id !== message.interaction?.interrupt.interaction_id,
-              )
-            : message.parts
-          return {
-            ...message,
-            parts: execution
-              ? [
-                  ...parts,
-                  {
-                    type: MessagePartType.TOOL_CALL,
-                    tool_call_id: execution.call.id,
-                    tool_name: execution.call.name,
-                    args: execution.call.args,
-                    status: ToolCallStatus.REQUESTED,
-                  } satisfies ToolCallPart,
-                ]
-              : parts,
-          }
-        })
-    },
-  )
+  const displayMessages = computed(() => {
+    return currentMessages.value
+      .filter((message) => message.role !== 'tool')
+      .map((message) => {
+        // ask_user 已由问题卡片展示，同一调用不再展示普通工具条。
+        // 只过滤 UI 投影；实际历史仍保留调用及结果，未生成问题卡片的参数错误调用仍显示错误。
+        const parts = message.interaction
+          ? message.parts.filter(
+              (part) =>
+                part.type !== MessagePartType.TOOL_CALL ||
+                part.tool_name !== 'ask_user' ||
+                part.tool_call_id !== message.interaction?.interrupt.interaction_id,
+            )
+          : message.parts
+        return {
+          ...message,
+          parts,
+        }
+      })
+  })
 
   /** 立即撤销推进权限；首次提交结束后交接，其余阶段同步收口。 */
   function stop() {
@@ -510,10 +485,7 @@ export function createUnifiedAgentModule(registry: ModuleRegistry) {
     if (!run || run.session.id !== currentSessionId.value || run.finalized) return
     run.stopped = true
     run.model.abort()
-    const cancellable = Object.values(run.session.toolExecutions).some(
-      (execution) => execution.status === 'pending' && cancellableTools.has(execution.call.name),
-    )
-    if (cancellable) run.tool.abort()
+    run.tool.abort()
     if (run.committed) finalizeRun(run, 'cancelled')
   }
 
@@ -544,7 +516,13 @@ export function createUnifiedAgentModule(registry: ModuleRegistry) {
 
   /** 取消所有旧运行并隔离内存；已经落盘的历史不随页面/账户清理删除。 */
   function clearMemory() {
-    activeRun.value?.model.abort()
+    const run = activeRun.value
+    if (run) {
+      run.stopped = true
+      run.model.abort()
+      run.tool.abort()
+      finalizeRun(run, 'cancelled')
+    }
     lifecycle.abort()
     lifecycle = new AbortController()
     activeRun.value = null
@@ -587,8 +565,8 @@ export function createUnifiedAgentModule(registry: ModuleRegistry) {
 
   /**
    * 从实际对话生成历史，包含中断前的用户输入、部分助手回复和工具错误结果。
-   * 文本部件逐段映射到 content；工具调用只在结果返回后成对提交，空白普通消息不发送。
-   * UI 的进度投影和 interaction 不属于模型消息，只有回答后提交的 ask_user 配对进入工具历史。
+   * 文本部件逐段映射到 content；同一助手消息保留完整调用数组，空白普通消息不发送。
+   * 只在批次结果完整或问题回答后请求模型，interaction 不属于模型消息。
    */
   function buildModelHistory(
     session: AgentSession,
@@ -682,24 +660,19 @@ export function createUnifiedAgentModule(registry: ModuleRegistry) {
       }
 
       // 2. 助手消息带有工具部件时，转换为 assistant + tool_calls，而不是普通文本消息。
-      // find 只取一个调用，依赖当前“一轮最多一个工具”的协议约束；这里没有多工具合并逻辑。
-      // 未返回结果的普通调用仅保存在 toolExecutions，由 displayMessages 投影给 UI，尚不在此列表。
-      // 未回答的 ask_user 只有 interaction，回答后才由 commitToolResult() 补入工具部件和配对结果。
-      const call = message.parts.find((part) => part.type === MessagePartType.TOOL_CALL)
-      if (call?.type === MessagePartType.TOOL_CALL) {
+      const calls = message.parts.filter((part) => part.type === MessagePartType.TOOL_CALL)
+      if (calls.length) {
         history.push({
           role: 'assistant',
           // 助手可以只有工具调用而没有正文，因此本分支不按空白文本过滤。
           content: textContent,
-          tool_calls: [
-            {
-              id: call.tool_call_id,
-              name: call.tool_name,
-              // 参数来自 JSON 工具协议；序列化复制为普通对象，去掉 Vue 响应式代理供请求快照使用。
-              // 这里只传原参数，不纠正参数类型；工具部件的 UI status 也不会发给模型。
-              args: JSON.parse(JSON.stringify(call.args)) as Record<string, unknown>,
-            },
-          ],
+          tool_calls: calls.map((call) => ({
+            id: call.tool_call_id,
+            name: call.tool_name,
+            // 参数来自 JSON 工具协议；序列化复制为普通对象，去掉 Vue 响应式代理供请求快照使用。
+            // 这里只传原参数，不纠正参数类型；工具部件的 UI status 也不会发给模型。
+            args: JSON.parse(JSON.stringify(call.args)) as Record<string, unknown>,
+          })),
         })
       } else if (content.some((part) => part.type === 'image' || part.text.trim())) {
         // 3. 普通用户/助手正文只要不是全空白就进入历史，不根据 modelCall 成功或中断状态过滤。
@@ -717,7 +690,7 @@ export function createUnifiedAgentModule(registry: ModuleRegistry) {
   }
 
   /**
-   * 通过助手消息 ID 找到原正文，单次替换消息数组，成对补入工具调用及实际结果。
+   * 通过助手消息 ID 找到原正文，更新对应工具部件并按顺序追加实际结果。
    * 用 success 区分成功/失败，错误结果也进入模型历史；同一记录只提交一次，提交后移除执行记录。
    * 保留原 output，只有失败且没有 output 时才使用 error 正文，避免下一轮收不到失败原因。
    */
@@ -728,8 +701,13 @@ export function createUnifiedAgentModule(registry: ModuleRegistry) {
     prepared?: AgentMessage,
     recordTelemetry = true,
   ) {
-    // 同一执行记录已有结果就不再提交，避免重复追加工具调用和结果消息；失败结果也算已提交。
-    if (execution.result) return
+    // 调用 ID 已有结果就不再提交，重复回调不能追加结果或图片。
+    if (
+      session.messages.some(
+        (message) => message.role === 'tool' && message.toolCallId === execution.call.id,
+      )
+    )
+      return
     // 通过执行记录保存的助手消息 ID 定位原消息，不依赖 latestModelCall，避免写到其他轮次的回复中。
     // 原助手消息不存在时无法构成调用与结果的配对，直接抛错，不修改执行记录和消息列表。
     const assistantIndex = session.messages.findIndex(
@@ -739,7 +717,8 @@ export function createUnifiedAgentModule(registry: ModuleRegistry) {
     const assistant = session.messages[assistantIndex]!
     // 标记本次记录已提交，避免持有该记录的回调重复写入；完成状态由下方的消息部件保存供 UI 展示。
     execution.result = result
-    execution.status = result.success ? 'completed' : 'failed'
+    if (['queued', 'running', 'waiting'].includes(execution.status))
+      execution.status = result.success ? 'completed' : 'failed'
     // 成功时原样保留 output，包括空字符串；失败时优先保留 output，其次使用 error 和兜底错误码。
     // 错误正文也作为工具结果交给模型，让下一轮能够根据失败原因修正参数或处理执行失败。
     const content = result.success
@@ -750,12 +729,17 @@ export function createUnifiedAgentModule(registry: ModuleRegistry) {
         name: execution.call.name,
         args: execution.call.args,
       })
-      source.started_at = execution.startedAt ?? source.started_at
       source.ended_at = new Date().toISOString()
-      source.duration_ms = Date.parse(source.ended_at) - Date.parse(source.started_at)
+      if (execution.startedAt) {
+        source.started_at = execution.startedAt
+        if (execution.status !== 'interrupted')
+          source.duration_ms = Date.parse(source.ended_at) - Date.parse(source.started_at)
+      }
       source.output = {
         content,
         result,
+        executed: execution.startedAt ? true : execution.status === 'interrupted' ? null : false,
+        synthetic: ['skipped', 'cancelled', 'interrupted'].includes(execution.status),
         ...(assistant.interaction?.result ? { interaction: assistant.interaction.result } : {}),
       }
       source.error = result.success ? null : (result.error ?? content)
@@ -782,32 +766,29 @@ export function createUnifiedAgentModule(registry: ModuleRegistry) {
     ]
     message.toolCallId = execution.call.id
     message.toolName = execution.call.name
-    // 按原助手消息的位置插入结果，再一次替换实际消息列表，避免先写入未配对调用。
-    // 即使原助手后面已有其他消息，也保证结果紧跟调用所属消息，并保留其他消息的相对顺序。
+    // 结果追加到所属助手的结果区，保留工具顺序和其他消息的相对顺序。
+    let resultEnd = assistantIndex + 1
+    while (session.messages[resultEnd]?.role === 'tool') resultEnd++
     session.messages = [
       ...session.messages.slice(0, assistantIndex),
       {
         ...assistant,
         parts: [
-          // 保留助手正文和其他原有部件，仅在所属助手消息末尾补入工具调用。
-          ...assistant.parts,
-          {
-            type: MessagePartType.TOOL_CALL,
-            tool_call_id: execution.call.id,
-            tool_name: execution.call.name,
-            args: execution.call.args,
-            // 此状态只供界面展示；buildModelHistory 只发送调用 ID、名称和原参数。
-            status: result.success ? ToolCallStatus.COMPLETED : ToolCallStatus.FAILED,
-          } satisfies ToolCallPart,
+          ...assistant.parts.map((part) =>
+            part.type === MessagePartType.TOOL_CALL && part.tool_call_id === execution.call.id
+              ? { ...part, status: execution.status as ToolCallStatus }
+              : part,
+          ),
         ],
       },
       // 配对结果进入实际历史；显示投影会隐藏 tool 消息，下一次模型请求仍会携带其正文。
+      ...session.messages.slice(assistantIndex + 1, resultEnd),
       message,
-      ...session.messages.slice(assistantIndex + 1),
+      ...session.messages.slice(resultEnd),
     ]
     // 成功、失败及 ask_user 回答都已保存为配对消息，不再保留完成记录，避免随聊天持续积累。
     // 必须在消息写入之后移除，执行中或待回答的问题记录仍保留，供进度展示和回答入口使用。
-    delete session.toolExecutions[execution.assistantMessageId]
+    delete session.toolExecutions[execution.call.id]
   }
 
   /** 先将配对消息与观察图原子保存，成功后再发布到内存历史和界面。 */
@@ -819,6 +800,12 @@ export function createUnifiedAgentModule(registry: ModuleRegistry) {
     isCurrent: () => boolean,
     signal: AbortSignal,
   ): Promise<void> {
+    if (
+      session.messages.some(
+        (message) => message.role === 'tool' && message.toolCallId === execution.call.id,
+      )
+    )
+      return Promise.resolve()
     const save = async (value: ToolResult, pending: AgentToolImage[]) => {
       if (!isCurrent()) return
       // 使用临时会话构造配对结果，事务成功前不修改当前展示的消息列表。
@@ -847,9 +834,57 @@ export function createUnifiedAgentModule(registry: ModuleRegistry) {
       }
     })()
     toolCommits.set(session.id, pending)
-    return pending.finally(() => {
-      if (toolCommits.get(session.id) === pending) toolCommits.delete(session.id)
-    })
+    return pending
+      .catch((error: unknown) => {
+        if (isCurrent()) reportStorageError(session, error)
+        throw error
+      })
+      .finally(() => {
+        if (toolCommits.get(session.id) === pending) toolCommits.delete(session.id)
+      })
+  }
+
+  function setToolStatus(
+    session: AgentSession,
+    execution: ToolExecution,
+    status: ToolExecution['status'],
+  ) {
+    execution.status = status
+    const assistant = session.messages.find(
+      (message) => message.id === execution.assistantMessageId,
+    )
+    const part = assistant?.parts.find(
+      (part) => part.type === MessagePartType.TOOL_CALL && part.tool_call_id === execution.call.id,
+    )
+    if (part?.type === MessagePartType.TOOL_CALL) part.status = status as ToolCallStatus
+  }
+
+  function closeToolBatch(
+    session: AgentSession,
+    modelCallId: string,
+    reason: 'failed' | 'cancelled' | 'interrupted',
+  ) {
+    for (const message of [...session.messages]) {
+      for (const part of message.parts) {
+        if (part.type !== MessagePartType.TOOL_CALL) continue
+        const execution = session.toolExecutions[part.tool_call_id]
+        if (!execution || execution.modelCallId !== modelCallId) continue
+        const running =
+          execution.status === 'running' &&
+          (reason === 'interrupted' || Boolean(execution.startedAt))
+        const status = running ? 'interrupted' : reason === 'failed' ? 'skipped' : 'cancelled'
+        const code = running
+          ? 'TOOL_INTERRUPTED'
+          : status === 'skipped'
+            ? 'TOOL_SKIPPED'
+            : 'TOOL_CANCELLED'
+        const output = running
+          ? `${code}：工具已经开始执行，最终效果未知。继续前请先读取实际工程状态，不要自动重放此调用。`
+          : `${code}：工具未执行，${reason === 'failed' ? '前序调用失败，停止本批后续调用。' : '本批执行已中断。'}`
+        setToolStatus(session, execution, status)
+        commitToolResult(session, execution, { success: false, output, error: code })
+      }
+    }
   }
 
   /** 数据归属不依赖展示选择、活动位或存储就绪状态。 */
@@ -874,30 +909,12 @@ export function createUnifiedAgentModule(registry: ModuleRegistry) {
     if (run.finalized) return
     run.finalized = true
     const session = run.session
-    if (run.committed && ownsSession(run)) {
+    if (run.committed && sessions.value[session.id] === session && !run.lifecycle.aborted) {
       const current = run.modelCall
       if (current?.status === 'running')
         current.status = status === 'failed' ? 'failed' : 'cancelled'
-      for (const execution of Object.values(session.toolExecutions)) {
-        if (execution.modelCallId !== current?.id || status === 'waiting') continue
-        const source = newLogSource('cancelled', {
-          name: execution.call.name,
-          args: execution.call.args,
-        })
-        source.started_at = execution.startedAt ?? source.started_at
-        source.ended_at = new Date().toISOString()
-        source.duration_ms = Date.parse(source.ended_at) - Date.parse(source.started_at)
-        source.error = { code: 'TOOL_CANCELLED', result_committed: false }
-        void telemetry.record(
-          session,
-          execution.resultSpanId ?? crypto.randomUUID(),
-          'tool_result',
-          source,
-          execution.modelCallId,
-          execution.call.id,
-        )
-        delete session.toolExecutions[execution.assistantMessageId]
-      }
+      if (current && status !== 'waiting')
+        closeToolBatch(session, current.id, status === 'failed' ? 'failed' : 'cancelled')
       const message = session.messages.find((m) => m.id === current?.assistantMessageId)
       if (current && run.awaitingCompletion)
         finishes.push({
@@ -957,7 +974,11 @@ export function createUnifiedAgentModule(registry: ModuleRegistry) {
     const userId = session.userId
     const projectId = session.projectId
     const isRunCurrent = () =>
-      ownsSession(control) && activeRun.value === control && !control.stopped && ready.value
+      ownsSession(control) &&
+      activeRun.value === control &&
+      !control.stopped &&
+      !control.finalized &&
+      ready.value
     try {
       // 首次消息与图片原子保存失败时回滚；后续运行错误不再影响草稿。
       try {
@@ -1056,10 +1077,19 @@ export function createUnifiedAgentModule(registry: ModuleRegistry) {
         const completion = await output.finalCompletion()
         // 等待期间可能已经停止或删除原会话；展示切换不会使原运行失效。
         if (!isRunCurrent() || session.latestModelCall?.id !== current.id) return
-        const call = completion.message.tool_calls?.[0]
+        const calls = completion.message.tool_calls ?? []
         // 5. 用完整终态校准正文，不另建消息或提前提交工具调用；模型完成不代表工具成功。
         const assistant = getAssistantMessage(session, current)
-        assistant.parts = [{ type: MessagePartType.TEXT, text: completion.message.content }]
+        assistant.parts = [
+          { type: MessagePartType.TEXT, text: completion.message.content },
+          ...calls.map((call) => ({
+            type: MessagePartType.TOOL_CALL as const,
+            tool_call_id: call.id,
+            tool_name: call.name,
+            args: call.args,
+            status: ToolCallStatus.QUEUED,
+          })),
+        ]
         control.awaitingCompletion = false
         session.usageRecords[current.id] = {
           usage: completion.usage,
@@ -1086,95 +1116,146 @@ export function createUnifiedAgentModule(registry: ModuleRegistry) {
           },
         }
         // 最终回复同步交接，不等待保存或日志落盘。
-        if (!call) {
+        if (!calls.length) {
           finalizeRun(control, 'completed', [{ id: current.id, changes: modelChanges }])
           return
         }
-        await telemetry.finish(session, current.id, modelChanges)
-        if (!isRunCurrent()) return
-        // 6. 调用先只保存在执行记录中：普通工具进度由 UI 投影，ask_user 只展示问题卡片。
-        session.toolExecutions[assistant.id] = {
-          startedAt: new Date().toISOString(),
-          resultSpanId: crypto.randomUUID(),
-          userId,
-          projectId,
-          sessionId,
-          modelCallId: current.id,
-          assistantMessageId: assistant.id,
-          call,
-          status: 'pending',
-          result: null,
+        session.toolExecutions = {
+          ...session.toolExecutions,
+          ...Object.fromEntries(
+            calls.map((call) => [
+              call.id,
+              {
+                resultSpanId: crypto.randomUUID(),
+                userId,
+                projectId,
+                sessionId,
+                modelCallId: current.id,
+                assistantMessageId: assistant.id,
+                call,
+                status: 'queued',
+                result: null,
+              } satisfies ToolExecution,
+            ]),
+          ),
         }
-        // 从响应式字典取回记录，后续状态和结果更新才能同步驱动 UI。
-        const execution = session.toolExecutions[assistant.id]!
+        const modelLog = telemetry.finish(session, current.id, modelChanges)
         await persistSession(session)
+        await modelLog
         if (!isRunCurrent()) return
-        let result: ToolResult
-        let toolImages: AgentToolImage[] = []
-        const toolSignal = AbortSignal.any([control.tool.signal, control.lifecycle])
-        // 每个工具调用独占暂存区，执行结束后统一取出合法引用并释放其余图片。
-        const imageStaging = createToolImageStaging({
-          userId,
-          projectId,
-          signal: toolSignal,
-          isCurrent: isRunCurrent,
-        })
-        try {
-          // 校验位于工具处理范围内：参数非法时不执行工具，而是生成错误结果供模型下一轮修正。
-          toolRuntime.validate(call)
-          if (call.name === 'ask_user') {
-            // ask_user 不立即执行或创建等待 Promise，只在助手消息中保存问题，由计算属性推导等待状态。
-            // 问题交接释放活动位；用户回答时提交配对结果并启动新循环。
-            const question = call.args as { question: string; suggested_options: string[] }
-            assistant.interaction = {
-              interrupt: {
-                interaction_id: call.id,
-                kind: 'ask_user',
-                prompt: question.question,
-                options: question.suggested_options,
-                created_at: new Date().toISOString(),
+        if (calls.length > 1 && calls.some((call) => call.name === 'ask_user')) {
+          for (const call of calls) {
+            if (!isRunCurrent()) return
+            const execution = session.toolExecutions[call.id]!
+            const code = call.name === 'ask_user' ? 'TOOL_BATCH_CONSTRAINT' : 'TOOL_SKIPPED'
+            setToolStatus(session, execution, call.name === 'ask_user' ? 'failed' : 'skipped')
+            await commitToolResultAndImages(
+              session,
+              execution,
+              {
+                success: false,
+                output: `${code}：ask_user 必须独占一次模型响应，本批所有工具均未执行。`,
+                error: code,
               },
-              result: null,
-            }
-            // 问题建立和释放活动位在同一同步交接内完成。
-            finalizeRun(control, 'waiting')
-            return
+              [],
+              isRunCurrent,
+              control.tool.signal,
+            )
           }
-          // 普通工具使用原执行器；传入取消信号和实时归属检查，适配层在异步准备后再次复核。
-          result = await toolRuntime.execute(call, {
-            toolCallId: call.id,
+          continue
+        }
+        for (const call of calls) {
+          if (!isRunCurrent()) return
+          const execution = session.toolExecutions[call.id]!
+          let result: ToolResult | undefined
+          let toolImages: AgentToolImage[] = []
+          const toolSignal = AbortSignal.any([control.tool.signal, control.lifecycle])
+          const imageStaging = createToolImageStaging({
             userId,
             projectId,
-            sessionId,
-            modelCallId: current.id,
             signal: toolSignal,
             isCurrent: isRunCurrent,
-            stageImage: imageStaging.stageImage,
           })
-          toolImages = imageStaging.take(result)
-        } catch (error) {
-          // 停止或会话失效后丢弃错误；活动工具的真实错误仍作为结果提交。
-          if (!isRunCurrent()) return
-          // 校验异常或执行异常转换为失败结果，保留错误正文；不重放原调用、不自动修改参数。
-          const message = error instanceof Error ? error.message : String(error)
-          result = { success: false, output: message, error: message }
-        } finally {
-          imageStaging.dispose()
-        }
-        // 停止后的所有工具结果只被消费，不再写入聊天和日志。
-        if (!isRunCurrent()) return
-        try {
-          await commitToolResultAndImages(
-            session,
-            execution,
-            result,
-            toolImages,
-            isRunCurrent,
-            toolSignal,
-          )
-        } catch (error) {
-          reportStorageError(session, error)
-          throw error
+          const releaseCancellation = registerToolBatchCancellation(call.name, call.id, () => {
+            if (!isRunCurrent()) return
+            control.stopped = true
+            control.tool.abort()
+            finalizeRun(control, 'cancelled')
+          })
+          try {
+            try {
+              toolRuntime.validate(call)
+              if (call.name === 'ask_user') {
+                const question = call.args as { question: string; suggested_options: string[] }
+                assistant.interaction = {
+                  interrupt: {
+                    interaction_id: call.id,
+                    kind: 'ask_user',
+                    prompt: question.question,
+                    options: question.suggested_options,
+                    created_at: new Date().toISOString(),
+                  },
+                  result: null,
+                }
+                setToolStatus(session, execution, 'waiting')
+                finalizeRun(control, 'waiting')
+                return
+              }
+            } catch (error) {
+              const message = error instanceof Error ? error.message : String(error)
+              result = { success: false, output: message, error: message }
+            }
+            if (!result) {
+              setToolStatus(session, execution, 'running')
+              await persistSession(session)
+              if (!isRunCurrent()) return
+              execution.startedAt = new Date().toISOString()
+              try {
+                result = await toolRuntime.execute(
+                  {
+                    ...call,
+                    args: JSON.parse(JSON.stringify(call.args)) as Record<string, unknown>,
+                  },
+                  {
+                    toolCallId: call.id,
+                    userId,
+                    projectId,
+                    sessionId,
+                    modelCallId: current.id,
+                    signal: toolSignal,
+                    isCurrent: isRunCurrent,
+                    stageImage: imageStaging.stageImage,
+                  },
+                )
+                toolImages = imageStaging.take(result)
+              } catch (error) {
+                if (!isRunCurrent()) return
+                const message = error instanceof Error ? error.message : String(error)
+                result = { success: false, output: message, error: message }
+              }
+            }
+            if (!isRunCurrent()) return
+            await commitToolResultAndImages(
+              session,
+              execution,
+              result,
+              toolImages,
+              isRunCurrent,
+              toolSignal,
+            )
+            if (!isRunCurrent()) return
+            if (!execution.result?.success) {
+              closeToolBatch(session, current.id, 'failed')
+              await persistSession(session)
+              break
+            }
+          } catch (error) {
+            if (isRunCurrent()) reportStorageError(session, error)
+            throw error
+          } finally {
+            releaseCancellation()
+            imageStaging.dispose()
+          }
         }
         // 8. 回到 while 顶部；停止后不再进入下一轮，否则用新 modelCall 和结果继续，由模型决定修正或结束。
       }
@@ -1225,8 +1306,8 @@ export function createUnifiedAgentModule(registry: ModuleRegistry) {
     // 发送准入由 pendingInteraction 统一判断；回答结果直接写回最后一条消息的交互记录。
     const message = currentMessages.value[currentMessages.value.length - 1]!
     const interaction = message.interaction
-    // 通过问题所属助手消息直接定位执行记录，不再遍历所有历史调用。
-    const execution = toolExecutions.value[message.id]
+    // 通过交互 ID 定位执行记录，不依赖助手消息 ID。
+    const execution = toolExecutions.value[interaction?.interrupt.interaction_id ?? '']
     if (!interaction || interaction.result || !execution) return false
     interaction.result = {
       interaction_id: interaction.interrupt.interaction_id,
@@ -1426,10 +1507,26 @@ export function createUnifiedAgentModule(registry: ModuleRegistry) {
         const saved = await sessionStore.load(userId, projectId)
         if (!current) return
         for (const session of saved) {
-          // 只恢复聊天数据和待回答问题，不恢复模型或普通工具执行。
           if (session.latestModelCall?.status === 'running')
             session.latestModelCall.status = 'cancelled'
           sessions.value[session.id] = session
+          const restored = sessions.value[session.id]!
+          const unfinished = Object.values(restored.toolExecutions).filter((execution) => {
+            const assistant = restored.messages.find(
+              (message) => message.id === execution.assistantMessageId,
+            )
+            return !(
+              execution.status === 'waiting' &&
+              execution.call.name === 'ask_user' &&
+              assistant?.interaction?.interrupt.interaction_id === execution.call.id &&
+              !assistant.interaction.result &&
+              assistant.parts.filter((part) => part.type === MessagePartType.TOOL_CALL).length === 1
+            )
+          })
+          for (const modelCallId of new Set(unfinished.map((execution) => execution.modelCallId)))
+            closeToolBatch(restored, modelCallId, 'interrupted')
+          if (unfinished.length) await persistSession(restored)
+          if (!current) return
         }
         newChat()
         void telemetry.resume(userId, projectId)

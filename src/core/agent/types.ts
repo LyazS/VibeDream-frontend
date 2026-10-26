@@ -15,9 +15,14 @@ export enum MessagePartType {
 }
 
 export enum ToolCallStatus {
-  REQUESTED = 'requested',
+  QUEUED = 'queued',
+  RUNNING = 'running',
+  WAITING = 'waiting',
   COMPLETED = 'completed',
   FAILED = 'failed',
+  SKIPPED = 'skipped',
+  CANCELLED = 'cancelled',
+  INTERRUPTED = 'interrupted',
 }
 
 export interface TextPart {
@@ -161,7 +166,7 @@ export type ToolExecution = {
   // 工具结果提交和 UI 进度投影对应的助手消息，不依赖最近一次 modelCall。
   assistantMessageId: string
   call: ToolCall
-  status: 'pending' | 'completed' | 'failed' | 'cancelled'
+  status: `${ToolCallStatus}`
   result: ToolResult | null
 }
 

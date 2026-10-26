@@ -18,6 +18,11 @@ import * as agentProvider from '../src/core/agent/services/agentProviderService'
 import type { AgentImage, AgentAttachmentRecord } from '../src/core/agent/types'
 import * as imageService from '../src/core/agent/services/agentImageService'
 import { agentFiles, agentImageFixture } from './helpers/agent-files'
+import {
+  cancelToolExecution,
+  registerToolCancellationHook,
+  unregisterToolCancellationHook,
+} from '../src/core/agent/tools/cancellation'
 
 vi.mock('@/core/managers/filesystem/fileSystemService', async () => ({
   fileSystemService: (await import('./helpers/agent-files')).agentFileSystem,
@@ -123,6 +128,19 @@ function output(
     },
   }
 }
+
+function batchReply(calls: NonNullable<Completion['message']['tool_calls']>) {
+  transport.calls.mockImplementationOnce(async (request: StreamParams) =>
+    output(
+      request,
+      Promise.resolve({
+        modelCallId: request.modelCallId,
+        usage: null,
+        message: { role: 'assistant', content: '', tool_calls: calls },
+      }),
+    ),
+  )
+}
 /** 重建模块模拟刷新；沿用同一 IndexedDB 和账户/工程，不恢复旧运行。 */
 function mountAgent() {
   const registry = new ModuleRegistry()
@@ -202,6 +220,386 @@ afterEach(async () => {
   vi.useRealTimers()
   vi.restoreAllMocks()
   vi.unstubAllGlobals()
+})
+
+describe('sequential tool batches', () => {
+  const calls = () => ['a', 'b', 'c'].map((id) => ({ id, name: 'read_project_info', args: {} }))
+
+  it('saves all calls before execution and commits each result before starting the next', async () => {
+    batchReply(calls())
+    const entered = deferred()
+    const release = deferred()
+    const save = vi
+      .spyOn(AgentSessionStore.prototype, 'save')
+      .mockImplementation(function (session, images, isCurrent, signal) {
+        if (session.messages.some((message) => message.toolCallId === 'a')) {
+          entered.resolve()
+          return release.promise.then(() =>
+            saveSession.call(this, session, images, isCurrent, signal),
+          )
+        }
+        return saveSession.call(this, session, images, isCurrent, signal)
+      })
+    toolExecution.mockImplementation(async (_name, _args, context) => {
+      const saved = (await new AgentSessionStore().load('u1', 'p1'))[0]
+      const index = calls().findIndex((call) => call.id === context.toolCallId)
+      expect(
+        saved.messages[1].parts
+          .filter((part) => part.type === 'tool_call')
+          .map((part) => part.tool_call_id),
+      ).toEqual(['a', 'b', 'c'])
+      expect(
+        saved.messages
+          .filter((message) => message.role === 'tool')
+          .map((message) => message.toolCallId),
+      ).toEqual(['a', 'b', 'c'].slice(0, index))
+      expect(saved.toolExecutions[context.toolCallId].status).toBe('running')
+      return { success: true, output: context.toolCallId }
+    })
+    const pending = agent.send('batch')
+    await entered.promise
+    expect(toolExecution).toHaveBeenCalledOnce()
+    expect(transport.calls).toHaveBeenCalledOnce()
+    expect(
+      agent.currentMessages.value[1].parts
+        .filter((part) => part.type === 'tool_call')
+        .map((part) => part.status),
+    ).toEqual(['running', 'queued', 'queued'])
+    release.resolve()
+    await pending
+    save.mockRestore()
+    expect(toolExecution.mock.calls.map((call) => call[2].toolCallId)).toEqual(['a', 'b', 'c'])
+    const history = (transport.calls.mock.calls[1][0] as StreamParams).messages.slice(2)
+    expect(history[0]).toMatchObject({ role: 'assistant', tool_calls: calls() })
+    expect(
+      history.slice(1).map((message) => message.role === 'tool' && message.tool_call_id),
+    ).toEqual(['a', 'b', 'c'])
+    expect(agent.toolExecutions.value).toEqual({})
+    const log = (await sessionLogs())[0]
+    const spans = log.spans.filter((span) => span.kind === 'tool_result')
+    expect(spans.map((span) => span.tool_call_id)).toEqual(['a', 'b', 'c'])
+    expect(new Set(spans.map((span) => span.model_call_id)).size).toBe(1)
+  })
+
+  it('executes a large batch without truncating or mutating arguments', async () => {
+    const batch = Array.from({ length: 40 }, (_, index) => ({
+      id: `large-${index}`,
+      name: 'list_tracks',
+      args: {},
+    }))
+    batchReply(batch)
+    toolExecution.mockImplementation(async (_name, args) => {
+      args.localMutation = true
+      return { success: true, output: 'done' }
+    })
+    await agent.send('large batch')
+    expect(toolExecution).toHaveBeenCalledTimes(40)
+    expect(toolExecution.mock.calls.map((call) => call[2].toolCallId)).toEqual(
+      batch.map((call) => call.id),
+    )
+    expect((transport.calls.mock.calls[1][0] as StreamParams).messages[2]).toMatchObject({
+      tool_calls: batch,
+    })
+  })
+
+  it.each(['schema', 'throw', 'failure'])(
+    'keeps earlier results and skips remaining tools after a %s error',
+    async (failure) => {
+      const batch = calls()
+      if (failure === 'schema') batch[1] = { id: 'b', name: 'add_track', args: {} }
+      batchReply(batch)
+      toolExecution.mockImplementation(async (_name, _args, context) => {
+        if (context.toolCallId === 'b') {
+          if (failure === 'throw') throw new Error('actual failure')
+          return { success: false, output: 'actual failure', error: 'ACTUAL_FAILURE' }
+        }
+        return { success: true, output: 'kept' }
+      })
+      await agent.send('failure')
+      expect(toolExecution.mock.calls.map((call) => call[2].toolCallId)).toEqual(
+        failure === 'schema' ? ['a'] : ['a', 'b'],
+      )
+      expect(
+        agent.currentMessages.value[1].parts
+          .filter((part) => part.type === 'tool_call')
+          .map((part) => part.status),
+      ).toEqual(['completed', 'failed', 'skipped'])
+      const history = (transport.calls.mock.calls[1][0] as StreamParams).messages
+      expect(history.slice(-3)).toMatchObject([
+        { tool_call_id: 'a', content: [{ type: 'text', text: 'kept' }] },
+        {
+          tool_call_id: 'b',
+          content: [
+            {
+              type: 'text',
+              text: expect.stringContaining(
+                failure === 'schema' ? 'TOOL_ARGUMENTS_INVALID' : 'actual failure',
+              ),
+            },
+          ],
+        },
+        {
+          tool_call_id: 'c',
+          content: [{ type: 'text', text: expect.stringContaining('TOOL_SKIPPED') }],
+        },
+      ])
+      const skipped = (await sessionLogs())[0].spans.find((span) => span.tool_call_id === 'c')!
+      expect(skipped.source).toMatchObject({ status: 'skipped', output: { executed: false } })
+      expect(skipped.source.duration_ms).toBeUndefined()
+    },
+  )
+
+  it.each(['first', 'last', 'twice'])(
+    'rejects ask_user mixed batches before any execution (%s)',
+    async (position) => {
+      const question = {
+        id: 'ask',
+        name: 'ask_user',
+        args: { question: 'choose', suggested_options: ['a', 'b'] },
+      }
+      const batch =
+        position === 'twice'
+          ? [question, { ...question, id: 'ask2' }]
+          : position === 'first'
+            ? [question, calls()[0]]
+            : [calls()[0], question]
+      batchReply(batch)
+      await agent.send('question')
+      expect(toolExecution).not.toHaveBeenCalled()
+      expect(agent.pendingInteraction.value).toBeNull()
+      const history = (transport.calls.mock.calls[1][0] as StreamParams).messages
+      expect(
+        history
+          .slice(-batch.length)
+          .map((message) => message.role === 'tool' && message.tool_call_id),
+      ).toEqual(batch.map((call) => call.id))
+      expect(agent.currentMessages.value[1].interaction).toBeUndefined()
+      expect(
+        agent.currentMessages.value[1].parts
+          .filter((part) => part.type === 'tool_call')
+          .map((part) => part.status),
+      ).toEqual(batch.map((call) => (call.name === 'ask_user' ? 'failed' : 'skipped')))
+    },
+  )
+
+  it('closes the active and queued calls on stop and ignores a late result', async () => {
+    batchReply(calls())
+    const late = deferred<{ success: boolean; output: string }>()
+    toolExecution.mockReturnValueOnce(late.promise)
+    const pending = agent.send('stop')
+    await vi.waitFor(() => expect(toolExecution).toHaveBeenCalledOnce())
+    agent.stop()
+    expect(agent.busy.value).toBe(false)
+    expect(
+      agent.currentMessages.value[1].parts
+        .filter((part) => part.type === 'tool_call')
+        .map((part) => part.status),
+    ).toEqual(['interrupted', 'cancelled', 'cancelled'])
+    const original = JSON.stringify(agent.toolResults.value)
+    late.resolve({ success: true, output: 'late effect' })
+    await pending
+    expect(JSON.stringify(agent.toolResults.value)).toBe(original)
+    expect(transport.calls).toHaveBeenCalledOnce()
+    await vi.waitFor(async () => {
+      const source = (await sessionLogs())[0].spans.find(
+        (span) => span.tool_call_id === 'a',
+      )!.source
+      expect(source).toMatchObject({
+        status: 'interrupted',
+        output: { executed: true, synthetic: true },
+      })
+      expect(source.duration_ms).toBeUndefined()
+    })
+    await agent.send('continue')
+    expect(
+      (transport.calls.mock.calls[1][0] as StreamParams).messages
+        .filter((message) => message.role === 'tool')
+        .map((message) => message.tool_call_id),
+    ).toEqual(['a', 'b', 'c'])
+    expect(toolExecution).toHaveBeenCalledOnce()
+  })
+
+  it('blocks the next tool and model when saving a result fails', async () => {
+    batchReply(calls())
+    vi.spyOn(AgentSessionStore.prototype, 'save').mockImplementation(
+      function (session, images, isCurrent, signal) {
+        if (session.messages.some((message) => message.role === 'tool'))
+          return Promise.reject(new Error('RESULT_SAVE_FAILED'))
+        return saveSession.call(this, session, images, isCurrent, signal)
+      },
+    )
+    await agent.send('save failure')
+    expect(toolExecution).toHaveBeenCalledOnce()
+    expect(transport.calls).toHaveBeenCalledOnce()
+    expect(agent.storageError.value).toBe('RESULT_SAVE_FAILED')
+    expect(await agent.send('blocked')).toBe(false)
+  })
+
+  it('marks a call cancelled when stopped during the running save before execution', async () => {
+    batchReply(calls())
+    const entered = deferred()
+    const release = deferred()
+    vi.spyOn(AgentSessionStore.prototype, 'save').mockImplementation(
+      function (session, images, isCurrent, signal) {
+        const pending = saveSession.call(this, session, images, isCurrent, signal)
+        if (
+          Object.values(session.toolExecutions).some((execution) => execution.status === 'running')
+        ) {
+          entered.resolve()
+          return release.promise.then(() => pending)
+        }
+        return pending
+      },
+    )
+    const pending = agent.send('stop before executor')
+    await entered.promise
+    agent.stop()
+    release.resolve()
+    await pending
+    expect(toolExecution).not.toHaveBeenCalled()
+    expect(transport.calls).toHaveBeenCalledOnce()
+    expect(
+      agent.currentMessages.value[1].parts
+        .filter((part) => part.type === 'tool_call')
+        .map((part) => part.status),
+    ).toEqual(['cancelled', 'cancelled', 'cancelled'])
+  })
+
+  it.each([false, true])(
+    'recovers running and queued records without replaying edits (save failure: %s)',
+    async (saveFailure) => {
+      batchReply(calls())
+      const late = deferred<{ success: boolean; output: string }>()
+      toolExecution
+        .mockResolvedValueOnce({ success: true, output: 'saved result' })
+        .mockReturnValueOnce(late.promise)
+      const pending = agent.send('crash')
+      await vi.waitFor(() => expect(toolExecution).toHaveBeenCalledTimes(2))
+      const saved = (await new AgentSessionStore().load('u1', 'p1'))[0]
+      const sessionId = saved.id
+      scope.stop()
+      late.resolve({ success: true, output: 'ignored' })
+      await pending
+      vi.spyOn(AgentSessionStore.prototype, 'load').mockResolvedValueOnce([saved])
+      if (saveFailure)
+        vi.spyOn(AgentSessionStore.prototype, 'save').mockRejectedValue(
+          new Error('RECOVERY_SAVE_FAILED'),
+        )
+      mountAgent()
+      await vi.waitFor(() => expect(agent.historyLoading.value).toBe(false))
+      agent.selectSession(sessionId)
+      expect(agent.toolExecutions.value).toEqual({})
+      expect(
+        agent.currentMessages.value[1].parts
+          .filter((part) => part.type === 'tool_call')
+          .map((part) => part.status),
+      ).toEqual(['completed', 'interrupted', 'cancelled'])
+      expect(agent.toolResults.value.a.parts).toEqual([{ type: 'text', text: 'saved result' }])
+      if (saveFailure) {
+        expect(agent.storageError.value).toBe('RECOVERY_SAVE_FAILED')
+        expect(await agent.send('blocked by recovery save')).toBe(false)
+        expect(toolExecution).toHaveBeenCalledTimes(2)
+        expect(transport.calls).toHaveBeenCalledOnce()
+        return
+      }
+      const restored = (await new AgentSessionStore().load('u1', 'p1'))[0]
+      expect(restored.messages.filter((message) => message.role === 'tool')).toHaveLength(3)
+      await agent.send('continue after crash')
+      expect(toolExecution).toHaveBeenCalledTimes(2)
+      expect(
+        (transport.calls.mock.calls[1][0] as StreamParams).messages.filter(
+          (message) => message.role === 'tool',
+        ),
+      ).toHaveLength(3)
+    },
+  )
+
+  it('stops the entire batch from the single-tool cancellation entry', async () => {
+    batchReply(calls())
+    const late = deferred<{ success: boolean; output: string }>()
+    const cancel = vi.fn()
+    toolExecution.mockImplementationOnce((_name, _args, context) => {
+      registerToolCancellationHook('read_project_info', context.toolCallId, cancel)
+      return late.promise.finally(() =>
+        unregisterToolCancellationHook('read_project_info', context.toolCallId),
+      )
+    })
+    const pending = agent.send('cancel button')
+    await vi.waitFor(() => expect(toolExecution).toHaveBeenCalledOnce())
+    expect(await cancelToolExecution('read_project_info', 'a')).toBe(true)
+    expect(cancel).toHaveBeenCalledOnce()
+    late.resolve({ success: true, output: 'late' })
+    await pending
+    expect(toolExecution).toHaveBeenCalledOnce()
+    expect(transport.calls).toHaveBeenCalledOnce()
+    expect(Object.keys(agent.toolResults.value)).toEqual(['a', 'b', 'c'])
+  })
+
+  it('commits independent images and captions with each tool result', async () => {
+    batchReply(calls().slice(0, 2))
+    const images = new Map<string, string>()
+    toolExecution.mockImplementation(async (_name, _args, context) => {
+      const ref = context.stageImage({
+        blob: new Blob([context.toolCallId], { type: 'image/webp' }),
+        width: 20,
+        height: 20,
+        description: `caption ${context.toolCallId}`,
+      })
+      images.set(context.toolCallId, ref.image.id)
+      return { success: true, output: `result ${context.toolCallId}`, attachIds: [ref] }
+    })
+    vi.spyOn(agentProvider, 'uploadAgentImage').mockResolvedValue({
+      providerId: 'dashscope',
+      reference: 'oss://dashscope-instant/test/batch.webp',
+      expiresAt: new Date(Date.now() + 3600000).toISOString(),
+    })
+    await agent.send('images')
+    const history = (transport.calls.mock.calls[1][0] as StreamParams).messages.filter(
+      (message) => message.role === 'tool',
+    )
+    expect(history.map((message) => message.tool_call_id)).toEqual(['a', 'b'])
+    for (const [index, id] of ['a', 'b'].entries()) {
+      expect(history[index].content).toEqual([
+        { type: 'image', image: expect.any(Object) },
+        { type: 'text', text: `${images.get(id)}：caption ${id}` },
+        { type: 'text', text: `result ${id}` },
+      ])
+      expect(await (await agent.getImage(images.get(id)!)).blob.text()).toBe(id)
+    }
+    expect(new Set(images.values()).size).toBe(2)
+  })
+
+  it('rejects cross-call image references and skips later tools', async () => {
+    batchReply(calls())
+    let previous: { type: 'image'; image: { id: string } }
+    let uncommitted = ''
+    toolExecution.mockImplementation(async (_name, _args, context) => {
+      const ref = context.stageImage({
+        blob: new Blob(['image'], { type: 'image/webp' }),
+        width: 20,
+        height: 20,
+        description: context.toolCallId,
+      })
+      if (context.toolCallId === 'a') previous = ref
+      else uncommitted = ref.image.id
+      return { success: true, output: '', attachIds: [previous] }
+    })
+    vi.spyOn(agentProvider, 'uploadAgentImage').mockResolvedValue({
+      providerId: 'dashscope',
+      reference: 'oss://dashscope-instant/test/batch.webp',
+      expiresAt: new Date(Date.now() + 3600000).toISOString(),
+    })
+    await agent.send('image boundaries')
+    expect(toolExecution).toHaveBeenCalledTimes(2)
+    expect(agent.toolResults.value.b.parts).toEqual([
+      { type: 'text', text: 'INVALID_TOOL_IMAGE_REFERENCES' },
+    ])
+    expect(agent.toolResults.value.c.parts).toContainEqual({
+      type: 'text',
+      text: expect.stringContaining('TOOL_SKIPPED'),
+    })
+    await expect(agent.getImage(uncommitted)).rejects.toThrow('AGENT_IMAGE_RECORD_MISSING')
+  })
 })
 
 describe('manual attachment orphan cleanup only', () => {
@@ -801,7 +1199,13 @@ describe('persisted Agent sessions', () => {
     const firstRequest = structuredClone(transport.calls.mock.calls[0]![0].messages[1])
     expect(firstRequest.content).toEqual([
       ...attachments.flatMap((attachment) => [
-        { type: 'image', image: expect.objectContaining({ providerId: 'dashscope', reference: uploaded().reference }) },
+        {
+          type: 'image',
+          image: expect.objectContaining({
+            providerId: 'dashscope',
+            reference: uploaded().reference,
+          }),
+        },
         {
           type: 'text',
           text: `[ATTACHMENT attachmentId=${attachment.id}, name=source.png, original=available]`,
@@ -898,7 +1302,13 @@ describe('persisted Agent sessions', () => {
     expect((await storedImages())[0]?.original).toEqual(attachment.original)
     expect((await storedImages())[0]).not.toHaveProperty('blob')
     expect(transport.calls.mock.calls[0]![0].messages[1].content).toEqual([
-      { type: 'image', image: expect.objectContaining({ providerId: 'dashscope', reference: uploaded().reference }) },
+      {
+        type: 'image',
+        image: expect.objectContaining({
+          providerId: 'dashscope',
+          reference: uploaded().reference,
+        }),
+      },
       {
         type: 'text',
         text: `[ATTACHMENT attachmentId=${attachment.id}, name=source.png, original=available]`,
@@ -1835,17 +2245,17 @@ describe('text Agent orchestration', () => {
         }),
       ),
     )
-    toolExecution.mockImplementation(async () => {
+    toolExecution.mockImplementation(async (_name, _args, context) => {
       selection.selectedClipTimelineItemIds.value = ['changed-during-tool']
       currentFrame.value = 90
       expect(agent.running.value).toBe(true)
       expect(await agent.send('concurrent')).toBe(false)
       // 自动续轮时只保留当前执行，上一次工具结果已进入消息历史并清理执行记录。
       const assistantId = agent.latestModelCall.value!.assistantMessageId
-      expect(Object.keys(agent.toolExecutions.value)).toEqual([assistantId])
-      expect(agent.toolExecutions.value[assistantId]).toMatchObject({
+      expect(Object.keys(agent.toolExecutions.value)).toEqual([context.toolCallId])
+      expect(agent.toolExecutions.value[context.toolCallId]).toMatchObject({
         assistantMessageId: assistantId,
-        status: 'pending',
+        status: 'running',
         result: null,
       })
       return { success: true, output: '[KEYFRAMES]\n...省略，并非 JSON' }
@@ -1917,10 +2327,16 @@ describe('text Agent orchestration', () => {
           { assistantMessageId: string }
         >
         const currentAssistantId = agent.latestModelCall.value!.assistantMessageId
-        const execution = records[currentAssistantId]
-        delete records[currentAssistantId]
+        const execution = records['older-call']
         execution.assistantMessageId = assistantId
-        records[assistantId] = execution
+        const source = toRaw(
+          agent.currentMessages.value.find((message) => message.id === currentAssistantId)!,
+        )
+        const target = toRaw(
+          agent.currentMessages.value.find((message) => message.id === assistantId)!,
+        )
+        const partIndex = source.parts.findIndex((part) => part.type === 'tool_call')
+        target.parts.push(...source.parts.splice(partIndex, 1))
         return { success, output: success ? '读取成功' : '读取失败' }
       })
       await agent.send('读取工程')
@@ -2001,8 +2417,8 @@ describe('text Agent orchestration', () => {
       expect(await agent.send('横屏')).toBe(false)
       expect(agent.currentMessages.value).toHaveLength(2)
       expect(agent.pendingInteraction.value?.interaction_id).toBe('ask1')
-      expect(agent.toolExecutions.value[agent.currentMessages.value[1].id].result).toBeNull()
-      expect(Object.keys(agent.toolExecutions.value)).toEqual([agent.currentMessages.value[1].id])
+      expect(agent.toolExecutions.value.ask1.result).toBeNull()
+      expect(Object.keys(agent.toolExecutions.value)).toEqual(['ask1'])
       expect(transport.calls).toHaveBeenCalledTimes(1)
       selection.selectedClipTimelineItemIds.value = ['changed-while-answering']
       currentFrame.value = 120
@@ -2150,10 +2566,9 @@ describe('text Agent orchestration', () => {
         },
       ],
     })
-    const questionMessageId = agent.currentMessages.value[2].id
-    expect(Object.keys(agent.toolExecutions.value)).toEqual([questionMessageId])
-    expect(agent.toolExecutions.value[questionMessageId]).toMatchObject({
-      status: 'pending',
+    expect(Object.keys(agent.toolExecutions.value)).toEqual(['fixed-ask'])
+    expect(agent.toolExecutions.value['fixed-ask']).toMatchObject({
+      status: 'waiting',
       result: null,
       call: { id: 'fixed-ask', name: 'ask_user' },
     })
@@ -2218,13 +2633,18 @@ describe('text Agent orchestration', () => {
     await agent.send('读取工程')
     expect(transport.calls).toHaveBeenCalledTimes(1)
     expect(agent.toolExecutions.value).toEqual({})
-    expect(agent.currentMessages.value).toHaveLength(1)
+    expect(agent.currentMessages.value).toHaveLength(2)
+    expect(agent.toolResults.value.stopped.parts).toContainEqual({
+      type: 'text',
+      text: expect.stringContaining('TOOL_INTERRUPTED'),
+    })
     expect(agent.running.value).toBe(false)
     await agent.send('继续')
-    expect((transport.calls.mock.calls[1][0] as StreamParams).messages.slice(1)).toEqual([
-      { role: 'user', content: userContent('读取工程') },
-      { role: 'user', content: userContent('继续') },
-    ])
+    expect(
+      (transport.calls.mock.calls[1][0] as StreamParams).messages
+        .slice(1)
+        .map((message) => message.role),
+    ).toEqual(['user', 'assistant', 'tool', 'user'])
   })
   it('shares full original schemas and rejects type coercion before executing', () => {
     const runtime = createToolRuntime()
@@ -2317,15 +2737,17 @@ describe('text Agent orchestration', () => {
       'user',
       'assistant',
     ])
-    expect(agent.currentMessages.value[1].parts).toEqual([{ type: 'text', text: '正在查找素材' }])
+    expect(agent.currentMessages.value[1].parts).toContainEqual(
+      expect.objectContaining({ type: 'tool_call', status: 'interrupted' }),
+    )
     await vi.waitFor(async () =>
       expect((await sessionLogs())[0]?.spans).toEqual(
         expect.arrayContaining([
           expect.objectContaining({
             kind: 'tool_result',
             source: expect.objectContaining({
-              status: 'cancelled',
-              error: { code: 'TOOL_CANCELLED', result_committed: false },
+              status: 'interrupted',
+              error: 'TOOL_INTERRUPTED',
             }),
           }),
         ]),
@@ -2339,7 +2761,7 @@ describe('text Agent orchestration', () => {
     expect(agent.toolExecutions.value).toEqual({})
     await agent.send('继续')
     const history = (transport.calls.mock.calls[1][0] as StreamParams).messages.slice(1)
-    expect(history.map((message) => message.role)).toEqual(['user', 'assistant', 'user'])
+    expect(history.map((message) => message.role)).toEqual(['user', 'assistant', 'tool', 'user'])
     expect(toolExecution).toHaveBeenCalledOnce()
   })
   it('clears a stopped media call even when stopping during its pending save', async () => {
@@ -2369,7 +2791,11 @@ describe('text Agent orchestration', () => {
       expect(toolExecution).not.toHaveBeenCalled()
       expect(agent.running.value).toBe(false)
       expect(agent.toolExecutions.value).toEqual({})
-      expect(agent.currentMessages.value).toHaveLength(1)
+      expect(agent.currentMessages.value).toHaveLength(2)
+      expect(agent.toolResults.value['before-execute'].parts).toContainEqual({
+        type: 'text',
+        text: expect.stringContaining('TOOL_CANCELLED'),
+      })
       const saved = await new AgentSessionStore().load('u1', 'p1')
       expect(saved[0].toolExecutions).toEqual({})
     } finally {
@@ -2401,21 +2827,25 @@ describe('text Agent orchestration', () => {
     const pending = agent.send('新增轨道')
     await vi.waitFor(() => expect(toolExecution).toHaveBeenCalledOnce())
     const saved = (await new AgentSessionStore().load('u1', 'p1'))[0]
-    expect(saved.toolExecutions).toEqual({})
-    expect(saved.messages[1].parts).toEqual([{ type: 'text', text: '开始编辑' }])
+    expect(saved.toolExecutions.edit.status).toBe('running')
+    expect(saved.messages[1].parts).toContainEqual(
+      expect.objectContaining({ tool_call_id: 'edit', status: 'running' }),
+    )
     const context = toolExecution.mock.calls[0][2]
     expect(agent.currentMessages.value[1].parts).toContainEqual(
-      expect.objectContaining({ type: 'tool_call', status: 'requested' }),
+      expect.objectContaining({ type: 'tool_call', status: 'running' }),
     )
-    expect(agent.toolExecutions.value[agent.currentMessages.value[1].id].assistantMessageId).toBe(
+    expect(agent.toolExecutions.value.edit.assistantMessageId).toBe(
       agent.currentMessages.value[1].id,
     )
     agent.stop()
-    expect(context.signal.aborted).toBe(false)
+    expect(context.signal.aborted).toBe(true)
     expect(context.isCurrent()).toBe(false)
     expect(agent.running.value).toBe(false)
     expect(agent.toolExecutions.value).toEqual({})
-    expect(agent.currentMessages.value[1].parts).toEqual([{ type: 'text', text: '开始编辑' }])
+    expect(agent.currentMessages.value[1].parts).toContainEqual(
+      expect.objectContaining({ tool_call_id: 'edit', status: 'interrupted' }),
+    )
     expect(agent.latestModelCall.value?.status).toBe('completed')
     const publish = vi.spyOn(AgentTelemetry.prototype, 'finishAndPublish')
     await agent.send('继续')
@@ -2440,7 +2870,7 @@ describe('text Agent orchestration', () => {
     savedCalls.mockRestore()
     expect(toolExecution).toHaveBeenCalledOnce()
     const history = (transport.calls.mock.calls[1][0] as StreamParams).messages.slice(1)
-    expect(history.map((message) => message.role)).toEqual(['user', 'assistant', 'user'])
+    expect(history.map((message) => message.role)).toEqual(['user', 'assistant', 'tool', 'user'])
   })
   it.each([
     { change: 'project_leave', stopFirst: false },
@@ -2476,7 +2906,7 @@ describe('text Agent orchestration', () => {
       const context = toolExecution.mock.calls[0][2]
       if (stopFirst) {
         agent.stop()
-        expect(context.signal.aborted).toBe(false)
+        expect(context.signal.aborted).toBe(true)
         expect(agent.busy.value).toBe(false)
       }
       if (change === 'project_leave') agent.leaveProject()
@@ -3191,7 +3621,13 @@ it('atomically commits generic tool images, preserves role and ordered captions,
     name: 'read_project_info',
     tool_call_id: 'image-call',
     content: [
-      { type: 'image', image: expect.objectContaining({ providerId: 'dashscope', reference: 'oss://dashscope-instant/test/tool.webp' }) },
+      {
+        type: 'image',
+        image: expect.objectContaining({
+          providerId: 'dashscope',
+          reference: 'oss://dashscope-instant/test/tool.webp',
+        }),
+      },
       { type: 'text', text: `${imageId}：素材 source，at=00:00:01+00，完整画面。` },
       { type: 'text', text: '额外说明' },
     ],
@@ -3302,13 +3738,11 @@ it('queries a provider once per runtime run and keeps it through model and tool 
 })
 
 it('retains the rejected user message and images and refreshes the provider on the next send', async () => {
-  const upload = vi
-    .spyOn(agentProvider, 'uploadAgentImage')
-    .mockResolvedValue({
-      providerId: 'dashscope',
-      reference: 'oss://dashscope-instant/test.webp',
-      expiresAt: new Date(Date.now() + 3600000).toISOString(),
-    })
+  const upload = vi.spyOn(agentProvider, 'uploadAgentImage').mockResolvedValue({
+    providerId: 'dashscope',
+    reference: 'oss://dashscope-instant/test.webp',
+    expiresAt: new Date(Date.now() + 3600000).toISOString(),
+  })
   transport.calls.mockRejectedValueOnce(
     Object.assign(new Error('AGENT_PROVIDER_CHANGED'), { code: 'AGENT_PROVIDER_CHANGED' }),
   )

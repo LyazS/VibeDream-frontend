@@ -6,6 +6,7 @@
       <div class="tool-title-group">
         <div class="tool-title-stack">
           <span class="tool-title">{{ displayName }}</span>
+          <span class="tool-status">{{ t(`aiPanel.toolStatus.${item.status}`) }}</span>
         </div>
       </div>
       <button
@@ -224,13 +225,25 @@ const handleCancelToolExecution = async () => {
   flex-shrink: 0;
   box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.1);
 }
-.status-dot[data-status='requested'] {
+.status-dot[data-status='running'],
+.status-dot[data-status='waiting'] {
   background-color: var(--color-accent-secondary);
   box-shadow: none;
 }
-.status-dot[data-status='failed'] {
+.status-dot[data-status='failed'],
+.status-dot[data-status='interrupted'] {
   background-color: var(--color-error);
   box-shadow: none;
+}
+.status-dot[data-status='queued'],
+.status-dot[data-status='skipped'],
+.status-dot[data-status='cancelled'] {
+  background-color: var(--color-text-secondary);
+  box-shadow: none;
+}
+.tool-status {
+  font-size: 11px;
+  color: var(--color-text-secondary);
 }
 
 .tool-icon {

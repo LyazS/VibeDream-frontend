@@ -508,26 +508,36 @@ export class AgentClient {
         // 此处只判断是否有内容，tool_calls 的实际结构由下一项检查。
         const isEmptyMessage = !(message.content as string).trim() && !message.tool_calls
 
-        // 3. tool_calls 可以省略；提供时必须是数组，且当前协议每轮只允许一个工具调用。
+        const callIds = new Set(
+          call.params.messages.flatMap((entry) =>
+            entry.role === 'assistant' && 'tool_calls' in entry
+              ? (entry.tool_calls ?? []).map((tool) => tool.id)
+              : [],
+          ),
+        )
         const hasInvalidToolCalls =
           message.tool_calls !== undefined &&
           (!Array.isArray(message.tool_calls) ||
-            message.tool_calls.length !== 1 ||
-            message.tool_calls.some(
-              (toolCall) =>
+            !message.tool_calls.length ||
+            message.tool_calls.some((toolCall) => {
+              const invalid =
                 !toolCall ||
                 // 工具调用 ID 和工具名称必须是非空字符串，用于结果配对和执行器查找。
                 typeof toolCall.id !== 'string' ||
-                !toolCall.id ||
+                !/^[A-Za-z0-9._:-]{1,128}$/.test(toolCall.id) ||
                 typeof toolCall.name !== 'string' ||
-                !toolCall.name ||
+                !/^[A-Za-z0-9_-]{1,64}$/.test(toolCall.name) ||
+                !call.params.tools?.some((tool) => tool.name === toolCall.name) ||
+                callIds.has(toolCall.id) ||
                 // 参数必须是非 null 的对象且不能是数组；具体工具的参数 schema 由 ToolRuntime 校验。
                 !toolCall.args ||
                 typeof toolCall.args !== 'object' ||
                 Array.isArray(toolCall.args) ||
                 // 工具调用只接受协议定义的三个字段，避免把其他格式当作合法调用。
-                Object.keys(toolCall).some((key) => !['id', 'name', 'args'].includes(key)),
-            ))
+                Object.keys(toolCall).some((key) => !['id', 'name', 'args'].includes(key))
+              if (!invalid) callIds.add(toolCall.id)
+              return invalid
+            }))
 
         // 4. 助手消息只接受 role、content 和可选的 tool_calls，出现其他字段即违反协议。
         const hasUnexpectedMessageFields = Object.keys(message).some(

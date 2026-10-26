@@ -106,7 +106,6 @@ export class AgentSessionStore {
     return JSON.stringify([userId, projectId, toolContractVersion])
   }
 
-  /** 固定消息、用量及调用摘要，只保留恢复待回答问题所需的工具记录。 */
   save(
     session: AgentSession,
     images: readonly (AgentAttachment | AgentToolImage)[] = [],
@@ -117,14 +116,18 @@ export class AgentSessionStore {
       ...session,
       toolExecutions: Object.fromEntries(
         Object.entries(session.toolExecutions).filter(
-          ([assistantId, execution]) =>
-            execution.status === 'pending' &&
-            execution.call.name === 'ask_user' &&
+          ([callId, execution]) =>
+            ['queued', 'running', 'waiting'].includes(execution.status) &&
+            callId === execution.call.id &&
+            execution.userId === session.userId &&
+            execution.projectId === session.projectId &&
+            execution.sessionId === session.id &&
             session.messages.some(
               (message) =>
-                message.id === assistantId &&
-                message.interaction?.interrupt.interaction_id === execution.call.id &&
-                !message.interaction.result,
+                message.id === execution.assistantMessageId &&
+                message.parts.some(
+                  (part) => part.type === MessagePartType.TOOL_CALL && part.tool_call_id === callId,
+                ),
             ),
         ),
       ),
