@@ -123,6 +123,9 @@ export interface AgentMessage {
   id: string
   role: AgentMessageRole | 'tool'
   parts: AgentMessagePart[]
+  reasoning_content?: string
+  /** 新助手消息只在模型调用成功后进入历史；旧会话缺失该字段仍可读取。 */
+  modelCallStatus?: ModelCallSummary['status']
   created_at: string
   toolCallId?: string
   toolName?: string

@@ -18,6 +18,9 @@
     "toggle": "切换",
     "unknownError": "未知错误",
     "chat": {
+      "reasoning": "思考过程",
+      "replyCancelled": "已取消",
+      "replyFailed": "生成失败",
       "inputPlaceholder": "输入消息...",
       "send": "发送",
       "attachImage": "添加图片",

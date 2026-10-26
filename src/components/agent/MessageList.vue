@@ -1,12 +1,18 @@
 <template>
-  <div class="chat-messages-container" ref="messagesContainer">
+  <div class="chat-messages-container" ref="messagesContainer" @scroll.passive="onScroll">
     <AgentMessage :messages="[welcomeMessage]" />
     <template v-for="message in store.agentMessages" :key="message.id">
       <UserMessage v-if="message.role === AgentMessageRole.USER" :message="message" />
       <AgentMessage v-else :messages="[message]" />
       <InteractionCard v-if="message.interaction" :record="message.interaction" />
     </template>
-    <ThinkingIndicator v-if="indicatorStatus" :status="indicatorStatus" />
+    <ThinkingIndicator
+      v-if="indicatorStatus"
+      :key="store.agentSessionId"
+      :status="indicatorStatus"
+      :reasoning="currentReasoning"
+      :model-call-id="store.agentModelCall?.id"
+    />
     <div v-if="store.agentModelCall?.status === 'failed'" class="chat-error" role="alert">
       {{ t(getAgentErrorKey(store.agentModelCall?.errorCode ?? store.agentModelCall?.error)) }}
     </div>
@@ -31,6 +37,11 @@ import { useAppI18n } from '@/core/composables/useI18n'
 const store = useUnifiedStore()
 const { t } = useAppI18n()
 const indicatorStatus = ref<'thinking' | 'completed' | null>(null)
+const currentReasoning = computed(
+  () =>
+    store.agentMessages.find((message) => message.id === store.agentModelCall?.assistantMessageId)
+      ?.reasoning_content ?? '',
+)
 let completedIndicatorTimer: ReturnType<typeof setTimeout> | null = null
 const md = new MarkdownIt({ html: false, linkify: true, typographer: true })
 provide('renderMarkdown', (content: string) => md.render(content))
@@ -41,7 +52,13 @@ const welcomeMessage = computed(() => ({
   created_at: new Date().toISOString(),
 }))
 const messagesContainer = ref<HTMLElement>()
+let followMessages = true
+function onScroll() {
+  const element = messagesContainer.value
+  if (element) followMessages = element.scrollHeight - element.scrollTop - element.clientHeight < 48
+}
 async function scrollToBottom() {
+  if (!followMessages) return
   await nextTick()
   if (messagesContainer.value)
     messagesContainer.value.scrollTop = messagesContainer.value.scrollHeight

@@ -106,6 +106,41 @@ afterEach(
 )
 
 describe('project-scoped single-turn client', /** 组织工程范围内单轮客户端的协议和生命周期测试。 */ () => {
+  it('separates reasoning deltas and accepts authoritative complete reasoning without appending it', async () => {
+    const stream = await started(client())
+    sockets[0].frame('reasoning.delta', { delta: '先分析' })
+    sockets[0].frame('reasoning.done')
+    sockets[0].frame('text.delta', { delta: '回答' })
+    const message = { role: 'assistant', content: '回答', reasoning_content: '先分析，再核对' }
+    sockets[0].frame('model_call.completed', { message, usage: null })
+    const chunks = []
+    for await (const chunk of stream) chunks.push(chunk)
+    expect(chunks).toEqual([
+      { type: 'reasoning.delta', delta: '先分析' },
+      { type: 'reasoning.done', delta: '' },
+      { delta: '回答' },
+    ])
+    expect((await stream.finalCompletion()).message).toEqual(message)
+  })
+  it.each([null, 1, {}, []])(
+    'rejects non-string complete reasoning: %j',
+    async (reasoning_content) => {
+      const stream = await started(client())
+      sockets[0].frame('model_call.completed', {
+        message: { role: 'assistant', content: 'reply', reasoning_content },
+        usage: null,
+      })
+      await expect(stream.finalCompletion()).rejects.toMatchObject({ code: 'PROTOCOL_INVALID' })
+    },
+  )
+  it('rejects a reasoning-only completion', async () => {
+    const stream = await started(client())
+    sockets[0].frame('model_call.completed', {
+      message: { role: 'assistant', content: '', reasoning_content: 'still thinking' },
+      usage: null,
+    })
+    await expect(stream.finalCompletion()).rejects.toMatchObject({ code: 'PROTOCOL_INVALID' })
+  })
   it('accepts an ordered batch without a fixed call limit', async () => {
     const c = client()
     const tools = [{ name: 'read', description: '', parameters: { type: 'object' } }]
@@ -312,7 +347,7 @@ describe('project-scoped single-turn client', /** 组织工程范围内单轮客
     await started(c)
     const frame = JSON.parse(sockets[0].sent[0])
     expect(frame).toMatchObject({
-      protocol_version: 'agent-model-calls-v3',
+      protocol_version: 'agent-model-calls-v4',
       project_id: 'project-1',
       messages: params.messages,
       tools: [],

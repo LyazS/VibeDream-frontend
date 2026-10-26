@@ -18,6 +18,9 @@
     "toggle": "Toggle",
     "unknownError": "Unknown error",
     "chat": {
+      "reasoning": "Reasoning",
+      "replyCancelled": "Cancelled",
+      "replyFailed": "Generation failed",
       "inputPlaceholder": "Type a message...",
       "send": "Send",
       "attachImage": "Add images",

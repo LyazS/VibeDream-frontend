@@ -35,11 +35,12 @@ export type TextContentPart = { type: 'text'; text: string }
 export type ImageContentPart = { type: 'image'; image: ProviderUpload }
 export type MessageContent = string | TextContentPart[]
 export type MultimodalContent = string | (TextContentPart | ImageContentPart)[]
-export type TextMessage = { role: 'system' | 'assistant'; content: MessageContent }
+export type TextMessage = { role: 'system'; content: MessageContent }
 export type ToolCall = { id: string; name: string; args: Record<string, unknown> }
 export type AssistantMessage = {
   role: 'assistant'
   content: string
+  reasoning_content?: string
   tool_calls?: ToolCall[]
 }
 export type ModelMessage =
@@ -68,7 +69,7 @@ export type StreamParams = {
   tools?: ModelTool[]
   projectId: string
 }
-export type Delta = { delta: string }
+export type Delta = { delta: string; type?: 'text.delta' | 'reasoning.delta' | 'reasoning.done' }
 export interface CompletionStream extends AsyncIterable<Delta> {
   /** 获取同一轮次的最终结果；多次调用共享同一个 Promise。 */
   finalCompletion(): Promise<Completion>
@@ -478,12 +479,27 @@ export class AgentClient {
         if (!call.cancelled) call.started.resolve(call.stream)
         return
       case 'text.delta':
+      case 'reasoning.delta':
         if (!call.accepted || typeof v.delta !== 'string') {
           this.close('PROTOCOL_INVALID')
           return
         }
         if (!call.cancelled) {
-          call.queue.push({ delta: v.delta })
+          call.queue.push({
+            delta: v.delta,
+            ...(v.type === 'reasoning.delta' ? { type: v.type } : {}),
+          })
+          call.wake?.()
+          call.wake = undefined
+        }
+        return
+      case 'reasoning.done':
+        if (!call.accepted) {
+          this.close('PROTOCOL_INVALID')
+          return
+        }
+        if (!call.cancelled) {
+          call.queue.push({ type: 'reasoning.done', delta: '' })
           call.wake?.()
           call.wake = undefined
         }
@@ -498,7 +514,8 @@ export class AgentClient {
           !call.accepted ||
           !message ||
           message.role !== 'assistant' ||
-          typeof message.content !== 'string'
+          typeof message.content !== 'string' ||
+          (message.reasoning_content !== undefined && typeof message.reasoning_content !== 'string')
         if (hasInvalidMessageShape) {
           this.close('PROTOCOL_INVALID')
           return
@@ -539,9 +556,9 @@ export class AgentClient {
               return invalid
             }))
 
-        // 4. 助手消息只接受 role、content 和可选的 tool_calls，出现其他字段即违反协议。
+        // 4. 助手消息只接受协议定义的正文、思考和工具调用字段。
         const hasUnexpectedMessageFields = Object.keys(message).some(
-          (key) => !['role', 'content', 'tool_calls'].includes(key),
+          (key) => !['role', 'content', 'reasoning_content', 'tool_calls'].includes(key),
         )
 
         // 5. usage 可以显式为 null；否则三个 token 数都必须是非负安全整数，且总量等于输入加输出。

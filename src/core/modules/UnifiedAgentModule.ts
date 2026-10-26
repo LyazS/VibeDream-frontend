@@ -454,6 +454,7 @@ export function createUnifiedAgentModule(registry: ModuleRegistry) {
         buildDisplayMessage(modelCall.assistantMessageId, AgentMessageRole.ASSISTANT, ''),
       )
       message = session.messages[session.messages.length - 1]!
+      message.modelCallStatus = 'running'
     }
     return message
   }
@@ -576,6 +577,18 @@ export function createUnifiedAgentModule(registry: ModuleRegistry) {
     // 系统提示词由 buildTextMessages() 添加；背景上下文属于对应用户消息的固定快照。
     const history: ModelMessage[] = []
     for (const message of session.messages) {
+      // 中断的部分正文和思考仅供展示，不冒充成功助手消息进入下一轮上下文。
+      if (
+        message.role === AgentMessageRole.ASSISTANT &&
+        ((message.modelCallStatus !== undefined && message.modelCallStatus !== 'completed') ||
+          (session.latestModelCall?.assistantMessageId === message.id &&
+            session.latestModelCall.status !== 'completed'))
+      )
+        continue
+      const reasoning =
+        message.role === AgentMessageRole.ASSISTANT && message.reasoning_content !== undefined
+          ? { reasoning_content: message.reasoning_content }
+          : {}
       // 用户图片按原顺序放在文字之前，兼容此前按文字优先保存的消息；背景快照放在最后。
       // 工具结果按原始部件顺序映射图文；助手仅映射文本，进度和交互元数据不转成正文。
       const parts =
@@ -664,6 +677,7 @@ export function createUnifiedAgentModule(registry: ModuleRegistry) {
       if (calls.length) {
         history.push({
           role: 'assistant',
+          ...reasoning,
           // 助手可以只有工具调用而没有正文，因此本分支不按空白文本过滤。
           content: textContent,
           tool_calls: calls.map((call) => ({
@@ -675,13 +689,12 @@ export function createUnifiedAgentModule(registry: ModuleRegistry) {
           })),
         })
       } else if (content.some((part) => part.type === 'image' || part.text.trim())) {
-        // 3. 普通用户/助手正文只要不是全空白就进入历史，不根据 modelCall 成功或中断状态过滤。
-        // 所以失败前的用户输入、已经收到的部分助手回复都会进入用户下一次提交的请求。
+        // 3. 有效用户输入及成功助手回复保留全部文本部件与完整思考。
         // 任意一段不是全空白就保留整条消息及全部文本部件；trim() 不修改实际发送的文本。
         history.push(
           message.role === AgentMessageRole.USER
             ? { role: 'user', content }
-            : { role: message.role, content: textContent },
+            : { role: message.role, content: textContent, ...reasoning },
         )
       }
       // 三个分支都只挑选模型协议字段，消息 ID、时间和 interaction 等界面元数据不会发送。
@@ -916,6 +929,7 @@ export function createUnifiedAgentModule(registry: ModuleRegistry) {
       if (current && status !== 'waiting')
         closeToolBatch(session, current.id, status === 'failed' ? 'failed' : 'cancelled')
       const message = session.messages.find((m) => m.id === current?.assistantMessageId)
+      if (message && current) message.modelCallStatus = current.status
       if (current && run.awaitingCompletion)
         finishes.push({
           id: current.id,
@@ -925,6 +939,9 @@ export function createUnifiedAgentModule(registry: ModuleRegistry) {
             output: {
               message: {
                 role: 'assistant',
+                ...(message?.reasoning_content !== undefined
+                  ? { reasoning_content: message.reasoning_content }
+                  : {}),
                 content: message
                   ? getMessageTextParts(message)
                       .map((p) => p.text)
@@ -937,6 +954,7 @@ export function createUnifiedAgentModule(registry: ModuleRegistry) {
       session.messages = session.messages.filter(
         (message) =>
           message.id !== current?.assistantMessageId ||
+          Boolean(message.reasoning_content?.trim()) ||
           message.interaction ||
           message.parts.some((part) => part.type !== MessagePartType.TEXT || part.text.trim()),
       )
@@ -1012,7 +1030,7 @@ export function createUnifiedAgentModule(registry: ModuleRegistry) {
         // 1. 等待旧模型调用释放槽位，再复核归属；只等待收口，不重放旧请求。
         await client.waitForIdle()
         if (!isRunCurrent()) return
-        // 2. 从唯一消息记录生成快照，包括部分回复和已配对工具结果，不再额外追加首次输入。
+        // 2. 从唯一消息记录生成快照，包括成功回复和已配对工具结果。
         // 3. 新建 modelCall，记录用户消息或工具结果的输入 ID；助手消息按固定 ID 逐步保存。
         session.latestModelCall = {
           id: crypto.randomUUID(),
@@ -1067,10 +1085,15 @@ export function createUnifiedAgentModule(registry: ModuleRegistry) {
         // 4. 增量写入同一条助手消息，停止也不删除；工具参数仍须等待完整终态再处理。
         for await (const chunk of output) {
           if (!isRunCurrent() || session.latestModelCall?.id !== current.id) break
+          if (chunk.type === 'reasoning.done') continue
           if (!chunk.delta) continue
           const assistant = getAssistantMessage(session, current)
-          const text = assistant.parts.find((part) => part.type === MessagePartType.TEXT)!
-          if (text.type === MessagePartType.TEXT) text.text += chunk.delta
+          if (chunk.type === 'reasoning.delta') {
+            assistant.reasoning_content = (assistant.reasoning_content ?? '') + chunk.delta
+          } else {
+            const text = assistant.parts.find((part) => part.type === MessagePartType.TEXT)!
+            if (text.type === MessagePartType.TEXT) text.text += chunk.delta
+          }
           // 每次增量保存固定快照并顺序写入，部分正文也属于实际会话内容。
           await persistSession(session)
         }
@@ -1080,6 +1103,8 @@ export function createUnifiedAgentModule(registry: ModuleRegistry) {
         const calls = completion.message.tool_calls ?? []
         // 5. 用完整终态校准正文，不另建消息或提前提交工具调用；模型完成不代表工具成功。
         const assistant = getAssistantMessage(session, current)
+        assistant.reasoning_content = completion.message.reasoning_content
+        assistant.modelCallStatus = 'completed'
         assistant.parts = [
           { type: MessagePartType.TEXT, text: completion.message.content },
           ...calls.map((call) => ({
@@ -1509,6 +1534,11 @@ export function createUnifiedAgentModule(registry: ModuleRegistry) {
         for (const session of saved) {
           if (session.latestModelCall?.status === 'running')
             session.latestModelCall.status = 'cancelled'
+          for (const message of session.messages) {
+            if (message.modelCallStatus === 'running') message.modelCallStatus = 'cancelled'
+            if (message.id === session.latestModelCall?.assistantMessageId)
+              message.modelCallStatus = session.latestModelCall.status
+          }
           sessions.value[session.id] = session
           const restored = sessions.value[session.id]!
           const unfinished = Object.values(restored.toolExecutions).filter((execution) => {

@@ -174,7 +174,7 @@ const handleCancelToolExecution = async () => {
 }
 
 .tool-call-display {
-  margin: 4px 0;
+  margin: 0;
   padding: 0;
   border-radius: 0;
   background: transparent;

@@ -222,6 +222,97 @@ afterEach(async () => {
   vi.unstubAllGlobals()
 })
 
+describe('thinking message lifecycle', () => {
+  it('preserves full reasoning through multiple tools, new user turns, refresh and provider changes', async () => {
+    for (let index = 0; index < 3; index++) {
+      transport.calls.mockImplementationOnce(async (request: StreamParams) => ({
+        async *[Symbol.asyncIterator]() {
+          yield { type: 'reasoning.delta', delta: `draft-${index}` }
+          yield { type: 'reasoning.done', delta: '' }
+        },
+        finalCompletion: async () => ({
+          modelCallId: request.modelCallId,
+          usage: null,
+          message: {
+            role: 'assistant',
+            content: index < 2 ? '' : '最终回答',
+            reasoning_content: `完整思考-${index}`,
+            ...(index < 2
+              ? {
+                  tool_calls: [
+                    { id: `thinking-tool-${index}`, name: 'read_project_info', args: {} },
+                  ],
+                }
+              : {}),
+          },
+        }),
+      }))
+    }
+    await agent.send('多轮工具')
+    expect(transport.calls).toHaveBeenCalledTimes(3)
+    const thoughts = (request: StreamParams) =>
+      request.messages
+        .filter((message) => message.role === 'assistant')
+        .map((message) => (message.role === 'assistant' ? message.reasoning_content : undefined))
+    expect(thoughts(transport.calls.mock.calls[2][0])).toEqual(['完整思考-0', '完整思考-1'])
+    expect(
+      agent.currentMessages.value
+        .filter((message) => message.role === 'assistant')
+        .map((message) => message.reasoning_content),
+    ).toEqual(['完整思考-0', '完整思考-1', '完整思考-2'])
+    const id = agent.currentSessionId.value
+    await Promise.allSettled(backgroundWrites)
+    scope.stop()
+    mountAgent()
+    await vi.waitFor(() => expect(agent.ready.value).toBe(true))
+    agent.selectSession(id)
+    vi.mocked(agentProvider.getAgentProvider).mockResolvedValue({
+      id: 'deepseek',
+      route_hash: 'b'.repeat(64),
+    })
+    await agent.send('下一条用户消息')
+    const request = transport.calls.mock.calls[3][0] as StreamParams
+    expect(request.provider.id).toBe('deepseek')
+    expect(thoughts(request)).toEqual(['完整思考-0', '完整思考-1', '完整思考-2'])
+    expect(request.messages.filter((message) => message.role === 'tool')).toHaveLength(2)
+  })
+
+  it.each(['failed', 'cancelled'] as const)(
+    'retains partial reasoning for a %s call but never replays it as successful history',
+    async (status) => {
+      const final = deferred<Completion>()
+      transport.calls.mockImplementationOnce(async () => ({
+        async *[Symbol.asyncIterator]() {
+          yield { type: 'reasoning.delta', delta: '未完成思考' }
+        },
+        finalCompletion: () => final.promise,
+      }))
+      const pending = agent.send('原问题')
+      await vi.waitFor(() =>
+        expect(agent.currentMessages.value[1]?.reasoning_content).toBe('未完成思考'),
+      )
+      if (status === 'cancelled') agent.stop()
+      final.reject(new Error('MODEL_FAILED'))
+      await pending
+      expect(agent.currentMessages.value[1]).toMatchObject({
+        reasoning_content: '未完成思考',
+        modelCallStatus: status,
+      })
+      await Promise.allSettled(backgroundWrites)
+      const id = agent.currentSessionId.value
+      scope.stop()
+      mountAgent()
+      await vi.waitFor(() => expect(agent.ready.value).toBe(true))
+      agent.selectSession(id)
+      expect(agent.currentMessages.value[1].reasoning_content).toBe('未完成思考')
+      await agent.send('继续')
+      expect(
+        (transport.calls.mock.calls[1][0] as StreamParams).messages.map((message) => message.role),
+      ).toEqual(['system', 'user', 'user'])
+    },
+  )
+})
+
 describe('sequential tool batches', () => {
   const calls = () => ['a', 'b', 'c'].map((id) => ({ id, name: 'read_project_info', args: {} }))
 
@@ -1751,7 +1842,6 @@ describe('persisted Agent sessions', () => {
       await agent.send('continue')
       expect(transport.calls.mock.calls[1][0].messages.slice(1)).toEqual([
         { role: 'user', content: userContent('original input') },
-        { role: 'assistant', content: [{ type: 'text', text: 'complete reply' }] },
         { role: 'user', content: userContent('continue') },
       ])
     },
@@ -3088,7 +3178,7 @@ describe('text Agent orchestration', () => {
     expect(agent.latestModelCall.value?.status).toBe('running')
     expect(
       (transport.calls.mock.calls[1][0] as StreamParams).messages.slice(1).map((m) => m.role),
-    ).toEqual(['user', 'assistant', 'user', 'user'])
+    ).toEqual(['user', 'user', 'user'])
     newestCompletion.resolve({
       modelCallId: newestCall,
       message: { role: 'assistant', content: 'new reply' },
@@ -3390,7 +3480,7 @@ describe('text Agent orchestration', () => {
     expect(agent.running.value).toBe(false)
   })
   it.each(['failed', 'cancelled'] as const)(
-    'keeps %s input and partial reply in the next request',
+    'keeps %s input while excluding the partial assistant reply from the next request',
     async (status) => {
       await agent.send('completed input')
       let resolve!: (value: Completion) => void
@@ -3441,7 +3531,6 @@ describe('text Agent orchestration', () => {
         { role: 'user', content: userContent('completed input') },
         { role: 'assistant', content: [{ type: 'text', text: 'complete reply' }] },
         { role: 'user', content: userContent('unfinished input') },
-        { role: 'assistant', content: [{ type: 'text', text: 'partial draft' }] },
         { role: 'user', content: userContent('next input') },
       ])
     },

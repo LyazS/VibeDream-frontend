@@ -1,6 +1,9 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { createRenderer, h, nextTick, reactive, ref, toRaw } from 'vue'
 import { createI18n } from 'vue-i18n'
+import ThinkingIndicator from '../src/components/agent/ThinkingIndicator.vue'
+import MessageList from '../src/components/agent/MessageList.vue'
+import AgentMessageDisplay from '../src/components/agent/AgentMessage.vue'
 import AgentInput from '../src/components/agent/AgentInput.vue'
 import ToolCallDisplay from '../src/components/agent/ToolCallDisplay.vue'
 import AgentImagePreview from '../src/components/agent/AgentImage.vue'
@@ -41,12 +44,13 @@ const mocks = vi.hoisted(() => ({
     sendAgentDraft: vi.fn(),
     stopAgent: vi.fn(),
   },
+  listStore: undefined as object | undefined,
   createPreview: vi.fn(),
   disposePreview: vi.fn(),
   readMediaState: vi.fn(),
   searchMediaState: vi.fn(),
 }))
-vi.mock('@/core/unifiedStore', () => ({ useUnifiedStore: () => mocks.store }))
+vi.mock('@/core/unifiedStore', () => ({ useUnifiedStore: () => mocks.listStore ?? mocks.store }))
 vi.mock('@/core/composables/useI18n', () => ({ useAppI18n: () => ({ t: i18n.global.t }) }))
 vi.mock('@/constants/iconComponents', () => ({
   IconComponents: {
@@ -88,6 +92,7 @@ vi.mock('@/core/agent/services/agentImageService', async (importOriginal) => ({
 // 使用 Vue 宿主渲染器挂载真实组件，在无浏览器环境中验证输入交互。
 class HostNode {
   props: Record<string, unknown> = {}
+  style = { display: '' }
   children: HostNode[] = []
   parent: HostNode | null = null
   value = ''
@@ -171,6 +176,7 @@ function pressEnter() {
 
 beforeEach(() => {
   vi.clearAllMocks()
+  mocks.listStore = undefined
   mocks.readMediaState.mockReturnValue(ref(null))
   mocks.searchMediaState.mockReturnValue(ref(null))
   mocks.createPreview.mockImplementation(() => ({
@@ -721,5 +727,110 @@ it.each(['read_media', 'search_indexing', 'search_media'])(
         width: `${completed * 20}%`,
       })
     }
+  },
+)
+
+it('opens the bottom thinking indicator only on click and keeps streaming content open', async () => {
+  app.unmount()
+  const props = reactive({
+    status: 'thinking' as const,
+    reasoning: 'first thought',
+    modelCallId: 'call-1',
+  })
+  app = renderer.createApp({ setup: () => () => h(ThinkingIndicator, props) })
+  app.mount(root)
+  const toggle = () => findNode((node) => node.props.class === 'thinking-indicator__toggle')
+  expect(toggle().props['aria-expanded']).toBe(false)
+  expect(toggle().props['aria-controls']).toBeTruthy()
+  expect(toggle().props.type).toBe('button')
+  ;(toggle().props.onClick as () => void)()
+  props.reasoning += ' second thought'
+  await nextTick()
+  expect(toggle().props['aria-expanded']).toBe(true)
+  const content = findNode((node) => node.props.class === 'thinking-indicator__content')
+  expect(content.value).toBe(props.reasoning)
+  expect(content.props['aria-live']).toBe('off')
+  ;(toggle().props.onClick as () => void)()
+  props.reasoning += ' more'
+  await nextTick()
+  expect(toggle().props['aria-expanded']).toBe(false)
+})
+
+it('shows only the latest call reasoning below the conversation and replaces it on the next call', async () => {
+  app.unmount()
+  const state = reactive({
+    agentSessionId: 'session',
+    agentRunning: true,
+    agentPendingInteraction: null,
+    agentStorageError: null,
+    agentModelCall: { id: 'call-1', assistantMessageId: 'assistant-1', status: 'running' },
+    agentMessages: [
+      {
+        id: 'history',
+        role: 'assistant',
+        parts: [{ type: 'text', text: 'previous answer' }],
+        created_at: '',
+        reasoning_content: 'historical reasoning',
+      },
+      {
+        id: 'assistant-1',
+        role: 'assistant',
+        parts: [{ type: 'text', text: '' }],
+        created_at: '',
+        reasoning_content: 'current reasoning',
+      },
+    ],
+  })
+  mocks.listStore = state
+  app = renderer.createApp(MessageList)
+  app.mount(root)
+  const toggle = () => findNode((node) => node.props.class === 'thinking-indicator__toggle')
+  const content = () => findNode((node) => node.props.class === 'thinking-indicator__content')
+  expect(toggle().props['aria-expanded']).toBe(false)
+  ;(toggle().props.onClick as () => void)()
+  await nextTick()
+  expect(content().value).toBe('current reasoning')
+  expect(findOptional((node) => node.value === 'historical reasoning', root)).toBeUndefined()
+  // A new call starts before its assistant message exists; the previous thought disappears immediately.
+  state.agentModelCall = { id: 'call-2', assistantMessageId: 'assistant-2', status: 'running' }
+  await nextTick()
+  expect(content().value).toBe('')
+  expect(toggle().props['aria-expanded']).toBe(true)
+  state.agentMessages.push({
+    id: 'assistant-2',
+    role: 'assistant',
+    parts: [{ type: 'text', text: '' }],
+    created_at: '',
+    reasoning_content: 'next call reasoning',
+  })
+  await nextTick()
+  expect(content().value).toBe('next call reasoning')
+  expect(findOptional((node) => node.value === 'current reasoning', root)).toBeUndefined()
+  state.agentRunning = false
+  state.agentModelCall.status = 'completed'
+  await nextTick()
+  expect(
+    findOptional((node) => node.props.class === 'thinking-indicator__toggle', root),
+  ).toBeUndefined()
+})
+
+it.each(['', 'saved reasoning'])(
+  'never displays per-message reasoning or an empty assistant bubble: %s',
+  async (reasoning_content) => {
+    app.unmount()
+    app = renderer.createApp(AgentMessageDisplay, {
+      messages: [
+        {
+          id: 'assistant',
+          role: 'assistant',
+          parts: [{ type: 'text', text: '' }],
+          created_at: '',
+          reasoning_content,
+        },
+      ],
+    })
+    app.mount(root)
+    expect(findOptional((node) => node.props.class === 'chat-message ai', root)).toBeUndefined()
+    expect(findOptional((node) => node.value === 'saved reasoning', root)).toBeUndefined()
   },
 )
