@@ -108,7 +108,7 @@
         "effectTemplateReady": "下载效果素材"
       },
       "statuses": {
-        "idle": "等待启动",
+        "idle": "等待依赖",
         "queued": "排队中",
         "running": "处理中"
       }

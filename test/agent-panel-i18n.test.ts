@@ -92,6 +92,12 @@ const render = (component: Component) => renderToString(createSSRApp(component))
 it.each([
   ['CONNECTION_FAILED', 'connectionFailed'],
   ['MODEL_CALL_TIMEOUT', 'timeout'],
+  ['AI_MODEL_NOT_CONFIGURED', 'unavailable'],
+  ['AI_MODEL_CONFIG_INVALID', 'unavailable'],
+  ['AI_API_KEY_MISSING', 'unavailable'],
+  ['AI_UNAVAILABLE', 'modelFailed'],
+  ['AI_INVALID_CHAT_RESPONSE', 'modelFailed'],
+  ['AI_INVALID_REQUEST', 'requestInvalid'],
   ['AGENT_IMAGE_URL_EXPIRED', 'imageExpired'],
   ['AGENT_IMAGE_UPLOAD_FAILED', 'imageUploadFailed'],
   ['INSUFFICIENT_BALANCE', 'insufficientBalance'],

@@ -26,17 +26,25 @@ export interface TaskView {
  * childResourceIds 由调用方传入，因为单节点本身只知道直接 deps，不知道 UI 想展示
  * 几层子图。MVP 默认把整条依赖子图收集出来。
  */
-export function createTaskView(node: ResourceNode, childResourceIds: string[] = []): TaskView {
+export function createTaskView(
+  node: ResourceNode,
+  childResourceIds: string[] = [],
+  childNodes: ResourceNode[] = [],
+): TaskView {
+  const status = getAggregatedStatus(node, childNodes)
+  const message = getAggregatedMessage(node, childNodes, status)
+  const progress = getAggregatedProgress(node, childNodes, status)
+
   return {
     id: node.id,
     title: node.message || node.stage || `${node.type}:${node.key}`,
-    status: node.status,
-    progress: node.progress,
-    message: node.message,
+    status,
+    progress,
+    message,
     rootResourceId: node.id,
     childResourceIds,
     actions: {
-      canCancel: node.status === 'queued' || node.status === 'running',
+      canCancel: status === 'idle' || status === 'queued' || status === 'running',
       // 来源定位依赖后续 bindings 设计，MVP 固定为 false。
       canRevealSource: false,
     },
@@ -56,8 +64,59 @@ export function createTaskViews(nodes: ResourceNode[]): TaskView[] {
     .filter((node) => node.dependents.length === 0)
     .map((node) => {
       const childResourceIds = collectDependencies(node, nodeById)
-      return createTaskView(node, childResourceIds)
+      const childNodes = childResourceIds
+        .map((resourceId) => nodeById.get(resourceId))
+        .filter((childNode): childNode is ResourceNode => childNode !== undefined)
+      return createTaskView(node, childResourceIds, childNodes)
     })
+}
+
+function getAggregatedStatus(node: ResourceNode, childNodes: ResourceNode[]): ResourceStatus {
+  const nodes = [node, ...childNodes]
+
+  if (nodes.some((currentNode) => currentNode.status === 'running')) {
+    return 'running'
+  }
+
+  if (nodes.some((currentNode) => currentNode.status === 'queued')) {
+    return 'queued'
+  }
+
+  if (nodes.some((currentNode) => currentNode.status === 'idle')) {
+    return 'idle'
+  }
+
+  return node.status
+}
+
+function getAggregatedMessage(
+  node: ResourceNode,
+  childNodes: ResourceNode[],
+  status: ResourceStatus,
+): string | undefined {
+  if (node.status === status && node.message) {
+    return node.message
+  }
+
+  const activeChild = childNodes.find(
+    (childNode) => childNode.status === status && (childNode.message || childNode.stage),
+  )
+
+  return activeChild?.message || activeChild?.stage || node.message
+}
+
+function getAggregatedProgress(
+  node: ResourceNode,
+  childNodes: ResourceNode[],
+  status: ResourceStatus,
+): number | undefined {
+  if (node.status === status && typeof node.progress === 'number') {
+    return node.progress
+  }
+
+  return childNodes.find(
+    (childNode) => childNode.status === status && typeof childNode.progress === 'number',
+  )?.progress
 }
 
 /** 深度收集依赖子图，供 UI 展开 root 任务查看子步骤。 */

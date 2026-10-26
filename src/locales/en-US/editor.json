@@ -108,7 +108,7 @@
         "effectTemplateReady": "Downloading Effect Template"
       },
       "statuses": {
-        "idle": "Waiting to start",
+        "idle": "Waiting for dependencies",
         "queued": "Queued",
         "running": "In progress"
       }
