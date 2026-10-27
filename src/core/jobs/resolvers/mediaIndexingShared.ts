@@ -443,7 +443,7 @@ export function setIndexingMetadata(
     indexStatus: MediaIndexStatus
     mediaKind?: 'video' | 'image'
     indexedAt?: string
-    lastIndexTaskId?: string
+    taskId?: string
     segmentCount?: number
     failedSegmentCount?: number
     segmentSummaries?: UnifiedVideoMediaIndexMetadata['segmentSummaries']
@@ -474,7 +474,7 @@ export function canResumeMediaIndexingFromRemote(
   indexing: UnifiedMediaIndexMetadata | undefined,
 ): boolean {
   // 当前系统只有新的 Cloudflare 任务模型，因此存在待处理状态和 taskId 即可恢复，不再兼容旧协议。
-  return shouldRecoverMediaIndexing(indexing) && Boolean(indexing?.lastIndexTaskId)
+  return shouldRecoverMediaIndexing(indexing) && Boolean(indexing?.taskId)
 }
 
 export function throwIfAborted(signal: AbortSignal): void {
@@ -513,7 +513,7 @@ export async function waitForMediaIndexTaskCompletion(
       ) {
         setIndexingMetadata(mediaItem, {
           indexStatus: 'failed',
-          lastIndexTaskId: taskId,
+          taskId,
         })
         await persistMediaItem(mediaItem)
         throw new Error(task.message || task.error || mediaIndexingTaskFailureMessage(task.status))
@@ -522,7 +522,7 @@ export async function waitForMediaIndexTaskCompletion(
       // processing/cancelling 不发 HTTP 轮询；等待下一条 Durable Object 推送即可。
       setIndexingMetadata(mediaItem, {
         indexStatus: 'processing',
-        lastIndexTaskId: taskId,
+        taskId,
       })
       onProgress({
         progress:
@@ -542,11 +542,11 @@ export async function waitForMediaIndexTaskCompletion(
       error instanceof Error &&
       'code' in error &&
       error.code === 'AI_TASK_NOT_FOUND' &&
-      mediaItem.metadata?.indexing?.lastIndexTaskId === taskId
+      mediaItem.metadata?.indexing?.taskId === taskId
     ) {
       setIndexingMetadata(mediaItem, {
         indexStatus: 'failed',
-        lastIndexTaskId: undefined,
+        taskId: undefined,
       })
       await persistMediaItem(mediaItem)
     }

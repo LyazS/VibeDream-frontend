@@ -69,7 +69,7 @@ export class MediaIndexMetadataWritebackResolver
         mediaKind: 'video',
         indexStatus: status,
         indexedAt: result.indexed_at,
-        lastIndexTaskId: taskId,
+        taskId,
         segmentCount: result.segment_count,
         failedSegmentCount: result.failed_segment_count,
         segmentSummaries: result.segment_summaries?.map((segment) => ({
@@ -91,7 +91,7 @@ export class MediaIndexMetadataWritebackResolver
         mediaKind: 'image',
         indexStatus: status,
         indexedAt: result.indexed_at,
-        lastIndexTaskId: taskId,
+        taskId,
         segmentCount: undefined,
         failedSegmentCount: undefined,
         segmentSummaries: undefined,

@@ -130,7 +130,7 @@ export class MediaIndexTaskSubmitResolver
   ): Promise<MediaIndexTaskSubmitResult | null> {
     const mediaItem = this.module.getMediaItem(ctx.input.mediaId)
     const indexing = mediaItem?.metadata?.indexing
-    const taskId = indexing?.lastIndexTaskId
+    const taskId = indexing?.taskId
     // 项目重新打开时优先复用仍在处理中的新 Cloudflare 任务，避免再次上传与重复扣费。
     if (canResumeMediaIndexingFromRemote(indexing) && typeof taskId === 'string' && taskId.trim()) {
       return {
@@ -283,7 +283,7 @@ export class MediaIndexTaskSubmitResolver
     setIndexingMetadata(mediaItem, {
       mediaKind: mediaItem.mediaType,
       indexStatus: 'processing',
-      lastIndexTaskId: response.task_id,
+      taskId: response.task_id,
     })
     await persistMediaItem(mediaItem)
 

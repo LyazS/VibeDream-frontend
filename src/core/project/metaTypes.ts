@@ -120,7 +120,7 @@ function isUnifiedMediaIndexMetadata(
   if (
     !validStatus ||
     !isOptionalString(value.indexedAt) ||
-    !isOptionalString(value.lastIndexTaskId)
+    !isOptionalString(value.taskId)
   ) {
     return false
   }

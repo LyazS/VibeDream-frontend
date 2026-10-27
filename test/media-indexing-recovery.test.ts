@@ -40,7 +40,7 @@ function media(indexStatus: 'pending' | 'processing' = 'processing'): UnifiedMed
     ext: '.png',
     name: 'image.png',
     mediaType: 'image',
-    metadata: { indexing: { mediaKind: 'image', indexStatus, lastIndexTaskId: taskId } },
+    metadata: { indexing: { mediaKind: 'image', indexStatus, taskId: taskId } },
   } as UnifiedMediaItemData
 }
 
@@ -77,7 +77,7 @@ describe('missing media indexing task recovery', () => {
       ).rejects.toMatchObject({ code: 'AI_TASK_NOT_FOUND' })
       expect(close).toHaveBeenCalledOnce()
       expect(savedIndexing).toEqual({ mediaKind: 'image', indexStatus: 'failed' })
-      expect(item.metadata?.indexing?.lastIndexTaskId).toBeUndefined()
+      expect(item.metadata?.indexing?.taskId).toBeUndefined()
       expect(shouldRecoverMediaIndexing(savedIndexing)).toBe(false)
       expect(canResumeMediaIndexingFromRemote(savedIndexing)).toBe(false)
 
@@ -161,7 +161,7 @@ describe('missing media indexing task recovery', () => {
     expect(item.metadata?.indexing).toEqual({
       mediaKind: 'image',
       indexStatus: 'processing',
-      lastIndexTaskId: taskId,
+      taskId,
     })
     expect(globalMetaFileManager.saveMetaFile).not.toHaveBeenCalled()
     expect(close).toHaveBeenCalledOnce()
@@ -170,13 +170,13 @@ describe('missing media indexing task recovery', () => {
   it('does not clear a newer task when an older wait fails', async () => {
     const item = media()
     subscribeWith(async () => {
-      item.metadata!.indexing!.lastIndexTaskId = 'new-task'
+      item.metadata!.indexing!.taskId = 'new-task'
       throw missingTaskError()
     })
     await expect(
       waitForMediaIndexTaskCompletion(item, taskId, vi.fn(), new AbortController().signal),
     ).rejects.toMatchObject({ code: 'AI_TASK_NOT_FOUND' })
-    expect(item.metadata?.indexing?.lastIndexTaskId).toBe('new-task')
+    expect(item.metadata?.indexing?.taskId).toBe('new-task')
     expect(item.metadata?.indexing?.indexStatus).toBe('processing')
     expect(globalMetaFileManager.saveMetaFile).not.toHaveBeenCalled()
   })

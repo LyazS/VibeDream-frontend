@@ -125,7 +125,7 @@ export interface BaseUnifiedMediaIndexMetadata {
   mediaKind: 'video' | 'image'
   indexStatus: MediaIndexStatus
   indexedAt?: string
-  lastIndexTaskId?: string
+  taskId?: string
 }
 
 export interface UnifiedVideoIndexSegmentSummary {

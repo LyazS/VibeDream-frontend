@@ -34,7 +34,7 @@ export class MediaIndexTaskCompleteResolver
     const mediaItem = this.module.getMediaItem(ctx.input.mediaId)
     const indexing = mediaItem?.metadata?.indexing
     const existingTaskId = canResumeMediaIndexingFromRemote(indexing)
-      ? ctx.input.taskId || indexing?.lastIndexTaskId
+      ? ctx.input.taskId || indexing?.taskId
       : undefined
     // 已有待处理任务时跳过提交 Resolver，后续只重新订阅其进度。
     if (existingTaskId) {
@@ -50,7 +50,7 @@ export class MediaIndexTaskCompleteResolver
     const mediaItem = getIndexableMediaItem(this.module, ctx.input.mediaId)
     const indexing = mediaItem.metadata?.indexing
     const existingTaskId = canResumeMediaIndexingFromRemote(indexing)
-      ? ctx.input.taskId || indexing?.lastIndexTaskId
+      ? ctx.input.taskId || indexing?.taskId
       : undefined
     const submitted = existingTaskId
       ? null
@@ -95,7 +95,7 @@ export class MediaIndexTaskCompleteResolver
 
   async cancel(ctx: ResolveContext<MediaIndexTaskCompleteInput>): Promise<void> {
     const mediaItem = this.module.getMediaItem(ctx.input.mediaId)
-    const taskId = ctx.input.taskId || mediaItem?.metadata?.indexing?.lastIndexTaskId
+    const taskId = ctx.input.taskId || mediaItem?.metadata?.indexing?.taskId
     if (!taskId) {
       return
     }
@@ -107,7 +107,7 @@ export class MediaIndexTaskCompleteResolver
     if (mediaItem) {
       setIndexingMetadata(mediaItem, {
         indexStatus: 'failed',
-        lastIndexTaskId: taskId,
+        taskId,
       })
       await persistMediaItem(mediaItem)
     }

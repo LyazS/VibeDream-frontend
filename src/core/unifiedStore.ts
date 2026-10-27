@@ -264,7 +264,7 @@ export const useUnifiedStore = defineStore('unified', () => {
           mediaKind: mediaItem.mediaType,
           indexStatus: 'pending',
           indexedAt: undefined,
-          lastIndexTaskId: undefined,
+          taskId: undefined,
           failedSegmentCount: mediaItem.mediaType === 'video' ? 0 : undefined,
           segmentCount:
             mediaItem.mediaType === 'video' && indexing?.mediaKind === 'video'
