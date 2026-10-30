@@ -52,6 +52,13 @@ export class TimelineItemReadyResolver
       }
     }
 
+    if (TimelineItemQueries.hasTimelinePlaceholder(timelineItem)) {
+      return {
+        timelineItemId: timelineItem.id,
+        status: 'skipped',
+      }
+    }
+
     if (
       timelineItem.timelineStatus === 'ready' ||
       TimelineItemQueries.isTextTimelineItem(timelineItem)
@@ -77,6 +84,7 @@ export class TimelineItemReadyResolver
 
     if (
       !timelineItem ||
+      TimelineItemQueries.hasTimelinePlaceholder(timelineItem) ||
       timelineItem.timelineStatus === 'ready' ||
       TimelineItemQueries.isTextTimelineItem(timelineItem) ||
       !timelineItem.mediaItemId
@@ -107,6 +115,15 @@ export class TimelineItemReadyResolver
         timelineItemId: ctx.input.timelineItemId,
         status: 'skipped',
       }
+    }
+
+    if (TimelineItemQueries.hasTimelinePlaceholder(timelineItem)) {
+      ctx.update({
+        progress: 1,
+        stage: 'placeholder',
+        message: `Timeline placeholder is owned by its business resolver: ${timelineItem.id}`,
+      })
+      return { timelineItemId: timelineItem.id, status: 'skipped' }
     }
 
     if (timelineItem.timelineStatus === 'ready') {

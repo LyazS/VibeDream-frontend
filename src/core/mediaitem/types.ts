@@ -83,6 +83,32 @@ export interface UnifiedMediaItemMetadata {
   indexing?: UnifiedMediaIndexMetadata
   /** 本地 All-In-One 音乐结构分析结果 */
   musicAnalysis?: MusicAnalysisMetadata
+  /** 已完成和活动的素材级字幕识别结果。 */
+  asr?: AsrMetadata
+}
+
+export interface AsrRange {
+  start_ms: number
+  end_ms: number
+}
+
+export interface AsrSegment {
+  start_ms: number
+  end_ms: number
+  text: string
+  words?: Array<{ start_ms: number; end_ms: number; text: string }>
+}
+
+export interface AsrTaskRecord {
+  taskId: string
+  recognitionRange: AsrRange
+  createdAt: string
+}
+
+export interface AsrMetadata {
+  completedRanges: AsrRange[]
+  segments: AsrSegment[]
+  tasks: AsrTaskRecord[]
 }
 
 export interface MusicAnalysisSegment {

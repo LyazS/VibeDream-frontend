@@ -7,27 +7,27 @@
       @mousedown="handleMouseDown"
     >
       <!-- 四角控制点 -->
-      <div 
-        class="control-point corner top-left" 
+      <div
+        class="control-point corner top-left"
         :class="{ active: activeHandle === 'corner-top-left' }"
         @mousedown.stop="handleScaleMouseDown($event, 'corner', 'top-left')"
       />
-      <div 
-        class="control-point corner top-right" 
+      <div
+        class="control-point corner top-right"
         :class="{ active: activeHandle === 'corner-top-right' }"
         @mousedown.stop="handleScaleMouseDown($event, 'corner', 'top-right')"
       />
-      <div 
-        class="control-point corner bottom-left" 
+      <div
+        class="control-point corner bottom-left"
         :class="{ active: activeHandle === 'corner-bottom-left' }"
         @mousedown.stop="handleScaleMouseDown($event, 'corner', 'bottom-left')"
       />
-      <div 
-        class="control-point corner bottom-right" 
+      <div
+        class="control-point corner bottom-right"
         :class="{ active: activeHandle === 'corner-bottom-right' }"
         @mousedown.stop="handleScaleMouseDown($event, 'corner', 'bottom-right')"
       />
-      
+
       <!-- 四边中点控制点（等比缩放时隐藏） -->
       <div
         v-if="!isProportionalScale"
@@ -53,16 +53,25 @@
         :class="{ active: activeHandle === 'edge-right' }"
         @mousedown.stop="handleScaleMouseDown($event, 'edge', 'right')"
       />
-      
+
       <!-- 旋转柄 -->
       <div class="rotation-handle-line" />
-      <div 
-        class="rotation-handle" 
+      <div
+        class="rotation-handle"
         :class="{ active: activeHandle === 'rotation' }"
         @mousedown.stop="handleRotateMouseDown($event)"
       >
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2"/>
+        <svg
+          width="12"
+          height="12"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+        >
+          <path
+            d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2"
+          />
         </svg>
       </div>
     </div>
@@ -114,12 +123,15 @@ const activeHandle = ref<string | null>(null)
 const shouldShowIndicator = computed(() => {
   if (!props.selectedTimelineItemId) return false
   if (props.isMultiSelectMode) return false
-  
+
+  // 异步业务占位符没有可编辑的画布视觉属性。
+  if (selectedItem.value?.timelinePlaceholder) return false
+
   // 音频类型不显示指示器
   if (selectedItem.value && TimelineItemQueries.isAudioTimelineItem(selectedItem.value)) {
     return false
   }
-  
+
   return true
 })
 
@@ -139,7 +151,10 @@ const visualConfig = computed<VisualProps | null>(() => {
 const isProportionalScale = computed(() => {
   if (!selectedItem.value) return false
   if (!TimelineItemQueries.hasVisualProperties(selectedItem.value)) return false
-  return TimelineItemQueries.getResolvedRenderConfig(selectedItem.value).visual.proportionalScale ?? false
+  return (
+    TimelineItemQueries.getResolvedRenderConfig(selectedItem.value).visual.proportionalScale ??
+    false
+  )
 })
 
 const indicatorStyle = computed((): CSSProperties => {
@@ -182,7 +197,7 @@ function handleMouseDown(event: MouseEvent) {
 function handleScaleMouseDown(
   event: MouseEvent,
   handleType: TransformScaleHandleType,
-  handlePosition: TransformScaleHandlePosition
+  handlePosition: TransformScaleHandlePosition,
 ) {
   event.preventDefault()
   event.stopPropagation()

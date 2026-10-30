@@ -47,6 +47,10 @@ export function cloneTimelineItem<T extends MediaType>(
       exRenderConfig: original.runtime.exRenderConfig ?? createDefaultTimelineExtraRenderConfig(),
       isInitialized: original.runtime.isInitialized,
     },
+    timelinePlaceholder: original.timelinePlaceholder
+      ? cloneDeep(original.timelinePlaceholder)
+      : undefined,
+    provenance: original.provenance ? cloneDeep(original.provenance) : undefined,
   })
 
   // 应用覆盖值
@@ -220,6 +224,15 @@ export async function buildTimelineItemForDag(
     }
 
     console.log(`🔄 [${logIdentifier}] 开始构建时间轴项目（Ready DAG）...`)
+
+    if (originalTimelineItemData.timelinePlaceholder) {
+      const placeholderItem = cloneTimelineItem(originalTimelineItemData, {
+        timelineStatus:
+          originalTimelineItemData.timelinePlaceholder.state === 'error' ? 'error' : 'loading',
+      })
+      placeholderItem.runtime.isInitialized = false
+      return { timelineItem: placeholderItem, success: true }
+    }
 
     if (TimelineItemQueries.isTextTimelineItem(originalTimelineItemData)) {
       const newTimelineItem = cloneTimelineItem(originalTimelineItemData, {

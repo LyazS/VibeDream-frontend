@@ -458,6 +458,8 @@ export function createUnifiedAutoSaveModule(
           mediaItemId: item.mediaItemId,
           trackId: item.trackId,
           timelineStatus: item.timelineStatus,
+          timelinePlaceholder: item.timelinePlaceholder,
+          provenance: item.provenance,
           mediaType: item.mediaType,
           timeRange: item.timeRange,
           markers: item.markers,

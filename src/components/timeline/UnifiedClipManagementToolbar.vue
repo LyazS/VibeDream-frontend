@@ -124,6 +124,7 @@ import { useAppI18n } from '@/core/composables/useI18n'
 import { useBeatMarkDetection } from '@/core/composables/useBeatMarkDetection'
 import { useMusicStructureAnalysis } from '@/core/composables/useMusicStructureAnalysis'
 import type { AIMarkMode } from '@/core/timelineitem/model/timelineItem'
+import { DeleteTimelinePlaceholderCommand } from '@/core/modules/commands/DeleteTimelinePlaceholderCommand'
 import {
   MUSIC_ANALYSIS_MAX_DURATION_SECONDS,
   MUSIC_ANALYSIS_MIN_DURATION_SECONDS,
@@ -352,7 +353,8 @@ async function toggleSelectedClipMusicStructure(): Promise<void> {
   const timelineItem = selectedTimelineItem.value
   if (!timelineItem || typeof timelineItem.mediaItemId !== 'string') return
   if (isMusicStructureMenuDisabled.value) return
-  const analysis = selectedMusicAnalysis.value ?? (await analyzeMusicStructure(timelineItem.mediaItemId))
+  const analysis =
+    selectedMusicAnalysis.value ?? (await analyzeMusicStructure(timelineItem.mediaItemId))
   if (!analysis) return
 
   const currentTimelineItem = unifiedStore.getTimelineItem(timelineItem.id)
@@ -468,7 +470,19 @@ async function deleteSelectedSelection() {
       `🗑️ 删除时间轴项目: ${mediaItem?.name || '未知'} (ID: ${unifiedStore.selectedClipTimelineItemId})`,
     )
 
-    await unifiedStore.removeTimelineItemWithHistory(unifiedStore.selectedClipTimelineItemId)
+    if (item?.timelinePlaceholder) {
+      const command = new DeleteTimelinePlaceholderCommand(item, {
+        getTimelineItem: unifiedStore.getTimelineItem,
+        addTimelineItem: unifiedStore.addTimelineItem,
+        removeTimelineItem: unifiedStore.removeTimelineItem,
+        onRestore: (restored) => unifiedStore.restoreMediaAsrPlaceholder(restored.id),
+      })
+      const batch = unifiedStore.startBatch(command.historyLabel)
+      batch.addCommand(command)
+      await unifiedStore.executeBatchCommand(batch.build())
+    } else {
+      await unifiedStore.removeTimelineItemWithHistory(unifiedStore.selectedClipTimelineItemId)
+    }
     console.log('✅ 时间轴项目删除成功')
   }
 }
@@ -506,7 +520,6 @@ async function redo() {
     console.error('❌ 重做操作失败:', error)
   }
 }
-
 </script>
 
 <style scoped>

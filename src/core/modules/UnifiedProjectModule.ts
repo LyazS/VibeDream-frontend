@@ -9,6 +9,7 @@ import { TimelineItemQueries } from '@/core/timelineitem/queries'
 import type { UnifiedTrackData } from '@/core/track/TrackTypes'
 import { createUnifiedTrackData } from '@/core/track/TrackTypes'
 import type { UnifiedMediaItemData } from '@/core/mediaitem/types'
+import type { MediaAsrInput, MediaAsrResult } from '@/core/asr/types'
 import { globalMetaFileManager } from '@/core/managers/media/globalMetaFileManager'
 import { globalMediaItemLoader } from '@/core/managers/media/MediaItemLoader'
 import { isMediaAsset } from '@/core/asset/types'
@@ -69,6 +70,9 @@ export function createUnifiedProjectModule(registry: ModuleRegistry) {
 
   let ensureMediaReadyForProjectLoad: ((mediaId: string) => Promise<unknown>) | null = null
   let ensureMediaIndexingForProjectLoad: ((mediaId: string) => Promise<unknown>) | null = null
+  let ensureMediaAsrForProjectLoad: ((input: MediaAsrInput) => Promise<MediaAsrResult>) | null = null
+  let applyMediaAsrResultForProjectLoad:
+    ((timelineItemId: string, result: MediaAsrResult) => Promise<void>) | null = null
   let _ensureEffectTemplateReadyForProjectLoad: ((assetId: string) => Promise<unknown>) | null =
     null
   let ensureTimelineItemResolvedForProjectLoad:
@@ -121,6 +125,16 @@ export function createUnifiedProjectModule(registry: ModuleRegistry) {
 
   function setMediaIndexingEnsurer(ensurer: (mediaId: string) => Promise<unknown>): void {
     ensureMediaIndexingForProjectLoad = ensurer
+  }
+
+  function setMediaAsrEnsurer(ensurer: (input: MediaAsrInput) => Promise<MediaAsrResult>): void {
+    ensureMediaAsrForProjectLoad = ensurer
+  }
+
+  function setMediaAsrResultApplier(
+    applier: (timelineItemId: string, result: MediaAsrResult) => Promise<void>,
+  ): void {
+    applyMediaAsrResultForProjectLoad = applier
   }
 
   function setEffectTemplateReadyEnsurer(ensurer: (assetId: string) => Promise<unknown>): void {
@@ -434,6 +448,24 @@ export function createUnifiedProjectModule(registry: ModuleRegistry) {
           continue
         }
 
+        // 没有时间轴占位符的素材任务也要继续等待并回写缓存，例如用户删除占位符后刷新项目。
+        // 这里仍由同一个 ASR Resolver 处理，Resolver 内部先检查 completedRanges，再复用 taskId。
+        if (isMediaAsset(mediaItem) && ensureMediaAsrForProjectLoad) {
+          for (const task of mediaItem.metadata?.asr?.tasks ?? []) {
+            void ensureMediaAsrForProjectLoad({
+              mediaId: mediaItem.id,
+              timelineItemId: '',
+              requestedRange: task.recognitionRange,
+              recognitionRange: task.recognitionRange,
+            }).catch((error) => {
+              console.error(
+                `❌ 恢复字幕识别任务失败，可通过重新识别提交新任务: ${mediaItem.name}`,
+                error,
+              )
+            })
+          }
+        }
+
         if (isMediaAsset(mediaItem) && isRecoverableMediaIndexing(mediaItem)) {
           if (ensureMediaIndexingForProjectLoad) {
             void ensureMediaIndexingForProjectLoad(mediaItem.id).catch((error) => {
@@ -654,6 +686,53 @@ export function createUnifiedProjectModule(registry: ModuleRegistry) {
       timelineModule.refreshTransitionItems?.()
       ensureTimelineEffectDependencies(timelineModule.timelineItems.value)
 
+      // 时间轴占位符已经恢复后，再启动 ASR Resolver。Resolver 会先检查素材缓存，
+      // 只有缓存未覆盖时才读取素材上的活动任务并继续等待。
+      if (ensureMediaAsrForProjectLoad && applyMediaAsrResultForProjectLoad) {
+        for (const item of timelineModule.timelineItems.value) {
+          if (item.timelinePlaceholder?.kind !== 'asr') continue
+          if (item.timelinePlaceholder.state !== 'active') continue
+          const payload = item.timelinePlaceholder.payload
+          if (!payload || typeof payload !== 'object') continue
+          const asrPayload = payload as {
+            sourceMediaId?: string
+            requestedRange?: MediaAsrInput['requestedRange']
+            recognitionRange?: MediaAsrInput['recognitionRange']
+          }
+          if (
+            !asrPayload.sourceMediaId ||
+            !asrPayload.requestedRange ||
+            !asrPayload.recognitionRange
+          ) {
+            item.timelineStatus = 'error'
+            item.timelinePlaceholder.state = 'orphaned'
+            item.timelinePlaceholder.error = {
+              code: 'ASR_PLACEHOLDER_INVALID',
+              message: '字幕占位符缺少识别范围',
+            }
+            continue
+          }
+          const timelineItemId = item.id
+          void ensureMediaAsrForProjectLoad({
+            mediaId: asrPayload.sourceMediaId,
+            timelineItemId,
+            requestedRange: asrPayload.requestedRange,
+            recognitionRange: asrPayload.recognitionRange,
+          })
+            .then((result) => applyMediaAsrResultForProjectLoad?.(timelineItemId, result))
+            .catch((error) => {
+              const current = timelineModule.getTimelineItem(timelineItemId)
+              if (!current?.timelinePlaceholder) return
+              current.timelineStatus = 'error'
+              current.timelinePlaceholder.state = 'error'
+              current.timelinePlaceholder.error = {
+                code: 'ASR_RECOVERY_FAILED',
+                message: error instanceof Error ? error.message : String(error),
+              }
+            })
+        }
+      }
+
       console.log(`✅ 时间轴项目恢复完成: ${timelineModule.timelineItems.value.length}个项目`)
     } catch (error) {
       console.error('❌ 恢复时间轴项目失败:', error)
@@ -713,6 +792,8 @@ export function createUnifiedProjectModule(registry: ModuleRegistry) {
     // 加载进度方法
     setMediaReadyEnsurer,
     setMediaIndexingEnsurer,
+    setMediaAsrEnsurer,
+    setMediaAsrResultApplier,
     setEffectTemplateReadyEnsurer,
     setTimelineItemResolvedEnsurer,
     updateLoadingProgress,

@@ -218,7 +218,20 @@
     "singleSelect": {
       "emptyHint": "Select a timeline item to view properties",
       "emptyHintDetail": "Choose audio, video, image, or text clips to edit their settings",
-      "loading": "Loading..."
+      "loading": "Loading...",
+      "loadingStatus": "Media status: {status}",
+      "asrPlaceholder": {
+        "title": "Subtitle recognition",
+        "sourceMedia": "Source media",
+        "range": "Recognition range",
+        "hint": "This placeholder will be replaced by subtitle clips when recognition finishes.",
+        "status": {
+          "active": "Recognizing subtitles",
+          "paused": "Waiting for recognition to resume",
+          "error": "Subtitle recognition failed",
+          "orphaned": "Waiting to recover subtitle recognition"
+        }
+      }
     },
     "multiSelect": {
       "title": "Multiple Items Selected ({count})",

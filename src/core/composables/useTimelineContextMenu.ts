@@ -15,6 +15,9 @@ import { detectSceneTransNetV2 } from '@/core/utils/scene-detector-transnetv2'
 import type { TransNetV2ProgressEvent } from '@/core/utils/transnetv2/types'
 import { buildClipSelectionId } from '@/core/types/timelineSelection'
 import { canRevealTimelineSource } from '@/core/timelineitem/TimelineSourceReveal'
+import { GenerateSubtitlesCommand } from '@/core/modules/commands/GenerateSubtitlesCommand'
+import { expandAsrRange } from '@/core/asr/cache'
+import { RENDERER_FPS } from '@/core/mediabunny/constant'
 
 /**
  * 菜单项类型定义
@@ -143,6 +146,16 @@ export function useTimelineContextMenu(
     // 只有 ready 状态的 timelineItem 才有各种右键选项
     // 非 ready 状态（loading 或 error）只有删除选项
     if (timelineItem.timelineStatus === 'ready') {
+      if (canGenerateSubtitles(timelineItem)) {
+        menuItems.push({
+          label: t('timeline.contextMenu.clip.generateSubtitles'),
+          icon: IconComponents.TRANSLATE,
+          onClick: () => void generateSubtitles(),
+        })
+
+        appendMenuSeparator(menuItems)
+      }
+
       // 智能分镜头 - 仅视频类型支持
       if (timelineItem.mediaType === 'video') {
         menuItems.push({
@@ -212,6 +225,58 @@ export function useTimelineContextMenu(
     })
 
     return menuItems
+  }
+
+  function canGenerateSubtitles(timelineItem: UnifiedTimelineItemData): boolean {
+    if (timelineItem.timelineStatus !== 'ready') return false
+    if (timelineItem.mediaType !== 'audio' && timelineItem.mediaType !== 'video') return false
+    const media = unifiedStore.getMediaItem(timelineItem.mediaItemId)
+    return media?.mediaStatus === 'ready' && !timelineItem.timelinePlaceholder
+  }
+
+  async function generateSubtitles(): Promise<void> {
+    const clipId = contextMenuTarget.value.clipId
+    const item = clipId ? unifiedStore.getTimelineItem(clipId) : undefined
+    if (!item || !canGenerateSubtitles(item)) return
+
+    const media = unifiedStore.getMediaItem(item.mediaItemId)
+    if (!media) return
+
+    const requestedRange = {
+      start_ms: Math.round((item.timeRange.clipStartTime / RENDERER_FPS) * 1000),
+      end_ms: Math.round((item.timeRange.clipEndTime / RENDERER_FPS) * 1000),
+    }
+    const durationMs =
+      typeof media.duration === 'number'
+        ? Math.round((media.duration / RENDERER_FPS) * 1000)
+        : requestedRange.end_ms
+    const recognitionRange = expandAsrRange(requestedRange, durationMs)
+
+    showContextMenu.value = false
+    try {
+      const command = new GenerateSubtitlesCommand({
+        mediaId: media.id,
+        sourceTimelineItemId: item.id,
+        requestedRange,
+        recognitionRange,
+        ensureAsr: unifiedStore.ensureMediaAsr,
+        getTimelineItem: unifiedStore.getTimelineItem,
+        getTimelineItems: () => unifiedStore.timelineItems,
+        addTimelineItem: unifiedStore.addTimelineItem,
+        removeTimelineItem: unifiedStore.removeTimelineItem,
+        getTrack: unifiedStore.getTrack,
+        getTracks: () => unifiedStore.tracks,
+        addTrack: unifiedStore.addTrack,
+        removeTrack: unifiedStore.removeTrack,
+        hasTimelineItemsOnTrack: (trackId) =>
+          unifiedStore.timelineItems.some((candidate) => candidate.trackId === trackId),
+      })
+      const batch = unifiedStore.startBatch(command.historyLabel)
+      batch.addCommand(command)
+      await unifiedStore.executeBatchCommand(batch.build())
+    } catch (error) {
+      console.error('字幕识别失败', error)
+    }
   }
 
   function revealClipInLibrary(): void {

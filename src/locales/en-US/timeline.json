@@ -37,6 +37,7 @@
         "addTextTrack": "Add Text Track"
       },
       "clip": {
+        "generateSubtitles": "Recognize Subtitles",
         "smartSceneDetection": "Scene Detection",
         "autoBeatMarks": "Auto Beat Marks",
         "regenerateBeatMarks": "Regenerate Beat Marks",

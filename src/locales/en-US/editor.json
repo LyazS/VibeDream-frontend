@@ -104,6 +104,7 @@
       "titles": {
         "mediaReady": "Preparing Media",
         "mediaIndexing": "Indexing Media",
+        "mediaAsr": "Transcribing Subtitles",
         "timelineItemReady": "Preparing Timeline Media",
         "effectTemplateReady": "Downloading Effect Template"
       },

@@ -1,8 +1,8 @@
 import { fetchClient } from '@/utils/fetchClient'
 
 // Worker 只为白名单能力签发 policy。搜索候选额外绑定 point_id，并返回只能在对应任务中使用的 upload_ref。
-export type MediaUploadCapability = 'indexing' | 'rerank' | 'validate'
-export type MediaUploadPurpose = 'tagging' | 'embedding' | 'rerank' | 'validate'
+export type MediaUploadCapability = 'indexing' | 'asr' | 'rerank' | 'validate'
+export type MediaUploadPurpose = 'tagging' | 'embedding' | 'asr' | 'rerank' | 'validate'
 
 export interface CfBailianTempFileUploadRequest {
   capability: MediaUploadCapability

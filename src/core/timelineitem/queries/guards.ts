@@ -32,6 +32,12 @@ export function isTextTimelineItem(
   return item.mediaType === 'text'
 }
 
+export function hasTimelinePlaceholder(
+  item: UnifiedTimelineItemData<MediaType>,
+): boolean {
+  return item.timelinePlaceholder !== undefined
+}
+
 /**
  * 检查是否为具有视觉属性的时间轴项目（video, image, text）
  */

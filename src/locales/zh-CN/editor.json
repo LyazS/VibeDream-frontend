@@ -104,6 +104,7 @@
       "titles": {
         "mediaReady": "准备素材",
         "mediaIndexing": "索引素材",
+        "mediaAsr": "识别字幕",
         "timelineItemReady": "准备时间轴素材",
         "effectTemplateReady": "下载效果素材"
       },

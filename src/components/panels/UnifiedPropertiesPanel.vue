@@ -56,8 +56,42 @@
 
     <!-- 时间轴单选状态 -->
     <template v-else-if="selectedTimelineItem">
-      <!-- 只在ready状态时显示完整属性面板 -->
-      <template v-if="selectedTimelineItem.timelineStatus === 'ready'">
+      <!-- 异步业务占位符显示只读任务状态，不显示普通片段编辑控件。 -->
+      <n-scrollbar v-if="asrPlaceholderPayload" class="properties-scroll-area">
+        <div
+          class="placeholder-properties"
+          :class="`placeholder-properties--${asrPlaceholderState}`"
+        >
+          <div class="placeholder-properties__icon">
+            <component :is="asrPlaceholderIcon" size="28px" />
+          </div>
+          <h3>{{ t('properties.singleSelect.asrPlaceholder.title') }}</h3>
+          <p class="placeholder-properties__status">
+            {{ asrPlaceholderStatusText }}
+          </p>
+
+          <div class="placeholder-properties__details">
+            <div class="placeholder-properties__row">
+              <span>{{ t('properties.singleSelect.asrPlaceholder.sourceMedia') }}</span>
+              <strong>{{ asrPlaceholderMediaName }}</strong>
+            </div>
+            <div class="placeholder-properties__row">
+              <span>{{ t('properties.singleSelect.asrPlaceholder.range') }}</span>
+              <strong>{{ asrPlaceholderRange }}</strong>
+            </div>
+          </div>
+
+          <p class="placeholder-properties__hint">
+            {{ t('properties.singleSelect.asrPlaceholder.hint') }}
+          </p>
+          <p v-if="asrPlaceholderError" class="placeholder-properties__error">
+            {{ asrPlaceholderError }}
+          </p>
+        </div>
+      </n-scrollbar>
+
+      <!-- 只在 ready 状态时显示完整属性面板 -->
+      <template v-else-if="selectedTimelineItem.timelineStatus === 'ready'">
         <n-tabs v-model:value="activePropertyTab" type="line" animated class="property-tabs">
           <n-tab
             v-for="tab in propertyTabs"
@@ -145,6 +179,7 @@ import { useUnifiedStore } from '@/core/unifiedStore'
 import { useAppI18n } from '@/core/composables/useI18n'
 import { NScrollbar, NTab, NTabs } from 'naive-ui'
 import type { UnifiedTimelineItemData } from '@/core/timelineitem/model/timelineItem'
+import type { AsrPlaceholderPayload } from '@/core/asr/types'
 import { getStatusText } from '@/core/timelineitem/queries'
 import { hasVisualProperties } from '@/core/timelineitem/queries'
 import { supportsClipTransitionOut } from '@/core/timelineitem/queries'
@@ -197,6 +232,55 @@ const selectedTimelineItem = computed(() => {
   if (!unifiedStore.selectedClipTimelineItemId) return null
   return unifiedStore.getTimelineItem(unifiedStore.selectedClipTimelineItemId) || null
 })
+
+const asrPlaceholderPayload = computed<AsrPlaceholderPayload | null>(() => {
+  const placeholder = selectedTimelineItem.value?.timelinePlaceholder
+  if (!placeholder || placeholder.kind !== 'asr') return null
+  return placeholder.payload as AsrPlaceholderPayload
+})
+
+const asrPlaceholderState = computed(() => {
+  const placeholder = selectedTimelineItem.value?.timelinePlaceholder
+  return placeholder?.kind === 'asr' ? placeholder.state : 'active'
+})
+
+const asrPlaceholderStatusText = computed(() => {
+  const statusKey = `properties.singleSelect.asrPlaceholder.status.${asrPlaceholderState.value}`
+  return t(statusKey)
+})
+
+const asrPlaceholderIcon = computed(() => {
+  if (asrPlaceholderState.value === 'error') return IconComponents.ERROR
+  if (asrPlaceholderState.value === 'orphaned') return IconComponents.WARNING
+  return IconComponents.LOADING
+})
+
+const asrPlaceholderMediaName = computed(() => {
+  const mediaId = asrPlaceholderPayload.value?.sourceMediaId
+  return mediaId
+    ? unifiedStore.getMediaItem(mediaId)?.name || t('properties.mediaItem.unknown')
+    : '--'
+})
+
+const asrPlaceholderRange = computed(() => {
+  const range = asrPlaceholderPayload.value?.requestedRange
+  if (!range) return '--'
+  return `${formatMilliseconds(range.start_ms)} - ${formatMilliseconds(range.end_ms)}`
+})
+
+const asrPlaceholderError = computed(
+  () => selectedTimelineItem.value?.timelinePlaceholder?.error?.message,
+)
+
+function formatMilliseconds(milliseconds: number): string {
+  const totalSeconds = Math.max(0, Math.round(milliseconds / 1000))
+  const hours = Math.floor(totalSeconds / 3600)
+  const minutes = Math.floor((totalSeconds % 3600) / 60)
+  const seconds = totalSeconds % 60
+  return `${hours.toString().padStart(2, '0')}:${minutes
+    .toString()
+    .padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`
+}
 
 const selectedTransitionOverlay = computed(() => {
   if (unifiedStore.isTimelineSelectionMultiSelectMode) return null
@@ -504,6 +588,94 @@ watch(
 .loading-status {
   font-size: var(--font-size-sm);
   color: var(--color-text-hint);
+}
+
+.placeholder-properties {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-height: 100%;
+  box-sizing: border-box;
+  padding: var(--spacing-xl) var(--spacing-lg);
+  text-align: center;
+  color: var(--color-text-secondary);
+}
+
+.placeholder-properties__icon {
+  margin-bottom: var(--spacing-md);
+  color: var(--color-accent-secondary);
+}
+
+.placeholder-properties--active .placeholder-properties__icon,
+.placeholder-properties--paused .placeholder-properties__icon {
+  animation: spin 1s linear infinite;
+}
+
+.placeholder-properties--error .placeholder-properties__icon {
+  color: var(--color-error);
+}
+
+.placeholder-properties--orphaned .placeholder-properties__icon {
+  color: var(--color-warning);
+}
+
+.placeholder-properties h3 {
+  margin: 0 0 var(--spacing-sm);
+  color: var(--color-text-primary);
+  font-size: var(--font-size-base);
+  font-weight: var(--font-weight-semibold);
+}
+
+.placeholder-properties__status {
+  margin: 0;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+}
+
+.placeholder-properties__details {
+  width: 100%;
+  margin-top: var(--spacing-xl);
+  padding: var(--spacing-sm) var(--spacing-md);
+  border-radius: var(--border-radius-medium);
+  background: rgba(255, 255, 255, 0.04);
+  box-sizing: border-box;
+}
+
+.placeholder-properties__row {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--spacing-md);
+  padding: var(--spacing-xs) 0;
+  text-align: left;
+  font-size: var(--font-size-sm);
+}
+
+.placeholder-properties__row span {
+  color: var(--color-text-hint);
+  flex-shrink: 0;
+}
+
+.placeholder-properties__row strong {
+  overflow: hidden;
+  color: var(--color-text-primary);
+  font-weight: var(--font-weight-medium);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.placeholder-properties__hint {
+  margin: var(--spacing-lg) 0 0;
+  color: var(--color-text-hint);
+  font-size: var(--font-size-xs);
+  line-height: 1.5;
+}
+
+.placeholder-properties__error {
+  margin: var(--spacing-md) 0 0;
+  color: var(--color-error);
+  font-size: var(--font-size-xs);
+  line-height: 1.5;
+  word-break: break-word;
 }
 
 .empty-state,

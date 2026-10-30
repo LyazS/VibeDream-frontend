@@ -43,6 +43,25 @@ import type { VisualProps, AudioProps } from './render'
  */
 export type TimelineItemStatus = 'ready' | 'loading' | 'error'
 
+export type TimelinePlaceholderState = 'active' | 'paused' | 'error' | 'orphaned'
+
+export interface TimelinePlaceholder<P = unknown> {
+  kind: string
+  state: TimelinePlaceholderState
+  payload: P
+  error?: {
+    code: string
+    message: string
+  }
+}
+
+export interface TimelineProvenance {
+  generatedBy: {
+    type: string
+    id: string
+  }
+}
+
 // ==================== 配置类型映射 ====================
 
 /**
@@ -163,6 +182,9 @@ export interface UnifiedTimelineItemData<T extends MediaType = MediaType> {
   trackId: string
   // ==================== 状态管理 ====================
   timelineStatus: TimelineItemStatus
+  /** 异步业务在时间轴上的临时投影；存在时不得进入 ready。 */
+  timelinePlaceholder?: TimelinePlaceholder
+  provenance?: TimelineProvenance
   // ==================== 媒体信息 ====================
   mediaType: T
   // ==================== 时间范围 ====================

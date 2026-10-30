@@ -25,6 +25,7 @@ export type ResourceType =
   | 'music-structure-analysis'
   | 'timeline-item-ready'
   | 'effect-template-ready'
+  | 'media-asr'
 
 /**
  * ResourceNode 的运行态状态。

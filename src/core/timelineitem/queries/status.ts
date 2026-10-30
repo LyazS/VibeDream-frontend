@@ -12,7 +12,7 @@ import { TimelineStatusDisplayUtils } from '@/core/timelineitem/ui/statusDisplay
  * 检查是否为就绪状态
  */
 export function isReady(data: UnifiedTimelineItemData<MediaType>): boolean {
-  return data.timelineStatus === 'ready'
+  return data.timelineStatus === 'ready' && !data.timelinePlaceholder
 }
 
 /**
@@ -33,7 +33,7 @@ export function hasError(data: UnifiedTimelineItemData<MediaType>): boolean {
  * 检查是否可以编辑
  */
 export function canEdit(data: UnifiedTimelineItemData<MediaType>): boolean {
-  return data.timelineStatus !== 'loading'
+  return data.timelineStatus !== 'loading' && !data.timelinePlaceholder
 }
 
 /**

@@ -218,7 +218,20 @@
     "singleSelect": {
       "emptyHint": "选择时间轴项目以查看属性",
       "emptyHintDetail": "选择音频、视频、图片或文本片段来编辑其设置",
-      "loading": "加载中..."
+      "loading": "加载中...",
+      "loadingStatus": "素材状态：{status}",
+      "asrPlaceholder": {
+        "title": "字幕识别",
+        "sourceMedia": "源素材",
+        "range": "识别范围",
+        "hint": "识别完成后，这个占位符会替换为字幕片段。",
+        "status": {
+          "active": "正在识别字幕",
+          "paused": "等待识别恢复",
+          "error": "字幕识别失败",
+          "orphaned": "等待恢复字幕识别"
+        }
+      }
     },
     "multiSelect": {
       "title": "已选择 {count} 个项目",

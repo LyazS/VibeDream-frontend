@@ -16,6 +16,9 @@ export type {
   // 核心数据类型
   UnifiedTimelineItemData,
   TimelineItemStatus,
+  TimelinePlaceholder,
+  TimelinePlaceholderState,
+  TimelineProvenance,
   TimelineExtraRenderConfig,
   VisualPropPatch,
   AudioPropPatch,

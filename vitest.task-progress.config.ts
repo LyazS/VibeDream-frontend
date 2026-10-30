@@ -13,6 +13,9 @@ export default defineConfig({
       'test/media-analysis.test.ts',
       'test/media-indexing-recovery.test.ts',
       'test/project-timeline-recovery.test.ts',
+      'test/asr-cache.test.ts',
+      'test/asr-history-command.test.ts',
+      'test/asr-subtitle-splitter.test.ts',
     ],
   },
 })

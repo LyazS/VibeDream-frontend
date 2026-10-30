@@ -37,6 +37,7 @@
         "addTextTrack": "添加文本轨道"
       },
       "clip": {
+        "generateSubtitles": "识别字幕",
         "smartSceneDetection": "智能分镜头",
         "autoBeatMarks": "自动节拍",
         "regenerateBeatMarks": "重新识别节拍",
