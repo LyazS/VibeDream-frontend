@@ -14,3 +14,8 @@ app.use(i18n)
 app.use(ContextMenu)
 
 app.mount('#app')
+
+if (import.meta.env.VITE_AGENT_EVAL === 'true') {
+  const { installBrowserHarness } = await import('./core/evaluation/browserHarness')
+  installBrowserHarness()
+}

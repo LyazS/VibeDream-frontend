@@ -5,9 +5,61 @@
 
 import type { TimelineItemDragData, MediaItemDragData } from './index'
 
+export type EvalTurnStatus =
+  | 'completed'
+  | 'waiting_user'
+  | 'failed'
+  | 'cancelled'
+  | 'timeout'
+  | 'unknown'
+
+export interface EvalSnapshot {
+  project: {
+    config: unknown
+    tracks: unknown[]
+    timelineItems: unknown[]
+    mediaItems: unknown[]
+  }
+  agent: {
+    sessionId: string | null
+    messages: unknown[]
+    toolExecutions: unknown
+    pendingInteraction: unknown
+    latestModelCall: unknown
+    usage: unknown
+    connection: unknown
+    ready: boolean
+    historyLoading: boolean
+    draftSendable: boolean
+    draftSubmitting: boolean
+    draftEditable: boolean
+  }
+}
+
+export interface EvalTurnResult {
+  turnId: string
+  status: EvalTurnStatus
+  snapshot: EvalSnapshot
+  error?: string
+}
+
+export interface AgentEval {
+  version: 1
+  prepare(input: {
+    projectId: string
+    files: Array<{ path: string; url: string; sha256?: string }>
+  }): Promise<{ projectId: string; sessionId: string; snapshot: EvalSnapshot }>
+  send(text: string): Promise<{ turnId: string }>
+  answer(text: string): Promise<{ turnId: string }>
+  wait(turnId: string, options?: { timeoutMs?: number }): Promise<EvalTurnResult>
+  snapshot(): Promise<EvalSnapshot>
+  stop(): Promise<void>
+}
+
 // 扩展 Window 接口，添加拖拽数据属性和 File System Access API
 declare global {
   interface Window {
+    agentEval?: AgentEval
     __timelineDragData?: TimelineItemDragData | null
     __mediaDragData?: MediaItemDragData | null
     showSaveFilePicker?: (options?: SaveFilePickerOptions) => Promise<FileSystemFileHandle>

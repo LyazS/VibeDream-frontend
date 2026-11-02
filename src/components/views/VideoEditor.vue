@@ -2,13 +2,19 @@
   <div class="video-editor-view">
     <!-- 顶部栏组件 -->
     <EditorTopBar />
+    <button v-if="isAgentEval" class="eval-workspace-export" @click="exportEvalWorkspace">
+      导出评估工程
+    </button>
 
     <!-- 视频编辑器主体 -->
     <div
       class="editor-content"
       :class="{ 'loading-hidden': unifiedStore.showProjectLoadingProgress }"
     >
-      <VideoPreviewEngine :isAIChatPanelVisible="unifiedStore.isChatPanelVisible" @update:isAIChatPanelVisible="unifiedStore.setChatPanelVisible" />
+      <VideoPreviewEngine
+        :isAIChatPanelVisible="unifiedStore.isChatPanelVisible"
+        @update:isAIChatPanelVisible="unifiedStore.setChatPanelVisible"
+      />
     </div>
 
     <!-- 加载进度覆盖层 -->
@@ -40,6 +46,13 @@ import { useAppI18n } from '@/core/composables/useI18n'
 const route = useRoute()
 const unifiedStore = useUnifiedStore()
 const { t } = useAppI18n()
+const isAgentEval = import.meta.env.VITE_AGENT_EVAL === 'true'
+
+function exportEvalWorkspace() {
+  void import('@/core/evaluation/browserHarness').then(({ downloadEvalWorkspace }) =>
+    downloadEvalWorkspace(route.params.projectId as string),
+  )
+}
 
 // 键盘快捷键（兼容 Windows/Linux 的 Ctrl+B 和 Mac 的 Cmd+B 切换聊天面板）
 function handleKeydown(event: KeyboardEvent) {
@@ -125,6 +138,19 @@ onUnmounted(() => {
   flex-direction: column;
   background-color: var(--color-bg-primary);
   color: var(--color-text-primary);
+}
+
+.eval-workspace-export {
+  position: fixed;
+  top: 8px;
+  left: 180px;
+  z-index: 20;
+  padding: 4px 8px;
+  border: 1px solid var(--color-border-primary);
+  border-radius: 4px;
+  background: var(--color-bg-secondary);
+  color: var(--color-text-primary);
+  cursor: pointer;
 }
 
 .editor-content {

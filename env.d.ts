@@ -22,6 +22,7 @@ interface ImportMetaEnv {
   readonly VITE_TRANSITION_ASSET_BASE_URL?: string
   readonly VITE_MODEL_MANIFEST_URL?: string
   readonly VITE_ENABLE_ORT_CDN_FALLBACK?: string
+  readonly VITE_AGENT_EVAL?: string
 }
 
 interface ImportMeta {
