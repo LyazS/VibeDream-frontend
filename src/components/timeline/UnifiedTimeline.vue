@@ -59,7 +59,7 @@
         >
           <!-- 每个轨道一行 -->
           <div
-            v-for="track in tracks"
+            v-for="track in displayTracks"
             :key="track.id"
             class="track-row"
             :style="{ height: track.height + 'px' }"
@@ -392,6 +392,9 @@ const {
   getClipsForTrack,
 } = useTimelineTrackManagement()
 
+// 轨道数组按“从底层到顶层”保存，时间轴界面从上到下显示，因此这里反转展示顺序。
+const displayTracks = computed(() => [...tracks.value].reverse())
+
 // 轨道拖拽排序状态
 const draggingTrackId = ref<string | null>(null)
 const dragOverTrackId = ref<string | null>(null)
@@ -613,36 +616,49 @@ async function handleTrackDrop(event: DragEvent, targetTrackId: string) {
     return
   }
 
-  // 获取所有轨道
-  const allTracks = tracks.value
+  // DOM 按视觉顺序展示轨道，而 tracks 数组按底层到顶层保存。
+  const allTracks = displayTracks.value
 
   // 找到源轨道和目标轨道的当前位置
-  const fromIndex = allTracks.findIndex((t) => t.id === sourceTrackId)
-  const toIndex = allTracks.findIndex((t) => t.id === targetTrackId)
+  const fromDisplayIndex = allTracks.findIndex((t) => t.id === sourceTrackId)
+  const toDisplayIndex = allTracks.findIndex((t) => t.id === targetTrackId)
 
-  if (fromIndex === -1 || toIndex === -1) {
+  if (fromDisplayIndex === -1 || toDisplayIndex === -1) {
     console.error('❌ 找不到轨道')
     handleTrackDragEnd()
     return
   }
 
-  // 计算新位置
-  let newPosition = toIndex
+  // 先按视觉顺序计算插入位置，再转换回 tracks 数组中的底层到顶层索引。
+  let newDisplayPosition = toDisplayIndex
   if (insertPosition.value === 'after') {
-    newPosition = toIndex + 1
+    newDisplayPosition = toDisplayIndex + 1
   }
 
-  // 如果从目标前面移动到后面，需要调整索引
-  if (fromIndex < newPosition) {
-    newPosition -= 1
+  // 移除源轨道后，目标位置需要向前收缩一个位置。
+  if (fromDisplayIndex < newDisplayPosition) {
+    newDisplayPosition -= 1
   }
+
+  const reorderedDisplayTracks = allTracks.filter((track) => track.id !== sourceTrackId)
+  const sourceTrack = allTracks[fromDisplayIndex]
+  if (!sourceTrack) {
+    handleTrackDragEnd()
+    return
+  }
+  reorderedDisplayTracks.splice(newDisplayPosition, 0, sourceTrack)
+
+  const newPosition =
+    tracks.value.length -
+    1 -
+    reorderedDisplayTracks.findIndex((track) => track.id === sourceTrackId)
 
   // 使用历史记录执行移动
   try {
     await unifiedStore.moveTrackWithHistory(sourceTrackId, newPosition)
 
     console.log('✅ 轨道移动完成:', {
-      from: fromIndex,
+      from: tracks.value.length - 1 - fromDisplayIndex,
       to: newPosition,
       insertPosition: insertPosition.value,
     })

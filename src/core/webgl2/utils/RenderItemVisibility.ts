@@ -57,7 +57,7 @@ function isInBounds(
 }
 
 /**
- * 过滤出当前帧真正需要进入渲染链的 item，并按轨道顺序排序。
+ * 过滤出当前帧真正需要进入渲染链的 item，并按轨道层级排序。
  *
  * 过滤条件包括：
  * - 时间范围命中
@@ -128,6 +128,6 @@ export function getVisibleRenderableItems(
     .sort((a, b) => {
       const aIndex = context.trackIndexMap.get(a.trackId) ?? -Infinity
       const bIndex = context.trackIndexMap.get(b.trackId) ?? -Infinity
-      return bIndex - aIndex
+      return aIndex - bIndex
     }) as VisualRenderableItem[]
 }

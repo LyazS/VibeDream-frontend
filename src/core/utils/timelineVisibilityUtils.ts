@@ -54,7 +54,7 @@ export function getVisibleTimelineItems(
 
 /**
  * 按轨道索引对时间轴项排序（从上到下）
- * 返回的数组中，索引小的在前面，索引大的在后面
+ * 返回的数组中，索引大的在前面，索引小的在后面
  *
  * @param items 时间轴项数组
  * @param trackIndexMap 轨道ID到索引的映射
@@ -70,6 +70,6 @@ export function sortTimelineItemsByTrackIndex<T extends UnifiedTimelineItemData<
       return trackIndexMap.get(trackId) ?? -Infinity
     }
 
-    return getTrackIndex(a.trackId) - getTrackIndex(b.trackId)
+    return getTrackIndex(b.trackId) - getTrackIndex(a.trackId)
   })
 }

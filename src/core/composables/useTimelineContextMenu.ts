@@ -467,16 +467,13 @@ export function useTimelineContextMenu(
     const trackControlElement = target.closest('.track-controls') as HTMLElement
     if (trackControlElement) {
       // 点击在轨道控制区域
-      const trackRow = trackControlElement.closest('.track-row') as HTMLElement
-      if (trackRow) {
-        const trackIndex = Array.from(trackRow.parentElement?.children || []).indexOf(trackRow)
-        const track = tracks.value[trackIndex]
-        if (track) {
-          contextMenuType.value = 'track'
-          contextMenuTarget.value = { trackId: track.id, element: trackControlElement }
-          showContextMenu.value = true
-          return
-        }
+      const trackId = trackControlElement.dataset.trackId
+      const track = trackId ? tracks.value.find((item) => item.id === trackId) : undefined
+      if (track) {
+        contextMenuType.value = 'track'
+        contextMenuTarget.value = { trackId: track.id, element: trackControlElement }
+        showContextMenu.value = true
+        return
       }
     }
 
@@ -484,16 +481,13 @@ export function useTimelineContextMenu(
     const trackContentElement = target.closest('.track-content') as HTMLElement
     if (trackContentElement) {
       // 点击在轨道内容区域（空白处）
-      const trackRow = trackContentElement.closest('.track-row') as HTMLElement
-      if (trackRow) {
-        const trackIndex = Array.from(trackRow.parentElement?.children || []).indexOf(trackRow)
-        const track = tracks.value[trackIndex]
-        if (track) {
-          contextMenuType.value = 'track'
-          contextMenuTarget.value = { trackId: track.id, element: trackContentElement }
-          showContextMenu.value = true
-          return
-        }
+      const trackId = trackContentElement.dataset.trackId
+      const track = trackId ? tracks.value.find((item) => item.id === trackId) : undefined
+      if (track) {
+        contextMenuType.value = 'track'
+        contextMenuTarget.value = { trackId: track.id, element: trackContentElement }
+        showContextMenu.value = true
+        return
       }
     }
 

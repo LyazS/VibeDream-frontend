@@ -85,7 +85,8 @@ export class UnifiedProjectManager {
     const audioTrack = createUnifiedTrackData('audio', { name: trackNames.audio })
     const textTrack = createUnifiedTrackData('text', { name: trackNames.text })
 
-    return [videoTrack, audioTrack, textTrack]
+    // 轨道按底层到顶层保存；时间轴界面会反向展示为文本、视频、音频。
+    return [audioTrack, videoTrack, textTrack]
   }
 
   /**

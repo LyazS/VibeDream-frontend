@@ -40,7 +40,7 @@ Returns
       position: {
         type: 'integer',
         description:
-          '可选插入位置，0-based 轨道索引。来自用户指定或根据 list_tracks 返回的轨道顺序推导；不提供时追加到末尾。',
+          '可选插入位置，0-based 轨道索引。轨道按底层到顶层排列，索引越大越靠上；来自用户指定或根据 list_tracks 返回的轨道顺序推导；不提供时追加到末尾。',
         minimum: 0,
       },
     },

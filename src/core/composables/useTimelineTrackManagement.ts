@@ -21,7 +21,7 @@ export function useTimelineTrackManagement() {
   /**
    * 添加新轨道
    * @param type 轨道类型
-   * @param afterTrackId 在指定轨道后添加（可选）
+   * @param afterTrackId 在界面上指定轨道下方添加（可选）
    */
   async function addNewTrack(type: UnifiedTrackType = 'video', afterTrackId?: string) {
     try {
@@ -33,9 +33,9 @@ export function useTimelineTrackManagement() {
           return
         }
 
-        // 在目标轨道后插入新轨道（位置为 afterTrackIndex + 1）
-        await unifiedStore.addTrackWithHistory(type, afterTrackIndex + 1)
-        console.log('✅ 轨道添加成功，类型:', type, '位置:', afterTrackIndex + 1)
+        // tracks 按底层到顶层保存；界面下方对应数组中的前一个位置。
+        await unifiedStore.addTrackWithHistory(type, afterTrackIndex)
+        console.log('✅ 轨道添加成功，类型:', type, '位置:', afterTrackIndex)
       } else {
         // 在末尾添加新轨道
         await unifiedStore.addTrackWithHistory(type)

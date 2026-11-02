@@ -96,6 +96,15 @@ const visibleMessages = computed(() =>
 .markdown-body {
   color: var(--color-text-primary);
   background-color: transparent;
+
+  /* github-markdown-css follows the OS color scheme by default. Keep rendered
+     Markdown aligned with LightCut's dark editor theme instead. */
+  --fgColor-default: var(--color-text-primary);
+  --fgColor-muted: var(--color-text-secondary);
+  --bgColor-default: var(--color-bg-secondary);
+  --bgColor-muted: var(--color-bg-tertiary);
+  --borderColor-default: var(--color-border-primary);
+  --borderColor-muted: var(--color-border-secondary);
 }
 
 .message-status {
@@ -106,5 +115,13 @@ const visibleMessages = computed(() =>
 .markdown-body table {
   display: block;
   overflow-x: auto;
+}
+
+.markdown-body table tr {
+  background-color: var(--color-bg-secondary);
+}
+
+.markdown-body table tr:nth-child(2n) {
+  background-color: var(--color-bg-tertiary);
 }
 </style>

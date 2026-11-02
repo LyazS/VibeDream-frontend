@@ -160,7 +160,7 @@ export class TimelineWebGLRenderer {
     ].sort((left, right) => {
       const leftIndex = this.options.trackIndexMap().get(left.trackId) ?? -Infinity
       const rightIndex = this.options.trackIndexMap().get(right.trackId) ?? -Infinity
-      return rightIndex - leftIndex
+      return leftIndex - rightIndex
     })
 
     for (const entry of renderQueue) {

@@ -26,7 +26,7 @@ Returns
       "trackId": "<trackId>",             // 轨道 ID
       "name": "<trackName>",              // 轨道名称
       "type": "<trackType>",              // 轨道类型
-      "index": "<trackIndex>",            // 轨道在时间轴中的 0-based 顺序
+      "index": "<trackIndex>",            // 轨道在时间轴中的 0-based 层级索引，越大越靠上
       "visible": "<visible>",             // 轨道是否可见
       "muted": "<muted>",                 // 轨道是否静音
       "clipCount": "<clipCount>"          // 当前轨道上的片段数量

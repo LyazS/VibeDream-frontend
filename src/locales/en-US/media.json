@@ -67,6 +67,7 @@
     "type": "Type",
     "new": "New",
     "newFolder": "New Folder",
+    "import": "Import",
     "paste": "Paste",
     "pasteImport": "Paste Import Images",
     "pasteImportSuccess": "Successfully imported {count} image(s) from clipboard",

@@ -100,9 +100,9 @@ export class GenerateSubtitlesCommand implements SimpleCommand {
       .map((track, index) => ({ track, index }))
       .filter(({ track }) => track.type === 'text')
       .sort((a, b) => {
-        if (sourceTrackIndex < 0) return a.index - b.index
+        if (sourceTrackIndex < 0) return b.index - a.index
         const distance = Math.abs(a.index - sourceTrackIndex) - Math.abs(b.index - sourceTrackIndex)
-        return distance || a.index - b.index
+        return distance || b.index - a.index
       })
 
     const isTrackAvailable = (trackId: string) =>

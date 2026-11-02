@@ -561,19 +561,20 @@ const currentMenuItems = computed((): MenuItem[] => {
   if (!contextMenuTarget.value) {
     // 空白区域菜单
     return [
-      // 新建子菜单
+      // 新建文件夹作为直接操作，避免只有一个有效创建项时还要多展开一级
       {
-        label: t('media.new'),
-        icon: IconComponents.ADD_CIRCLE,
+        label: t('media.newFolder'),
+        icon: IconComponents.FOLDER_ADD,
+        onClick: () => {
+          showCreateDirModal.value = true
+          showContextMenu.value = false
+        },
+      },
+      // 导入作为独立一级菜单，明确区分“创建文件夹”和“添加素材”
+      {
+        label: t('media.import'),
+        icon: IconComponents.UPLOAD,
         children: [
-          {
-            label: t('media.folder'),
-            icon: IconComponents.FOLDER_ADD,
-            onClick: () => {
-              showCreateDirModal.value = true
-              showContextMenu.value = false
-            },
-          },
           {
             label: t('media.importFiles'),
             icon: IconComponents.UPLOAD,

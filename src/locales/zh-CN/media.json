@@ -67,6 +67,7 @@
     "type": "类型",
     "new": "新建",
     "newFolder": "新建文件夹",
+    "import": "导入",
     "paste": "粘贴",
     "pasteImport": "粘贴导入图片",
     "pasteImportSuccess": "已从剪贴板成功导入 {count} 张图片",

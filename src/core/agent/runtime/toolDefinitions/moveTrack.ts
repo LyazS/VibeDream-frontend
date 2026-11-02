@@ -36,7 +36,7 @@ Returns
 
 Limitations
 -----------
-只修改轨道顺序，不移动轨道内片段的时间位置。轨道 index 越小视觉层级越高。
+只修改轨道顺序，不移动轨道内片段的时间位置。轨道 index 越大视觉层级越高，且在时间轴上越靠上。
 index.from 用于校验轨道当前顺序；若轨道实际 index 与 index.from 不一致，不会执行移动并失败。`,
   parameters: {
     type: 'object',
@@ -57,7 +57,7 @@ index.from 用于校验轨道当前顺序；若轨道实际 index 与 index.from
           to: {
             type: 'integer',
             description:
-              '移动后的目标轨道索引，0-based。根据 list_tracks 返回的 index 或用户指定层级计算；越小越靠上。',
+              '移动后的目标轨道索引，0-based。根据 list_tracks 返回的 index 或用户指定层级计算；越大越靠上。',
             minimum: 0,
           },
         },
