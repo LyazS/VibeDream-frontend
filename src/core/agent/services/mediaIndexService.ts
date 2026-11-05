@@ -138,6 +138,33 @@ export interface ReconcileMediaIndexingResult {
   deleted_orphan_point_count: number
 }
 
+export interface MediaIndexingDetailsResult {
+  project_id: string
+  indexed_media: Array<{
+    media_id: string
+    media_kind: 'image' | 'video'
+    task_id: string
+    indexed_at: string | null
+    segment_count: number
+    result_summary?: unknown
+    result: {
+      media_kind: 'image' | 'video'
+      indexed_count: number
+      failed_segment_count?: number
+      summary?: { title?: string; summary?: string }
+      segment_summaries?: Array<{
+        segment_index: number
+        start_timecode: string
+        end_timecode: string
+        title?: string
+        summary?: string
+      }>
+      metadata?: { status?: MediaIndexStatus }
+      indexed_at?: string
+    }
+  }>
+}
+
 function buildBoundedExportSize(
   width: number | undefined,
   height: number | undefined,
@@ -624,6 +651,24 @@ export async function reconcileMediaIndexing(
     throw new Error('索引对账返回数据为空')
   }
 
+  return response.data
+}
+
+export async function getMediaIndexingDetails(
+  projectId: string,
+  mediaIds: string[],
+): Promise<MediaIndexingDetailsResult> {
+  const normalizedMediaIds = Array.from(new Set(mediaIds.map((id) => id.trim()).filter(Boolean)))
+  const response = await fetchClient.post<MediaIndexingDetailsResult>(
+    '/api/media/indexing/details',
+    {
+      project_id: projectId,
+      media_ids: normalizedMediaIds,
+    },
+  )
+  if (!response.data) {
+    throw new Error('索引详情返回数据为空')
+  }
   return response.data
 }
 

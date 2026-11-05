@@ -70,3 +70,29 @@ export async function loadTransNetV2Runner(options?: OnnxModelLoadOptions) {
     },
   }
 }
+
+let backendPreflightPromise: Promise<void> | undefined
+
+/** Load and execute one tiny inference to validate the browser ONNX backend. */
+export function verifyTransNetV2Backend(): Promise<void> {
+  if (!backendPreflightPromise) {
+    backendPreflightPromise = (async () => {
+      const runner = await loadTransNetV2Runner()
+      await runner.run(
+        new Float32Array(
+          TRANSNETV2_WINDOW_SIZE *
+            TRANSNETV2_INPUT_HEIGHT *
+            TRANSNETV2_INPUT_WIDTH *
+            TRANSNETV2_INPUT_CHANNELS,
+        ),
+      )
+    })().catch((error) => {
+      backendPreflightPromise = undefined
+      throw new Error(
+        `ONNX_BACKEND_PREFLIGHT_FAILED:${error instanceof Error ? error.message : String(error)}`,
+      )
+    })
+  }
+
+  return backendPreflightPromise
+}

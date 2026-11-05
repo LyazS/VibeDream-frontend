@@ -208,6 +208,33 @@ async function configureWasmRuntime(): Promise<void> {
   return wasmConfigurationPromise
 }
 
+/**
+ * Validate the browser-visible ONNX WASM assets before starting a media warmup.
+ * This intentionally checks the same URLs used by the runtime and compiles the
+ * binary so CORS, missing assets, and invalid WASM fail before video indexing.
+ */
+export async function verifyOnnxWasmAssets(): Promise<void> {
+  const wasmUrl = resolveAssetUrl(wasmManifest.ort.path)
+  const moduleUrl = resolveAssetUrl(wasmManifest.ortMjs.path)
+  const [moduleResponse, wasmResponse] = await Promise.all([
+    fetch(moduleUrl, { cache: 'force-cache' }),
+    fetch(wasmUrl, { cache: 'force-cache' }),
+  ])
+  if (!moduleResponse.ok) {
+    throw new Error(`WASM_MODULE_UNAVAILABLE:${moduleResponse.status}`)
+  }
+  if (!wasmResponse.ok) {
+    throw new Error(`WASM_BINARY_UNAVAILABLE:${wasmResponse.status}`)
+  }
+  try {
+    await WebAssembly.compile(await wasmResponse.arrayBuffer())
+  } catch (error) {
+    throw new Error(
+      `WASM_BINARY_INVALID:${error instanceof Error ? error.message : String(error)}`,
+    )
+  }
+}
+
 function assertTensorMetadata(
   modelId: string,
   metadata: ort.InferenceSession.ValueMetadata,

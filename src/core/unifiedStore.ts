@@ -331,6 +331,9 @@ export const useUnifiedStore = defineStore('unified', () => {
 
     return jobRuntime.ensure(createMediaIndexMetadataWritebackRequest(mediaId))
   }
+  function cancelMediaIndexing(mediaId: string) {
+    return jobRuntime.cancel(getResourceId(MEDIA_INDEX_METADATA_WRITEBACK_RESOURCE_TYPE, mediaId))
+  }
   function ensureMusicStructureAnalysis(mediaId: string, force = false) {
     return jobRuntime.ensure(createMusicStructureAnalysisRequest(mediaId, { force }))
   }
@@ -560,6 +563,7 @@ export const useUnifiedStore = defineStore('unified', () => {
     restoreMediaAsrPlaceholder,
     ensureMusicStructureAnalysis,
     ensureMediaIndexing,
+    cancelMediaIndexing,
     cancelMusicStructureAnalysis,
     ensureTimelineItemReady,
     ensureTimelineItemResolved,

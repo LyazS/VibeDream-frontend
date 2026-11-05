@@ -3,9 +3,33 @@ import router from '@/router'
 import { fileSystemService } from '@/core/managers'
 import { useUnifiedStore } from '@/core/unifiedStore'
 import type { EvalSnapshot, AgentEval } from '@/types/global'
+import type { EvalIndexWarmupResult } from '@/types/global'
+import {
+  getMediaIndexingDetails,
+  reconcileMediaIndexing,
+} from '@/core/agent/services/mediaIndexService'
+import { persistMediaItem } from '@/core/jobs/resolvers/mediaIndexingShared'
+import { verifyOnnxWasmAssets } from '@/core/onnx/loader'
+import { verifyTransNetV2Backend } from '@/core/utils/transnetv2/modelRunner'
 
 const DEFAULT_TIMEOUT_MS = 120_000
 const POLL_INTERVAL_MS = 50
+const WARMUP_MEDIA_TIMEOUT_MS = 600_000
+const WARMUP_PREFLIGHT_TIMEOUT_MS = 60_000
+
+async function withTimeout<T>(promise: Promise<T>, timeoutMs: number, message: string): Promise<T> {
+  let timer: number | undefined
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<never>((_, reject) => {
+        timer = window.setTimeout(() => reject(new Error(message)), timeoutMs)
+      }),
+    ])
+  } finally {
+    if (timer !== undefined) window.clearTimeout(timer)
+  }
+}
 
 function assertProjectId(projectId: string): void {
   if (!/^[a-zA-Z0-9_-]{1,120}$/.test(projectId)) throw new Error('INVALID_PROJECT_ID')
@@ -94,16 +118,20 @@ async function blobToBase64(blob: Blob): Promise<string> {
 
 async function collectWorkspaceFiles(
   path: string,
+  root = path,
 ): Promise<Array<{ path: string; base64: string }>> {
   const entries = await fileSystemService.listDirectory(path)
   const files: Array<{ path: string; base64: string }> = []
   for (const entry of entries) {
     if (entry.kind === 'directory') {
-      files.push(...(await collectWorkspaceFiles(entry.path)))
+      files.push(...(await collectWorkspaceFiles(entry.path, root)))
       continue
     }
+    const relativePath = entry.path.startsWith(`${root}/`)
+      ? entry.path.slice(root.length + 1)
+      : entry.path
     files.push({
-      path: entry.path,
+      path: relativePath,
       base64: await blobToBase64(await fileSystemService.readFileAsBlob(entry.path)),
     })
   }
@@ -177,6 +205,224 @@ function installBrowserHarness(): AgentEval {
         sessionId: store.agentSessionId,
         snapshot: createSnapshot(store),
       }
+    },
+    async warmupIndex() {
+      if (!prepared) throw new Error('PREPARE_REQUIRED')
+      const startedAt = new Date().toISOString()
+      const started = Date.now()
+      const diagnostics: NonNullable<EvalIndexWarmupResult['diagnostics']> = []
+      await withTimeout(
+        (async () => {
+          await verifyOnnxWasmAssets()
+          await verifyTransNetV2Backend()
+        })(),
+        WARMUP_PREFLIGHT_TIMEOUT_MS,
+        `WARMUP_PREFLIGHT_TIMEOUT:${WARMUP_PREFLIGHT_TIMEOUT_MS}`,
+      )
+      const indexableItems = store.mediaItems.filter(
+        (item) => item.mediaType === 'video' || item.mediaType === 'image',
+      )
+      const reconcile = await reconcileMediaIndexing(
+        store.projectId,
+        indexableItems.map((item) => item.id),
+      )
+      const details = await getMediaIndexingDetails(
+        store.projectId,
+        indexableItems.map((item) => item.id),
+      )
+      const remote = new Map(details.indexed_media.map((item) => [item.media_id, item]))
+      const resultSummaries = new Map(
+        details.indexed_media.map((item) => [item.media_id, item.result_summary]),
+      )
+      const missing = new Set(reconcile.unindexed_media_ids)
+      let indexedCount = 0
+      let skippedCount = 0
+      let failedCount = 0
+
+      for (const mediaItem of indexableItems) {
+          const itemStarted = Date.now()
+          const local = mediaItem.metadata?.indexing
+          const remoteItem = remote.get(mediaItem.id)
+          if (
+            remoteItem &&
+            local?.indexStatus === 'completed' &&
+            local.mediaKind === remoteItem.media_kind
+          ) {
+            skippedCount += 1
+            diagnostics.push({
+              mediaId: mediaItem.id,
+              stage: 'reconcile',
+              status: 'skipped',
+              durationMs: Date.now() - itemStarted,
+              message: '本地与远端索引已就绪',
+            })
+            continue
+          }
+          if (remoteItem && !missing.has(mediaItem.id)) {
+            const remoteResult =
+              remoteItem.result && typeof remoteItem.result === 'object'
+                ? (remoteItem.result as Record<string, unknown>)
+                : undefined
+            const remoteSummary =
+              remoteResult?.summary && typeof remoteResult.summary === 'object'
+                ? (remoteResult.summary as Record<string, unknown>)
+                : undefined
+            const remoteSegments = Array.isArray(remoteResult?.segment_summaries)
+              ? remoteResult.segment_summaries
+              : undefined
+            const indexedAt = remoteItem.indexed_at || new Date().toISOString()
+            const failedSegmentCount =
+              typeof remoteResult?.failed_segment_count === 'number'
+                ? remoteResult.failed_segment_count
+                : 0
+            mediaItem.metadata = {
+              ...mediaItem.metadata,
+              indexing:
+                remoteItem.media_kind === 'video'
+                  ? {
+                      mediaKind: 'video',
+                      indexStatus:
+                        remoteResult?.metadata &&
+                        typeof remoteResult.metadata === 'object' &&
+                        (remoteResult.metadata as Record<string, unknown>).status === 'partial_failed'
+                          ? 'partial_failed'
+                          : failedSegmentCount > 0
+                            ? 'partial_failed'
+                            : 'completed',
+                      indexedAt,
+                      taskId: remoteItem.task_id,
+                      segmentCount: remoteItem.segment_count || undefined,
+                      failedSegmentCount,
+                      summary: remoteSummary
+                        ? {
+                            title:
+                              typeof remoteSummary.title === 'string'
+                                ? remoteSummary.title
+                                : undefined,
+                            summary:
+                              typeof remoteSummary.summary === 'string'
+                                ? remoteSummary.summary
+                                : undefined,
+                          }
+                        : undefined,
+                      segmentSummaries: remoteSegments?.flatMap((segment) => {
+                        if (!segment || typeof segment !== 'object') return []
+                        const value = segment as Record<string, unknown>
+                        return [
+                          {
+                            segmentIndex: Number(value.segment_index),
+                            startTimecode: String(value.start_timecode || ''),
+                            endTimecode: String(value.end_timecode || ''),
+                            title: typeof value.title === 'string' ? value.title : undefined,
+                            summary: typeof value.summary === 'string' ? value.summary : undefined,
+                          },
+                        ]
+                      }),
+                    }
+                  : {
+                      mediaKind: 'image',
+                      indexStatus:
+                        remoteResult?.metadata &&
+                        typeof remoteResult.metadata === 'object' &&
+                        (remoteResult.metadata as Record<string, unknown>).status === 'partial_failed'
+                          ? 'partial_failed'
+                          : 'completed',
+                      indexedAt,
+                      taskId: remoteItem.task_id,
+                      summary: remoteSummary
+                        ? {
+                            title:
+                              typeof remoteSummary.title === 'string'
+                                ? remoteSummary.title
+                                : undefined,
+                            summary:
+                              typeof remoteSummary.summary === 'string'
+                                ? remoteSummary.summary
+                                : undefined,
+                          }
+                        : undefined,
+                    },
+            }
+            await persistMediaItem(mediaItem)
+            skippedCount += 1
+            diagnostics.push({
+              mediaId: mediaItem.id,
+              stage: 'reconcile',
+              status: 'skipped',
+              durationMs: Date.now() - itemStarted,
+              message: '复用远端索引',
+            })
+            continue
+          }
+          try {
+            await withTimeout(
+              store.ensureMediaIndexing(mediaItem.id),
+              WARMUP_MEDIA_TIMEOUT_MS,
+              `INDEX_MEDIA_TIMEOUT:${WARMUP_MEDIA_TIMEOUT_MS}`,
+            )
+            indexedCount += 1
+            diagnostics.push({
+              mediaId: mediaItem.id,
+              stage: 'indexing',
+              status: 'completed',
+              durationMs: Date.now() - itemStarted,
+            })
+          } catch (error) {
+            failedCount += 1
+            const message = error instanceof Error ? error.message : String(error)
+            const timedOut = message.startsWith('INDEX_MEDIA_TIMEOUT:')
+            if (timedOut) await store.cancelMediaIndexing(mediaItem.id)
+            diagnostics.push({
+              mediaId: mediaItem.id,
+              stage: timedOut ? 'timeout' : 'indexing',
+              status: timedOut ? 'timeout' : 'failed',
+              durationMs: Date.now() - itemStarted,
+              message,
+            })
+            console.error('[AgentEval] index warmup failed', mediaItem.id, error)
+          }
+      }
+
+      const completedAt = new Date().toISOString()
+      const items = indexableItems.map((mediaItem) => {
+        const indexing = mediaItem.metadata?.indexing
+        return {
+          mediaId: mediaItem.id,
+          mediaKind: mediaItem.mediaType as 'video' | 'image',
+          indexStatus: indexing?.indexStatus || 'idle',
+          ...(indexing?.indexedAt ? { indexedAt: indexing.indexedAt } : {}),
+          ...(indexing?.taskId ? { taskId: indexing.taskId } : {}),
+          ...(indexing?.mediaKind === 'video' && indexing.segmentCount !== undefined
+            ? { segmentCount: indexing.segmentCount }
+            : {}),
+          ...(indexing?.mediaKind === 'video' && indexing.failedSegmentCount !== undefined
+            ? { failedSegmentCount: indexing.failedSegmentCount }
+            : {}),
+          ...(indexing?.summary ? { summary: indexing.summary } : {}),
+          ...(indexing?.mediaKind === 'video' && indexing.segmentSummaries
+            ? { segmentSummaries: indexing.segmentSummaries }
+            : {}),
+          ...(resultSummaries.get(mediaItem.id) !== undefined
+            ? { resultSummary: resultSummaries.get(mediaItem.id) }
+            : {}),
+        }
+      })
+      const result: EvalIndexWarmupResult = {
+        projectId: store.projectId,
+        startedAt,
+        completedAt,
+        durationMs: Date.now() - started,
+        indexedCount,
+        skippedCount,
+        failedCount,
+        items,
+        diagnostics,
+      }
+      return result
+    },
+    async exportWorkspace() {
+      if (!prepared) throw new Error('PREPARE_REQUIRED')
+      return collectWorkspaceFiles(fileSystemService.paths.getProjectPath(store.projectId))
     },
     async send(text) {
       if (!text.trim()) throw new Error('EMPTY_AGENT_MESSAGE')

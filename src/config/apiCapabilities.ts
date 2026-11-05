@@ -82,6 +82,7 @@ export function getApiCapability(path: string, _body?: BodyInit | null): ApiCapa
   if (path === '/api/transitions/test-search') return 'transition.search'
   if (path === '/api/providers/dashscope/uploads/policy') return 'ai-tasks'
   if (path === '/api/media/indexing/reconcile') return 'media.indexing'
+  if (path === '/api/media/indexing/details') return 'media.indexing'
   return capabilityPrefixes.find(([prefix]) => path.startsWith(prefix))?.[1] ?? 'other'
 }
 
