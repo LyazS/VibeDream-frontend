@@ -22,7 +22,7 @@ Do NOT Use When
 ---------------
 - 需要读取轨道概览或选择目标轨道时，应使用 list_tracks
 - 已经有明确 itemId 且需要详细属性，应使用 read_item
-- 需要读取素材库素材详情，应使用 read_media
+- 需要读取素材库素材详情，应使用 read_media；先用 list_media 获取未知素材 ID
 
 Returns
 --------

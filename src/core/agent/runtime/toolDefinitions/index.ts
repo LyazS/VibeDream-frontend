@@ -4,7 +4,6 @@ import { readProjectInfoDefinition } from './readProjectInfo'
 import { modifyProjectInfoDefinition } from './modifyProjectInfo'
 import { listMediaDefinition } from './listMedia'
 import { readMediaDefinition } from './readMedia'
-import { searchMediaDefinition } from './searchMedia'
 import { createFolderDefinition } from './createFolder'
 import { renameLibraryItemDefinition } from './renameLibraryItem'
 import { moveLibraryItemsDefinition } from './moveLibraryItems'
@@ -43,7 +42,6 @@ export const agentTools: ModelTool[] = [
   modifyProjectInfoDefinition,
   listMediaDefinition,
   readMediaDefinition,
-  searchMediaDefinition,
   createFolderDefinition,
   renameLibraryItemDefinition,
   moveLibraryItemsDefinition,

@@ -26,7 +26,7 @@ import { registerToolCancellationHook, unregisterToolCancellationHook } from './
 
 const MAX_MEDIA_IDS = 10
 const MAX_WAIT_MS = 30 * 60 * 1000
-const DEFAULT_FIELDS: ReadMediaField[] = ['basic', 'summary']
+const DEFAULT_FIELDS: ReadMediaField[] = ['basic']
 
 type ReadMediaField = 'basic' | 'summary' | 'segments'
 type ReadMediaItemStatus = 'success' | 'failed' | 'pending'
@@ -106,20 +106,6 @@ function updateExecutionState(toolCallId: string, patch: Partial<ReadMediaExecut
 function finishExecutionState(toolCallId: string): void {
   delete activeExecutions[toolCallId]
   unregisterToolCancellationHook('read_media', toolCallId)
-}
-
-function normalizeIncludeSegments(includeSegments: unknown): boolean {
-  if (includeSegments === undefined || includeSegments === null) {
-    return false
-  }
-  if (typeof includeSegments !== 'boolean') {
-    throw new Error('includeSegments must be a boolean when provided')
-  }
-  return includeSegments
-}
-
-function buildReadFields(includeSegments: boolean): ReadMediaField[] {
-  return includeSegments ? [...DEFAULT_FIELDS, 'segments'] : [...DEFAULT_FIELDS]
 }
 
 function normalizeMediaIds(mediaIds: unknown): string[] {
@@ -596,8 +582,10 @@ export async function executeReadMedia(
     signal.throwIfAborted()
     if (!context.isCurrent()) throw new Error('TOOL_CONTEXT_EXPIRED')
     const mediaIds = normalizeMediaIds(args.mediaIds)
-    const includeSegments = normalizeIncludeSegments(args.includeSegments)
-    const fields = buildReadFields(includeSegments)
+    // read_media 仅返回本地基础信息，始终不等待或触发素材内容索引。
+    // 参数 schema 已屏蔽 includeSummary/includeSegments；这里也固定字段，避免
+    // 直接调用执行函数时通过旧参数重新启用索引。
+    const fields = DEFAULT_FIELDS
     const unifiedStore = useUnifiedStore()
     const readMediaContext: ReadMediaToolContext = {
       resolveMediaRequest: (mediaId) =>
