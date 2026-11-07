@@ -117,7 +117,7 @@ function formatResult(item: RetrievalResultItem, mediaName: string): Record<stri
   const validationResult = getValidationResult(item)
   return {
     type: item.media_kind,
-    mediaId: item.media_item_id,
+    mediaId: item.localMediaId,
     mediaName,
     verdict: validationResult?.verdict,
     segment: item.segment
@@ -156,6 +156,19 @@ export async function executeSearchMedia(
   if (!unifiedStore.projectId) {
     return logSearchMediaResult(
       buildToolError('search_media', 'internal_error', '当前项目未初始化，无法检索素材'),
+    )
+  }
+
+  const searchableMediaCount = (unifiedStore.mediaItems || []).filter(
+    (item) => item.mediaType === 'video' || item.mediaType === 'image',
+  ).length
+  if (searchableMediaCount === 0) {
+    return logSearchMediaResult(
+      buildToolError(
+        'search_media',
+        'no_searchable_media',
+        '当前项目没有可检索的图片或视频素材',
+      ),
     )
   }
 
@@ -211,7 +224,9 @@ export async function executeSearchMedia(
 
     checkCancelled()
     const currentResults = results.flatMap((item) => {
-      const mediaItem = unifiedStore.getMediaItem(item.media_item_id)
+      const mediaItem = item.localMediaId
+        ? unifiedStore.getMediaItem(item.localMediaId)
+        : undefined
       return mediaItem ? [{ item, mediaName: mediaItem.name }] : []
     })
     const removedCount = results.length - currentResults.length

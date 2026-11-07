@@ -88,6 +88,8 @@ function isUnifiedMediaIndexSegmentSummary(
   }
 
   return (
+    isOptionalString(value.pointId) &&
+    isOptionalString(value.segmentKey) &&
     isInteger(value.segmentIndex) &&
     typeof value.startTimecode === 'string' &&
     typeof value.endTimecode === 'string' &&
@@ -102,6 +104,25 @@ function isOptionalUnifiedMediaIndexSegmentSummaryArray(
   return (
     value === undefined ||
     (Array.isArray(value) && value.every((item) => isUnifiedMediaIndexSegmentSummary(item)))
+  )
+}
+
+function isOptionalUnifiedMediaIndexSegments(value: unknown): boolean {
+  return (
+    value === undefined ||
+    (Array.isArray(value) &&
+      value.every(
+        (item) =>
+          isRecord(item) &&
+          isOptionalString(item.pointId) &&
+          typeof item.segmentKey === 'string' &&
+          item.segmentKey.length > 0 &&
+          isOptionalInteger(item.segmentIndex) &&
+          isOptionalString(item.startTimecode) &&
+          isOptionalString(item.endTimecode) &&
+          isOptionalString(item.title) &&
+          isOptionalString(item.summary),
+      ))
   )
 }
 
@@ -123,6 +144,12 @@ function isUnifiedMediaIndexMetadata(
 
   if (
     !validStatus ||
+    !isOptionalString(value.assetId) ||
+    !isOptionalString(value.manifestId) ||
+    !isOptionalString(value.contentSha256) ||
+    !isOptionalString(value.indexRecipeId) ||
+    !isOptionalString(value.indexVersion) ||
+    !isOptionalString(value.segmentPlanHash) ||
     !isOptionalString(value.indexedAt) ||
     !isOptionalString(value.taskId)
   ) {
@@ -139,7 +166,8 @@ function isUnifiedMediaIndexMetadata(
       isOptionalInteger(value.failedSegmentCount) &&
       (summary === undefined ||
         (isOptionalString(summary.title) && isOptionalString(summary.summary))) &&
-      isOptionalUnifiedMediaIndexSegmentSummaryArray(value.segmentSummaries)
+      isOptionalUnifiedMediaIndexSegmentSummaryArray(value.segmentSummaries) &&
+      isOptionalUnifiedMediaIndexSegments(value.segments)
     )
   }
 

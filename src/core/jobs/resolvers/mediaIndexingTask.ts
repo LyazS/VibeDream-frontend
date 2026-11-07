@@ -16,7 +16,6 @@ export type MediaIndexingTaskStatus =
 export interface MediaIndexingTask {
   task_id: string
   type: 'media.indexing'
-  project_id: string
   status: MediaIndexingTaskStatus
   revision: number
   progress?: number
@@ -27,23 +26,6 @@ export interface MediaIndexingTask {
   created_at: string
   started_at?: string
   completed_at?: string
-}
-
-export interface MediaIndexingTaskSubmission {
-  project_id: string
-  input: {
-    media_id: string
-    media_version: string
-    media_kind: 'image' | 'video'
-    media_name: string
-    expires_at: string
-    segments: Array<
-      Record<string, unknown> & {
-        segment_id: string
-        provider_urls: string[]
-      }
-    >
-  }
 }
 
 function isTaskStatus(value: unknown): value is MediaIndexingTaskStatus {

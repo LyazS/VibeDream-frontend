@@ -9,7 +9,7 @@ afterEach(() => {
   vi.unstubAllGlobals()
 })
 
-it('isolates v4 sessions without loading or deleting v2 history, questions or attachments', async () => {
+it('isolates v3 sessions without loading or deleting v2 history, questions or attachments', async () => {
   indexedDBService.close()
   vi.stubGlobal('indexedDB', new IDBFactory())
   const store = new AgentSessionStore()
@@ -40,7 +40,7 @@ it('isolates v4 sessions without loading or deleting v2 history, questions or at
     table.put(attachment),
   )
   expect(store.owner('user', 'project')).toBe(
-    JSON.stringify(['user', 'project', 'editor-tools-v4']),
+    JSON.stringify(['user', 'project', 'editor-tools-v3']),
   )
   expect(await store.load('user', 'project')).toEqual([])
   const session: AgentSession = {

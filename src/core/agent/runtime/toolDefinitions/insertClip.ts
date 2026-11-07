@@ -56,7 +56,7 @@ video 轨道可放 video/image；audio 轨道只能放 audio。`,
       mediaId: {
         type: 'string',
         description:
-          '要插入的素材 ID。必须来自 list_media/read_media/import_attachment 返回的完整 mediaId，不要传 clipId、attachmentId、路径或临时 URL。',
+          '要插入的素材 ID。必须来自 list_media/search_media/read_media/import_attachment 返回的完整 mediaId，不要传 clipId、attachmentId、路径或临时 URL。',
       },
       trackId: {
         type: 'string',

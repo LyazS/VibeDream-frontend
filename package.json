@@ -15,6 +15,7 @@
     "test:auth": "vitest run --config vitest.auth.config.ts",
     "test:task-progress": "vitest run --config vitest.task-progress.config.ts",
     "test:agent-socket": "vitest run --config vitest.agent.config.ts",
+    "test:media": "vitest run --config vitest.media.config.ts",
     "test:transitions": "vitest run --config vitest.transitions.config.ts",
     "test:type-safety": "vitest run --config vitest.type-safety.config.ts",
     "generate:model-manifest": "npm run download:music-analysis-models && npm run build:music-analysis-wasm && node scripts/generate-model-manifest.mjs",
@@ -35,6 +36,7 @@
   "dependencies": {
     "@imengyu/vue3-context-menu": "^1.5.2",
     "@mediabunny/mp3-encoder": "^1.55.7",
+    "@noble/hashes": "2.4.0",
     "@remixicon/vue": "^4.7.0",
     "@types/big.js": "^7.0.0",
     "@types/markdown-it": "^14.1.2",

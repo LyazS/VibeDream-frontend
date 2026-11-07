@@ -3,7 +3,7 @@ import { runAiTask } from '@/core/ai-tasks/taskApi'
 import { exportTimelineItem, exportMediaItem } from '@/core/utils/mediaExporter'
 import { timecodeToFrames } from '@/core/utils/timeUtils'
 import { fetchClient } from '@/utils/fetchClient'
-import type { MediaIndexStatus, UnifiedMediaItemData } from '@/core/mediaitem/types'
+import type { UnifiedMediaIndexMetadata, UnifiedMediaItemData } from '@/core/mediaitem/types'
 import type { UnifiedTimelineItemData } from '@/core/timelineitem/model/timelineItem'
 import { createDefaultTimelineExtraRenderConfig } from '@/core/timelineitem/model/timelineItem'
 import { DEFAULT_BLEND_MODE } from '@/core/timelineitem/model/blendMode'
@@ -43,8 +43,8 @@ export interface RetrievalSegmentInfo {
 
 export interface RetrievalResultItem {
   point_id: string
-  media_item_id: string
-  media_name: string
+  asset_id?: string
+  manifest_id?: string
   media_kind: string
   segment: RetrievalSegmentInfo | null
   title: string | null
@@ -54,7 +54,11 @@ export interface RetrievalResultItem {
   validation_result?: ValidationResultItem
   routes: string[]
   keyword_matches: RetrievalKeywordMatch[]
+  /** Local project media ID, attached after v3.1 manifest resolution. */
+  localMediaId?: string
 }
+
+type LocalRetrievalResultItem = RetrievalResultItem & { localMediaId: string }
 
 export interface RerankCandidateInput {
   pointId: string
@@ -116,7 +120,12 @@ interface ValidateTaskResult {
 type SearchCandidateUpload = { point_id: string; upload_ref: string }
 
 type SearchTaskInput =
-  | { query: string; top_k: number }
+  | {
+      query: string
+      top_k: number
+      scope?: Array<{ manifest_id: string }>
+      index_version?: string
+    }
   | { query: string; top_k: number; retrieval_task_id: string; candidates: SearchCandidateUpload[] }
   | { query: string; top_k: number; rerank_task_id: string; candidates: SearchCandidateUpload[] }
 
@@ -131,38 +140,68 @@ async function submitSearchTask<TResult>(
 
 export type SearchMediaStage = 'indexing' | 'retrieval' | 'rerank' | 'validate'
 
-export interface ReconcileMediaIndexingResult {
-  project_id: string
-  unindexed_media_ids: string[]
-  deleted_orphan_media_count: number
-  deleted_orphan_point_count: number
+export interface MediaIndexResolveResult {
+  asset_id: string
+  manifest_id: string
+  content_sha256: string
+  media_kind: 'image' | 'video'
+  segment_plan_hash?: string
+  status: 'missing' | 'processing' | 'completed' | 'partial_failed' | 'failed'
+  task_id: string | null
+  indexed_at?: string
+  canonical_segment_plan: Array<Record<string, unknown>>
+  segment_summaries?: Array<{
+    segment_index: number
+    start_timecode: string
+    end_timecode: string
+    duration_n: number
+    title?: string
+    summary?: string
+  }>
+  missing_segments: Array<{ segment_key: string; point_id: string }>
+  summary?: unknown
 }
 
-export interface MediaIndexingDetailsResult {
-  project_id: string
-  indexed_media: Array<{
-    media_id: string
-    media_kind: 'image' | 'video'
+export async function resolveMediaIndex(input: {
+  contentSha256: string
+  mediaKind: 'image' | 'video'
+  byteSize: number
+  indexRecipeId?: string
+  indexVersion?: string
+  segmentPlan?: Array<Record<string, unknown>>
+}): Promise<MediaIndexResolveResult> {
+  const response = await fetchClient.post<MediaIndexResolveResult>('/api/media/indexing/resolve', {
+    content_sha256: input.contentSha256,
+    media_kind: input.mediaKind,
+    byte_size: input.byteSize,
+    index_recipe_id: input.indexRecipeId,
+    index_version: input.indexVersion,
+    ...(input.segmentPlan ? { segment_plan: input.segmentPlan } : {}),
+  })
+  if (!response.data) throw new Error('媒体索引对象解析返回数据为空')
+  return response.data
+}
+
+export async function submitMediaManifestSegments(input: {
+  manifestId: string
+  segments: Array<Record<string, unknown>>
+}): Promise<{
+  manifest_id: string
+  task_id: string
+  status: string
+  submitted_segments: string[]
+}> {
+  const response = await fetchClient.post<{
+    manifest_id: string
     task_id: string
-    indexed_at: string | null
-    segment_count: number
-    result_summary?: unknown
-    result: {
-      media_kind: 'image' | 'video'
-      indexed_count: number
-      failed_segment_count?: number
-      summary?: { title?: string; summary?: string }
-      segment_summaries?: Array<{
-        segment_index: number
-        start_timecode: string
-        end_timecode: string
-        title?: string
-        summary?: string
-      }>
-      metadata?: { status?: MediaIndexStatus }
-      indexed_at?: string
-    }
-  }>
+    status: string
+    submitted_segments: string[]
+  }>('/api/media/indexing/submit', {
+    manifest_id: input.manifestId,
+    segments: input.segments,
+  })
+  if (!response.data) throw new Error('素材 manifest 提交返回数据为空')
+  return response.data
 }
 
 function buildBoundedExportSize(
@@ -507,6 +546,7 @@ async function callRetrievalApi(
   query: string,
   projectId: string,
   topK: number,
+  scope: Array<{ manifest_id: string }>,
   signal?: AbortSignal,
 ): Promise<{ taskId: string; result: RetrievalTaskResult }> {
   return submitSearchTask<RetrievalTaskResult>(
@@ -515,6 +555,8 @@ async function callRetrievalApi(
     {
       query,
       top_k: topK,
+      index_version: 'media-index-v3.1',
+      scope,
     },
     signal,
   )
@@ -633,45 +675,6 @@ export async function indexAllMedia({
   return t('aiPanel.indexAllMediaSuccess', { count: items.length })
 }
 
-export async function reconcileMediaIndexing(
-  projectId: string,
-  mediaIds: string[],
-): Promise<ReconcileMediaIndexingResult> {
-  const normalizedMediaIds = Array.from(new Set(mediaIds.map((id) => id.trim()).filter(Boolean)))
-
-  const response = await fetchClient.post<ReconcileMediaIndexingResult>(
-    '/api/media/indexing/reconcile',
-    {
-      project_id: projectId,
-      media_ids: normalizedMediaIds,
-    },
-  )
-
-  if (!response.data) {
-    throw new Error('索引对账返回数据为空')
-  }
-
-  return response.data
-}
-
-export async function getMediaIndexingDetails(
-  projectId: string,
-  mediaIds: string[],
-): Promise<MediaIndexingDetailsResult> {
-  const normalizedMediaIds = Array.from(new Set(mediaIds.map((id) => id.trim()).filter(Boolean)))
-  const response = await fetchClient.post<MediaIndexingDetailsResult>(
-    '/api/media/indexing/details',
-    {
-      project_id: projectId,
-      media_ids: normalizedMediaIds,
-    },
-  )
-  if (!response.data) {
-    throw new Error('索引详情返回数据为空')
-  }
-  return response.data
-}
-
 interface SearchMediaParams {
   query: string
   projectId?: string | null
@@ -702,32 +705,29 @@ function normalizeSearchTopK(value: number | undefined): number {
   return normalized
 }
 
-function isSearchIndexReady(status: MediaIndexStatus | undefined): boolean {
-  return status === 'completed' || status === 'partial_failed'
+function isSearchIndexReady(indexing: UnifiedMediaIndexMetadata | undefined): boolean {
+  return (
+    (indexing?.indexStatus === 'completed' || indexing?.indexStatus === 'partial_failed') &&
+    Boolean(indexing.assetId && indexing.manifestId && indexing.indexedAt)
+  )
 }
 
 async function ensureSearchMediaIndexed(params: {
-  projectId: string
   mediaItems: UnifiedMediaItemData[]
   ensureMediaIndexing: (id: string) => Promise<unknown>
   onIndexingProgress?: (resolvedCount: number, totalCount: number, failedCount: number) => void
   checkCancelled?: () => void
 }): Promise<void> {
-  const { projectId, mediaItems, ensureMediaIndexing, onIndexingProgress, checkCancelled } = params
+  const { mediaItems, ensureMediaIndexing, onIndexingProgress, checkCancelled } = params
   const indexableItems = mediaItems.filter(
     (item) => item.mediaType === 'video' || item.mediaType === 'image',
   )
 
-  const reconcileResult = await reconcileMediaIndexing(
-    projectId,
-    indexableItems.map((item) => item.id),
-  )
-  const remoteMissingIds = new Set(reconcileResult.unindexed_media_ids)
-  const localIncompleteIds = indexableItems
-    .filter((item) => !isSearchIndexReady(item.metadata?.indexing?.indexStatus))
+  // A completed local manifest is already sufficient to build the retrieval scope.
+  // Keep its cached summaries intact and only resolve items that still need work.
+  const targetIds = indexableItems
+    .filter((item) => !isSearchIndexReady(item.metadata?.indexing))
     .map((item) => item.id)
-
-  const targetIds = Array.from(new Set([...remoteMissingIds, ...localIncompleteIds]))
   if (targetIds.length === 0) {
     onIndexingProgress?.(0, 0, 0)
     return
@@ -787,7 +787,6 @@ export async function searchMedia({
     checkCancelled?.()
     onProgress?.('indexing', 0, totalSteps)
     await ensureSearchMediaIndexed({
-      projectId,
       mediaItems,
       ensureMediaIndexing,
       onIndexingProgress,
@@ -797,10 +796,39 @@ export async function searchMedia({
     onProgress?.('indexing', 1, totalSteps)
 
     onProgress?.('retrieval', 1, totalSteps)
-    const retrieval = await callRetrievalApi(normalizedQuery, projectId, RETRIEVAL_TOP_K, signal)
+    const scope = Array.from(
+      new Set(
+        mediaItems
+          .map((item) => item.metadata?.indexing?.manifestId)
+          .filter((manifestId): manifestId is string => Boolean(manifestId)),
+      ),
+    ).map((manifest_id) => ({ manifest_id }))
+    if (scope.length === 0) {
+      return {
+        results: [],
+        error: '当前项目没有可检索的图片或视频索引素材',
+      }
+    }
+    const retrieval = await callRetrievalApi(
+      normalizedQuery,
+      projectId,
+      RETRIEVAL_TOP_K,
+      scope,
+      signal,
+    )
 
     checkCancelled?.()
-    const retrievalResults = retrieval.result.results || []
+    const retrievalResults = (retrieval.result.results || [])
+      .map((result) => {
+        const mapped = mediaItems.find(
+          (item) =>
+            result.asset_id &&
+              item.metadata?.indexing?.assetId === result.asset_id &&
+              item.metadata?.indexing?.manifestId === result.manifest_id,
+        )
+        return mapped ? { ...result, localMediaId: mapped.id } : null
+      })
+      .filter((result): result is LocalRetrievalResultItem => result !== null)
     if (retrievalResults.length === 0) {
       return { results: [], error: '' }
     }
@@ -808,7 +836,7 @@ export async function searchMedia({
 
     const candidates: RerankCandidateInput[] = retrievalResults.map((result) => ({
       pointId: result.point_id,
-      mediaItemId: result.media_item_id,
+      mediaItemId: result.localMediaId!,
       mediaKind: result.media_kind,
       segment: result.segment,
     }))
@@ -858,7 +886,7 @@ export async function searchMedia({
 
     const validateCandidates: ValidationCandidateInput[] = reranked.map((result) => ({
       pointId: result.point_id,
-      mediaItemId: result.media_item_id,
+      mediaItemId: result.localMediaId!,
       mediaKind: result.media_kind,
       segment: result.segment,
     }))

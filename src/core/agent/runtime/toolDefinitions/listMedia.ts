@@ -14,6 +14,7 @@ Use When
 
 Do NOT Use When
 ---------------
+- 需要按内容语义找镜头、图片或视频片段时，应使用 search_media
 - 需要读取素材详情时，应使用 read_media
 - 需要查看时间轴轨道或 clip，应使用 read_tracks/read_item
 

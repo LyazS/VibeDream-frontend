@@ -80,9 +80,13 @@ export function getApiCapability(path: string, _body?: BodyInit | null): ApiCapa
   if (path === '/api/providers/deepseek/agent/uploads') return 'agent'
   if (path === '/api/agent/tools/describe-item-property') return 'item-properties'
   if (path === '/api/transitions/test-search') return 'transition.search'
+  if (
+    path === '/api/media/indexing/resolve' ||
+    path === '/api/media/indexing/submit' ||
+    path === '/api/media/indexing/clear'
+  )
+    return 'media.indexing'
   if (path === '/api/providers/dashscope/uploads/policy') return 'ai-tasks'
-  if (path === '/api/media/indexing/reconcile') return 'media.indexing'
-  if (path === '/api/media/indexing/details') return 'media.indexing'
   return capabilityPrefixes.find(([prefix]) => path.startsWith(prefix))?.[1] ?? 'other'
 }
 

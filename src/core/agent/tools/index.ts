@@ -28,6 +28,7 @@ import { readItemTool } from './readItem'
 import { updateItemTool } from './updateItem'
 import { applyTransitionTool, removeItemTool, searchTransitionsTool } from './transitionTools'
 import { removeTrackTool } from './removeTrack'
+import { searchMediaTool } from './searchMedia'
 import { splitClipTool } from './splitClip'
 import { trimClipTool } from './trimClip'
 import { writeClipKeyframeTool } from './writeClipKeyframe'
@@ -106,6 +107,7 @@ registerTool(searchTransitionsTool)
 registerTool(applyTransitionTool)
 registerTool(removeItemTool)
 registerTool(removeTrackTool)
+registerTool(searchMediaTool)
 registerTool(splitClipTool)
 registerTool(trimClipTool)
 registerTool(writeClipKeyframeTool)

@@ -49,6 +49,12 @@ export interface EvalIndexManifestItem {
   indexStatus: string
   indexedAt?: string
   taskId?: string
+  assetId?: string
+  manifestId?: string
+  contentSha256?: string
+  indexRecipeId?: string
+  indexVersion?: string
+  segmentPlanHash?: string
   segmentCount?: number
   failedSegmentCount?: number
   summary?: unknown

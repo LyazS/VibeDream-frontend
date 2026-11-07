@@ -33,7 +33,16 @@ export class MediaIndexMetadataWritebackResolver
       return null
     }
 
-    if (indexing.indexStatus === 'completed' || indexing.indexStatus === 'partial_failed') {
+    // AI-generated summaries are optional. Use the persisted remote identity and
+    // completion timestamp as the writeback completion marker instead of content
+    // that a provider may legitimately omit.
+    const hasRemoteIdentity = Boolean(indexing.assetId && indexing.manifestId)
+    const hasCompletionMarker = Boolean(indexing.indexedAt)
+    if (
+      (indexing.indexStatus === 'completed' || indexing.indexStatus === 'partial_failed') &&
+      hasRemoteIdentity &&
+      hasCompletionMarker
+    ) {
       return {
         mediaId: mediaItem.id,
         status: indexing.indexStatus,
@@ -43,7 +52,9 @@ export class MediaIndexMetadataWritebackResolver
     return null
   }
 
-  async getDependencies(ctx: ResolveContext<MediaIndexMetadataWritebackInput>): Promise<ResourceRequest[]> {
+  async getDependencies(
+    ctx: ResolveContext<MediaIndexMetadataWritebackInput>,
+  ): Promise<ResourceRequest[]> {
     return [createMediaIndexTaskCompleteRequest(ctx.input.mediaId)]
   }
 
@@ -54,15 +65,26 @@ export class MediaIndexMetadataWritebackResolver
     const { taskId, result } = await ctx.ensure<MediaIndexTaskCompleteResult>(
       createMediaIndexTaskCompleteRequest(ctx.input.mediaId),
     )
-    if (result.project_id !== this.module.getProjectId() || result.media_item_id !== mediaItem.id) {
+    const indexing = mediaItem.metadata?.indexing
+    const isMediaIndexResult =
+      Boolean(indexing?.manifestId) &&
+      result.manifest_id === indexing?.manifestId &&
+      result.asset_id === indexing?.assetId
+    if (!isMediaIndexResult) {
       throw new Error('索引结果与当前项目或素材不匹配')
     }
 
-    const status = result.metadata?.status || (
-      result.media_kind === 'video' && result.failed_segment_count > 0
+    ctx.update({
+      progress: 0.98,
+      stage: 'writing-index-metadata',
+      message: '索引任务已完成，正在写回素材结果',
+    })
+
+    const status =
+      result.metadata?.status ||
+      (result.media_kind === 'video' && result.failed_segment_count > 0
         ? 'partial_failed'
-        : 'completed'
-    )
+        : 'completed')
 
     if (result.media_kind === 'video') {
       setIndexingMetadata(mediaItem, {

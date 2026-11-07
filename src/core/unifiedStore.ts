@@ -54,6 +54,7 @@ import { materializeAsrSubtitles } from '@/core/asr/materializeSubtitles'
 import { useUnifiedDrag } from '@/core/composables/useUnifiedDrag'
 import { revealMediaInLibrary as coordinateMediaReveal } from '@/core/directory/LibraryReveal'
 import type { UnifiedTimelineItemData } from '@/core/timelineitem/model/timelineItem'
+import type { UnifiedMediaIndexMetadata } from '@/core/mediaitem/types'
 import { frameToPixel, pixelToFrame } from '@/core/utils/timelineScaleUtils'
 import {
   getTimelineItemsByTrack,
@@ -169,78 +170,36 @@ export const useUnifiedStore = defineStore('unified', () => {
     createVideoSceneSegmentsResolver({
       getMediaItem: unifiedMediaModule.getMediaItem,
       ensureMediaReady,
-      getProjectId: () => {
-        const projectId = unifiedConfigModule.projectId.value
-        if (!projectId) {
-          throw new Error('当前项目未初始化')
-        }
-        return projectId
-      },
     }),
   )
   jobRuntime.registerResolver(
     createVideoSegmentExportsResolver({
       getMediaItem: unifiedMediaModule.getMediaItem,
       ensureMediaReady,
-      getProjectId: () => {
-        const projectId = unifiedConfigModule.projectId.value
-        if (!projectId) {
-          throw new Error('当前项目未初始化')
-        }
-        return projectId
-      },
     }),
   )
   jobRuntime.registerResolver(
     createVideoSegmentOssUploadsResolver({
       getMediaItem: unifiedMediaModule.getMediaItem,
       ensureMediaReady,
-      getProjectId: () => {
-        const projectId = unifiedConfigModule.projectId.value
-        if (!projectId) {
-          throw new Error('当前项目未初始化')
-        }
-        return projectId
-      },
     }),
   )
   jobRuntime.registerResolver(
     createMediaIndexTaskSubmitResolver({
       getMediaItem: unifiedMediaModule.getMediaItem,
       ensureMediaReady,
-      getProjectId: () => {
-        const projectId = unifiedConfigModule.projectId.value
-        if (!projectId) {
-          throw new Error('当前项目未初始化')
-        }
-        return projectId
-      },
     }),
   )
   jobRuntime.registerResolver(
     createMediaIndexTaskCompleteResolver({
       getMediaItem: unifiedMediaModule.getMediaItem,
       ensureMediaReady,
-      getProjectId: () => {
-        const projectId = unifiedConfigModule.projectId.value
-        if (!projectId) {
-          throw new Error('当前项目未初始化')
-        }
-        return projectId
-      },
     }),
   )
   jobRuntime.registerResolver(
     createMediaIndexMetadataWritebackResolver({
       getMediaItem: unifiedMediaModule.getMediaItem,
       ensureMediaReady,
-      getProjectId: () => {
-        const projectId = unifiedConfigModule.projectId.value
-        if (!projectId) {
-          throw new Error('当前项目未初始化')
-        }
-        return projectId
-      },
     }),
   )
   jobRuntime.registerResolver(
@@ -311,7 +270,10 @@ export const useUnifiedStore = defineStore('unified', () => {
     const mediaItem = unifiedMediaModule.getMediaItem(mediaId)
     if (mediaItem && (mediaItem.mediaType === 'video' || mediaItem.mediaType === 'image')) {
       const indexing = mediaItem.metadata?.indexing
-      if (!canResumeMediaIndexingFromRemote(indexing)) {
+      const hasReusableIndex = (value: UnifiedMediaIndexMetadata | undefined): boolean =>
+        (value?.indexStatus === 'completed' || value?.indexStatus === 'partial_failed') &&
+        Boolean(value.assetId && value.manifestId && value.indexedAt)
+      if (!hasReusableIndex(indexing) && !canResumeMediaIndexingFromRemote(indexing)) {
         setIndexingMetadata(mediaItem, {
           mediaKind: mediaItem.mediaType,
           indexStatus: 'pending',

@@ -35,10 +35,21 @@ export interface VideoSceneSegmentsInput {
 
 export interface VideoSceneSegment {
   mediaItemId: string
+  segmentKey?: string
   segmentIndex: number
   startFrame: number
   endFrame: number
   durationN: number
+}
+
+export function segmentPlanKey(segments?: VideoSceneSegment[]): string {
+  if (!segments) return 'detected'
+  return segments
+    .map(
+      (segment) =>
+        segment.segmentKey || `${segment.segmentIndex}:${segment.startFrame}:${segment.endFrame}`,
+    )
+    .join('|')
 }
 
 export interface VideoSceneSegmentsResult {
@@ -48,6 +59,7 @@ export interface VideoSceneSegmentsResult {
 
 export interface VideoSegmentExportsInput {
   mediaId: string
+  canonicalSegments?: VideoSceneSegment[]
 }
 
 export type VideoSegmentExportPlan =
@@ -80,12 +92,16 @@ export interface VideoSegmentExportsResult {
 
 export interface VideoSegmentOssUploadsInput {
   mediaId: string
+  canonicalSegments?: VideoSceneSegment[]
 }
 
 export type MediaIndexSegmentInput =
   | {
       mediaItemId: string
+      segmentKey?: string
       segmentIndex: number
+      startFrame: number
+      endFrame: number
       startTimecode: string
       endTimecode: string
       durationN: number
@@ -95,7 +111,10 @@ export type MediaIndexSegmentInput =
     }
   | {
       mediaItemId: string
+      segmentKey?: string
       segmentIndex: number
+      startFrame: number
+      endFrame: number
       startTimecode: string
       endTimecode: string
       durationN: number
@@ -123,6 +142,7 @@ export interface MediaIndexTaskSubmitInput {
 export interface MediaIndexTaskSubmitResult {
   mediaId: string
   taskId: string
+  completed?: boolean
 }
 
 export interface MediaIndexTaskCompleteInput {
@@ -132,8 +152,9 @@ export interface MediaIndexTaskCompleteInput {
 
 export interface VideoMediaIndexingResult {
   media_kind: 'video'
-  project_id: string
   media_item_id: string
+  asset_id?: string
+  manifest_id?: string
   segment_count: number
   indexed_count: number
   failed_segment_count: number
@@ -164,8 +185,9 @@ export interface VideoMediaIndexingResult {
 
 export interface ImageMediaIndexingResult {
   media_kind: 'image'
-  project_id: string
   media_item_id: string
+  asset_id?: string
+  manifest_id?: string
   indexed_count: number
   summary?: {
     title?: string
@@ -198,7 +220,6 @@ export interface MediaIndexMetadataWritebackResult {
 
 export type MediaIndexingModule = Pick<UnifiedMediaModule, 'getMediaItem'> & {
   ensureMediaReady(mediaId: string): Promise<unknown>
-  getProjectId(): string
 }
 
 export function createVideoSceneSegmentsRequest(
@@ -219,11 +240,12 @@ export function createVideoSceneSegmentsRequest(
 export function createVideoSegmentExportsRequest(
   mediaId: string,
   policy?: ResourcePolicy,
+  canonicalSegments?: VideoSceneSegment[],
 ): ResourceRequest<VideoSegmentExportsInput> {
   return {
     type: VIDEO_SEGMENT_EXPORTS_RESOURCE_TYPE,
-    key: mediaId,
-    input: { mediaId },
+    key: `${mediaId}:${segmentPlanKey(canonicalSegments)}`,
+    input: { mediaId, canonicalSegments },
     policy: {
       queue: 'export',
       ...policy,
@@ -234,11 +256,12 @@ export function createVideoSegmentExportsRequest(
 export function createVideoSegmentOssUploadsRequest(
   mediaId: string,
   policy?: ResourcePolicy,
+  canonicalSegments?: VideoSceneSegment[],
 ): ResourceRequest<VideoSegmentOssUploadsInput> {
   return {
     type: VIDEO_SEGMENT_OSS_UPLOADS_RESOURCE_TYPE,
-    key: mediaId,
-    input: { mediaId },
+    key: `${mediaId}:${segmentPlanKey(canonicalSegments)}`,
+    input: { mediaId, canonicalSegments },
     policy: {
       queue: 'export',
       ...policy,
@@ -442,6 +465,12 @@ export function setIndexingMetadata(
   patch: {
     indexStatus: MediaIndexStatus
     mediaKind?: 'video' | 'image'
+    assetId?: string
+    manifestId?: string
+    contentSha256?: string
+    indexRecipeId?: string
+    indexVersion?: string
+    segmentPlanHash?: string
     indexedAt?: string
     taskId?: string
     segmentCount?: number
@@ -565,7 +594,11 @@ function mediaIndexingTaskFailureMessage(status: 'failed' | 'cancelled' | 'input
 function isMediaIndexingResult(value: unknown): value is MediaIndexingResult {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return false
   const result = value as Record<string, unknown>
-  if (typeof result.project_id !== 'string' || typeof result.media_item_id !== 'string')
+  if (
+    typeof result.asset_id !== 'string' ||
+    typeof result.manifest_id !== 'string' ||
+    typeof result.media_item_id !== 'string'
+  )
     return false
   if (result.media_kind === 'image') return typeof result.indexed_count === 'number'
   return (

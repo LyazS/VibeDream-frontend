@@ -4,11 +4,6 @@ import { fileSystemService } from '@/core/managers'
 import { useUnifiedStore } from '@/core/unifiedStore'
 import type { EvalSnapshot, AgentEval } from '@/types/global'
 import type { EvalIndexWarmupResult } from '@/types/global'
-import {
-  getMediaIndexingDetails,
-  reconcileMediaIndexing,
-} from '@/core/agent/services/mediaIndexService'
-import { persistMediaItem } from '@/core/jobs/resolvers/mediaIndexingShared'
 import { verifyOnnxWasmAssets } from '@/core/onnx/loader'
 import { verifyTransNetV2Backend } from '@/core/utils/transnetv2/modelRunner'
 
@@ -222,165 +217,39 @@ function installBrowserHarness(): AgentEval {
       const indexableItems = store.mediaItems.filter(
         (item) => item.mediaType === 'video' || item.mediaType === 'image',
       )
-      const reconcile = await reconcileMediaIndexing(
-        store.projectId,
-        indexableItems.map((item) => item.id),
-      )
-      const details = await getMediaIndexingDetails(
-        store.projectId,
-        indexableItems.map((item) => item.id),
-      )
-      const remote = new Map(details.indexed_media.map((item) => [item.media_id, item]))
-      const resultSummaries = new Map(
-        details.indexed_media.map((item) => [item.media_id, item.result_summary]),
-      )
-      const missing = new Set(reconcile.unindexed_media_ids)
       let indexedCount = 0
-      let skippedCount = 0
+      const skippedCount = 0
       let failedCount = 0
 
       for (const mediaItem of indexableItems) {
-          const itemStarted = Date.now()
-          const local = mediaItem.metadata?.indexing
-          const remoteItem = remote.get(mediaItem.id)
-          if (
-            remoteItem &&
-            local?.indexStatus === 'completed' &&
-            local.mediaKind === remoteItem.media_kind
-          ) {
-            skippedCount += 1
-            diagnostics.push({
-              mediaId: mediaItem.id,
-              stage: 'reconcile',
-              status: 'skipped',
-              durationMs: Date.now() - itemStarted,
-              message: '本地与远端索引已就绪',
-            })
-            continue
-          }
-          if (remoteItem && !missing.has(mediaItem.id)) {
-            const remoteResult =
-              remoteItem.result && typeof remoteItem.result === 'object'
-                ? (remoteItem.result as Record<string, unknown>)
-                : undefined
-            const remoteSummary =
-              remoteResult?.summary && typeof remoteResult.summary === 'object'
-                ? (remoteResult.summary as Record<string, unknown>)
-                : undefined
-            const remoteSegments = Array.isArray(remoteResult?.segment_summaries)
-              ? remoteResult.segment_summaries
-              : undefined
-            const indexedAt = remoteItem.indexed_at || new Date().toISOString()
-            const failedSegmentCount =
-              typeof remoteResult?.failed_segment_count === 'number'
-                ? remoteResult.failed_segment_count
-                : 0
-            mediaItem.metadata = {
-              ...mediaItem.metadata,
-              indexing:
-                remoteItem.media_kind === 'video'
-                  ? {
-                      mediaKind: 'video',
-                      indexStatus:
-                        remoteResult?.metadata &&
-                        typeof remoteResult.metadata === 'object' &&
-                        (remoteResult.metadata as Record<string, unknown>).status === 'partial_failed'
-                          ? 'partial_failed'
-                          : failedSegmentCount > 0
-                            ? 'partial_failed'
-                            : 'completed',
-                      indexedAt,
-                      taskId: remoteItem.task_id,
-                      segmentCount: remoteItem.segment_count || undefined,
-                      failedSegmentCount,
-                      summary: remoteSummary
-                        ? {
-                            title:
-                              typeof remoteSummary.title === 'string'
-                                ? remoteSummary.title
-                                : undefined,
-                            summary:
-                              typeof remoteSummary.summary === 'string'
-                                ? remoteSummary.summary
-                                : undefined,
-                          }
-                        : undefined,
-                      segmentSummaries: remoteSegments?.flatMap((segment) => {
-                        if (!segment || typeof segment !== 'object') return []
-                        const value = segment as Record<string, unknown>
-                        return [
-                          {
-                            segmentIndex: Number(value.segment_index),
-                            startTimecode: String(value.start_timecode || ''),
-                            endTimecode: String(value.end_timecode || ''),
-                            title: typeof value.title === 'string' ? value.title : undefined,
-                            summary: typeof value.summary === 'string' ? value.summary : undefined,
-                          },
-                        ]
-                      }),
-                    }
-                  : {
-                      mediaKind: 'image',
-                      indexStatus:
-                        remoteResult?.metadata &&
-                        typeof remoteResult.metadata === 'object' &&
-                        (remoteResult.metadata as Record<string, unknown>).status === 'partial_failed'
-                          ? 'partial_failed'
-                          : 'completed',
-                      indexedAt,
-                      taskId: remoteItem.task_id,
-                      summary: remoteSummary
-                        ? {
-                            title:
-                              typeof remoteSummary.title === 'string'
-                                ? remoteSummary.title
-                                : undefined,
-                            summary:
-                              typeof remoteSummary.summary === 'string'
-                                ? remoteSummary.summary
-                                : undefined,
-                          }
-                        : undefined,
-                    },
-            }
-            await persistMediaItem(mediaItem)
-            skippedCount += 1
-            diagnostics.push({
-              mediaId: mediaItem.id,
-              stage: 'reconcile',
-              status: 'skipped',
-              durationMs: Date.now() - itemStarted,
-              message: '复用远端索引',
-            })
-            continue
-          }
-          try {
-            await withTimeout(
-              store.ensureMediaIndexing(mediaItem.id),
-              WARMUP_MEDIA_TIMEOUT_MS,
-              `INDEX_MEDIA_TIMEOUT:${WARMUP_MEDIA_TIMEOUT_MS}`,
-            )
-            indexedCount += 1
-            diagnostics.push({
-              mediaId: mediaItem.id,
-              stage: 'indexing',
-              status: 'completed',
-              durationMs: Date.now() - itemStarted,
-            })
-          } catch (error) {
-            failedCount += 1
-            const message = error instanceof Error ? error.message : String(error)
-            const timedOut = message.startsWith('INDEX_MEDIA_TIMEOUT:')
-            if (timedOut) await store.cancelMediaIndexing(mediaItem.id)
-            diagnostics.push({
-              mediaId: mediaItem.id,
-              stage: timedOut ? 'timeout' : 'indexing',
-              status: timedOut ? 'timeout' : 'failed',
-              durationMs: Date.now() - itemStarted,
-              message,
-            })
-            console.error('[AgentEval] index warmup failed', mediaItem.id, error)
-          }
+        const itemStarted = Date.now()
+        try {
+          await withTimeout(
+            store.ensureMediaIndexing(mediaItem.id),
+            WARMUP_MEDIA_TIMEOUT_MS,
+            `INDEX_MEDIA_TIMEOUT:${WARMUP_MEDIA_TIMEOUT_MS}`,
+          )
+          indexedCount += 1
+          diagnostics.push({
+            mediaId: mediaItem.id,
+            stage: 'indexing',
+            status: 'completed',
+            durationMs: Date.now() - itemStarted,
+          })
+        } catch (error) {
+          failedCount += 1
+          const message = error instanceof Error ? error.message : String(error)
+          const timedOut = message.startsWith('INDEX_MEDIA_TIMEOUT:')
+          if (timedOut) await store.cancelMediaIndexing(mediaItem.id)
+          diagnostics.push({
+            mediaId: mediaItem.id,
+            stage: timedOut ? 'timeout' : 'indexing',
+            status: timedOut ? 'timeout' : 'failed',
+            durationMs: Date.now() - itemStarted,
+            message,
+          })
+          console.error('[AgentEval] index warmup failed', mediaItem.id, error)
+        }
       }
 
       const completedAt = new Date().toISOString()
@@ -392,6 +261,12 @@ function installBrowserHarness(): AgentEval {
           indexStatus: indexing?.indexStatus || 'idle',
           ...(indexing?.indexedAt ? { indexedAt: indexing.indexedAt } : {}),
           ...(indexing?.taskId ? { taskId: indexing.taskId } : {}),
+          ...(indexing?.assetId ? { assetId: indexing.assetId } : {}),
+          ...(indexing?.manifestId ? { manifestId: indexing.manifestId } : {}),
+          ...(indexing?.contentSha256 ? { contentSha256: indexing.contentSha256 } : {}),
+          ...(indexing?.indexRecipeId ? { indexRecipeId: indexing.indexRecipeId } : {}),
+          ...(indexing?.indexVersion ? { indexVersion: indexing.indexVersion } : {}),
+          ...(indexing?.segmentPlanHash ? { segmentPlanHash: indexing.segmentPlanHash } : {}),
           ...(indexing?.mediaKind === 'video' && indexing.segmentCount !== undefined
             ? { segmentCount: indexing.segmentCount }
             : {}),
@@ -401,9 +276,6 @@ function installBrowserHarness(): AgentEval {
           ...(indexing?.summary ? { summary: indexing.summary } : {}),
           ...(indexing?.mediaKind === 'video' && indexing.segmentSummaries
             ? { segmentSummaries: indexing.segmentSummaries }
-            : {}),
-          ...(resultSummaries.get(mediaItem.id) !== undefined
-            ? { resultSummary: resultSummaries.get(mediaItem.id) }
             : {}),
         }
       })

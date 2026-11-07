@@ -18,12 +18,11 @@ import {
   createMediaIndexTaskSubmitRequest,
 } from '@/core/jobs/resolvers/mediaIndexingShared'
 import { exportMediaItem, exportTimelineItem, exportVideoFrames } from '@/core/utils/mediaExporter'
-import { submitAiTask } from '@/core/ai-tasks/taskApi'
 import { CfBailianTempFileUploader } from '@/core/utils/cfBailianTempFileUploader'
 import { RENDERER_FPS } from '@/core/mediabunny/constant'
 
 vi.mock('@/core/managers/media/globalMetaFileManager', () => ({
-  globalMetaFileManager: { saveMetaFile: vi.fn() },
+  globalMetaFileManager: { saveMetaFile: vi.fn(), loadMediaFile: vi.fn() },
 }))
 vi.mock('@/core/utils/music-analysis', async () => ({
   ...(await import('@/core/utils/music-analysis/types')),
@@ -62,6 +61,9 @@ function context<T>(request: ResourceRequest<T>): ResolveContext<T> {
 beforeEach(() => {
   vi.resetAllMocks()
   vi.mocked(globalMetaFileManager.saveMetaFile).mockResolvedValue(true)
+  vi.mocked(globalMetaFileManager.loadMediaFile).mockResolvedValue(
+    new File(['original-image'], 'source.jpg', { type: 'image/jpeg' }),
+  )
 })
 afterEach(() => vi.unstubAllGlobals())
 
@@ -120,6 +122,40 @@ describe('local music analysis', () => {
 })
 
 describe('video indexing exports', () => {
+  it('uses a supplied canonical plan without running local scene detection', async () => {
+    const item = {
+      id: 'media_canonical_video',
+      ext: '.mov',
+      name: 'canonical.mov',
+      mediaType: 'video',
+      runtime: { bunny: { originalWidth: 1920, originalHeight: 1080 } },
+    } as unknown as UnifiedMediaItemData
+    const module = {
+      getMediaItem: () => item,
+      getProjectId: () => 'project',
+      ensureMediaReady: vi.fn(),
+    }
+    const canonicalSegments = [
+      {
+        mediaItemId: item.id,
+        segmentKey: 'segment-0003-S-000090-E-000150',
+        segmentIndex: 3,
+        startFrame: 90,
+        endFrame: 150,
+        durationN: 60,
+      },
+    ]
+    const request = createVideoSegmentExportsRequest(item.id, undefined, canonicalSegments)
+    const ctx = context(request)
+    const resolver = new VideoSegmentExportsResolver(module)
+
+    await expect(resolver.getDependencies(ctx)).resolves.toEqual([])
+    const result = await resolver.resolve(ctx)
+
+    expect(ctx.ensure).not.toHaveBeenCalled()
+    expect(result.exportPlans[0].segment).toEqual(canonicalSegments[0])
+  })
+
   it('uploads short-segment frames and long-segment videos using their own export plans', async () => {
     const item = {
       id: 'media_video',
@@ -212,13 +248,40 @@ describe('image indexing exports', () => {
       success: true,
       url: `https://upload.example/${options.purpose}/${options.fileName}`,
     }))
-    vi.mocked(submitAiTask).mockResolvedValue({ type: 'media.indexing', task_id: 'task-image' })
+    vi.stubGlobal(
+      'fetch',
+      vi
+        .fn()
+        .mockResolvedValueOnce(
+          Response.json({
+            asset_id: 'asset-image',
+            manifest_id: 'manifest-image',
+            content_sha256: 'a'.repeat(64),
+            media_kind: 'image',
+            segment_plan_hash: 'b'.repeat(64),
+            status: 'missing',
+            task_id: null,
+            canonical_segment_plan: [{ segment_key: 'image' }],
+            missing_segments: [{ segment_key: 'image', point_id: 'point-image' }],
+          }),
+        )
+        .mockResolvedValueOnce(
+          Response.json({
+            manifest_id: 'manifest-image',
+            task_id: 'task-image',
+            status: 'processing',
+            submitted_segments: ['image'],
+          }),
+        ),
+    )
     const ctx = context(createMediaIndexTaskSubmitRequest(item.id))
 
     await expect(new MediaIndexTaskSubmitResolver(module).resolve(ctx)).resolves.toEqual({
       mediaId: item.id,
       taskId: 'task-image',
     })
+
+    expect(item.metadata?.indexing?.failedSegmentCount).toBe(0)
 
     expect(CfBailianTempFileUploader.uploadBlob).toHaveBeenCalledTimes(2)
     expect(CfBailianTempFileUploader.uploadBlob).toHaveBeenCalledWith(
@@ -227,26 +290,90 @@ describe('image indexing exports', () => {
       expect.any(Function),
       ctx.signal,
     )
-    expect(submitAiTask).toHaveBeenCalledWith(
-      'media.indexing',
-      expect.objectContaining({
-        input: expect.objectContaining({
-          media_id: item.id,
-          media_name: item.name,
-          segments: [
+    expect(globalMetaFileManager.loadMediaFile).toHaveBeenCalledWith(item)
+  })
+
+  it('resolves a completed video manifest before uploading any segment', async () => {
+    const item = {
+      id: 'media_video',
+      ext: '.mov',
+      name: 'shared.mov',
+      mediaType: 'video',
+      createdAt: '2026-10-15T00:00:00.000Z',
+      runtime: {},
+    } as UnifiedMediaItemData
+    const module = {
+      getMediaItem: () => item,
+      getProjectId: () => 'project-b',
+      ensureMediaReady: vi.fn(),
+    }
+    vi.mocked(CfBailianTempFileUploader.uploadBlob).mockResolvedValue({
+      success: true,
+      url: 'https://upload.example/unused',
+    })
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        Response.json({
+          asset_id: 'asset-shared',
+          manifest_id: 'manifest-shared',
+          content_sha256: 'c'.repeat(64),
+          media_kind: 'video',
+          segment_plan_hash: 'd'.repeat(64),
+          status: 'completed',
+          task_id: null,
+          indexed_at: '2026-11-07T00:00:00.000Z',
+          canonical_segment_plan: [
             {
-              segment_id: 'image',
-              provider_urls: [
-                'https://upload.example/tagging/media_image.png',
-                'https://upload.example/embedding/media_image.png',
-              ],
-              source_type: 'image_url',
+              segment_key: 'segment-0000-S-000000-E-000030',
+              segment_index: 0,
+              start_frame: 0,
+              end_frame: 30,
+              start_timecode: '00:00:00+00',
+              end_timecode: '00:00:01+00',
+              duration_n: 30,
             },
           ],
+          segment_summaries: [
+            {
+              segment_index: 0,
+              start_timecode: '00:00:00+00',
+              end_timecode: '00:00:01+00',
+              title: 'Shared shot',
+              summary: 'Shared summary',
+            },
+          ],
+          missing_segments: [],
+          summary: { title: 'Shared video', summary: 'Shared video summary' },
         }),
-      }),
-      'indexing-test',
-      ctx.signal,
+      ),
     )
+    const request = createMediaIndexTaskSubmitRequest(item.id)
+    const ctx = context(request)
+    vi.mocked(ctx.ensure).mockResolvedValue({
+      mediaId: item.id,
+      exportPlans: [
+        {
+          exportKind: 'video',
+          segment: { mediaItemId: item.id, segmentIndex: 0, startFrame: 0, endFrame: 30, durationN: 30 },
+          fileName: 'segment.mp4',
+          timelineItemId: 'timeline-1',
+        },
+      ],
+      timelineItems: {},
+    })
+
+    await expect(new MediaIndexTaskSubmitResolver(module).resolve(ctx)).resolves.toMatchObject({
+      mediaId: item.id,
+      completed: true,
+    })
+    expect(item.metadata?.indexing).toMatchObject({
+      indexStatus: 'completed',
+      indexedAt: '2026-11-07T00:00:00.000Z',
+      assetId: 'asset-shared',
+      manifestId: 'manifest-shared',
+    })
+    expect(ctx.ensure).not.toHaveBeenCalled()
+    expect(CfBailianTempFileUploader.uploadBlob).not.toHaveBeenCalled()
   })
 })

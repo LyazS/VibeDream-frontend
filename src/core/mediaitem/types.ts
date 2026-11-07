@@ -150,11 +150,20 @@ export type MediaIndexStatus =
 export interface BaseUnifiedMediaIndexMetadata {
   mediaKind: 'video' | 'image'
   indexStatus: MediaIndexStatus
+  /** User scoped current index identity. Legacy records may omit these fields. */
+  assetId?: string
+  manifestId?: string
+  contentSha256?: string
+  indexRecipeId?: string
+  indexVersion?: string
+  segmentPlanHash?: string
   indexedAt?: string
   taskId?: string
 }
 
 export interface UnifiedVideoIndexSegmentSummary {
+  pointId?: string
+  segmentKey?: string
   segmentIndex: number
   startTimecode: string
   endTimecode: string
@@ -173,6 +182,15 @@ export interface UnifiedVideoMediaIndexMetadata extends BaseUnifiedMediaIndexMet
   failedSegmentCount?: number
   summary?: UnifiedImageIndexSummary
   segmentSummaries?: UnifiedVideoIndexSegmentSummary[]
+  segments?: Array<{
+    pointId: string
+    segmentKey: string
+    segmentIndex?: number
+    startTimecode?: string
+    endTimecode?: string
+    title?: string
+    summary?: string
+  }>
 }
 
 export interface UnifiedImageMediaIndexMetadata extends BaseUnifiedMediaIndexMetadata {

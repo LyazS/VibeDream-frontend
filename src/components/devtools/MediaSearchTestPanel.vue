@@ -69,7 +69,7 @@
       <li v-for="result in results" :key="result.point_id" class="result-item">
         <div class="result-main">
           <div class="result-heading">
-            <strong>{{ result.title || result.media_name }}</strong>
+            <strong>{{ result.title || result.asset_id }}</strong>
             <span class="media-kind">{{ t(`aiPanel.${result.media_kind}`) }}</span>
             <span v-if="result.validation_result?.verdict === 'uncertain'" class="review-state">
               {{ t('aiPanel.devtools.mediaSearch.review') }}
@@ -90,7 +90,7 @@
             }}</span>
           </div>
         </div>
-        <n-button size="tiny" quaternary @click="revealInLibrary(result.media_item_id)">
+        <n-button size="tiny" quaternary @click="revealInLibrary(result.localMediaId ?? '')">
           {{ t('aiPanel.devtools.mediaSearch.reveal') }}
         </n-button>
       </li>

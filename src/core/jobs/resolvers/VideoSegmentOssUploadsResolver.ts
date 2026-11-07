@@ -9,6 +9,7 @@ import {
   createVideoSegmentExportsRequest,
   createVideoSegmentOssUploadsRequest,
   getIndexableMediaItem,
+  segmentPlanKey,
   throwIfAborted,
   type MediaIndexSegmentInput,
   type MediaIndexingModule,
@@ -27,13 +28,15 @@ export class VideoSegmentOssUploadsResolver
   constructor(private readonly module: MediaIndexingModule) {}
 
   getKey(input: VideoSegmentOssUploadsInput): string {
-    return input.mediaId
+    return `${input.mediaId}:${segmentPlanKey(input.canonicalSegments)}`
   }
 
   async getDependencies(
     ctx: ResolveContext<VideoSegmentOssUploadsInput>,
   ): Promise<ResourceRequest[]> {
-    return [createVideoSegmentExportsRequest(ctx.input.mediaId)]
+    return [
+      createVideoSegmentExportsRequest(ctx.input.mediaId, undefined, ctx.input.canonicalSegments),
+    ]
   }
 
   async resolve(
@@ -44,7 +47,7 @@ export class VideoSegmentOssUploadsResolver
       throw new Error(`仅视频素材需要分片上传: ${mediaItem.id}`)
     }
     const exportResult = await ctx.ensure<VideoSegmentExportsResult>(
-      createVideoSegmentExportsRequest(ctx.input.mediaId),
+      createVideoSegmentExportsRequest(ctx.input.mediaId, undefined, ctx.input.canonicalSegments),
     )
     if (exportResult.exportPlans.length > 100) {
       throw new Error('视频分片超过索引任务的 100 段上限，请缩短素材')
@@ -139,7 +142,10 @@ export class VideoSegmentOssUploadsResolver
 
         uploadedSegments.push({
           mediaItemId: mediaItem.id,
+          segmentKey: plan.segment.segmentKey,
           segmentIndex: plan.segment.segmentIndex,
+          startFrame: plan.segment.startFrame,
+          endFrame: plan.segment.endFrame,
           startTimecode: framesToTimecode(plan.segment.startFrame),
           endTimecode: framesToTimecode(plan.segment.endFrame),
           durationN: plan.segment.durationN,
@@ -203,7 +209,10 @@ export class VideoSegmentOssUploadsResolver
 
         uploadedSegments.push({
           mediaItemId: mediaItem.id,
+          segmentKey: plan.segment.segmentKey,
           segmentIndex: plan.segment.segmentIndex,
+          startFrame: plan.segment.startFrame,
+          endFrame: plan.segment.endFrame,
           startTimecode: framesToTimecode(plan.segment.startFrame),
           endTimecode: framesToTimecode(plan.segment.endFrame),
           durationN: plan.segment.durationN,

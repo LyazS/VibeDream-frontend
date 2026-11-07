@@ -12,6 +12,7 @@ import {
   type MediaIndexTaskCompleteInput,
   type MediaIndexTaskCompleteResult,
   type MediaIndexTaskSubmitResult,
+  type MediaIndexingResult,
   type MediaIndexingModule,
   MEDIA_INDEX_TASK_COMPLETE_RESOURCE_TYPE,
 } from './mediaIndexingShared'
@@ -34,7 +35,9 @@ export class MediaIndexTaskCompleteResolver
     const mediaItem = this.module.getMediaItem(ctx.input.mediaId)
     const indexing = mediaItem?.metadata?.indexing
     const existingTaskId = canResumeMediaIndexingFromRemote(indexing)
-      ? ctx.input.taskId || indexing?.taskId
+      ? indexing?.manifestId
+        ? ctx.input.taskId || indexing?.taskId
+        : undefined
       : undefined
     // 已有待处理任务时跳过提交 Resolver，后续只重新订阅其进度。
     if (existingTaskId) {
@@ -50,7 +53,9 @@ export class MediaIndexTaskCompleteResolver
     const mediaItem = getIndexableMediaItem(this.module, ctx.input.mediaId)
     const indexing = mediaItem.metadata?.indexing
     const existingTaskId = canResumeMediaIndexingFromRemote(indexing)
-      ? ctx.input.taskId || indexing?.taskId
+      ? indexing?.manifestId
+        ? ctx.input.taskId || indexing?.taskId
+        : undefined
       : undefined
     const submitted = existingTaskId
       ? null
@@ -60,6 +65,51 @@ export class MediaIndexTaskCompleteResolver
     const taskId = existingTaskId || submitted?.taskId
     if (!taskId) {
       throw new Error(`索引任务缺少 taskId: ${mediaItem.id}`)
+    }
+
+    if (
+      submitted?.completed ||
+      (mediaItem.metadata?.indexing?.manifestId &&
+        mediaItem.metadata?.indexing?.indexStatus === 'completed')
+    ) {
+      const indexing = mediaItem.metadata?.indexing
+      const segmentCount = indexing && 'segmentCount' in indexing ? indexing.segmentCount || 0 : 0
+      const failedSegmentCount =
+        indexing && 'failedSegmentCount' in indexing ? indexing.failedSegmentCount || 0 : 0
+      const videoIndexing = indexing?.mediaKind === 'video' ? indexing : undefined
+      const result: MediaIndexingResult =
+        mediaItem.mediaType === 'image'
+          ? {
+              media_kind: 'image',
+              media_item_id: mediaItem.id,
+              asset_id: indexing?.assetId,
+              manifest_id: indexing?.manifestId,
+              indexed_count: segmentCount || 1,
+              summary: indexing?.summary,
+              indexed_at: indexing?.indexedAt,
+              metadata: { status: 'completed' },
+            }
+          : {
+              media_kind: 'video',
+              media_item_id: mediaItem.id,
+              asset_id: indexing?.assetId,
+              manifest_id: indexing?.manifestId,
+              segment_count: segmentCount,
+              indexed_count: segmentCount,
+              failed_segment_count: failedSegmentCount,
+              summary: indexing?.summary,
+              segment_summaries: videoIndexing?.segmentSummaries?.map((segment) => ({
+                segment_index: segment.segmentIndex,
+                start_timecode: segment.startTimecode,
+                end_timecode: segment.endTimecode,
+                title: segment.title,
+                summary: segment.summary,
+              })),
+              indexed_at: indexing?.indexedAt,
+              metadata: { status: 'completed' },
+            }
+      await persistMediaItem(mediaItem)
+      return { mediaId: mediaItem.id, taskId, result }
     }
 
     const controller = new AbortController()
