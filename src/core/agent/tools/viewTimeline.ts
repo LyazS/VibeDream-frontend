@@ -1,10 +1,15 @@
 import { useUnifiedStore } from '@/core/unifiedStore'
 import { framesToTimecode } from '@/core/utils/timeUtils'
-import type { ToolDefinition, ToolExecutionContext, ToolImageInput, ToolResult } from './types'
+import type { ToolDefinition, ToolExecutionContext, ToolResult } from './types'
 import {
+  createViewContactSheet,
+  describeViewContactSheet,
+  describeViewRegion,
+  drawViewCanvasContained,
   parseViewTimelineItems,
   runViewTool,
   viewSampleFrames,
+  type ViewReadResult,
   type ViewOptions,
 } from './viewShared'
 
@@ -29,24 +34,64 @@ export function executeViewTimeline(
       return {
         items,
         identify: () => '当前工程时间轴',
-        async read(item) {
-          const results: ToolImageInput[] = []
-          for (const frame of viewSampleFrames(item, duration)) {
+        async read(item): Promise<ViewReadResult> {
+          const frames = viewSampleFrames(item, duration)
+          if (!item.timeRange) {
             view.check()
+            const frame = frames[0]!
             const canvas = await capture.renderToCanvas(frame)
             view.check()
-            // 离屏画布会在下一帧复用，必须先把当前画面编码成独立 Blob。
-            results.push(
-              await view.encode(
-                canvas,
-                canvas.width,
-                canvas.height,
-                item,
-                `当前工程时间轴，at=${framesToTimecode(frame)}`,
-              ),
-            )
+            return {
+              images: [
+                await view.encode(
+                  canvas,
+                  canvas.width,
+                  canvas.height,
+                  item,
+                  `当前工程时间轴，at=${framesToTimecode(frame)}`,
+                ),
+              ],
+            }
           }
-          return results
+
+          const timecodes = frames.map(framesToTimecode)
+          let sheet: ReturnType<typeof createViewContactSheet> | undefined
+          try {
+            for (const [index, frame] of frames.entries()) {
+              view.check()
+              // capture 的画布可能在下一帧复用；drawFrame 会在这里立即拷贝到总画布。
+              const canvas = await capture.renderToCanvas(frame)
+              view.check()
+              sheet ??= createViewContactSheet(
+                timecodes.map((timecode) => ({ timecode })),
+                item.region,
+                view.signal,
+                view.check,
+                { width: canvas.width, height: canvas.height },
+              )
+              sheet.drawFrame(index, {
+                timecode: timecodes[index]!,
+                width: canvas.width,
+                height: canvas.height,
+                draw: (ctx, crop) => drawViewCanvasContained(ctx, canvas, crop),
+              })
+            }
+            const result = await sheet!.encode()
+            const note = describeViewContactSheet(item, timecodes, frames.length, result)
+            return {
+              images: [
+                {
+                  blob: result.blob,
+                  width: result.width,
+                  height: result.height,
+                  description: `当前工程时间轴 contact sheet，${note ?? ''}${describeViewRegion(item.region)}。`,
+                },
+              ],
+              note,
+            }
+          } finally {
+            sheet?.dispose()
+          }
         },
         dispose: () => capture.dispose(),
       }

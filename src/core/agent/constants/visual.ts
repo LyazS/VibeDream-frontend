@@ -12,8 +12,8 @@ export const AGENT_MAX_IMAGE_ENCODED_BYTES = 2 * 1024 * 1024
 /** 时间范围观察至少抽取的帧数。 */
 export const AGENT_VIEW_MIN_FRAME_COUNT = 2
 /** 单个时间范围最多抽取的帧数。 */
-export const AGENT_VIEW_MAX_FRAME_COUNT = AGENT_MAX_IMAGE_COUNT
+export const AGENT_VIEW_MAX_FRAME_COUNT = 25
 /** 单次观察工具最多接收的目标数量。 */
 export const AGENT_VIEW_MAX_ITEMS = AGENT_MAX_IMAGE_COUNT
 /** Agent 视觉观察在省略 frameCount 时采用的默认抽帧数。 */
-export const AGENT_VIEW_DEFAULT_FRAME_COUNT = AGENT_VIEW_MAX_FRAME_COUNT
+export const AGENT_VIEW_DEFAULT_FRAME_COUNT = AGENT_MAX_IMAGE_COUNT

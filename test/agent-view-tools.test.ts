@@ -3,7 +3,7 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { executeViewMedia } from '@/core/agent/tools/viewMedia'
 import { executeViewTimeline } from '@/core/agent/tools/viewTimeline'
 import { createToolRuntime } from '@/core/agent/runtime/ToolRuntime'
-import { viewSampleFrames } from '@/core/agent/tools/viewShared'
+import { viewContactSheetGrid, viewSampleFrames } from '@/core/agent/tools/viewShared'
 import { visualCrop } from '@/core/agent/services/agentImageService'
 import type { ToolExecutionContext } from '@/core/agent/tools/types'
 import { AgentSessionStore } from '@/core/agent/runtime/AgentSessionStore'
@@ -20,6 +20,7 @@ const mocks = vi.hoisted(() => ({
   sampleDraw: vi.fn(),
   sampleClose: vi.fn(),
   bitmapClose: vi.fn(),
+  fillText: vi.fn(),
 }))
 vi.mock('@/core/unifiedStore', () => ({
   useUnifiedStore: () => ({
@@ -46,11 +47,15 @@ function video() {
     id: 'video',
     mediaType: 'video',
     mediaStatus: 'ready',
+    duration: 300,
     name: 'Source',
     runtime: {
       bunny: {
         bunnyMedia: {
           getVideoDisplayRange: vi.fn().mockResolvedValue({ start: 2, end: 12 }),
+          videoSamplesAtTimestamps: () => vi.fn(),
+          audioBuffersFunc: () => null,
+          audioSamplesFunc: () => null,
           videoGetSample: () =>
             vi.fn(async (at: number) => ({
               timestamp: Math.floor((at - 2) * 2) / 2 + 2,
@@ -87,12 +92,22 @@ beforeEach(() => {
   mocks.render.mockResolvedValue({ width: 1920, height: 1080 })
   vi.stubGlobal('createImageBitmap', vi.fn().mockResolvedValue(bitmap))
   vi.stubGlobal('document', {
-    createElement: () => ({
-      width: 0,
-      height: 0,
-      getContext: () => ({ clearRect: vi.fn(), drawImage: mocks.draw }),
-      toBlob: (done: BlobCallback) => done(new Blob(['encoded'], { type: 'image/webp' })),
-    }),
+    createElement: () => {
+      const canvas = {
+        width: 0,
+        height: 0,
+        getContext: () => context,
+        toBlob: (done: BlobCallback) => done(new Blob(['encoded'], { type: 'image/webp' })),
+      }
+      const context = {
+        canvas,
+        clearRect: vi.fn(),
+        drawImage: mocks.draw,
+        fillRect: vi.fn(),
+        fillText: mocks.fillText,
+      }
+      return canvas
+    },
   })
 })
 afterEach(() => {
@@ -126,7 +141,7 @@ it.each([
   expect(mocks.ensureMediaReady).not.toHaveBeenCalled()
 })
 
-it('enforces a strict shared schema and reserves the entire image budget before decoding', async () => {
+it('enforces a strict shared schema and validates the output item budget before decoding', async () => {
   const runtime = createToolRuntime()
   expect(() =>
     runtime.validate({ id: 'c', name: 'view_timeline', args: { items: [{}] } }),
@@ -142,18 +157,29 @@ it('enforces a strict shared schema and reserves the entire image budget before 
   ).toThrow()
   const result = await executeViewMedia(
     {
-      items: [
-        {
-          source: { kind: 'media', mediaId: 'video' },
-          timeRange: { start: '00:00:00+00', end: '00:00:01+00', frameCount: 9 },
-        },
-        { source: { kind: 'attachment', attachmentId: 'a' } },
-      ],
+      items: Array.from({ length: 10 }, (_, index) => ({
+        source: { kind: 'attachment', attachmentId: `a${index}` },
+      })),
     },
     context,
   )
-  expect(result.output).toContain('visual_budget_exceeded')
+  expect(result.output).toContain('invalid_arguments')
   expect(mocks.getMediaItem).not.toHaveBeenCalled()
+})
+
+it('uses a near-square grid and labels each rendered frame below its tile', async () => {
+  expect(viewContactSheetGrid(2)).toEqual({ rows: 2, columns: 2 })
+  expect(viewContactSheetGrid(17)).toEqual({ rows: 4, columns: 5 })
+  expect(viewContactSheetGrid(25)).toEqual({ rows: 5, columns: 5 })
+
+  await executeViewTimeline(
+    {
+      items: [{ timeRange: { start: '00:00:01+00', end: '00:00:02+00', frameCount: 2 } }],
+    },
+    context,
+  )
+  expect(mocks.fillText).toHaveBeenCalledWith('00:00:01+00', expect.any(Number), expect.any(Number))
+  expect(mocks.fillText).toHaveBeenCalledWith('00:00:01+29', expect.any(Number), expect.any(Number))
 })
 
 it('rounds crop boundaries outward in original oriented display coordinates', async () => {
@@ -237,10 +263,40 @@ it('samples half-open editing ticks, deduplicates actual video frames and labels
   )
   expect(result.success).toBe(true)
   expect(result.attachIds).toHaveLength(1)
-  expect(result.output).toContain('请求 9 帧，去重后返回 1 帧')
-  expect(staged[0]!.description).toContain('at=00:00:00+00')
+  expect(result.output).toContain('请求 9 帧，去重后实际绘制 1 帧')
+  expect(result.output).toContain('网格 1×1')
+  expect(staged[0]!.description).toContain('视频 contact sheet')
   expect(mocks.sampleDraw).toHaveBeenCalledOnce()
   expect(mocks.sampleClose).toHaveBeenCalledTimes(9)
+})
+
+it('rounds decoder duration boundaries before validating an exact end timecode', async () => {
+  const media = video(),
+    bunny = media.runtime.bunny.bunnyMedia
+  bunny.getVideoDisplayRange = vi.fn().mockResolvedValue({ start: 0, end: 8.2 })
+  bunny.videoGetSample = () =>
+    vi.fn(async (at: number) => ({
+      timestamp: Math.floor(at * 2) / 2,
+      duration: 0.5,
+      displayWidth: 1920,
+      displayHeight: 1080,
+      drawWithFit: mocks.sampleDraw,
+      close: mocks.sampleClose,
+    }))
+  mocks.getMediaItem.mockReturnValue(media)
+  const result = await executeViewMedia(
+    {
+      items: [
+        {
+          source: { kind: 'media', mediaId: 'video' },
+          timeRange: { start: '00:00:00+00', end: '00:00:08+06', frameCount: 2 },
+        },
+      ],
+    },
+    context,
+  )
+  expect(result.success).toBe(true)
+  expect(result.output).not.toContain('time_out_of_range')
 })
 
 it('keeps successful targets but drops an entire range if any necessary frame fails', async () => {
@@ -300,14 +356,13 @@ it('shares one timeline snapshot across items without deduplicating composition 
     },
     context,
   )
-  expect(result.attachIds).toHaveLength(3)
+  expect(result.attachIds).toHaveLength(2)
   expect(mocks.createCapture).toHaveBeenCalledOnce()
   expect(mocks.render.mock.calls.map(([frame]) => frame)).toEqual([0, 30, 59])
-  expect(staged.map((i) => i.description)).toEqual([
-    '当前工程时间轴，at=00:00:00+00，完整画面。',
-    '当前工程时间轴，at=00:00:01+00，完整画面。',
-    '当前工程时间轴，at=00:00:01+29，完整画面。',
-  ])
+  expect(staged[0]!.description).toContain('当前工程时间轴，at=00:00:00+00')
+  expect(staged[1]!.description).toContain('当前工程时间轴 contact sheet')
+  expect(result.output).toContain('时间范围 [00:00:01+00, 00:00:02+00)')
+  expect(result.output).toContain('网格 2×2')
   expect(mocks.dispose).toHaveBeenCalledOnce()
 })
 
@@ -317,23 +372,19 @@ it('cancels a pending native video decode promptly and closes its late sample', 
       resolve = done
     }),
     media = video()
-  media.runtime.bunny.bunnyMedia.videoGetSample = () => vi.fn().mockReturnValue(pending)
+  media.runtime.bunny.bunnyMedia.videoGetSample = vi.fn(() => vi.fn().mockReturnValue(pending))
   mocks.getMediaItem.mockReturnValue(media)
   const running = executeViewMedia(
     { items: [{ source: { kind: 'media', mediaId: 'video' }, at: '00:00:00+00' }] },
     context,
   )
-  await vi.waitFor(() =>
-    expect(media.runtime.bunny.bunnyMedia.getVideoDisplayRange).toHaveBeenCalled(),
-  )
+  await vi.waitFor(() => expect(media.runtime.bunny.bunnyMedia.videoGetSample).toHaveBeenCalled())
   await Promise.resolve()
   await Promise.resolve()
   controller.abort()
   expect((await running).output).toContain('cancelled')
   // 原生解码在取消后才返回，迟到的视频帧仍须关闭且不能进入结果。
   resolve({ close: mocks.sampleClose })
-  await Promise.resolve()
-  await Promise.resolve()
-  expect(mocks.sampleClose).toHaveBeenCalledOnce()
+  await vi.waitFor(() => expect(mocks.sampleClose).toHaveBeenCalledOnce())
   expect(staged).toEqual([])
 })

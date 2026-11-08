@@ -1,15 +1,20 @@
 import { useUnifiedStore } from '@/core/unifiedStore'
 import { framesToTimecode } from '@/core/utils/timeUtils'
 import { abortable } from '@/core/utils/abortable'
+import { BunnyClip } from '@/core/mediabunny/bunny-clip'
 import { AgentSessionStore } from '../runtime/AgentSessionStore'
 import { readAgentImageSource } from '../services/agentImageService'
-import type { ToolDefinition, ToolExecutionContext, ToolImageInput, ToolResult } from './types'
+import type { ToolDefinition, ToolExecutionContext, ToolResult } from './types'
 import {
+  createViewContactSheet,
+  describeViewContactSheet,
+  describeViewRegion,
   parseViewMediaItems,
   runViewTool,
   viewError,
   viewSampleFrames,
   type ViewExecution,
+  type ViewReadResult,
   type ViewMediaItem,
   type ViewOptions,
 } from './viewShared'
@@ -37,21 +42,21 @@ export function executeViewMedia(
     item: ViewOptions,
     description: string,
     view: ViewExecution,
-  ): Promise<ToolImageInput[]> {
+  ): Promise<ViewReadResult> {
     const bitmap = await abortable(
       createImageBitmap(blob, { imageOrientation: 'from-image' }),
       view.signal,
       (late) => late.close(),
     )
     try {
-      return [await view.encode(bitmap, bitmap.width, bitmap.height, item, description)]
+      return { images: [await view.encode(bitmap, bitmap.width, bitmap.height, item, description)] }
     } finally {
       bitmap.close()
     }
   }
 
   /** 每个目标独立读取；任意必要帧失败时丢弃该目标此前编码的所有帧。 */
-  async function readMedia(item: ViewMediaItem, view: ViewExecution): Promise<ToolImageInput[]> {
+  async function readMedia(item: ViewMediaItem, view: ViewExecution): Promise<ViewReadResult> {
     const { signal, check, encode } = view
     const source = item.source
     if (source.kind === 'attachment') {
@@ -96,59 +101,117 @@ export function executeViewMedia(
       // 素材库位图由素材运行时持有，此处仅借用绘制，不关闭共享资源。
       const bitmap = media.runtime.bunny?.imageClip
       if (!bitmap) throw viewError('frame_unavailable', '素材图片未能解码。')
-      return [
-        await encode(
-          bitmap,
-          bitmap.width,
-          bitmap.height,
-          item,
-          `素材 ${source.mediaId}（${name}）`,
-        ),
-      ]
+      return {
+        images: [
+          await encode(
+            bitmap,
+            bitmap.width,
+            bitmap.height,
+            item,
+            `素材 ${source.mediaId}（${name}）`,
+          ),
+        ],
+      }
     }
     const bunny = media.runtime.bunny?.bunnyMedia
     if (!bunny) throw viewError('frame_unavailable', '视频解码器不可用。')
-    const range = await abortable(bunny.getVideoDisplayRange(), signal)
-    check()
-    const frames = viewSampleFrames(item, (range.end - range.start) * 30)
-    const getSample = bunny.videoGetSample()
-    if (!getSample) throw viewError('frame_unavailable', '素材没有可用视频轨道。')
+    // 素材时长已经由导入/解码阶段写入 media.duration（统一帧数），是编辑器配置的权威值。
+    const durationFrames = media.duration
+    if (
+      typeof durationFrames !== 'number' ||
+      !Number.isFinite(durationFrames) ||
+      durationFrames <= 0
+    )
+      throw viewError('frame_unavailable', '素材没有可用的帧数时长。')
+    const frames = viewSampleFrames(item, durationFrames)
+    const clip = new BunnyClip(bunny)
     const timestamps = new Set<number>(),
-      results: ToolImageInput[] = []
-    for (const frame of frames) {
-      check()
-      // 原素材时间从首个可显示时间戳起算，不能直接把相对时间当成解码时间戳。
-      const at = range.start + frame / 30
-      const sample = await abortable(getSample(at), signal, (late) => late?.close())
-      try {
+      sampled: Array<{
+        frame: number
+        sample: NonNullable<Awaited<ReturnType<typeof clip.getSampleN>>['video']>
+      }> = []
+    try {
+      for (const frame of frames) {
         check()
-        if (
-          !sample ||
-          at + 1e-6 < sample.timestamp ||
-          at >= sample.timestamp + sample.duration + 1e-6
+        // 与编辑器其他取帧路径一致：frame 是素材相对时间的统一帧号。
+        const sampleResult = await abortable(clip.getSampleN(BigInt(frame)), signal, (late) =>
+          late?.video?.close(),
         )
-          throw viewError('frame_unavailable', `at=${framesToTimecode(frame)} 没有可用视频帧。`)
-        // 多个编辑帧可能命中同一视频帧，按实际解码时间戳去重。
-        if (timestamps.has(sample.timestamp)) continue
-        timestamps.add(sample.timestamp)
-        results.push(
-          await encode(
-            (ctx, crop) =>
+        const sample = sampleResult.video
+        try {
+          check()
+          if (sampleResult.state !== 'success' || !sample)
+            throw viewError('frame_unavailable', `at=${framesToTimecode(frame)} 没有可用视频帧。`)
+          // 单帧观察保持原有输出；范围观察稍后把所有唯一帧拼成一张 contact sheet。
+          if (!item.timeRange) {
+            const image = await encode(
+              (ctx, crop) =>
+                sample.drawWithFit(ctx, {
+                  fit: 'fill',
+                  crop: { left: crop.x, top: crop.y, width: crop.width, height: crop.height },
+                }),
+              sample.displayWidth,
+              sample.displayHeight,
+              item,
+              `素材 ${source.mediaId}（${name}），at=${framesToTimecode(frame)}`,
+            )
+            sample.close()
+            return { images: [image] }
+          }
+          // 多个编辑帧可能命中同一视频帧，按实际解码时间戳去重。
+          if (timestamps.has(sample.timestamp)) {
+            sample.close()
+            continue
+          }
+          timestamps.add(sample.timestamp)
+          sampled.push({ frame, sample })
+        } catch (error) {
+          sample?.close()
+          throw error
+        }
+      }
+      if (!sampled.length) throw viewError('frame_unavailable', '范围内没有可用视频帧。')
+      const timecodes = sampled.map(({ frame }) => framesToTimecode(frame))
+      const sheet = createViewContactSheet(
+        timecodes.map((timecode) => ({ timecode })),
+        item.region,
+        signal,
+        check,
+        { width: sampled[0]!.sample.displayWidth, height: sampled[0]!.sample.displayHeight },
+      )
+      try {
+        sampled.forEach(({ sample }, index) => {
+          sheet.drawFrame(index, {
+            timecode: timecodes[index]!,
+            width: sample.displayWidth,
+            height: sample.displayHeight,
+            draw: (ctx, crop) =>
               sample.drawWithFit(ctx, {
-                fit: 'fill',
+                fit: 'contain',
                 crop: { left: crop.x, top: crop.y, width: crop.width, height: crop.height },
               }),
-            sample.displayWidth,
-            sample.displayHeight,
-            item,
-            `素材 ${source.mediaId}（${name}），at=${framesToTimecode(frame)}`,
-          ),
-        )
+          })
+        })
+        const result = await sheet.encode()
+        const note = describeViewContactSheet(item, timecodes, frames.length, result)
+        return {
+          images: [
+            {
+              blob: result.blob,
+              width: result.width,
+              height: result.height,
+              description: `素材 ${source.mediaId}（${name}）视频 contact sheet，${note ?? ''}${describeViewRegion(item.region)}。`,
+            },
+          ],
+          note,
+        }
       } finally {
-        sample?.close()
+        sheet.dispose()
       }
+    } finally {
+      sampled.forEach(({ sample }) => sample.close())
+      await clip.dispose()
     }
-    return results
   }
 }
 
