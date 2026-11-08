@@ -16,6 +16,7 @@ export type EvalTurnStatus =
 export interface EvalSnapshot {
   project: {
     config: unknown
+    directories: unknown[]
     tracks: unknown[]
     timelineItems: unknown[]
     mediaItems: unknown[]
@@ -90,7 +91,10 @@ export interface AgentEval {
   }): Promise<{ projectId: string; sessionId: string; snapshot: EvalSnapshot }>
   warmupIndex(): Promise<EvalIndexWarmupResult>
   exportWorkspace(): Promise<Array<{ path: string; base64: string }>>
-  send(text: string): Promise<{ turnId: string }>
+  send(
+    text: string,
+    attachments?: Array<{ url: string; sha256?: string }>,
+  ): Promise<{ turnId: string }>
   answer(text: string): Promise<{ turnId: string }>
   wait(turnId: string, options?: { timeoutMs?: number }): Promise<EvalTurnResult>
   snapshot(): Promise<EvalSnapshot>

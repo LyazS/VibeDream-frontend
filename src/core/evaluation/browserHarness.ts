@@ -80,6 +80,7 @@ function createSnapshot(store: ReturnType<typeof useUnifiedStore>): EvalSnapshot
         videoResolution: store.videoResolution,
         timelineDurationFrames: store.timelineDurationFrames,
       }),
+      directories: stable(Array.from(store.directories.values())) as unknown[],
       tracks: stable(store.tracks) as unknown[],
       timelineItems: stable(store.timelineItems) as unknown[],
       mediaItems: stable(store.mediaItems) as unknown[],
@@ -296,9 +297,26 @@ function installBrowserHarness(): AgentEval {
       if (!prepared) throw new Error('PREPARE_REQUIRED')
       return collectWorkspaceFiles(fileSystemService.paths.getProjectPath(store.projectId))
     },
-    async send(text) {
-      if (!text.trim()) throw new Error('EMPTY_AGENT_MESSAGE')
+    async send(text, attachments = []) {
+      if (!text.trim() && attachments.length === 0) throw new Error('EMPTY_AGENT_MESSAGE')
+      for (const attachment of attachments) {
+        const response = await fetch(attachment.url)
+        if (!response.ok) throw new Error(`ATTACHMENT_FETCH_FAILED:${response.status}`)
+        const blob = await response.blob()
+        if (attachment.sha256 && (await sha256(blob)) !== attachment.sha256.toLowerCase()) {
+          throw new Error('ATTACHMENT_CHECKSUM_MISMATCH')
+        }
+        store.addAgentDraftImages([blob])
+      }
       store.setAgentDraftText(text)
+      const attachmentDeadline = Date.now() + DEFAULT_TIMEOUT_MS
+      while (attachments.length > 0) {
+        const images = store.agentDraft?.images ?? []
+        if (images.some((image) => image.status === 'failed')) throw new Error('ATTACHMENT_PROCESS_FAILED')
+        if (images.length >= attachments.length && images.every((image) => image.status === 'ready')) break
+        if (Date.now() >= attachmentDeadline) throw new Error('ATTACHMENT_PROCESS_TIMEOUT')
+        await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL_MS))
+      }
       if (String(store.agentDraft?.text ?? '') !== text) {
         throw new Error(
           `AGENT_DRAFT_NOT_UPDATED:editable=${String(store.agentDraftEditable)}:text=${String(store.agentDraft?.text)}`,
