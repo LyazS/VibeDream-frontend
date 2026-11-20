@@ -5,11 +5,8 @@ import type { UnifiedMediaBunnyModule } from '@/core/modules/UnifiedMediaBunnyMo
 
 /**
  * 播放控制管理模块
- * 负责管理播放状态和时间控制
- *
- * 架构说明：
- * - UnifiedPlaybackModule 作为主控，管理所有播放状态
- * - 通过 MediaBunny 模块进行实际的渲染
+ * 统一更新播放头位置和播放状态，对外提供只读状态与播放命令。
+ * 播放时根据 MediaBunny 上报的时钟帧推进播放头，播完后在这里收尾。
  */
 export function createUnifiedPlaybackModule(registry: ModuleRegistry) {
   // ==================== 状态定义 ====================
@@ -18,6 +15,9 @@ export function createUnifiedPlaybackModule(registry: ModuleRegistry) {
   const currentFrame = ref(0) // 当前UI播放帧数（整数）
   const isPlaying = ref(false) // 是否正在播放
   const playbackRate = ref(1) // 播放速度倍率
+  // 播放请求序号。开始准备播放或调用 pauseAtFrame() 时递增。
+  // 等待音频设备就绪后核对序号，防止过期请求重新启动播放。
+  let playRequestN = 0
 
   // ==================== 计算属性 ====================
 
@@ -48,30 +48,11 @@ export function createUnifiedPlaybackModule(registry: ModuleRegistry) {
   // ==================== 播放控制方法 ====================
 
   /**
-   * 设置当前播放帧数
-   * @param frames 帧数
-   * @param forceAlign 是否强制对齐到整数帧
+   * 同步更新播放头帧号，供用户定位、播放推进和暂停使用。
+   * 暂停时由 MediaBunny 监听帧号变化，节流调度解码和画布预览。
    */
-  function setCurrentFrame(frames: number) {
-    const finalFrames = alignFramesToFrame(frames)
-    const clampedFrames = Math.max(0, finalFrames)
-
-    if (currentFrame.value !== clampedFrames) {
-      currentFrame.value = clampedFrames
-    }
-  }
-
-  /**
-   * 跳转到指定帧数
-   * @param frames 目标帧数
-   */
-  async function seekToFrame(frames: number): Promise<void> {
-    // const mediabunny = registry.get<UnifiedMediaBunnyModule>(MODULE_NAMES.MEDIABUNNY)
-    // if (mediabunny.isMediaBunnyAvailable()) {
-    //   await mediabunny.seekToFrame(frames)
-    // }
-    setCurrentFrame(frames)
-    console.log('🎯 跳转到帧:', frames, `(${framesToTimecode(frames)})`)
+  function seekToFrame(frameN: number): void {
+    currentFrame.value = Math.max(0, alignFramesToFrame(frameN))
   }
 
   /**
@@ -86,46 +67,58 @@ export function createUnifiedPlaybackModule(registry: ModuleRegistry) {
   }
 
   /**
-   * 播放
+   * 等待音频设备就绪后，从此时最新的播放头位置开始播放。
    */
   async function play(): Promise<void> {
     const mediabunny = registry.get<UnifiedMediaBunnyModule>(MODULE_NAMES.MEDIABUNNY)
-    if (mediabunny.isMediaBunnyAvailable()) {
-      await mediabunny.startPlayback()
-    }
+    if (isPlaying.value || !mediabunny.isMediaBunnyAvailable()) return
+
+    const requestN = ++playRequestN
+    const ready = await mediabunny.preparePlayback()
+    if (!ready || requestN !== playRequestN || !mediabunny.isMediaBunnyAvailable()) return
+
+    mediabunny.startPlayback(currentFrame.value)
     setPlaying(true)
+  }
+
+  /** 暂停、停止和自然播完都在这里更新播放头并清理音频，画布继续预览指定帧。 */
+  function pauseAtFrame(frameN: number, clearBuffers = false): void {
+    // 暂停、停止和播完都会取消尚在等待 AudioContext 恢复的播放请求。
+    playRequestN++
+    setPlaying(false)
+    seekToFrame(frameN)
+    const mediabunny = registry.get<UnifiedMediaBunnyModule>(MODULE_NAMES.MEDIABUNNY)
+    mediabunny.stopPlayback(currentFrame.value, clearBuffers)
+  }
+
+  function onPreviewFrame(frameN: number): void {
+    if (isPlaying.value) seekToFrame(frameN)
+  }
+
+  /** 自然播完时停在时间轴末尾，并复用手动暂停的清理流程。 */
+  function onPreviewEnded(endFrameN: number): void {
+    if (isPlaying.value) pauseAtFrame(endFrameN)
   }
 
   /**
    * 暂停
    */
   async function pause(): Promise<void> {
-    const mediabunny = registry.get<UnifiedMediaBunnyModule>(MODULE_NAMES.MEDIABUNNY)
-    if (mediabunny.isMediaBunnyAvailable()) {
-      await mediabunny.stopPlayback()
-    }
-    setPlaying(false)
+    pauseAtFrame(currentFrame.value)
   }
 
   /**
    * 切换播放/暂停状态
    */
-  function togglePlayPause() {
-    setPlaying(!isPlaying.value)
-    console.log('⏯️ 切换播放状态:', isPlaying.value ? '播放' : '暂停')
+  function togglePlayPause(): Promise<void> {
+    return isPlaying.value ? pause() : play()
   }
 
   /**
    * 停止播放并回到开始
    */
   async function stop(): Promise<void> {
-    const mediabunny = registry.get<UnifiedMediaBunnyModule>(MODULE_NAMES.MEDIABUNNY)
-    if (mediabunny.isMediaBunnyAvailable()) {
-      await mediabunny.stopPlayback()
-      await mediabunny.seekToFrame(0)
-    }
-    setPlaying(false)
-    setCurrentFrame(0)
+    pauseAtFrame(0, true)
     console.log('⏹️ 停止播放')
   }
 
@@ -161,8 +154,7 @@ export function createUnifiedPlaybackModule(registry: ModuleRegistry) {
    * 重置播放状态为默认值
    */
   function resetToDefaults() {
-    currentFrame.value = 0
-    isPlaying.value = false
+    pauseAtFrame(0, true)
     playbackRate.value = 1
     console.log('🔄 播放状态已重置为默认值')
   }
@@ -171,8 +163,8 @@ export function createUnifiedPlaybackModule(registry: ModuleRegistry) {
 
   return {
     // 状态
-    currentFrame,
-    isPlaying,
+    currentFrame: computed(() => currentFrame.value),
+    isPlaying: computed(() => isPlaying.value),
     playbackRate,
 
     // 计算属性
@@ -180,11 +172,9 @@ export function createUnifiedPlaybackModule(registry: ModuleRegistry) {
     playbackRateText,
 
     // 帧数控制方法
-    setCurrentFrame,
     seekToFrame,
 
     // 播放控制方法
-    setPlaying,
     play,
     pause,
     togglePlayPause,
@@ -192,6 +182,10 @@ export function createUnifiedPlaybackModule(registry: ModuleRegistry) {
     setPlaybackRate,
     resetPlaybackRate,
     resetToDefaults,
+
+    // 预览引擎事件，由 store 在装配时绑定。
+    onPreviewFrame,
+    onPreviewEnded,
   }
 }
 

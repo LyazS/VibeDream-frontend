@@ -109,7 +109,7 @@ const handleMouseMove = (event: MouseEvent) => {
     }
 
     // 更新当前帧（使用四舍五入而不是向下取整）
-    unifiedStore.setCurrentFrame(Math.max(0, Math.round(frame)))
+    unifiedStore.seekToFrame(Math.max(0, Math.round(frame)))
   }
 }
 

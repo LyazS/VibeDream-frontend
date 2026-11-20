@@ -11,6 +11,6 @@ export default defineConfig({
   test: {
     environment: 'node',
     globals: true,
-    include: ['test/media-analysis.test.ts'],
+    include: ['test/media-analysis.test.ts', 'test/preview-playback.test.ts'],
   },
 })

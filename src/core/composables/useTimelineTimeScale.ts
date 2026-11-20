@@ -247,7 +247,7 @@ export function useTimelineTimeScale(scaleContainer: Ref<HTMLElement | undefined
    */
   function handleTimeScaleClick(event: MouseEvent) {
     const frame = calculateFrameFromClick(event)
-    unifiedStore.setCurrentFrame(Math.round(frame))
+    unifiedStore.seekToFrame(Math.round(frame))
   }
 
   /**
@@ -262,7 +262,7 @@ export function useTimelineTimeScale(scaleContainer: Ref<HTMLElement | undefined
     // 开始拖拽，设置拖拽状态
     isDragging.value = true
     const frame = calculateFrameFromClick(event)
-    unifiedStore.setCurrentFrame(Math.round(frame))
+    unifiedStore.seekToFrame(Math.round(frame))
 
     // 添加全局鼠标事件监听器，处理拖拽到区域外的情况
     document.addEventListener('mousemove', handleGlobalMouseMove)
@@ -298,7 +298,7 @@ export function useTimelineTimeScale(scaleContainer: Ref<HTMLElement | undefined
         }
       }
 
-      unifiedStore.setCurrentFrame(Math.round(frame))
+      unifiedStore.seekToFrame(Math.round(frame))
     }
   }
 
@@ -346,7 +346,7 @@ export function useTimelineTimeScale(scaleContainer: Ref<HTMLElement | undefined
         }
       }
 
-      unifiedStore.setCurrentFrame(Math.round(frame))
+      unifiedStore.seekToFrame(Math.round(frame))
     }
   }
 

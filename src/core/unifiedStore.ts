@@ -134,9 +134,16 @@ export const useUnifiedStore = defineStore('unified', () => {
   const unifiedUserModule = createUnifiedUserModule(registry)
   registry.register(MODULE_NAMES.USER, unifiedUserModule)
 
+  // 在 store 装配只读播放状态和引擎回调，播放状态由 Playback 统一更新。
   const unifiedMediaBunnyModule = createUnifiedMediaBunnyModule(
     registry,
     unifiedViewportModule.contentEndTimeFrames,
+    {
+      currentFrame: unifiedPlaybackModule.currentFrame,
+      isPlaying: unifiedPlaybackModule.isPlaying,
+      onFrame: unifiedPlaybackModule.onPreviewFrame,
+      onEnded: unifiedPlaybackModule.onPreviewEnded,
+    },
   )
   registry.register(MODULE_NAMES.MEDIABUNNY, unifiedMediaBunnyModule)
 
@@ -649,11 +656,9 @@ export const useUnifiedStore = defineStore('unified', () => {
     playbackRateText: unifiedPlaybackModule.playbackRateText,
 
     // 帧数控制方法
-    setCurrentFrame: unifiedPlaybackModule.setCurrentFrame,
     seekToFrame: unifiedPlaybackModule.seekToFrame,
 
     // 播放控制方法
-    setPlaying: unifiedPlaybackModule.setPlaying,
     play: unifiedPlaybackModule.play,
     pause: unifiedPlaybackModule.pause,
     togglePlayPause: unifiedPlaybackModule.togglePlayPause,
@@ -692,13 +697,10 @@ export const useUnifiedStore = defineStore('unified', () => {
 
     // MediaBunny画布管理
     setMediaBunnyCanvas: unifiedMediaBunnyModule.setCanvas,
-    destroyMediaBunny: unifiedMediaBunnyModule.destroy,
-
-    // MediaBunny播放控制
-    mediaBunnyStartPlayback: unifiedMediaBunnyModule.startPlayback,
-    mediaBunnyStopPlayback: unifiedMediaBunnyModule.stopPlayback,
-    mediaBunnySeekToFrame: unifiedMediaBunnyModule.seekToFrame,
-    updateMediaBunnyTimelineDuration: unifiedMediaBunnyModule.updateTimelineDuration,
+    async destroyMediaBunny() {
+      await unifiedPlaybackModule.pause()
+      await unifiedMediaBunnyModule.destroy()
+    },
 
     // MediaBunny截帧功能
     createTimelineFrameCaptureSession: unifiedMediaBunnyModule.createFrameCaptureSession,
@@ -708,7 +710,6 @@ export const useUnifiedStore = defineStore('unified', () => {
 
     // MediaBunny工具方法
     isMediaBunnyAvailable: unifiedMediaBunnyModule.isMediaBunnyAvailable,
-    resetMediaBunnyToDefaults: unifiedMediaBunnyModule.resetToDefaults,
 
     // ==================== 统一视口模块状态和方法 ====================
 

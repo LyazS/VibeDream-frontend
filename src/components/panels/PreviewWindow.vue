@@ -71,11 +71,7 @@ const isPlaying = computed(() => unifiedStore.isPlaying)
 
 // 统一播放控制接口
 function togglePlayPause() {
-  if (isPlaying.value) {
-    unifiedStore.pause()
-  } else {
-    unifiedStore.play()
-  }
+  void unifiedStore.togglePlayPause()
 }
 
 function stop() {
