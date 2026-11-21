@@ -7,7 +7,7 @@ export class IndexedDBService {
   private db: IDBDatabase | null = null
 
   private readonly DB_NAME = 'VideoEditorDB'
-  private readonly DB_VERSION = 8
+  private readonly DB_VERSION = 9
 
   // 私有构造函数，确保单例
   private constructor() {}
@@ -51,6 +51,10 @@ export class IndexedDBService {
           db.createObjectStore('handles')
         }
 
+        for (const name of ['workspaceIdentities', 'linkedMediaHandles']) {
+          if (!db.objectStoreNames.contains(name)) db.createObjectStore(name)
+        }
+
         // 重建聊天存储，清除旧会话及本地调用/工具诊断记录；保留日志补传队列。
         if (event.oldVersion < 6) {
           for (const name of ['agentSessions', 'agentTurns', 'agentModelCalls', 'agentTools']) {
@@ -77,16 +81,18 @@ export class IndexedDBService {
     storeName: string,
     mode: IDBTransactionMode,
     operation: (store: IDBObjectStore) => IDBRequest<T>,
+    options?: IDBTransactionOptions,
   ): Promise<T> {
     const db = await this.openDB()
 
     return new Promise((resolve, reject) => {
-      const transaction = db.transaction(storeName, mode)
+      const transaction = db.transaction(storeName, mode, options)
       const store = transaction.objectStore(storeName)
       const request = operation(store)
 
-      request.onsuccess = () => resolve(request.result)
-      request.onerror = () => reject(request.error)
+      transaction.oncomplete = () => resolve(request.result)
+      transaction.onabort = () =>
+        reject(transaction.error ?? request.error ?? new DOMException('事务已中止', 'AbortError'))
     })
   }
 

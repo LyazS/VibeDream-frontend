@@ -52,6 +52,12 @@ export interface IFileSystemAdapter {
    */
   getWorkspaceInfo(): Promise<WorkspaceInfo | null>
 
+  /** Stable across reloads and distinct for each workspace on this origin. */
+  getWorkspaceKey(): string | null
+
+  /** OPFS cannot contain a file chosen by a native picker. */
+  getManagedProjectsRoot?(): Promise<FileSystemDirectoryHandle | null>
+
   // ==================== 文件操作 ====================
 
   /**

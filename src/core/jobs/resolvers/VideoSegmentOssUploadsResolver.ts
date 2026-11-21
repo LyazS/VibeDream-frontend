@@ -8,7 +8,8 @@ import {
   buildFrameFileName,
   createVideoSegmentExportsRequest,
   createVideoSegmentOssUploadsRequest,
-  getIndexableMediaItem,
+  getVideoForIndex,
+  videoIndexSourceKey,
   segmentPlanKey,
   throwIfAborted,
   type MediaIndexSegmentInput,
@@ -28,26 +29,35 @@ export class VideoSegmentOssUploadsResolver
   constructor(private readonly module: MediaIndexingModule) {}
 
   getKey(input: VideoSegmentOssUploadsInput): string {
-    return `${input.mediaId}:${segmentPlanKey(input.canonicalSegments)}`
+    return `${videoIndexSourceKey(input)}:${segmentPlanKey(input.canonicalSegments)}`
   }
 
   async getDependencies(
     ctx: ResolveContext<VideoSegmentOssUploadsInput>,
   ): Promise<ResourceRequest[]> {
     return [
-      createVideoSegmentExportsRequest(ctx.input.mediaId, undefined, ctx.input.canonicalSegments),
+      createVideoSegmentExportsRequest(
+        ctx.input.mediaId,
+        undefined,
+        ctx.input.canonicalSegments,
+        ctx.input.verifiedDigest,
+      ),
     ]
   }
 
   async resolve(
     ctx: ResolveContext<VideoSegmentOssUploadsInput>,
   ): Promise<VideoSegmentOssUploadsResult> {
-    const mediaItem = getIndexableMediaItem(this.module, ctx.input.mediaId)
-    if (mediaItem.mediaType !== 'video') {
-      throw new Error(`仅视频素材需要分片上传: ${mediaItem.id}`)
-    }
+    const mediaItem = getVideoForIndex(this.module, ctx.input)
+    const getMediaItem = (id: string | null) =>
+      id === mediaItem.id ? mediaItem : this.module.getMediaItem(id)
     const exportResult = await ctx.ensure<VideoSegmentExportsResult>(
-      createVideoSegmentExportsRequest(ctx.input.mediaId, undefined, ctx.input.canonicalSegments),
+      createVideoSegmentExportsRequest(
+        ctx.input.mediaId,
+        undefined,
+        ctx.input.canonicalSegments,
+        ctx.input.verifiedDigest,
+      ),
     )
     if (exportResult.exportPlans.length > 100) {
       throw new Error('视频分片超过索引任务的 100 段上限，请缩短素材')
@@ -80,7 +90,7 @@ export class VideoSegmentOssUploadsResolver
 
         const videoBlob = await exportTimelineItem({
           timelineItem,
-          getMediaItem: this.module.getMediaItem,
+          getMediaItem,
           ...plan.exportOptions,
         })
 
@@ -107,7 +117,7 @@ export class VideoSegmentOssUploadsResolver
 
         const frameBlobs = await exportVideoFrames({
           timelineItem,
-          getMediaItem: this.module.getMediaItem,
+          getMediaItem,
           timestampsMs: plan.frameExportOptions.timestampsMs,
           outputWidth: plan.frameExportOptions.outputWidth,
           outputHeight: plan.frameExportOptions.outputHeight,
@@ -164,7 +174,7 @@ export class VideoSegmentOssUploadsResolver
 
         const videoBlob = await exportTimelineItem({
           timelineItem,
-          getMediaItem: this.module.getMediaItem,
+          getMediaItem,
           ...plan.exportOptions,
         })
 

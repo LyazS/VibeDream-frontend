@@ -44,8 +44,10 @@ export function createMediaFileImportService(store: MediaImportStore) {
     options: MediaFileImportOptions = {},
   ) {
     const projectId = options.projectId ?? store.projectId
+    const context = globalMetaFileManager.captureContext()
     const assertCurrent = () => {
       options.signal?.throwIfAborted()
+      context.assertActive?.()
       if (
         !projectId ||
         store.projectId !== projectId ||
@@ -79,7 +81,7 @@ export function createMediaFileImportService(store: MediaImportStore) {
         throw new MediaFileImportError('directory_not_found', '目标素材目录已被删除。')
       }
     }
-    source.importContext = { projectId, assertActive }
+    source.importContext = { ...context, projectId, assertActive }
     store.addMediaItem(mediaItem)
     const location = store.registerAssetLocation(mediaItem.id)
     if (!location.success) {

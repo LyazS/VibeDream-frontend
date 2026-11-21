@@ -73,7 +73,9 @@ it('initializes the final attachment table directly in an empty database', async
   indexedDBService.close()
   vi.stubGlobal('indexedDB', new IDBFactory())
   const db = await indexedDBService.openDB()
-  expect(db.version).toBe(8)
+  expect(db.version).toBe(9)
+  expect(db.objectStoreNames.contains('linkedMediaHandles')).toBe(true)
+  expect(db.objectStoreNames.contains('workspaceIdentities')).toBe(true)
   expect(db.objectStoreNames.contains('agentAttachments')).toBe(true)
   const table = db.transaction('agentAttachments').objectStore('agentAttachments')
   expect(table.keyPath).toBe('key')
@@ -153,7 +155,7 @@ it.each([3, 4, 5])(
     })
 
     const db = await indexedDBService.openDB()
-    expect(db.version).toBe(8)
+    expect(db.version).toBe(9)
     for (const name of ['agentTurns', 'agentModelCalls', 'agentTools'])
       expect(db.objectStoreNames.contains(name)).toBe(false)
     expect(

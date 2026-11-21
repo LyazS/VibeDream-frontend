@@ -1,3 +1,4 @@
+import { fileSystemService } from '@/core/managers/filesystem/fileSystemService'
 /**
  * 项目导出工具
  * 提供视频项目导出为 MP4 文件的功能
@@ -42,6 +43,30 @@ import { setupTimelineItemBunny } from '@/core/bunnyUtils/timelineItemSetup'
 import { WebGLExportRenderer } from '@/core/utils/WebGLExportRenderer'
 import type { FrameData } from '@/core/webgl2/types'
 import { TransitionEdgeFrameResolver } from '@/core/webgl2/transition/TransitionEdgeFrameResolver'
+
+import { globalMetaFileManager } from '@/core/managers/media/globalMetaFileManager'
+import {
+  decodeVerifiedMedia,
+  disposeVerifiedMedia,
+  getVerifiedMediaFile,
+} from '@/core/datasource/providers/linked-file/VerifiedMediaSnapshot'
+import {
+  createLinkedMediaReader,
+  toLinkedMediaError,
+} from '@/core/datasource/providers/linked-file/LinkedMediaReader'
+
+import type { LinkedMediaIssue } from '@/core/datasource/providers/linked-file/LinkedFileSource'
+
+export const VERIFYING_LINKED_MEDIA_STAGE = 'verifying-linked-media'
+
+export class LinkedMediaExportError extends Error {
+  constructor(readonly issues: { name: string; issue: LinkedMediaIssue }[]) {
+    super(
+      `Unable to export linked media: ${issues.map(({ name, issue }) => `${name} (${issue})`).join(', ')}`,
+    )
+    this.name = 'LinkedMediaExportError'
+  }
+}
 
 /**
  * 导出类型
@@ -132,13 +157,69 @@ export class ExportManager {
   // 控制标志
   private isExporting: boolean = false
   private shouldCancel: boolean = false
+  private readonly linkedSnapshots = new Map<string, UnifiedMediaItemData>()
+  private readonly ownedSnapshots = new Set<UnifiedMediaItemData>()
+  private exportAbort = new AbortController()
+
+  private getExportMedia = (id: string) =>
+    this.linkedSnapshots.get(id) ?? this.config.getMediaItem(id)
+
+  private async prepareLinkedMedia(): Promise<void> {
+    const usedIds = new Set(
+      this.config.timelineItems
+        .filter((item) => item.mediaType !== 'text')
+        .map((item) => item.mediaItemId),
+    )
+    const linkedMedia = [...usedIds].flatMap((id) => {
+      const media = id ? this.config.getMediaItem(id) : undefined
+      return media?.source.type === 'linked-file' ? [media] : []
+    })
+    if (!linkedMedia.length) return
+    this.reportProgress(VERIFYING_LINKED_MEDIA_STAGE, 0)
+
+    const { workspaceKey, projectId } = globalMetaFileManager.captureContext()
+    const linkedReader = workspaceKey
+      ? createLinkedMediaReader({ workspaceKey, projectId }, fileSystemService)
+      : undefined
+    const issues: LinkedMediaExportError['issues'] = []
+    const signal = this.exportAbort.signal
+    for (const media of linkedMedia) {
+      signal.throwIfAborted()
+      try {
+        if (getVerifiedMediaFile(media)) {
+          this.linkedSnapshots.set(media.id, media)
+          continue
+        }
+        const file = await globalMetaFileManager.loadMediaFile(media, {
+          verifyContent: true,
+          signal,
+          linkedReader,
+        })
+        const snapshot = await decodeVerifiedMedia(media, file)
+        this.ownedSnapshots.add(snapshot)
+        this.linkedSnapshots.set(media.id, snapshot)
+      } catch (error) {
+        signal.throwIfAborted()
+        issues.push({ name: media.name, issue: toLinkedMediaError(error).issue })
+      }
+    }
+    signal.throwIfAborted()
+    if (issues.length) throw new LinkedMediaExportError(issues)
+  }
+
+  private throwMediaReadError(item: UnifiedTimelineItemData, error: unknown): never {
+    const linked = item.mediaItemId && this.linkedSnapshots.get(item.mediaItemId)
+    if (linked)
+      throw new LinkedMediaExportError([
+        { name: linked.name, issue: toLinkedMediaError(error).issue },
+      ])
+    throw error
+  }
 
   constructor(config: ExportProjectOptions) {
     this.config = config
     this.frameRate = config.frameRate ?? RENDERER_FPS
-    this.transitionEdgeResolver = new TransitionEdgeFrameResolver((mediaItemId: string) =>
-      this.config.getMediaItem(mediaItemId),
-    )
+    this.transitionEdgeResolver = new TransitionEdgeFrameResolver(this.getExportMedia)
     console.log(`✅ 导出帧率设置为: ${this.frameRate}fps`)
   }
 
@@ -158,7 +239,7 @@ export class ExportManager {
             }
           : undefined
       },
-      getMediaItem: this.config.getMediaItem,
+      getMediaItem: this.getExportMedia,
       getAsset: this.config.getAsset,
       trackIndexMap: () => new Map(this.config.tracks.map((track, index) => [track.id, index])),
     })
@@ -174,7 +255,8 @@ export class ExportManager {
     originalItems: UnifiedTimelineItemData<MediaType>[],
     getMediaItem: (id: string) => UnifiedMediaItemData | undefined,
   ): Promise<UnifiedTimelineItemData<MediaType>[]> {
-    const clonedItems: UnifiedTimelineItemData<MediaType>[] = []
+    const clonedItems = this.clonedTimelineItems
+    clonedItems.length = 0
     this.clipsMap = new Map() // 初始化 clipsMap
 
     for (const originalItem of originalItems) {
@@ -195,7 +277,9 @@ export class ExportManager {
       }
 
       // 3. 使用 setupTimelineItemBunny 重建 runtime
-      await setupTimelineItemBunny(clonedItem, mediaItem)
+      await setupTimelineItemBunny(clonedItem, mediaItem).catch((error) =>
+        this.throwMediaReadError(clonedItem, error),
+      )
 
       // 4. 如果是音视频项目，添加到 clipsMap
       if (clonedItem.runtime.bunnyClip) {
@@ -244,16 +328,14 @@ export class ExportManager {
           // 获取轨道静音状态
           const track = this.config.tracks.find((t) => t.id === item.trackId)
           const isTrackMuted = track?.isMuted ?? false
-          const isItemMuted = TimelineItemQueries.getResolvedRenderConfig(item).audio.isMuted ?? false
+          const isItemMuted =
+            TimelineItemQueries.getResolvedRenderConfig(item).audio.isMuted ?? false
           const shouldRequestAudio = !isTrackMuted && !isItemMuted
 
           // 调用 tickN 获取音视频数据（使用 30fps 的帧数）
-          const { audio, video, state } = await bunnyClip.tickN(
-            BigInt(frameIn30fps),
-            true,
-            true,
-            0n,
-          )
+          const { audio, video, state } = await bunnyClip
+            .tickN(BigInt(frameIn30fps), true, true, 0n)
+            .catch((error) => this.throwMediaReadError(item, error))
 
           if (state === 'success') {
             // 更新视频帧
@@ -334,16 +416,19 @@ export class ExportManager {
           // 获取轨道静音状态
           const track = this.config.tracks.find((t) => t.id === item.trackId)
           const isTrackMuted = track?.isMuted ?? false
-          const isItemMuted = TimelineItemQueries.getResolvedRenderConfig(item).audio.isMuted ?? false
+          const isItemMuted =
+            TimelineItemQueries.getResolvedRenderConfig(item).audio.isMuted ?? false
           const shouldRequestAudio = !isTrackMuted && !isItemMuted
 
           // 调用 tickN 获取音频数据（不请求视频）
-          const { audio, state } = await bunnyClip.tickN(
-            BigInt(frameIn30fps),
-            true, // 需要音频
-            false, // 不需要视频
-            0n,
-          )
+          const { audio, state } = await bunnyClip
+            .tickN(
+              BigInt(frameIn30fps),
+              true, // 需要音频
+              false, // 不需要视频
+              0n,
+            )
+            .catch((error) => this.throwMediaReadError(item, error))
 
           if (state === 'success' && shouldRequestAudio && audio && audio.length > 0) {
             // 获取当前音量值（应用了动画插值）
@@ -422,9 +507,12 @@ export class ExportManager {
     try {
       this.isExporting = true
       this.shouldCancel = false
+      this.exportAbort = new AbortController()
 
       const exportType = this.config.exportType
       const isAudioOnly = exportType === 'audio'
+
+      await this.prepareLinkedMedia()
 
       // 阶段 1: 初始化
       if (isAudioOnly) {
@@ -439,7 +527,7 @@ export class ExportManager {
       this.reportProgress('准备', 5, '克隆时间轴项目...')
       this.clonedTimelineItems = await this.cloneAndRebuildTimelineItems(
         this.config.timelineItems,
-        this.config.getMediaItem,
+        this.getExportMedia,
       )
       refreshClipTransitionsForItems(this.clonedTimelineItems)
       await this.transitionEdgeResolver.prepareItems(this.clonedTimelineItems)
@@ -560,6 +648,18 @@ export class ExportManager {
       this.reportProgress('完成', 95, '处理音频...')
       // 音频渲染已经在主循环中处理完成
 
+      // Re-check readability of the snapshots, including files fully cached by the decoder.
+      const issues: LinkedMediaExportError['issues'] = []
+      for (const media of this.linkedSnapshots.values()) {
+        try {
+          await getVerifiedMediaFile(media)?.slice(0, 1).arrayBuffer()
+        } catch (error) {
+          issues.push({ name: media.name, issue: toLinkedMediaError(error).issue })
+        }
+      }
+      this.exportAbort.signal.throwIfAborted()
+      if (issues.length) throw new LinkedMediaExportError(issues)
+
       // 阶段 8: 关闭并完成
       if (this.canvasSource) {
         this.canvasSource.close()
@@ -578,6 +678,7 @@ export class ExportManager {
       return new Uint8Array(buffer)
     } catch (error) {
       // 区分取消操作和其他错误
+      if (this.output?.state === 'started') await this.output.cancel().catch(() => {})
       if (error instanceof ExportCancelledError) {
         console.log('⚠️ 导出已取消')
       } else {
@@ -594,6 +695,7 @@ export class ExportManager {
    */
   cancel(): void {
     this.shouldCancel = true
+    this.exportAbort.abort(new ExportCancelledError())
   }
 
   /**
@@ -613,9 +715,12 @@ export class ExportManager {
 
     // 清理克隆的 BunnyClips
     for (const clip of this.clipsMap.values()) {
-      await clip.dispose()
+      await clip.dispose().catch((error) => console.warn('导出片段清理失败', error))
     }
     this.clipsMap.clear()
+    await Promise.allSettled([...this.ownedSnapshots].map(disposeVerifiedMedia))
+    this.ownedSnapshots.clear()
+    this.linkedSnapshots.clear()
 
     // 清理 textBitmap
     for (const item of this.clonedTimelineItems) {

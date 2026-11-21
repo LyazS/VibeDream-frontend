@@ -564,6 +564,7 @@ async function deleteProject(projectId: string) {
     console.log('项目删除成功')
   } catch (error) {
     console.error('删除项目失败:', error)
+    unifiedStore.messageError(t('project.delete.failed'))
   }
 }
 

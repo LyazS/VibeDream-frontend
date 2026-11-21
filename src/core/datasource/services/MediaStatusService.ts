@@ -9,6 +9,16 @@ import type { UnifiedMediaItemData, MediaStatus } from '@/core/mediaitem/types'
  * 媒体状态管理器
  * 负责统一管理媒体项目的状态转换
  */
+const transitions: Record<MediaStatus, MediaStatus[]> = {
+  pending: ['asyncprocessing', 'error', 'cancelled', 'missing'],
+  asyncprocessing: ['decoding', 'error', 'cancelled', 'missing'],
+  decoding: ['ready', 'error', 'cancelled', 'missing'],
+  ready: ['error', 'missing', 'pending'],
+  error: ['pending', 'cancelled', 'missing'],
+  cancelled: ['pending', 'missing'],
+  missing: ['pending', 'cancelled'],
+}
+
 export class MediaStatusManager {
   /**
    * 转换媒体项目状态
@@ -50,17 +60,7 @@ export class MediaStatusManager {
    * @returns 是否允许转换
    */
   validateTransition(fromStatus: MediaStatus, toStatus: MediaStatus): boolean {
-    const validTransitions: Record<MediaStatus, MediaStatus[]> = {
-      pending: ['asyncprocessing', 'error', 'cancelled'],
-      asyncprocessing: ['decoding', 'error', 'cancelled'],
-      decoding: ['ready', 'error', 'cancelled'],
-      ready: ['error'],
-      error: ['pending', 'cancelled'],
-      cancelled: ['pending'],
-      missing: ['pending', 'cancelled'],
-    }
-
-    return validTransitions[fromStatus]?.includes(toStatus) || false
+    return transitions[fromStatus]?.includes(toStatus) || false
   }
 
   /**
@@ -79,17 +79,7 @@ export class MediaStatusManager {
    * @returns 允许转换的状态列表
    */
   getAllowedTransitions(currentStatus: MediaStatus): MediaStatus[] {
-    const validTransitions: Record<MediaStatus, MediaStatus[]> = {
-      pending: ['asyncprocessing', 'error', 'cancelled'],
-      asyncprocessing: ['decoding', 'error', 'cancelled'],
-      decoding: ['ready', 'error', 'cancelled'],
-      ready: ['error'],
-      error: ['pending', 'cancelled'],
-      cancelled: ['pending'],
-      missing: ['pending', 'cancelled'],
-    }
-
-    return validTransitions[currentStatus] || []
+    return transitions[currentStatus] || []
   }
 
   /**

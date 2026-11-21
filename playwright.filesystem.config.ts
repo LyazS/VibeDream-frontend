@@ -2,7 +2,7 @@ import { defineConfig } from '@playwright/test'
 
 export default defineConfig({
   testDir: './test/browser',
-  testMatch: 'opfs.spec.ts',
+  testMatch: ['opfs.spec.ts', 'linked-media.spec.ts'],
   fullyParallel: true,
   timeout: 60_000,
   expect: { timeout: 15_000 },

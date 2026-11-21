@@ -115,7 +115,7 @@ describe('media file identity persistence', () => {
       parentDirectoryId: 'dir_root',
     })
     await expect(globalMetaFileManager.verifyMediaFileExists(restored)).resolves.toBe(true)
-    const prepared = await UserSelectedFileProcessor.getInstance().prepareMediaFileForDag(restored)
+    const prepared = await new UserSelectedFileProcessor().prepareMediaFileForDag(restored)
     expect(prepared.file.name).toBe(fileName)
     expect(prepared.file.type).toBe('video/mp4')
     expect(await prepared.file.text()).toBe('original media bytes')

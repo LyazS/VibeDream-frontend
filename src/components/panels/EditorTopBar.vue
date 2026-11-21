@@ -124,7 +124,11 @@ import { useUnifiedStore } from '@/core/unifiedStore'
 import HoverButton from '@/components/base/HoverButton.vue'
 import LanguageSelector from '@/components/utils/LanguageSelector.vue'
 import { IconComponents, getUserStatusIcon } from '@/constants/iconComponents'
-import { exportProjectWithCancel } from '@/core/utils/projectExporter'
+import {
+  exportProjectWithCancel,
+  LinkedMediaExportError,
+  VERIFYING_LINKED_MEDIA_STAGE,
+} from '@/core/utils/projectExporter'
 import EditProjectModal from '@/components/modals/EditProjectModal.vue'
 import LoginModal from '@/components/modals/LoginModal.vue'
 import UserInfoModal from '@/components/modals/UserInfoModal.vue'
@@ -246,7 +250,10 @@ async function handleExportWithSettings(settings: {
           // 更新进度
           loading.update({
             progress: Math.max(0, Math.min(100, progress)),
-            details: details || '',
+            details:
+              stage === VERIFYING_LINKED_MEDIA_STAGE
+                ? t('media.linked.exportVerifying')
+                : details || '',
           })
         },
       },
@@ -263,7 +270,7 @@ async function handleExportWithSettings(settings: {
         // 显示错误通知
         loading.close()
         cancelExport = null
-        unifiedStore.messageError(error.message || t('editor.exportFailed'))
+        showProjectExportError(error)
       },
       // 取消回调
       () => {
@@ -276,8 +283,19 @@ async function handleExportWithSettings(settings: {
   } catch (error) {
     console.error('导出项目失败:', error)
     // 显示错误通知
-    unifiedStore.messageError(error instanceof Error ? error.message : t('editor.exportFailed'))
+    showProjectExportError(error)
   }
+}
+
+function showProjectExportError(error: unknown) {
+  if (error instanceof LinkedMediaExportError) {
+    const messages = error.issues.map(
+      ({ name, issue }) => `${name} — ${t(`media.linked.issue.${issue}`)}`,
+    )
+    unifiedStore.messageError([t('media.linked.exportFailed'), ...messages].join('\n'))
+    return
+  }
+  unifiedStore.messageError((error instanceof Error && error.message) || t('editor.exportFailed'))
 }
 
 async function handleUserClick() {

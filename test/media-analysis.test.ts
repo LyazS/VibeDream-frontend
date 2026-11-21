@@ -1,6 +1,6 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest'
 import { globalMetaFileManager } from '@/core/managers/media/globalMetaFileManager'
-import type { UnifiedMediaItemData } from '@/core/mediaitem/types'
+import type { UnifiedMediaItemData, VideoMediaItem } from '@/core/mediaitem/types'
 import { createResourceNode, type ResourceRequest } from '@/core/jobs/ResourceTypes'
 import type { ResolveContext } from '@/core/jobs/ResourceResolver'
 import {
@@ -16,6 +16,7 @@ import {
   createVideoSegmentExportsRequest,
   createVideoSegmentOssUploadsRequest,
   createMediaIndexTaskSubmitRequest,
+  registerVerifiedIndexVideo,
 } from '@/core/jobs/resolvers/mediaIndexingShared'
 import { exportMediaItem, exportTimelineItem, exportVideoFrames } from '@/core/utils/mediaExporter'
 import { CfBailianTempFileUploader } from '@/core/utils/cfBailianTempFileUploader'
@@ -156,23 +157,28 @@ describe('video indexing exports', () => {
     expect(result.exportPlans[0].segment).toEqual(canonicalSegments[0])
   })
 
-  it('uploads short-segment frames and long-segment videos using their own export plans', async () => {
+  it.each(['copied', 'linked'])('uploads segments for %s media', async (source) => {
     const item = {
       id: 'media_video',
       ext: '.mov',
       name: 'Renamed video.webm',
       mediaType: 'video',
       runtime: { bunny: { originalWidth: 1920, originalHeight: 1080 } },
-    } as unknown as UnifiedMediaItemData
+    } as unknown as VideoMediaItem
+    const digest = source === 'linked' ? 'b'.repeat(64) : undefined
+    const preview = digest ? { ...item, runtime: {} } : item
+    if (digest) onTestFinished(registerVerifiedIndexVideo(item, digest))
     const module = {
-      getMediaItem: () => item,
+      getMediaItem: () => preview,
       getProjectId: () => 'project',
       ensureMediaReady: vi.fn(),
     }
     const segments = buildSegmentsFromBoundaries(item.id, 10 * RENDERER_FPS, [
       BigInt(2 * RENDERER_FPS),
     ])
-    const exportCtx = context(createVideoSegmentExportsRequest(item.id))
+    const exportCtx = context(
+      createVideoSegmentExportsRequest(item.id, undefined, undefined, digest),
+    )
     vi.mocked(exportCtx.ensure).mockResolvedValue({ mediaId: item.id, segments })
     const plans = await new VideoSegmentExportsResolver(module).resolve(exportCtx)
     const videoBlob = new Blob(['video'])
@@ -183,7 +189,9 @@ describe('video indexing exports', () => {
       success: true,
       url: `https://upload.example/${options.purpose}/${options.fileName}`,
     }))
-    const uploadCtx = context(createVideoSegmentOssUploadsRequest(item.id))
+    const uploadCtx = context(
+      createVideoSegmentOssUploadsRequest(item.id, undefined, undefined, digest),
+    )
     vi.mocked(uploadCtx.ensure).mockResolvedValue(plans)
 
     const result = await new VideoSegmentOssUploadsResolver(module).resolve(uploadCtx)
@@ -207,6 +215,12 @@ describe('video indexing exports', () => {
     ])
     expect(exportTimelineItem).toHaveBeenCalledTimes(2)
     expect(exportVideoFrames).toHaveBeenCalledOnce()
+    for (const [options] of [
+      ...vi.mocked(exportTimelineItem).mock.calls,
+      ...vi.mocked(exportVideoFrames).mock.calls,
+    ]) {
+      expect(options.getMediaItem(item.id)).toBe(item)
+    }
     expect(CfBailianTempFileUploader.uploadBlob).toHaveBeenCalledTimes(7)
     expect(
       vi.mocked(exportTimelineItem).mock.calls.map(([options]) => options.timelineItem.timeRange),
@@ -232,6 +246,7 @@ describe('image indexing exports', () => {
     const item = {
       id: 'media_image',
       ext: '.jpg',
+      source: { type: 'user-selected' },
       name: 'Renamed image.gif',
       mediaType: 'image',
       createdAt: '2026-10-15T00:00:00.000Z',
@@ -297,6 +312,7 @@ describe('image indexing exports', () => {
     const item = {
       id: 'media_video',
       ext: '.mov',
+      source: { type: 'user-selected' },
       name: 'shared.mov',
       mediaType: 'video',
       createdAt: '2026-10-15T00:00:00.000Z',

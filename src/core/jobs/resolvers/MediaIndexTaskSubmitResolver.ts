@@ -1,12 +1,19 @@
+import {
+  decodeVerifiedMedia,
+  disposeVerifiedMedia,
+} from '@/core/datasource/providers/linked-file/VerifiedMediaSnapshot'
+import { setLinkedMediaIssue } from '@/core/datasource/providers/linked-file/LinkedMediaReader'
+import { hashFile } from '@/core/utils/hashFile'
 import { exportMediaItem } from '@/core/utils/mediaExporter'
 import type { ImageMediaItem, VideoMediaItem } from '@/core/mediaitem/types'
-import { sha256 } from '@noble/hashes/sha2.js'
-import { bytesToHex } from '@noble/hashes/utils.js'
 import type { ResolveCheckContext, ResolveContext, ResourceResolver } from '../ResourceResolver'
 import type { ResourceRequest } from '../ResourceTypes'
 import { CfBailianTempFileUploader } from '@/core/utils/cfBailianTempFileUploader'
 import { globalMetaFileManager } from '@/core/managers/media/globalMetaFileManager'
-import { resolveMediaIndex, submitMediaManifestSegments } from '@/core/agent/services/mediaIndexService'
+import {
+  resolveMediaIndex,
+  submitMediaManifestSegments,
+} from '@/core/agent/services/mediaIndexService'
 import { framesToTimecode } from '@/core/utils/timeUtils'
 import {
   canResumeMediaIndexingFromRemote,
@@ -15,6 +22,7 @@ import {
   createVideoSegmentOssUploadsRequest,
   getIndexableMediaItem,
   persistMediaItem,
+  registerVerifiedIndexVideo,
   setIndexingMetadata,
   type MediaIndexTaskSubmitInput,
   type MediaIndexTaskSubmitResult,
@@ -91,50 +99,6 @@ function normalizeIndexSummary(value: unknown): { title?: string; summary?: stri
   const title = typeof row.title === 'string' ? row.title.trim() : ''
   const summary = typeof row.summary === 'string' ? row.summary.trim() : ''
   return title || summary ? { title: title || undefined, summary: summary || undefined } : undefined
-}
-
-const HASH_CHUNK_SIZE = 4 * 1024 * 1024
-
-async function hashFileInMainThread(file: Blob): Promise<string> {
-  const hasher = sha256.create()
-  if (typeof file.stream === 'function') {
-    const reader = file.stream().getReader()
-    try {
-      while (true) {
-        const { done, value } = await reader.read()
-        if (done) break
-        hasher.update(value)
-      }
-    } finally {
-      reader.releaseLock()
-    }
-  } else {
-    for (let offset = 0; offset < file.size; offset += HASH_CHUNK_SIZE) {
-      const chunk = await file.slice(offset, offset + HASH_CHUNK_SIZE).arrayBuffer()
-      hasher.update(new Uint8Array(chunk))
-    }
-  }
-  return bytesToHex(hasher.digest())
-}
-
-async function hashFile(file: File): Promise<string> {
-  if (typeof Worker === 'undefined') return hashFileInMainThread(file)
-
-  return await new Promise((resolve, reject) => {
-    const worker = new Worker(new URL('../../workers/contentSha256.worker.ts', import.meta.url), {
-      type: 'module',
-    })
-    worker.onmessage = (event: MessageEvent<{ hash?: string; error?: string }>) => {
-      worker.terminate()
-      if (event.data.hash) resolve(event.data.hash)
-      else reject(new Error(event.data.error || 'SHA-256 计算失败'))
-    }
-    worker.onerror = (event) => {
-      worker.terminate()
-      reject(event.error || new Error('SHA-256 Worker 失败'))
-    }
-    worker.postMessage({ file })
-  })
 }
 
 function buildImageIndexingExportSize(
@@ -252,14 +216,68 @@ export class MediaIndexTaskSubmitResolver
   ): Promise<MediaIndexTaskSubmitResult> {
     const mediaItem = getIndexableMediaItem(this.module, ctx.input.mediaId)
     ctx.signal.throwIfAborted()
-    const sourceFile = await globalMetaFileManager.loadMediaFile(mediaItem)
-    const contentSha256 = await hashFile(sourceFile)
+    const source = mediaItem.source
+    const linked = source.type === 'linked-file'
+    const sourceFile = await (
+      linked
+        ? globalMetaFileManager.loadMediaFile(mediaItem, {
+            verifyContent: true,
+            signal: ctx.signal,
+          })
+        : globalMetaFileManager.loadMediaFile(mediaItem)
+    ).catch((error) => {
+      if (linked && source === mediaItem.source && !ctx.signal.aborted)
+        setLinkedMediaIssue(mediaItem, error)
+      throw error
+    })
+    const verifiedDigest = linked ? source.record?.contentSha256 : undefined
+    const contentSha256 = verifiedDigest ?? (await hashFile(sourceFile, ctx.signal))
+    let snapshot: VideoMediaItem | ImageMediaItem | undefined
+    let releaseSnapshot: (() => void) | undefined
+    async function prepareSnapshot() {
+      if (!verifiedDigest) return mediaItem
+      if (!snapshot) {
+        ctx.signal.throwIfAborted()
+        snapshot = await decodeVerifiedMedia(mediaItem, sourceFile)
+        if (snapshot.mediaType === 'video')
+          releaseSnapshot = registerVerifiedIndexVideo(snapshot, verifiedDigest)
+      }
+      return snapshot
+    }
+    try {
+      return await this.submitIndex(ctx, mediaItem, {
+        byteSize: sourceFile.size,
+        contentSha256,
+        verifiedDigest,
+        prepareSnapshot,
+      })
+    } finally {
+      releaseSnapshot?.()
+      if (snapshot) await disposeVerifiedMedia(snapshot).catch(() => {})
+    }
+  }
+
+  private async submitIndex(
+    ctx: ResolveContext<MediaIndexTaskSubmitInput>,
+    mediaItem: VideoMediaItem | ImageMediaItem,
+    {
+      byteSize,
+      contentSha256,
+      verifiedDigest,
+      prepareSnapshot,
+    }: {
+      byteSize: number
+      contentSha256: string
+      verifiedDigest?: string
+      prepareSnapshot: () => Promise<VideoMediaItem | ImageMediaItem>
+    },
+  ): Promise<MediaIndexTaskSubmitResult> {
     let exportResult: VideoSegmentExportsResult | undefined
     let segmentPlan: Array<Record<string, unknown>> | undefined
     if (mediaItem.mediaType === 'video') {
       segmentPlan = undefined
     } else if (mediaItem.mediaType === 'image') {
-      await this.module.ensureMediaReady(mediaItem.id)
+      if (!verifiedDigest) await this.module.ensureMediaReady(mediaItem.id)
       segmentPlan = [{ segment_key: 'image' }]
     } else {
       throw new Error('不支持的索引素材类型')
@@ -270,21 +288,24 @@ export class MediaIndexTaskSubmitResolver
         segmentPlan,
         contentSha256,
         mediaKind: mediaItem.mediaType,
-        byteSize: sourceFile.size,
+        byteSize,
       })
     } catch (error) {
-      if (!(error instanceof Error && 'code' in error && error.code === 'MEDIA_SEGMENT_PLAN_REQUIRED')) {
+      if (
+        !(error instanceof Error && 'code' in error && error.code === 'MEDIA_SEGMENT_PLAN_REQUIRED')
+      ) {
         throw error
       }
+      await prepareSnapshot()
       exportResult = await ctx.ensure<VideoSegmentExportsResult>(
-        createVideoSegmentExportsRequest(ctx.input.mediaId),
+        createVideoSegmentExportsRequest(ctx.input.mediaId, undefined, undefined, verifiedDigest),
       )
       segmentPlan = segmentPlanFromExports(exportResult)
       index = await resolveMediaIndex({
         segmentPlan,
         contentSha256,
         mediaKind: mediaItem.mediaType,
-        byteSize: sourceFile.size,
+        byteSize,
       })
     }
     setIndexingMetadata(mediaItem, {
@@ -333,8 +354,14 @@ export class MediaIndexTaskSubmitResolver
         mediaItem.id,
         index.canonical_segment_plan,
       )
+      await prepareSnapshot()
       const uploadResult = await ctx.ensure<VideoSegmentOssUploadsResult>(
-        createVideoSegmentOssUploadsRequest(ctx.input.mediaId, undefined, canonicalSegments),
+        createVideoSegmentOssUploadsRequest(
+          ctx.input.mediaId,
+          undefined,
+          canonicalSegments,
+          verifiedDigest,
+        ),
       )
       segments = uploadResult.segments
     } else {
@@ -343,9 +370,10 @@ export class MediaIndexTaskSubmitResolver
         stage: 'uploading-image',
         message: `正在上传图片素材（打标）: ${mediaItem.name}`,
       })
+      const exportMedia = await prepareSnapshot()
       const imageBlob = await exportMediaItem({
-        mediaItem,
-        ...buildImageIndexingExportSize(mediaItem),
+        mediaItem: exportMedia,
+        ...buildImageIndexingExportSize(exportMedia),
       })
       const fileName = `${mediaItem.id}.png`
       console.info('[MediaIdentity] indexing:export-image', {
@@ -359,11 +387,12 @@ export class MediaIndexTaskSubmitResolver
       const taggingResult = await CfBailianTempFileUploader.uploadBlob(
         imageBlob,
         { capability: 'indexing', purpose: 'tagging', fileName },
-        (progress) => ctx.update({
-          progress: Math.max(0.05, Math.min(0.25, (progress / 100) * 0.2 + 0.05)),
-          stage: 'uploading-image',
-          message: `上传打标图片: ${progress}%`,
-        }),
+        (progress) =>
+          ctx.update({
+            progress: Math.max(0.05, Math.min(0.25, (progress / 100) * 0.2 + 0.05)),
+            stage: 'uploading-image',
+            message: `上传打标图片: ${progress}%`,
+          }),
         ctx.signal,
       )
       if (!taggingResult.success || !taggingResult.url)
@@ -371,21 +400,24 @@ export class MediaIndexTaskSubmitResolver
       const embeddingResult = await CfBailianTempFileUploader.uploadBlob(
         imageBlob,
         { capability: 'indexing', purpose: 'embedding', fileName },
-        (progress) => ctx.update({
-          progress: Math.max(0.25, Math.min(0.45, (progress / 100) * 0.2 + 0.25)),
-          stage: 'uploading-image',
-          message: `上传向量化图片: ${progress}%`,
-        }),
+        (progress) =>
+          ctx.update({
+            progress: Math.max(0.25, Math.min(0.45, (progress / 100) * 0.2 + 0.25)),
+            stage: 'uploading-image',
+            message: `上传向量化图片: ${progress}%`,
+          }),
         ctx.signal,
       )
       if (!embeddingResult.success || !embeddingResult.url)
         throw new Error(embeddingResult.error || `上传向量化图片失败: ${mediaItem.name}`)
-      segments = [{
-        mediaItemId: mediaItem.id,
-        sourceType: 'image_url',
-        taggingImageUrl: taggingResult.url,
-        embeddingImageUrl: embeddingResult.url,
-      }]
+      segments = [
+        {
+          mediaItemId: mediaItem.id,
+          sourceType: 'image_url',
+          taggingImageUrl: taggingResult.url,
+          embeddingImageUrl: embeddingResult.url,
+        },
+      ]
     }
     const taskSegments = providerSegments(segments)
     const localByKey = new Map(taskSegments.map((segment) => [segment.segment_key, segment]))

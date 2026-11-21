@@ -1,3 +1,8 @@
+import { cleanupTimelineItemBunny } from '@/core/bunnyUtils/timelineItemSetup'
+import { disposeBunnyObjects } from '@/core/bunnyUtils/BunnyProcessor'
+import { globalMetaFileManager } from '@/core/managers/media/globalMetaFileManager'
+import { markLinkedMediaReadable } from '@/core/datasource/providers/linked-file/LinkedMediaReader'
+import type { UnifiedMediaItemData } from '@/core/mediaitem/types'
 import { defineStore } from 'pinia'
 import { createUnifiedMediaModule } from '@/core/modules/UnifiedMediaModule'
 import { createUnifiedTrackModule } from '@/core/modules/UnifiedTrackModule'
@@ -309,6 +314,42 @@ export const useUnifiedStore = defineStore('unified', () => {
   function cancelMusicStructureAnalysis(mediaId: string) {
     return jobRuntime.cancel(getResourceId(MUSIC_STRUCTURE_ANALYSIS_RESOURCE_TYPE, mediaId))
   }
+  async function reloadLinkedMedia(media: UnifiedMediaItemData, file: File): Promise<void> {
+    const clips = unifiedTimelineModule.timelineItems.value.filter(
+      (item) => item.mediaItemId === media.id,
+    )
+    const source = media.source
+    const assertActive = () => {
+      globalMetaFileManager.assertAssetActive(media)
+      if (media.source !== source) throw new Error('链接来源已变化')
+    }
+    assertActive()
+    if (clips.length) await unifiedPlaybackModule.pause()
+    assertActive()
+    const jobs = [
+      createMediaReadyRequest(media.id),
+      ...clips.map((clip) => createTimelineItemReadyRequest(clip.id)),
+    ]
+    await Promise.all(jobs.map((job) => jobRuntime.cancel(getResourceId(job.type, job.key))))
+    assertActive()
+    unifiedMediaModule.forgetPreparedMediaFile(media.id)
+    for (const clip of clips) {
+      const idle = cleanupTimelineItemBunny(clip)
+      clip.timelineStatus = 'loading'
+      // Keep the original placement and in/out points when rebuilding the clip.
+      clip.runtime.isInitialized = true
+      await idle
+      assertActive()
+    }
+    const runtime = media.runtime.bunny
+    delete media.runtime.bunny
+    await disposeBunnyObjects(runtime)
+    assertActive()
+    markLinkedMediaReadable(media, file)
+    await ensureMediaReady(media.id)
+    assertActive()
+    await Promise.all(clips.map((clip) => ensureTimelineItemResolved(clip.id)))
+  }
   function ensureTimelineItemReady(timelineItemId: string) {
     return jobRuntime.ensure(createTimelineItemReadyRequest(timelineItemId))
   }
@@ -528,6 +569,7 @@ export const useUnifiedStore = defineStore('unified', () => {
     cancelJobTask: jobTaskCenter.cancelTask,
     findMediaProcessingTaskView,
     ensureMediaReady,
+    reloadLinkedMedia,
     ensureMediaAsr,
     restoreMediaAsrPlaceholder,
     ensureMusicStructureAnalysis,

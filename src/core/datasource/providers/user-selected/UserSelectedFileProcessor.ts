@@ -21,22 +21,6 @@ import type { UnifiedMediaItemData, MediaType } from '@/core/mediaitem/types'
  * 用户选择文件执行器。
  */
 export class UserSelectedFileProcessor extends DataSourceProcessor {
-  private static instance: UserSelectedFileProcessor
-
-  /**
-   * 获取单例实例
-   */
-  static getInstance(): UserSelectedFileProcessor {
-    if (!this.instance) {
-      this.instance = new UserSelectedFileProcessor()
-    }
-    return this.instance
-  }
-
-  private constructor() {
-    super()
-  }
-
   // ==================== 用户选择文件执行逻辑 ====================
 
   /**
@@ -124,10 +108,11 @@ export class UserSelectedFileProcessor extends DataSourceProcessor {
     preparedFile: PreparedMediaFile,
   ): Promise<void> {
     const source = mediaItem.source as UserSelectedFileSourceData
-    const context = source.importContext ?? { projectId: globalMetaFileManager.currentProjectId }
+    const context = source.importContext ?? globalMetaFileManager.contextForAsset(mediaItem)
 
     try {
       context.assertActive?.()
+      globalMetaFileManager.assertAssetActive(mediaItem)
       const { file, mediaType } = preparedFile
       if (mediaType !== null) {
         mediaItem.mediaType = mediaType
@@ -137,6 +122,7 @@ export class UserSelectedFileProcessor extends DataSourceProcessor {
 
       const bunnyResult = await this.bunnyProcessor.processMedia(mediaItem, file)
       context.assertActive?.()
+      globalMetaFileManager.assertAssetActive(mediaItem)
 
       mediaItem.runtime.bunny = bunnyResult.bunnyObjects
       mediaItem.duration = Number(bunnyResult.durationN)

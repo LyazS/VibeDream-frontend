@@ -1,8 +1,14 @@
+import { withStorageLock } from '@/core/storage/withStorageLock'
 import type { IFileSystemAdapter, PermissionCheckResult, FileSystemEntry } from '../interfaces'
 import type { WorkspaceInfo } from './types'
 import { PathResolver } from './PathResolver'
 import { FileSystemError } from '../errors/FileSystemError'
 import { ErrorCode } from '../errors/ErrorCodes'
+
+export interface ProjectWriteOptions {
+  workspaceKey: string | null
+  assertActive?: () => void
+}
 
 /**
  * 统一的文件系统服务
@@ -11,6 +17,7 @@ import { ErrorCode } from '../errors/ErrorCodes'
 export class FileSystemService {
   private adapter: IFileSystemAdapter
   private pathResolver: PathResolver
+  private readonly deletingProjects = new Set<string>()
 
   constructor(adapter: IFileSystemAdapter) {
     // 在构造函数中检查适配器支持性
@@ -50,6 +57,55 @@ export class FileSystemService {
     }
   }
 
+  get workspaceKey(): string | null {
+    return this.adapter.getWorkspaceKey?.() ?? null
+  }
+
+  async getManagedProjectsRoot(): Promise<FileSystemDirectoryHandle | null> {
+    return (await this.adapter.getManagedProjectsRoot?.()) ?? null
+  }
+
+  /** Queued filesystem mutations recheck the workspace and directory after acquiring the lock. */
+  private async mutateProjectPath<T>(
+    path: string,
+    run: (assertWritable: () => void) => Promise<T>,
+    options?: ProjectWriteOptions,
+    rootOperation?: 'create' | 'delete',
+  ): Promise<T> {
+    const [root, projectId, ...parts] = path.split('/').filter(Boolean)
+    if (root !== 'projects' || !projectId || !this.adapter.getWorkspaceKey)
+      return run(() => options?.assertActive?.())
+
+    const workspaceKey = options ? options.workspaceKey : this.workspaceKey
+    const assertActive = () => {
+      if (!workspaceKey || workspaceKey !== this.workspaceKey) throw new Error('工作区已切换')
+      options?.assertActive?.()
+    }
+    const lockKey = `project-files:${JSON.stringify([workspaceKey, projectId])}`
+    const assertWritable = () => {
+      assertActive()
+      if (this.deletingProjects.has(lockKey)) throw new Error('工程正在删除')
+    }
+    assertWritable()
+    const deletesProject = rootOperation === 'delete' && parts.length === 0
+    if (deletesProject) this.deletingProjects.add(lockKey)
+    try {
+      return await withStorageLock(lockKey, async () => {
+        assertActive()
+        if (!(rootOperation === 'create' && parts.length === 0) && !deletesProject) {
+          if (this.deletingProjects.has(lockKey)) throw new Error('工程正在删除')
+          if (!(await this.adapter.directoryExists(this.paths.getProjectPath(projectId)))) {
+            throw new Error('工程目录不存在')
+          }
+          assertWritable()
+        }
+        return run(assertWritable)
+      })
+    } finally {
+      if (deletesProject) this.deletingProjects.delete(lockKey)
+    }
+  }
+
   // ==================== 文件操作（委托给适配器） ====================
 
   async readFile(path: string): Promise<string> {
@@ -68,17 +124,64 @@ export class FileSystemService {
     }
   }
 
-  async writeFile(path: string, content: string | Blob): Promise<void> {
+  async writeFile(
+    path: string,
+    content: string | Blob,
+    options?: ProjectWriteOptions,
+  ): Promise<void> {
     try {
-      await this.adapter.writeFile(path, content)
+      await this.mutateProjectPath(path, () => this.adapter.writeFile(path, content), options)
     } catch (error) {
       throw this.wrapError(error, `写入文件失败: ${path}`, path)
     }
   }
 
-  async deleteFile(path: string): Promise<void> {
+  /** Publish the new source before queued writes can run. */
+  async commitLinkedMediaMeta(
+    path: string,
+    content: string,
+    options: ProjectWriteOptions,
+    commit: 'create' | { onCommitted: () => void },
+  ): Promise<void> {
     try {
-      await this.adapter.deleteFile(path)
+      await this.mutateProjectPath(
+        path,
+        async (assertWritable) => {
+          if (commit === 'create') {
+            if (await this.adapter.fileExists(path)) throw new Error('目标文件已存在')
+            assertWritable()
+          }
+
+          try {
+            await this.adapter.writeFile(path, content)
+          } catch (error) {
+            if (commit === 'create')
+              await this.removeEmptyMetaAfterFailedCreate(path, options.workspaceKey)
+            throw error
+          }
+          if (commit !== 'create') commit.onCommitted()
+        },
+        options,
+      )
+    } catch (error) {
+      throw this.wrapError(error, `写入文件失败: ${path}`, path)
+    }
+  }
+
+  private async removeEmptyMetaAfterFailedCreate(path: string, workspaceKey: string | null) {
+    // An uncertain close can leave a committed record. Only remove confirmed empty files.
+    try {
+      if (workspaceKey !== this.workspaceKey) return
+      const file = await this.adapter.readFileAsBlob(path)
+      if (file.size === 0 && workspaceKey === this.workspaceKey) await this.adapter.deleteFile(path)
+    } catch {
+      // Leave the record for reconciliation if the filesystem cannot confirm the outcome.
+    }
+  }
+
+  async deleteFile(path: string, options?: ProjectWriteOptions): Promise<void> {
+    try {
+      await this.mutateProjectPath(path, () => this.adapter.deleteFile(path), options)
     } catch (error) {
       throw this.wrapError(error, `删除文件失败: ${path}`, path)
     }
@@ -94,17 +197,31 @@ export class FileSystemService {
 
   // ==================== 目录操作（委托给适配器） ====================
 
-  async createDirectory(path: string): Promise<void> {
+  async createDirectory(path: string, options?: ProjectWriteOptions): Promise<void> {
     try {
-      await this.adapter.createDirectory(path)
+      await this.mutateProjectPath(
+        path,
+        () => this.adapter.createDirectory(path),
+        options,
+        'create',
+      )
     } catch (error) {
       throw this.wrapError(error, `创建目录失败: ${path}`, path)
     }
   }
 
-  async deleteDirectory(path: string, recursive?: boolean): Promise<void> {
+  async deleteDirectory(
+    path: string,
+    recursive?: boolean,
+    options?: ProjectWriteOptions,
+  ): Promise<void> {
     try {
-      await this.adapter.deleteDirectory(path, recursive)
+      await this.mutateProjectPath(
+        path,
+        () => this.adapter.deleteDirectory(path, recursive),
+        options,
+        'delete',
+      )
     } catch (error) {
       throw this.wrapError(error, `删除目录失败: ${path}`, path)
     }
@@ -138,7 +255,8 @@ export class FileSystemService {
 
   async writeFiles(files: Map<string, string>): Promise<void> {
     try {
-      await this.adapter.writeFiles(files)
+      const options = { workspaceKey: this.workspaceKey }
+      await Promise.all([...files].map(([path, content]) => this.writeFile(path, content, options)))
     } catch (error) {
       throw this.wrapError(error, `批量写入文件失败`)
     }
@@ -148,7 +266,7 @@ export class FileSystemService {
 
   async copyFile(source: string, dest: string): Promise<void> {
     try {
-      await this.adapter.copyFile(source, dest)
+      await this.mutateProjectPath(dest, () => this.adapter.copyFile(source, dest))
     } catch (error) {
       throw this.wrapError(error, `复制文件失败: ${source} -> ${dest}`, source)
     }
@@ -156,7 +274,7 @@ export class FileSystemService {
 
   async moveFile(source: string, dest: string): Promise<void> {
     try {
-      await this.adapter.moveFile(source, dest)
+      await this.mutateProjectPath(dest, () => this.adapter.moveFile(source, dest))
     } catch (error) {
       throw this.wrapError(error, `移动文件失败: ${source} -> ${dest}`, source)
     }

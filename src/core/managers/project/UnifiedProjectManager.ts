@@ -1,3 +1,4 @@
+import { clearLinkedHandles } from '@/core/datasource/providers/linked-file/LinkedMediaBindings'
 import { fileSystemService } from '@/core/managers/filesystem/fileSystemService'
 import {
   PROJECT_FORMAT_VERSION,
@@ -166,15 +167,12 @@ export class UnifiedProjectManager {
    * 删除项目
    */
   async deleteProject(projectId: string): Promise<void> {
-    // 检查工作空间权限
-    const permissionResult = await fileSystemService.checkPermission()
-    if (!permissionResult.hasAccess) {
-      throw new Error('未设置工作目录')
-    }
-
+    const workspaceKey = fileSystemService.workspaceKey
+    if (!workspaceKey) throw new Error('未设置工作目录')
     try {
       const projectPath = fileSystemService.paths.getProjectPath(projectId)
-      await fileSystemService.deleteDirectory(projectPath, true)
+      await fileSystemService.deleteDirectory(projectPath, true, { workspaceKey })
+      await clearLinkedHandles({ projectId, workspaceKey })
       console.log('统一项目删除成功:', projectId)
     } catch (error) {
       console.error('删除统一项目失败:', error)

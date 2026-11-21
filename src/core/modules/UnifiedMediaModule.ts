@@ -1,3 +1,4 @@
+import { disposeBunnyObjects } from '@/core/bunnyUtils/BunnyProcessor'
 import { ref, watch } from 'vue'
 import {
   type UnifiedMediaItemData,
@@ -99,6 +100,7 @@ export function createUnifiedMediaModule(registry: ModuleRegistry) {
    * @param mediaItem 媒体项目
    */
   function addMediaItem(mediaItem: UnifiedMediaItemData) {
+    globalMetaFileManager.bindAsset(mediaItem)
     mediaItems.value.push(mediaItem)
     const autoSaveModule = registry.get<UnifiedAutoSaveModule>(MODULE_NAMES.AUTOSAVE)
     autoSaveModule.setupMediaItemWatcher(mediaItem)
@@ -122,6 +124,7 @@ export function createUnifiedMediaModule(registry: ModuleRegistry) {
       return
     }
 
+    globalMetaFileManager.bindAsset(asset)
     effectTemplateAssets.value.push(asset)
     const autoSaveModule = registry.get<UnifiedAutoSaveModule>(MODULE_NAMES.AUTOSAVE)
     autoSaveModule.setupMediaItemWatcher(asset)
@@ -144,35 +147,30 @@ export function createUnifiedMediaModule(registry: ModuleRegistry) {
     if (index > -1) {
       const mediaItem = mediaItems.value[index]
 
-      // 1. 先删除硬盘文件（媒体文件 + Meta文件）。失败时保留媒体和目录归属以便重试。
-      const deleteResult = await globalMetaFileManager.deleteMediaFiles(mediaItem)
-      if (!deleteResult.success) {
-        throw new Error(deleteResult.error || `删除媒体文件失败: ${mediaItem.name}`)
-      }
-      console.log(`✅ [UnifiedMediaModule] 硬盘文件已删除: ${mediaItem.name}`)
-
-      // 2. 清理 watcher
       const autoSaveModule = registry.get<UnifiedAutoSaveModule>(MODULE_NAMES.AUTOSAVE)
       autoSaveModule.cleanupMediaItemWatcher(mediaItemId)
+      try {
+        const deleteResult = await globalMetaFileManager.deleteAssetFiles(mediaItem)
+        if (!deleteResult.success)
+          throw new Error(deleteResult.error || `删除素材失败: ${mediaItem.name}`)
+      } catch (error) {
+        autoSaveModule.setupMediaItemWatcher(mediaItem)
+        throw error
+      }
 
       // 3. 清理相关的时间轴项目
       await cleanupRelatedTimelineItems(mediaItemId)
 
-      // 4. 清理 bunnyMedia
-      if (mediaItem.runtime.bunny?.bunnyMedia) {
-        await mediaItem.runtime.bunny.bunnyMedia.dispose()
-        mediaItem.runtime.bunny.bunnyMedia = undefined
-        console.log(`🧹 [UnifiedMediaModule] bunnyMedia已清理: ${mediaItem.name}`)
-      }
-
-      // 5. 清理缩略图URL
-      if (mediaItem.runtime.bunny?.thumbnailUrl) {
-        URL.revokeObjectURL(mediaItem.runtime.bunny.thumbnailUrl)
-        console.log(`🧹 [UnifiedMediaModule] bunny缩略图URL已清理: ${mediaItem.name}`)
-      }
+      preparedMediaFiles.delete(mediaItemId)
+      await disposeBunnyObjects(mediaItem.runtime.bunny).catch((error) => {
+        console.warn('释放素材解码资源失败', error)
+      })
+      delete mediaItem.runtime.bunny
+      if (mediaItem.source.type === 'linked-file') delete mediaItem.source.checkedFile
 
       // 6. 从数组中移除
-      mediaItems.value.splice(index, 1)
+      const currentIndex = mediaItems.value.indexOf(mediaItem)
+      if (currentIndex >= 0) mediaItems.value.splice(currentIndex, 1)
 
       printUnifiedDebugInfo(
         '从素材库删除统一媒体项目',
@@ -465,8 +463,15 @@ export function createUnifiedMediaModule(registry: ModuleRegistry) {
       throw error
     }
 
+    const source = mediaItem.source
     const preparedFile = await processor.prepareMediaFileForDag(mediaItem)
+    globalMetaFileManager.assertAssetActive(mediaItem)
+    if (source !== mediaItem.source) throw new Error('素材来源已变化')
     preparedMediaFiles.set(mediaItem.id, preparedFile)
+  }
+
+  function forgetPreparedMediaFile(mediaId: string) {
+    preparedMediaFiles.delete(mediaId)
   }
 
   function hasPreparedMediaFile(mediaId: string): boolean {
@@ -696,6 +701,7 @@ export function createUnifiedMediaModule(registry: ModuleRegistry) {
     processMediaSourceDirectly,
     prepareMediaFileDirectly,
     hasPreparedMediaFile,
+    forgetPreparedMediaFile,
     decodePreparedMediaFileDirectly,
 
     // 便捷查询方法

@@ -1,3 +1,4 @@
+import { LinkedFileProcessor } from '@/core/datasource/providers/linked-file/LinkedFileProcessor'
 /**
  * datasource 执行器注册表。
  *
@@ -60,7 +61,8 @@ export class DataSourceRegistry {
    */
   private initializeDefaultProcessors(): void {
     // 注册用户选择文件执行器
-    this.register('user-selected', UserSelectedFileProcessor.getInstance())
+    this.register('user-selected', new UserSelectedFileProcessor())
+    this.register('linked-file', new LinkedFileProcessor())
   }
 }
 

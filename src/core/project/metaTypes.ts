@@ -1,3 +1,4 @@
+import { isLinkedFileRecord } from '@/core/datasource/providers/linked-file/LinkedFileSource'
 import type { BaseDataSourcePersistedData } from '@/core/datasource/core/DataSourceTypes'
 import { isMediaExtension } from '@/core/utils/mediaPathUtils'
 import type {
@@ -355,6 +356,8 @@ function isMediaPersistedSourceData(value: unknown): value is BaseDataSourcePers
   switch (value.type) {
     case 'user-selected':
       return true
+    case 'linked-file':
+      return isLinkedFileRecord(value)
     default:
       return false
   }
@@ -428,4 +431,16 @@ export function parseLibraryAssetMetaFile(value: unknown): LibraryAssetMetaFile 
     expectedMediaVersion: MEDIA_META_VERSION,
   })
   throw new Error('Invalid library asset meta file')
+}
+
+/** Keep a damaged link's asset and timeline references visible without accepting its source. */
+export function readDamagedLinkedMediaMeta(
+  value: unknown,
+): Omit<MediaLibraryAssetMetaFile, 'source'> | null {
+  if (!isRecord(value) || !isRecord(value.source) || value.source.type !== 'linked-file')
+    return null
+  const candidate = { ...value, source: { type: 'user-selected' } }
+  if (!isMediaLibraryAssetMetaFileValue(candidate)) return null
+  const { source: _, ...asset } = candidate
+  return asset
 }

@@ -31,6 +31,7 @@ export const SHORT_SEGMENT_MAX_DURATION_SECONDS = 3
 
 export interface VideoSceneSegmentsInput {
   mediaId: string
+  verifiedDigest?: string
 }
 
 export interface VideoSceneSegment {
@@ -57,8 +58,7 @@ export interface VideoSceneSegmentsResult {
   segments: VideoSceneSegment[]
 }
 
-export interface VideoSegmentExportsInput {
-  mediaId: string
+export interface VideoSegmentExportsInput extends VideoSceneSegmentsInput {
   canonicalSegments?: VideoSceneSegment[]
 }
 
@@ -90,8 +90,7 @@ export interface VideoSegmentExportsResult {
   timelineItems: Record<string, UnifiedTimelineItemData<'video'>>
 }
 
-export interface VideoSegmentOssUploadsInput {
-  mediaId: string
+export interface VideoSegmentOssUploadsInput extends VideoSceneSegmentsInput {
   canonicalSegments?: VideoSceneSegment[]
 }
 
@@ -222,14 +221,36 @@ export type MediaIndexingModule = Pick<UnifiedMediaModule, 'getMediaItem'> & {
   ensureMediaReady(mediaId: string): Promise<unknown>
 }
 
+const verifiedIndexMedia = new Map<string, VideoMediaItem>()
+
+export function videoIndexSourceKey({ mediaId, verifiedDigest }: VideoSceneSegmentsInput) {
+  return verifiedDigest ? `${mediaId}:${verifiedDigest}` : mediaId
+}
+
+export function registerVerifiedIndexVideo(media: VideoMediaItem, digest: string) {
+  const key = videoIndexSourceKey({ mediaId: media.id, verifiedDigest: digest })
+  verifiedIndexMedia.set(key, media)
+  return () => {
+    if (verifiedIndexMedia.get(key) === media) verifiedIndexMedia.delete(key)
+  }
+}
+
+export function getVideoForIndex(module: MediaIndexingModule, input: VideoSceneSegmentsInput) {
+  if (!input.verifiedDigest) return getVideoMediaItem(module, input.mediaId)
+  const snapshot = verifiedIndexMedia.get(videoIndexSourceKey(input))
+  if (!snapshot) throw new Error('索引原件快照已失效')
+  return snapshot
+}
+
 export function createVideoSceneSegmentsRequest(
   mediaId: string,
   policy?: ResourcePolicy,
+  verifiedDigest?: string,
 ): ResourceRequest<VideoSceneSegmentsInput> {
   return {
     type: VIDEO_SCENE_SEGMENTS_RESOURCE_TYPE,
-    key: mediaId,
-    input: { mediaId },
+    key: videoIndexSourceKey({ mediaId, verifiedDigest }),
+    input: { mediaId, ...(verifiedDigest && { verifiedDigest }) },
     policy: {
       queue: 'local-heavy',
       ...policy,
@@ -241,11 +262,12 @@ export function createVideoSegmentExportsRequest(
   mediaId: string,
   policy?: ResourcePolicy,
   canonicalSegments?: VideoSceneSegment[],
+  verifiedDigest?: string,
 ): ResourceRequest<VideoSegmentExportsInput> {
   return {
     type: VIDEO_SEGMENT_EXPORTS_RESOURCE_TYPE,
-    key: `${mediaId}:${segmentPlanKey(canonicalSegments)}`,
-    input: { mediaId, canonicalSegments },
+    key: `${videoIndexSourceKey({ mediaId, verifiedDigest })}:${segmentPlanKey(canonicalSegments)}`,
+    input: { mediaId, canonicalSegments, ...(verifiedDigest && { verifiedDigest }) },
     policy: {
       queue: 'export',
       ...policy,
@@ -257,11 +279,12 @@ export function createVideoSegmentOssUploadsRequest(
   mediaId: string,
   policy?: ResourcePolicy,
   canonicalSegments?: VideoSceneSegment[],
+  verifiedDigest?: string,
 ): ResourceRequest<VideoSegmentOssUploadsInput> {
   return {
     type: VIDEO_SEGMENT_OSS_UPLOADS_RESOURCE_TYPE,
-    key: `${mediaId}:${segmentPlanKey(canonicalSegments)}`,
-    input: { mediaId, canonicalSegments },
+    key: `${videoIndexSourceKey({ mediaId, verifiedDigest })}:${segmentPlanKey(canonicalSegments)}`,
+    input: { mediaId, canonicalSegments, ...(verifiedDigest && { verifiedDigest }) },
     policy: {
       queue: 'export',
       ...policy,

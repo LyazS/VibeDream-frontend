@@ -1,4 +1,7 @@
-import { cleanupTimelineItemBunny, setupTimelineItemBunny } from '@/core/bunnyUtils/timelineItemSetup'
+import {
+  cleanupTimelineItemBunny,
+  setupTimelineItemBunny,
+} from '@/core/bunnyUtils/timelineItemSetup'
 import { detectSceneTransNetV2 } from '@/core/utils/scene-detector-transnetv2'
 import type { ResolveContext, ResourceResolver } from '../ResourceResolver'
 import type { ResourceRequest } from '../ResourceTypes'
@@ -7,7 +10,8 @@ import {
   buildSegmentsFromBoundaries,
   createTemporaryVideoTimelineItem,
   createVideoSceneSegmentsRequest,
-  getVideoMediaItem,
+  getVideoForIndex,
+  videoIndexSourceKey,
   type MediaIndexingModule,
   type VideoSceneSegmentsInput,
   type VideoSceneSegmentsResult,
@@ -22,15 +26,15 @@ export class VideoSceneSegmentsResolver
   constructor(private readonly module: MediaIndexingModule) {}
 
   getKey(input: VideoSceneSegmentsInput): string {
-    return input.mediaId
+    return videoIndexSourceKey(input)
   }
 
   async getDependencies(ctx: ResolveContext<VideoSceneSegmentsInput>): Promise<ResourceRequest[]> {
-    return [createMediaReadyRequest(ctx.input.mediaId)]
+    return ctx.input.verifiedDigest ? [] : [createMediaReadyRequest(ctx.input.mediaId)]
   }
 
   async resolve(ctx: ResolveContext<VideoSceneSegmentsInput>): Promise<VideoSceneSegmentsResult> {
-    const mediaItem = getVideoMediaItem(this.module, ctx.input.mediaId)
+    const mediaItem = getVideoForIndex(this.module, ctx.input)
     if (mediaItem.mediaStatus !== 'ready' || typeof mediaItem.duration !== 'number') {
       throw new Error(`视频素材尚未就绪: ${mediaItem.name}`)
     }

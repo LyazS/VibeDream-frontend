@@ -188,23 +188,29 @@ export async function saveProject(
   try {
     console.log(`💾 保存项目: ${projectId}`)
 
-    // 保存项目配置
+    // Queue each snapshot at the same point, so a delayed full save cannot overwrite a
+    // directory snapshot committed by an import started later.
+    const writes: Promise<void>[] = []
+    const writeOptions = { workspaceKey: fileSystemService.workspaceKey }
     if (configChanged && projectConfig) {
-      const configPath = fileSystemService.paths.getProjectConfigPath(projectId)
-      await fileSystemService.writeFile(configPath, JSON.stringify(projectConfig, null, 2))
+      const path = fileSystemService.paths.getProjectConfigPath(projectId)
+      writes.push(
+        fileSystemService.writeFile(path, JSON.stringify(projectConfig, null, 2), writeOptions),
+      )
     }
-
-    // 保存项目内容
     if (contentChanged && projectTimeline) {
-      const contentPath = fileSystemService.paths.getProjectTimelinePath(projectId)
-      await fileSystemService.writeFile(contentPath, JSON.stringify(projectTimeline, null, 2))
+      const path = fileSystemService.paths.getProjectTimelinePath(projectId)
+      writes.push(
+        fileSystemService.writeFile(path, JSON.stringify(projectTimeline, null, 2), writeOptions),
+      )
     }
-
-    // 🆕 保存目录配置
     if (directoryChanged && directoryConfig) {
-      const directoryPath = fileSystemService.paths.getProjectDirectoriesPath(projectId)
-      await fileSystemService.writeFile(directoryPath, JSON.stringify(directoryConfig, null, 2))
+      const path = fileSystemService.paths.getProjectDirectoriesPath(projectId)
+      writes.push(
+        fileSystemService.writeFile(path, JSON.stringify(directoryConfig, null, 2), writeOptions),
+      )
     }
+    await Promise.all(writes)
 
     console.log(`✅ 项目保存成功: ${projectId}`)
   } catch (error) {

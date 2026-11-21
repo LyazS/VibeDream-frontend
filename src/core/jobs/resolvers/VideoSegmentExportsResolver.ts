@@ -7,7 +7,8 @@ import {
   createTemporaryVideoTimelineItem,
   createVideoSceneSegmentsRequest,
   createVideoSegmentExportsRequest,
-  getVideoMediaItem,
+  getVideoForIndex,
+  videoIndexSourceKey,
   isShortSegment,
   segmentPlanKey,
   type MediaIndexingModule,
@@ -26,21 +27,21 @@ export class VideoSegmentExportsResolver
   constructor(private readonly module: MediaIndexingModule) {}
 
   getKey(input: VideoSegmentExportsInput): string {
-    return `${input.mediaId}:${segmentPlanKey(input.canonicalSegments)}`
+    return `${videoIndexSourceKey(input)}:${segmentPlanKey(input.canonicalSegments)}`
   }
 
   async getDependencies(ctx: ResolveContext<VideoSegmentExportsInput>): Promise<ResourceRequest[]> {
     if (ctx.input.canonicalSegments) return []
-    return [createVideoSceneSegmentsRequest(ctx.input.mediaId)]
+    return [createVideoSceneSegmentsRequest(ctx.input.mediaId, undefined, ctx.input.verifiedDigest)]
   }
 
   async resolve(ctx: ResolveContext<VideoSegmentExportsInput>): Promise<VideoSegmentExportsResult> {
-    const mediaItem = getVideoMediaItem(this.module, ctx.input.mediaId)
+    const mediaItem = getVideoForIndex(this.module, ctx.input)
     const segments =
       ctx.input.canonicalSegments ||
       (
         await ctx.ensure<VideoSceneSegmentsResult>(
-          createVideoSceneSegmentsRequest(ctx.input.mediaId),
+          createVideoSceneSegmentsRequest(ctx.input.mediaId, undefined, ctx.input.verifiedDigest),
         )
       ).segments
 

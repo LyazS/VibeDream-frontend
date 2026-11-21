@@ -5,7 +5,8 @@
     "edit": "Edit",
     "delete": {
       "title": "Delete",
-      "confirm": "Are you sure you want to delete project '{name}'? This operation cannot be undone."
+      "confirm": "Delete project “{name}”, its entire folder including imported copies, and its link records? Originals outside the project are kept. This cannot be undone.",
+      "failed": "Could not delete the project. Check workspace permissions and try again."
     },
     "name": "Project Name",
     "description": "Project Description",

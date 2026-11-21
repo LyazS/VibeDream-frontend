@@ -32,9 +32,12 @@ export class BunnyProcessor {
    * @param file 文件对象（必需）
    * @returns 处理结果
    */
-  async processMedia(mediaItem: UnifiedMediaItemData, file: File): Promise<BunnyProcessingResult> {
-    // 使用 p-limit 控制并发
-    return this.limit(() => this.processMediaInternal(mediaItem, file))
+  async processMedia(
+    mediaItem: UnifiedMediaItemData,
+    file: File,
+    options: { thumbnail?: boolean } = {},
+  ): Promise<BunnyProcessingResult> {
+    return this.limit(() => this.processMediaInternal(mediaItem, file, options.thumbnail !== false))
   }
 
   /**
@@ -46,6 +49,7 @@ export class BunnyProcessor {
   private async processMediaInternal(
     mediaItem: UnifiedMediaItemData,
     file: File,
+    thumbnail: boolean,
   ): Promise<BunnyProcessingResult> {
     console.log(`🚀 [BunnyProcessor] 开始处理媒体: ${mediaItem.name} (${mediaItem.mediaType})`)
 
@@ -59,23 +63,17 @@ export class BunnyProcessor {
     let duration: number
     let durationN: bigint
     switch (mediaItem.mediaType) {
-      case 'video': {
-        const bmedia = new BunnyMedia(targetFile)
-        await bmedia.ready
-        bunnyObjects = {
-          bunnyMedia: markRaw(bmedia),
-          originalWidth: bmedia.width,
-          originalHeight: bmedia.height,
-        }
-        duration = bmedia.duration
-        durationN = bmedia.durationN
-        break
-      }
+      case 'video':
       case 'audio': {
         const bmedia = new BunnyMedia(targetFile)
-        await bmedia.ready
-        bunnyObjects = {
-          bunnyMedia: markRaw(bmedia),
+        await bmedia.ready.catch(async (error) => {
+          await bmedia.dispose().catch(() => {})
+          throw error
+        })
+        bunnyObjects = { bunnyMedia: markRaw(bmedia) }
+        if (mediaItem.mediaType === 'video') {
+          bunnyObjects.originalWidth = bmedia.width
+          bunnyObjects.originalHeight = bmedia.height
         }
         duration = bmedia.duration
         durationN = bmedia.durationN
@@ -98,6 +96,8 @@ export class BunnyProcessor {
     }
     // 预先设置给 generateThumbnailForUnifiedMediaItemBunny 使用
     mediaItem.runtime.bunny = bunnyObjects
+    if (!thumbnail) return { bunnyObjects, duration, durationN }
+
     // 生成缩略图
     if (mediaItem.mediaType === 'video' || mediaItem.mediaType === 'image') {
       // 5. 计算缩略图尺寸（最长边使用常量，保持宽高比）
@@ -156,4 +156,11 @@ export class BunnyProcessor {
   setMaxConcurrentClips(max: number): void {
     this.limit = pLimit(Math.max(1, max))
   }
+}
+
+export async function disposeBunnyObjects(objects: BunnyObjects | undefined) {
+  if (!objects) return
+  if (objects.thumbnailUrl) URL.revokeObjectURL(objects.thumbnailUrl)
+  objects.imageClip?.close()
+  await objects.bunnyMedia?.dispose()
 }

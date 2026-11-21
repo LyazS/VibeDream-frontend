@@ -10,6 +10,18 @@ export type DetectedMediaType = 'video' | 'image' | 'audio' | 'unknown'
 
 // ==================== 文件验证类型定义 ====================
 
+export type FileValidationFailure =
+  | {
+      code:
+        | 'missing'
+        | 'empty'
+        | 'unsupported'
+        | 'invalidName'
+        | 'invalidCharacters'
+        | 'reservedName'
+    }
+  | { code: 'tooLarge'; sizeMB: number; limitMB: number }
+
 /**
  * 文件验证结果 - 使用条件类型确保类型安全
  */
@@ -21,6 +33,7 @@ export type FileValidationResult =
     }
   | {
       isValid: false
+      failure: FileValidationFailure
       errorMessage: string
     }
 
@@ -208,6 +221,7 @@ export function validateFile(file: File): FileValidationResult {
   if (!file) {
     return {
       isValid: false,
+      failure: { code: 'missing' },
       errorMessage: '文件不存在',
     }
   }
@@ -216,6 +230,7 @@ export function validateFile(file: File): FileValidationResult {
   if (file.size === 0) {
     return {
       isValid: false,
+      failure: { code: 'empty' },
       errorMessage: '文件为空',
     }
   }
@@ -226,6 +241,7 @@ export function validateFile(file: File): FileValidationResult {
     console.error(`❌ [validateFile] 不支持的文件类型: ${file.type || '未知'} (${file.name})`)
     return {
       isValid: false,
+      failure: { code: 'unsupported' },
       errorMessage:
         '不支持的文件类型，支持的格式：视频(MP4、WebM、MOV、AVI、MKV、FLV)、音频(MP3、WAV、AAC、FLAC、OGG、M4A)、图片(JPG、PNG、GIF、WebP、BMP)',
     }
@@ -239,6 +255,7 @@ export function validateFile(file: File): FileValidationResult {
     const typeNames = { video: '视频', audio: '音频', image: '图片' }
     return {
       isValid: false,
+      failure: { code: 'tooLarge', sizeMB, limitMB },
       errorMessage: `${typeNames[mediaType]}文件过大: ${sizeMB}MB，最大支持 ${limitMB}MB`,
     }
   }
@@ -247,6 +264,7 @@ export function validateFile(file: File): FileValidationResult {
   if (!file.name || file.name.length === 0 || file.name.length > 255) {
     return {
       isValid: false,
+      failure: { code: 'invalidName' },
       errorMessage: '文件名无效',
     }
   }
@@ -255,6 +273,7 @@ export function validateFile(file: File): FileValidationResult {
   if (invalidChars.test(file.name)) {
     return {
       isValid: false,
+      failure: { code: 'invalidCharacters' },
       errorMessage: '文件名包含非法字符',
     }
   }
@@ -263,6 +282,7 @@ export function validateFile(file: File): FileValidationResult {
   if (reservedNames.test(file.name)) {
     return {
       isValid: false,
+      failure: { code: 'reservedName' },
       errorMessage: '文件名使用了系统保留名称',
     }
   }

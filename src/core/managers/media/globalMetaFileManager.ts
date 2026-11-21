@@ -1,8 +1,21 @@
+import { toRaw } from 'vue'
+import {
+  pruneLinkedHandles,
+  withLinkedProjectLock,
+  type LinkedProjectScope,
+} from '@/core/datasource/providers/linked-file/LinkedMediaBindings'
+import {
+  createLinkedMediaReader,
+  verifyLinkedContent,
+} from '@/core/datasource/providers/linked-file/LinkedMediaReader'
+import type { LinkedFileSourceData } from '@/core/datasource/providers/linked-file/LinkedFileSource'
 import { fileSystemService } from '@/core/managers/filesystem/fileSystemService'
 import {
   MEDIA_META_VERSION,
   parseLibraryAssetMetaFile,
+  readDamagedLinkedMediaMeta,
   type MediaMetaFile,
+  type MediaLibraryAssetMetaFile,
 } from '@/core/project/metaTypes'
 import type { UnifiedMediaItemData, MediaStatus } from '@/core/mediaitem/types'
 import {
@@ -28,8 +41,21 @@ export interface MediaSaveResult {
 /** 固定一次导入的工程；异步步骤之后及写入之前重新检查执行权限。 */
 export interface MediaPersistenceContext {
   projectId: string
+  workspaceKey?: string | null
   assertActive?: () => void
 }
+
+interface MediaReadOptions {
+  context?: MediaPersistenceContext
+  linkedReader?: ReturnType<typeof createLinkedMediaReader>
+  verifyContent?: boolean
+  signal?: AbortSignal
+}
+
+type LinkedMetaCommit = { source: LinkedFileSourceData } & (
+  | { initial: true }
+  | { onCommitted: () => void }
+)
 
 /**
  * 全局Meta文件管理器
@@ -42,6 +68,9 @@ export interface MediaPersistenceContext {
  */
 class GlobalMetaFileManager {
   private projectId: string = ''
+  private session = {}
+  private readonly assetContexts = new WeakMap<UnifiedLibraryAssetData, MediaPersistenceContext>()
+  private readonly deletingAssets = new WeakSet<UnifiedLibraryAssetData>()
 
   /**
    * 初始化管理器
@@ -49,6 +78,7 @@ class GlobalMetaFileManager {
    */
   async initialize(projectId: string): Promise<void> {
     this.projectId = projectId
+    this.session = {}
     console.log(`🔧 [globalMetaFileManager] 初始化: ${projectId}`)
   }
 
@@ -57,6 +87,37 @@ class GlobalMetaFileManager {
    */
   get currentProjectId(): string {
     return this.projectId
+  }
+
+  captureContext(): MediaPersistenceContext {
+    const { projectId, session } = this
+    const workspaceKey = fileSystemService.workspaceKey
+    return {
+      projectId,
+      workspaceKey,
+      assertActive: () => {
+        if (
+          !projectId ||
+          this.session !== session ||
+          fileSystemService.workspaceKey !== workspaceKey
+        ) {
+          throw new Error('素材所属工程或工作区已切换')
+        }
+      },
+    }
+  }
+
+  bindAsset(asset: UnifiedLibraryAssetData): void {
+    this.assetContexts.set(toRaw(asset), this.captureContext())
+  }
+
+  contextForAsset(asset: UnifiedLibraryAssetData): MediaPersistenceContext {
+    return this.assetContexts.get(toRaw(asset)) ?? this.captureContext()
+  }
+
+  assertAssetActive(asset: UnifiedLibraryAssetData): void {
+    this.contextForAsset(asset).assertActive?.()
+    if (this.deletingAssets.has(toRaw(asset))) throw new Error('素材已删除或正在删除')
   }
 
   // ==================== 媒体文件操作 ====================
@@ -70,9 +131,10 @@ class GlobalMetaFileManager {
   async saveMediaFile(
     file: File,
     media: MediaFileReference,
-    context: MediaPersistenceContext = { projectId: this.projectId },
+    context: MediaPersistenceContext = this.captureContext(),
   ): Promise<boolean> {
     const { id } = media
+    const workspaceKey = context.workspaceKey ?? fileSystemService.workspaceKey
     try {
       context.assertActive?.()
       console.info('[MediaIdentity] save-file:start', {
@@ -94,13 +156,19 @@ class GlobalMetaFileManager {
       const mediaDirExists = await fileSystemService.directoryExists(mediaDirPath)
       context.assertActive?.()
       if (!mediaDirExists) {
-        await fileSystemService.createDirectory(mediaDirPath)
+        await fileSystemService.createDirectory(mediaDirPath, {
+          workspaceKey,
+          assertActive: context.assertActive,
+        })
         context.assertActive?.()
       }
 
       // 保存文件
       const mediaPath = fileSystemService.paths.getMediaPath(context.projectId, media)
-      await fileSystemService.writeFile(mediaPath, file)
+      await fileSystemService.writeFile(mediaPath, file, {
+        workspaceKey,
+        assertActive: context.assertActive,
+      })
       context.assertActive?.()
 
       console.info('[MediaIdentity] save-file:success', { id, ext: media.ext, path: mediaPath })
@@ -116,16 +184,40 @@ class GlobalMetaFileManager {
    * @param media 媒体 ID 和原文件扩展名
    * @returns 媒体文件
    */
-  async loadMediaFile(media: MediaFileReference): Promise<File> {
+  async loadMediaFile(
+    media: MediaFileReference | UnifiedMediaItemData,
+    options: MediaReadOptions = {},
+  ): Promise<File> {
+    const context =
+      options.context ?? ('source' in media ? this.contextForAsset(media) : this.captureContext())
+    context.assertActive?.()
+    options.signal?.throwIfAborted()
+    if ('source' in media && media.source.type === 'linked-file') {
+      const record = media.source.record
+      const workspaceKey = context.workspaceKey ?? fileSystemService.workspaceKey
+      if (!workspaceKey) throw new Error('工作区不可用')
+      const reader =
+        options.linkedReader ??
+        createLinkedMediaReader({ ...context, workspaceKey }, fileSystemService)
+      const file = await reader.read(media)
+      if (options.verifyContent && record) await verifyLinkedContent(record, file, options.signal)
+      if (media.source.type !== 'linked-file' || media.source.record !== record)
+        throw new Error('链接来源已变化')
+      context.assertActive?.()
+      options.signal?.throwIfAborted()
+      return file
+    }
     const { id } = media
     try {
       console.info('[MediaIdentity] load-file:start', {
-        projectId: this.projectId,
+        projectId: context.projectId,
         id,
         ext: media.ext,
       })
-      const mediaPath = fileSystemService.paths.getMediaPath(this.projectId, media)
+      const mediaPath = fileSystemService.paths.getMediaPath(context.projectId, media)
       const blob = await fileSystemService.readFileAsBlob(mediaPath)
+      context.assertActive?.()
+      options.signal?.throwIfAborted()
       const file = new File([blob], getMediaFileName(media), { type: blob.type })
 
       console.info('[MediaIdentity] load-file:success', {
@@ -188,10 +280,18 @@ class GlobalMetaFileManager {
    */
   async saveMetaFile(
     asset: UnifiedLibraryAssetData,
-    context: MediaPersistenceContext = { projectId: this.projectId },
+    context: MediaPersistenceContext = this.contextForAsset(asset),
+    linkedCommit?: LinkedMetaCommit,
   ): Promise<boolean> {
-    try {
+    const workspaceKey = context.workspaceKey ?? fileSystemService.workspaceKey
+    const previousSource = isMediaAsset(asset) ? asset.source : undefined
+    const assertActive = () => {
       context.assertActive?.()
+      if (this.deletingAssets.has(toRaw(asset))) throw new Error('素材已删除或正在删除')
+      if (isMediaAsset(asset) && asset.source !== previousSource) throw new Error('链接来源已更新')
+    }
+    try {
+      assertActive()
       console.log(`💾 [globalMetaFileManager] 保存 Meta 文件: ${asset.id}`)
 
       // 定义终态列表
@@ -207,7 +307,7 @@ class GlobalMetaFileManager {
             assetKind: 'media',
             parentDirectoryId: asset.parentDirectoryId,
             mediaType: asset.mediaType,
-            source: extractSourceData(asset.source),
+            source: extractSourceData(linkedCommit?.source ?? asset.source),
             duration: asset.duration,
             ...(terminalStatuses.includes(asset.mediaStatus) && {
               mediaStatus: asset.mediaStatus as 'error' | 'cancelled' | 'missing',
@@ -230,32 +330,28 @@ class GlobalMetaFileManager {
             }),
           }
 
-      // 2. 检查工作空间权限
       const permissionResult = await fileSystemService.checkPermission()
-      context.assertActive?.()
+      assertActive()
       if (!permissionResult.hasAccess) throw new Error('未设置工作目录')
 
-      // 3. 确保 media 目录存在
       const mediaDirPath = fileSystemService.paths.getMediaDirPath(context.projectId)
-      const mediaDirExists = await fileSystemService.directoryExists(mediaDirPath)
-      context.assertActive?.()
-      if (!mediaDirExists) {
-        await fileSystemService.createDirectory(mediaDirPath)
-        context.assertActive?.()
+      if (!(await fileSystemService.directoryExists(mediaDirPath))) {
+        await fileSystemService.createDirectory(mediaDirPath, { workspaceKey, assertActive })
       }
 
-      // 4. 写入 meta 文件
       const metaPath = fileSystemService.paths.getMetaPath(context.projectId, asset.id)
-      console.info('[MediaIdentity] save-meta:start', {
-        id: asset.id,
-        ext: isMediaAsset(asset) ? asset.ext : undefined,
-        name: asset.name,
-        version: metaData.version,
-        assetKind: asset.assetKind,
-        path: metaPath,
-      })
-      await fileSystemService.writeFile(metaPath, JSON.stringify(metaData, null, 2))
-      context.assertActive?.()
+      const content = JSON.stringify(metaData, null, 2)
+      const writeOptions = { workspaceKey, assertActive }
+      if (linkedCommit) {
+        await fileSystemService.commitLinkedMediaMeta(
+          metaPath,
+          content,
+          writeOptions,
+          'initial' in linkedCommit ? 'create' : linkedCommit,
+        )
+      } else {
+        await fileSystemService.writeFile(metaPath, content, writeOptions)
+      }
 
       console.info('[MediaIdentity] save-meta:success', { id: asset.id, path: metaPath })
       return true
@@ -289,37 +385,56 @@ class GlobalMetaFileManager {
    * 扫描所有 Meta 文件
    * @returns Meta 文件数组
    */
-  async scanAllMetaFiles(): Promise<MediaMetaFile[]> {
+  async scanProjectMeta(context: MediaPersistenceContext) {
+    const metaFiles: MediaMetaFile[] = []
+    const damaged: Omit<MediaLibraryAssetMetaFile, 'source'>[] = []
+    let complete = true
     try {
-      const mediaDirPath = fileSystemService.paths.getMediaDirPath(this.projectId)
+      context.assertActive?.()
+      const mediaDirPath = fileSystemService.paths.getMediaDirPath(context.projectId)
       const entries = await fileSystemService.listDirectory(mediaDirPath)
-
-      const metaFiles: MediaMetaFile[] = []
-
       for (const entry of entries) {
-        if (entry.kind === 'file' && entry.name.endsWith('.meta')) {
-          try {
-            const content = await fileSystemService.readFile(entry.path)
-            const metaData = parseLibraryAssetMetaFile(JSON.parse(content) as unknown)
-            console.info('[MediaIdentity] scan-meta:accepted', {
-              id: metaData.id,
-              ext: metaData.assetKind === 'media' ? metaData.ext : undefined,
-              version: metaData.version,
-              path: entry.path,
-            })
-            metaFiles.push(metaData)
-          } catch (error) {
-            console.warn('[MediaIdentity] scan-meta:rejected', { path: entry.path }, error)
-          }
+        if (entry.kind !== 'file' || !entry.name.endsWith('.meta')) continue
+        context.assertActive?.()
+        let value: unknown
+        try {
+          const content = await fileSystemService.readFile(entry.path)
+          // An interrupted create can leave an empty file. A complete read confirms that
+          // it cannot reference a binding. A malformed non-empty record remains uncertain.
+          if (content.length === 0) continue
+          value = JSON.parse(content)
+          metaFiles.push(parseLibraryAssetMetaFile(value))
+        } catch (error) {
+          complete = false
+          const invalidLink = readDamagedLinkedMediaMeta(value)
+          if (invalidLink) damaged.push(invalidLink)
+          console.warn('[MediaIdentity] scan-meta:rejected', { path: entry.path }, error)
         }
       }
-
-      console.log(`📄 [globalMetaFileManager] 扫描到 ${metaFiles.length} 个 Meta 文件`)
-      return metaFiles
+      context.assertActive?.()
     } catch (error) {
-      console.error('❌ [globalMetaFileManager] 扫描 Meta 文件失败:', error)
-      return []
+      complete = false
+      console.warn('[MediaIdentity] scan-meta:failed', error)
     }
+    return { metaFiles, damaged, complete }
+  }
+
+  /** Call under the linked project lock. An incomplete scan must never remove a binding. */
+  async reconcileLinkedHandles(
+    scope: LinkedProjectScope,
+    context: MediaPersistenceContext,
+    scanned?: Awaited<ReturnType<GlobalMetaFileManager['scanProjectMeta']>>,
+  ) {
+    const { complete, metaFiles } = scanned ?? (await this.scanProjectMeta(context))
+    if (!complete) return
+    context.assertActive?.()
+    const referenced = new Set<string>()
+    for (const meta of metaFiles) {
+      if (meta.assetKind === 'media' && meta.source.type === 'linked-file') {
+        referenced.add(meta.source.handleId)
+      }
+    }
+    await pruneLinkedHandles(scope, referenced)
   }
 
   // ==================== 完整保存流程 ====================
@@ -335,7 +450,10 @@ class GlobalMetaFileManager {
   async saveMediaToProject(
     mediaItem: UnifiedMediaItemData,
     file: File,
-    context: MediaPersistenceContext = { projectId: this.projectId },
+    context: MediaPersistenceContext = this.assetContexts.get(toRaw(mediaItem)) ?? {
+      projectId: this.projectId,
+      workspaceKey: fileSystemService.workspaceKey,
+    },
   ): Promise<MediaSaveResult> {
     try {
       context.assertActive?.()
@@ -383,16 +501,23 @@ class GlobalMetaFileManager {
    * @param media 媒体 ID 和原文件扩展名
    * @returns 删除结果
    */
-  async deleteMediaFiles(media: MediaFileReference): Promise<{
+  async deleteMediaFiles(
+    media: MediaFileReference,
+    context: MediaPersistenceContext = this.captureContext(),
+  ): Promise<{
     success: boolean
     deletedMedia: boolean
     deletedMeta: boolean
     error?: string
   }> {
     const { id } = media
+    const options = {
+      workspaceKey: context.workspaceKey ?? fileSystemService.workspaceKey,
+      assertActive: context.assertActive,
+    }
     try {
       console.info('[MediaIdentity] delete:start', {
-        projectId: this.projectId,
+        projectId: context.projectId,
         id,
         ext: media.ext,
       })
@@ -406,11 +531,11 @@ class GlobalMetaFileManager {
 
       // 1. 删除媒体文件
       try {
-        const mediaPath = fileSystemService.paths.getMediaPath(this.projectId, media)
+        const mediaPath = fileSystemService.paths.getMediaPath(context.projectId, media)
         mediaExists = await fileSystemService.fileExists(mediaPath)
 
         if (mediaExists) {
-          await fileSystemService.deleteFile(mediaPath)
+          await fileSystemService.deleteFile(mediaPath, options)
           deletedMedia = true
           console.log(`✅ [globalMetaFileManager] 媒体文件已删除: ${id}`)
         } else {
@@ -423,11 +548,11 @@ class GlobalMetaFileManager {
 
       // 2. 删除Meta文件
       try {
-        const metaPath = fileSystemService.paths.getMetaPath(this.projectId, id)
+        const metaPath = fileSystemService.paths.getMetaPath(context.projectId, id)
         metaExists = await fileSystemService.fileExists(metaPath)
 
         if (metaExists) {
-          await fileSystemService.deleteFile(metaPath)
+          await fileSystemService.deleteFile(metaPath, options)
           deletedMeta = true
           console.log(`✅ [globalMetaFileManager] Meta文件已删除: ${id}.meta`)
         } else {
@@ -479,7 +604,36 @@ class GlobalMetaFileManager {
     error?: string
   }> {
     if (isMediaAsset(asset)) {
-      return this.deleteMediaFiles(asset)
+      const context = this.contextForAsset(asset)
+      const workspaceKey = context.workspaceKey ?? fileSystemService.workspaceKey
+      this.assertAssetActive(asset)
+      this.deletingAssets.add(toRaw(asset))
+      if (asset.source.type !== 'linked-file') {
+        const result = await this.deleteMediaFiles(asset, context)
+        if (!result.success) this.deletingAssets.delete(toRaw(asset))
+        return result
+      }
+      try {
+        if (!workspaceKey) throw new Error('工作区不可用')
+        const scope = { projectId: context.projectId, workspaceKey }
+        await withLinkedProjectLock(scope, async () => {
+          context.assertActive?.()
+          const path = fileSystemService.paths.getMetaPath(scope.projectId, asset.id)
+          if (await fileSystemService.fileExists(path)) {
+            await fileSystemService.deleteFile(path, {
+              workspaceKey,
+              assertActive: context.assertActive,
+            })
+          }
+          await this.reconcileLinkedHandles(scope, context).catch((error) => {
+            console.warn('链接句柄回收将延后到下次打开工程', error)
+          })
+        })
+        return { success: true, deletedMedia: false, deletedMeta: true }
+      } catch (error) {
+        this.deletingAssets.delete(toRaw(asset))
+        return { success: false, deletedMedia: false, deletedMeta: false, error: String(error) }
+      }
     }
 
     try {

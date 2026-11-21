@@ -74,6 +74,17 @@
       </div>
     </template>
 
+    <template v-else-if="item?.mediaStatus === 'missing' && item.source.type === 'linked-file'">
+      <div
+        class="thumbnail-placeholder"
+        :title="
+          item.source.issue ? t(`media.linked.issue.${item.source.issue}`) : item.source.errorMessage
+        "
+      >
+        <component :is="IconComponents.WARNING" size="20px" />
+      </div>
+    </template>
+
     <!-- 就绪状态：显示缩略图 -->
     <template v-else-if="item">
       <!-- 优先使用缩略图 -->

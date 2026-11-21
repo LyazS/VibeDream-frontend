@@ -1,126 +1,83 @@
+import { fileSystemService } from '@/core/managers/filesystem/fileSystemService'
 import { globalMetaFileManager } from '@/core/managers/media/globalMetaFileManager'
-import type { MediaMetaFile } from '@/core/project/metaTypes'
-import { createUnifiedMediaItemData } from '@/core/mediaitem/types'
-import { DataSourceFactory } from '@/core/datasource/core/DataSourceTypes'
-import type { BaseUserSelectedFileSourceData } from '@/core/datasource/providers/user-selected/UserSelectedFileSource'
+import { createUnifiedMediaItemData, type UnifiedMediaItemData } from '@/core/mediaitem/types'
+import {
+  DataSourceFactory,
+  type UnifiedDataSourceData,
+} from '@/core/datasource/core/DataSourceTypes'
 import type { UnifiedLibraryAssetData } from '@/core/asset/types'
+import type { MediaLibraryAssetMetaFile } from '@/core/project/metaTypes'
+import { createLinkedFileSource } from '@/core/datasource/providers/linked-file/LinkedFileSource'
+import { withLinkedProjectLock } from '@/core/datasource/providers/linked-file/LinkedMediaBindings'
+import {
+  createLinkedMediaReader,
+  LinkedMediaError,
+  markLinkedMediaReadable,
+  setLinkedMediaIssue,
+} from '@/core/datasource/providers/linked-file/LinkedMediaReader'
 
-/**
- * 媒体项目加载器（阶段二彻底重构版）
- * 负责从 Meta 文件重建媒体项目
- *
- * 🌟 只从 Meta 文件加载，Meta 文件是唯一真相源
- */
 export class MediaItemLoader {
-  /**
-   * 从 Meta 文件加载所有媒体项目
-   * @param projectId 项目 ID
-   * @returns 媒体项目数组
-   */
   async loadMediaItemsFromMeta(projectId: string): Promise<UnifiedLibraryAssetData[]> {
-    try {
-      console.log(`📂 [MediaItemLoader] 开始从 Meta 文件加载媒体项目: ${projectId}`)
-
-      // 1. 扫描所有 Meta 文件
-      const metaFiles = await globalMetaFileManager.scanAllMetaFiles()
-      console.log(`📄 [MediaItemLoader] 发现 ${metaFiles.length} 个 Meta 文件`)
-
-      // 2. 从每个 Meta 文件重建媒体项目
-      const mediaItems: UnifiedLibraryAssetData[] = []
-
-      for (const metaData of metaFiles) {
+    const context = globalMetaFileManager.captureContext()
+    if (context.projectId !== projectId) throw new Error('素材所属工程已切换')
+    const scan = () => globalMetaFileManager.scanProjectMeta(context)
+    const scope = context.workspaceKey ? { projectId, workspaceKey: context.workspaceKey } : null
+    const result = scope
+      ? await withLinkedProjectLock(scope, async () => {
+          const scanned = await scan()
+          await globalMetaFileManager
+            .reconcileLinkedHandles(scope, context, scanned)
+            .catch((error) => {
+              console.warn('链接句柄回收将延后到下次打开工程', error)
+            })
+          return scanned
+        })
+      : await scan()
+    context.assertActive?.()
+    const linkedReader = scope ? createLinkedMediaReader(scope, fileSystemService) : undefined
+    const items: UnifiedMediaItemData[] = []
+    for (const meta of result.metaFiles) {
+      if (meta.assetKind !== 'media') continue
+      const source =
+        meta.source.type === 'linked-file'
+          ? createLinkedFileSource(meta.source)
+          : DataSourceFactory.createUserSelectedSourceFromBaseData(meta.source)
+      const item = rebuildMediaItem(meta, source)
+      if (source.type === 'linked-file') {
         try {
-          if (metaData.assetKind === 'effect-template') {
-            continue
-          }
-
-          const mediaItem = await this.rebuildMediaItemFromMeta(metaData)
-
-          if (mediaItem.assetKind === 'effect-template') {
-            console.log(`✨ [MediaItemLoader] 模板资产加载成功: ${metaData.name}`)
-          } else if (mediaItem.mediaType === 'text') {
-            // text 类型没有实际媒体文件，跳过文件验证
-            console.log(`📝 [MediaItemLoader] 文本媒体项目加载（无文件）: ${metaData.name}`)
-          } else if (mediaItem.mediaStatus === 'ready') {
-            const fileExists = await globalMetaFileManager.verifyMediaFileExists(mediaItem)
-
-            if (fileExists) {
-              console.log(`✅ [MediaItemLoader] 媒体项目加载成功: ${metaData.name}`)
-            } else {
-              // 文件缺失，标记为 missing 状态
-              mediaItem.mediaStatus = 'missing'
-              console.warn(`⚠️ [MediaItemLoader] 媒体文件缺失: ${metaData.name}`)
-            }
-          } else {
-            console.log(
-              `📋 [MediaItemLoader] 媒体项目加载（状态: ${mediaItem.mediaStatus}）: ${metaData.name}`,
-            )
-          }
-          mediaItems.push(mediaItem)
+          const file = await globalMetaFileManager.loadMediaFile(item, { linkedReader, context })
+          markLinkedMediaReadable(item, file)
         } catch (error) {
-          console.error(`❌ [MediaItemLoader] 重建媒体项目失败: ${metaData.name}`, error)
+          setLinkedMediaIssue(item, error)
         }
+      } else if (item.mediaType !== 'text' && item.mediaStatus === 'ready') {
+        if (!(await globalMetaFileManager.verifyMediaFileExists(item))) item.mediaStatus = 'missing'
       }
-
-      console.log(`✅ [MediaItemLoader] 媒体项目加载完成: ${mediaItems.length}/${metaFiles.length}`)
-      return mediaItems
-    } catch (error) {
-      console.error('❌ [MediaItemLoader] 加载媒体项目失败:', error)
-      return []
+      context.assertActive?.()
+      items.push(item)
     }
-  }
-
-  /**
-   * 从 Meta 文件重建媒体项目（阶段二彻底重构版）
-   * @param metaData Meta 文件数据
-   * @returns 重建的媒体项目
-   */
-  private async rebuildMediaItemFromMeta(
-    metaData: MediaMetaFile,
-  ): Promise<UnifiedLibraryAssetData> {
-    if (metaData.assetKind === 'effect-template') {
-      throw new Error('新链路不再支持从项目媒体目录恢复 effect-template 资产')
+    for (const meta of result.damaged) {
+      const item = rebuildMediaItem(meta, createLinkedFileSource())
+      setLinkedMediaIssue(item, new LinkedMediaError('damaged'))
+      items.push(item)
     }
-
-    // 1. 根据数据源类型创建相应的数据源（运行时状态）
-    let source
-
-    const sourceType = metaData.source.type
-
-    if (sourceType === 'user-selected') {
-      // 用户选择文件数据源
-      source = DataSourceFactory.createUserSelectedSourceFromBaseData(
-        metaData.source as BaseUserSelectedFileSourceData,
-      )
-    } else {
-      throw new Error(`不支持的数据源类型: ${sourceType}`)
-    }
-
-    // 2. 创建媒体项目
-    const mediaItem = createUnifiedMediaItemData(metaData.id, metaData.name, source, {
-      ext: metaData.ext,
-      createdAt: metaData.createdAt,
-      parentDirectoryId: metaData.parentDirectoryId,
-      mediaType: metaData.mediaType,
-      duration: metaData.duration,
-      mediaStatus: metaData.mediaStatus || 'pending', // 🌟 如果 meta 文件中有终态状态，使用它；否则默认为 pending
-      // 恢复素材分析元数据
-      ...(metaData.metadata && {
-        metadata: metaData.metadata,
-      }),
-    })
-    console.info('[MediaIdentity] restore-meta', {
-      id: mediaItem.id,
-      ext: mediaItem.ext,
-      name: mediaItem.name,
-      version: metaData.version,
-      mediaStatus: mediaItem.mediaStatus,
-      parentDirectoryId: mediaItem.parentDirectoryId,
-    })
-
-    return mediaItem
+    return items
   }
 }
 
-// 导出全局实例
+function rebuildMediaItem(
+  meta: Omit<MediaLibraryAssetMetaFile, 'source'>,
+  source: UnifiedDataSourceData,
+) {
+  return createUnifiedMediaItemData(meta.id, meta.name, source, {
+    ext: meta.ext,
+    createdAt: meta.createdAt,
+    parentDirectoryId: meta.parentDirectoryId,
+    mediaType: meta.mediaType,
+    duration: meta.duration,
+    mediaStatus: meta.mediaStatus || 'pending',
+    metadata: meta.metadata,
+  })
+}
+
 export const globalMediaItemLoader = new MediaItemLoader()

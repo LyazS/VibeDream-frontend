@@ -97,6 +97,17 @@
               >
                 <span class="item-name__label">{{ getItemName(item) }}</span>
               </div>
+              <button
+                v-if="getLinkedIssue(item.id)"
+                class="linked-media-status"
+                type="button"
+                :disabled="linkedRecoveryBusy"
+                :title="getLinkedIssue(item.id)"
+                :aria-label="getLinkedRecoveryLabel(item.id)"
+                @click.stop="recoverLinkedFile(item.id)"
+              >
+                {{ getLinkedIssue(item.id) }}
+              </button>
             </div>
           </div>
 
@@ -154,7 +165,20 @@
 
               <!-- 类型列 -->
               <div class="list-item-type">
-                {{ item.type === 'directory' ? t('media.folder') : getAssetTypeLabel(item.id) }}
+                <button
+                  v-if="getLinkedIssue(item.id)"
+                  class="linked-media-status"
+                  type="button"
+                  :disabled="linkedRecoveryBusy"
+                  :title="getLinkedIssue(item.id)"
+                  :aria-label="getLinkedRecoveryLabel(item.id)"
+                  @click.stop="recoverLinkedFile(item.id)"
+                >
+                  {{ getLinkedIssue(item.id) }}
+                </button>
+                <template v-else>{{
+                  item.type === 'directory' ? t('media.folder') : getAssetTypeLabel(item.id)
+                }}</template>
               </div>
             </div>
           </div>
@@ -246,6 +270,14 @@
         />
       </n-scrollbar>
     </div>
+    <LinkedMediaImportProgressModal
+      :visible="Boolean(linkedImportProgress)"
+      :stage="linkedImportProgressLabel"
+      :percentage="linkedImportPercentage"
+      :stopping="linkedImportStopping"
+      @cancel="stopLinkedImport"
+    />
+
     <Teleport to="body">
       <Transition name="file-name-tooltip">
         <div
@@ -285,6 +317,7 @@ import {
   ContextMenuSeparator,
   ContextMenuGroup,
 } from '@imengyu/vue3-context-menu'
+import LinkedMediaImportProgressModal from '@/components/modals/LinkedMediaImportProgressModal.vue'
 import CreateFolderModal from '@/components/modals/CreateFolderModal.vue'
 import RenameModal from '@/components/modals/RenameModal.vue'
 import MediaItemThumbnail from '@/components/panels/MediaItemThumbnail.vue'
@@ -302,6 +335,21 @@ import {
   type DirectoryImportSummary,
   type ExternalImportRoot,
 } from '@/core/media-import'
+
+import type { LinkedFileSourceData } from '@/core/datasource/providers/linked-file/LinkedFileSource'
+import {
+  importLinkedMedia,
+  type LinkedImportProgress,
+} from '@/core/media-import/LinkedMediaImportService'
+import {
+  reauthorizeLinkedMedia,
+  relinkMediaFromPicker,
+} from '@/core/datasource/providers/linked-file/LinkedMediaRecovery'
+import {
+  LinkedMediaError,
+  toLinkedMediaError,
+} from '@/core/datasource/providers/linked-file/LinkedMediaReader'
+import { fileSystemService } from '@/core/managers/filesystem/fileSystemService'
 
 const unifiedStore = useUnifiedStore()
 const mediaFileImportService = createMediaFileImportService(unifiedStore)
@@ -332,7 +380,46 @@ function isFileDrag(event: DragEvent): boolean {
 const isDragOver = ref(false)
 const fileInput = ref<HTMLInputElement>()
 type ExternalImportKind = 'directory' | 'file'
+type LinkedRecoveryAction = 'authorize' | ExternalImportKind
+const linkedRecoveryActions = {
+  authorize: { label: 'media.linked.authorize', icon: IconComponents.EDIT },
+  file: { label: 'media.linked.relinkFile', icon: IconComponents.UPLOAD },
+  directory: { label: 'media.linked.relinkFolder', icon: IconComponents.FOLDER_OPEN },
+} as const
 let mediaImportAbortController: AbortController | null = null
+let librarySession = new AbortController()
+let linkedImportStop: AbortController | undefined
+const linkedImportProgress = ref<LinkedImportProgress>()
+const linkedImportStopping = ref(false)
+const linkedRecoveryBusy = ref(false)
+const linkedImportProgressLabel = computed(() => {
+  const progress = linkedImportProgress.value
+  return progress
+    ? t(
+        `media.linked.${progress.phase}`,
+        { current: progress.current, total: progress.total },
+        progress.current,
+      )
+    : ''
+})
+
+const linkedImportPercentage = computed(() => {
+  const progress = linkedImportProgress.value
+  if (!progress?.total) return undefined
+  return (progress.current / progress.total) * 100
+})
+
+watch(
+  () => unifiedStore.projectId,
+  () => {
+    librarySession.abort()
+    librarySession = new AbortController()
+    linkedImportProgress.value = undefined
+    mediaImportAbortController?.abort()
+  },
+  { flush: 'sync' },
+)
+
 const showCreateDirModal = ref(false)
 const libraryScrollbar = ref<ScrollbarInst | null>(null)
 const mediaGridScrollViewport = ref<HTMLElement>()
@@ -431,6 +518,7 @@ watch(
 )
 
 onBeforeUnmount(() => {
+  librarySession.abort()
   mediaImportAbortController?.abort()
   if (revealedAssetTimer) clearTimeout(revealedAssetTimer)
   librarySelectionSurfaceResizeObserver?.disconnect()
@@ -591,6 +679,24 @@ const currentMenuItems = computed((): MenuItem[] => {
               showContextMenu.value = false
             },
           },
+          { type: 'separator' },
+          {
+            label: t('media.linked.files'),
+            icon: IconComponents.UPLOAD,
+            onClick: () => {
+              showContextMenu.value = false
+              void triggerLinkedImport('file')
+            },
+          },
+          {
+            label: t('media.linked.directory'),
+            icon: IconComponents.FOLDER_OPEN,
+            onClick: () => {
+              showContextMenu.value = false
+              void triggerLinkedImport('directory')
+            },
+          },
+          { type: 'separator' },
           {
             label: t('media.pasteImport'),
             icon: IconComponents.CLIPBOARD,
@@ -756,7 +862,11 @@ const currentMenuItems = computed((): MenuItem[] => {
     ]
   } else {
     // 资产菜单
+    const linked = getMediaItem(target.id)?.source
     return [
+      ...(linked?.type === 'linked-file' && linked.record
+        ? [...linkedRecoveryMenu(target.id), { type: 'separator' as const }]
+        : []),
       {
         label: t('media.cut'),
         icon: IconComponents.CUT,
@@ -1390,6 +1500,200 @@ async function processFiles(files: File[]): Promise<void> {
   )
 }
 
+function stopLinkedImport() {
+  if (!linkedImportStop || linkedImportStop.signal.aborted) return
+  linkedImportStopping.value = true
+  linkedImportStop.abort()
+}
+
+function supportsLinkedPicker(kind: ExternalImportKind) {
+  return Boolean(kind === 'file' ? window.showOpenFilePicker : window.showDirectoryPicker)
+}
+
+async function triggerLinkedImport(kind: ExternalImportKind) {
+  const dir = currentDir.value
+  if (!dir) return
+  if (linkedImportStop || mediaImportAbortController) {
+    unifiedStore.messageWarning(t('media.directoryImportInProgress'))
+    return
+  }
+  if (!supportsLinkedPicker(kind)) {
+    unifiedStore.messageWarning(t('media.linked.unsupported'))
+    return
+  }
+  const session = librarySession.signal
+  const workspaceKey = fileSystemService.workspaceKey
+  const stop = new AbortController()
+  linkedImportStop = stop
+  try {
+    const roots =
+      kind === 'file'
+        ? await window.showOpenFilePicker({ multiple: true })
+        : [await window.showDirectoryPicker({ mode: 'read' })]
+    if (session.aborted || workspaceKey !== fileSystemService.workspaceKey || !roots.length) return
+    const summary = await importLinkedMedia(unifiedStore, roots, dir.id, {
+      signal: session,
+      stop: stop.signal,
+      onProgress: (progress) => {
+        if (!session.aborted && workspaceKey === fileSystemService.workspaceKey) {
+          linkedImportProgress.value = progress
+        }
+      },
+    })
+    if (session.aborted || workspaceKey !== fileSystemService.workspaceKey) return
+    const count = (reason: string) =>
+      summary.problems.filter((problem) => problem.reason === reason).length
+    const message = t('media.linked.summary', {
+      succeeded: summary.succeeded,
+      failed: count('failed'),
+      invalid: count('invalid') + count('unreadable-file'),
+      protected: count('protected'),
+      unreadable: count('unreadable-directory'),
+      notStarted: summary.notStarted,
+    })
+    if (summary.problems.length) {
+      console.warn('[LinkedMediaImport] Import problems:', summary.problems)
+      const details = summary.problems.slice(0, 20).map((problem) => {
+        if (problem.reason === 'invalid') {
+          const { validation } = problem
+          const reason = t(
+            `media.linked.validation.${validation.code}`,
+            validation.code === 'tooLarge'
+              ? { size: validation.sizeMB, limit: validation.limitMB }
+              : {},
+          )
+          return `${problem.path} — ${reason}`
+        }
+        const reason =
+          problem.reason === 'protected'
+            ? t('media.linked.issue.protected')
+            : t(`media.linked.importProblem.${problem.reason}`)
+        return `${problem.path} — ${reason}`
+      })
+      if (summary.problems.length > details.length)
+        details.push(t('media.linked.moreItems', summary.problems.length - details.length))
+      showLinkedReport(t('media.linked.importReport'), [message, ...details])
+    } else {
+      unifiedStore.messageInfo(message)
+    }
+  } catch (error) {
+    if (!session.aborted && !(error instanceof Error && error.name === 'AbortError')) {
+      showLinkedOperationError(error, t('media.linked.importFailed'))
+    }
+  } finally {
+    linkedImportStop = undefined
+    linkedImportStopping.value = false
+    linkedImportProgress.value = undefined
+  }
+}
+
+function showLinkedReport(title: string, lines: string[]) {
+  unifiedStore.dialogWarning({
+    title,
+    content: lines.join('\n'),
+    positiveText: t('common.confirm'),
+    style: { whiteSpace: 'pre-line', overflowWrap: 'anywhere' },
+  })
+}
+
+function showLinkedOperationError(error: unknown, fallback: string) {
+  console.error('[LinkedMedia] Operation failed:', error)
+  const issue = error instanceof DOMException ? toLinkedMediaError(error).issue : undefined
+  if (
+    issue === 'permission' ||
+    (error instanceof LinkedMediaError && error.issue === 'permission')
+  ) {
+    unifiedStore.messageWarning(t('media.linked.permissionDenied'))
+    return
+  }
+  if (error instanceof LinkedMediaError) {
+    unifiedStore.messageWarning(t(`media.linked.issue.${error.issue}`))
+    return
+  }
+  unifiedStore.messageError(fallback)
+}
+
+function getLinkedIssue(id: string) {
+  const source = getMediaItem(id)?.source
+  return source?.type === 'linked-file' && source.issue
+    ? t(`media.linked.issue.${source.issue}`)
+    : ''
+}
+
+function defaultLinkedRecoveryAction(
+  source: LinkedFileSourceData,
+): LinkedRecoveryAction | undefined {
+  if (!source.record) return
+  return source.issue === 'permission' && source.permissionHandle
+    ? 'authorize'
+    : source.record.handleKind
+}
+
+function getLinkedRecoveryLabel(id: string) {
+  const source = getMediaItem(id)?.source
+  const action = source?.type === 'linked-file' ? defaultLinkedRecoveryAction(source) : undefined
+  return action ? t(linkedRecoveryActions[action].label) : getLinkedIssue(id)
+}
+
+function linkedRecoveryMenu(id: string): MenuItem[] {
+  const source = getMediaItem(id)?.source
+  if (source?.type !== 'linked-file' || !source.record) return []
+  const actions: LinkedRecoveryAction[] = ['file']
+  if (source.record.handleKind === 'directory') actions.push('directory')
+  if (defaultLinkedRecoveryAction(source) === 'authorize') actions.unshift('authorize')
+  return actions.map((action) => ({
+    label: t(linkedRecoveryActions[action].label),
+    icon: linkedRecoveryActions[action].icon,
+    disabled: linkedRecoveryBusy.value,
+    onClick: () => void recoverLinkedFile(id, action),
+  }))
+}
+
+async function recoverLinkedFile(id: string, action?: LinkedRecoveryAction) {
+  const item = getMediaItem(id)
+  const source = item?.source
+  if (!item || source?.type !== 'linked-file' || linkedRecoveryBusy.value) return
+  const defaultAction = defaultLinkedRecoveryAction(source)
+  if (!defaultAction) {
+    unifiedStore.messageWarning(t('media.linked.issue.damaged'))
+    return
+  }
+  action ??= defaultAction
+  if (action !== 'authorize' && !supportsLinkedPicker(action)) {
+    unifiedStore.messageWarning(t('media.linked.unsupported'))
+    return
+  }
+  showContextMenu.value = false
+  linkedRecoveryBusy.value = true
+  const signal = librarySession.signal
+  try {
+    if (action === 'file') {
+      unifiedStore.messageInfo(t('media.linked.chooseOriginal', { name: item.name }))
+    }
+    const results =
+      action === 'authorize'
+        ? await reauthorizeLinkedMedia(unifiedStore, item, signal)
+        : await relinkMediaFromPicker(unifiedStore, item, action, signal)
+    if (signal.aborted || results.length === 0) return
+    const failures = results.flatMap(({ name, issue }) =>
+      issue ? [`${name} — ${t(`media.linked.issue.${issue}`)}`] : [],
+    )
+    const recovered = results.length - failures.length
+    const message = t(
+      'media.linked.recoveryReport',
+      { count: recovered, failed: failures.length },
+      recovered,
+    )
+    if (failures.length) showLinkedReport(message, failures)
+    else unifiedStore.messageSuccess(message)
+  } catch (error) {
+    if (signal.aborted || (error instanceof Error && error.name === 'AbortError')) return
+    showLinkedOperationError(error, t('media.linked.issue.recoveryFailed'))
+  } finally {
+    linkedRecoveryBusy.value = false
+  }
+}
+
 async function triggerDirectoryImport(): Promise<void> {
   const targetDirectoryId = currentDir.value?.id
   if (!targetDirectoryId) {
@@ -1767,7 +2071,13 @@ function removeAssetItem(mediaId: string): void {
 
   unifiedStore.dialogWarning({
     title: t('media.deleteMedia'),
-    content: t('media.deleteMediaSingleRef', { name: mediaItem.name }),
+    content:
+      mediaItem.source.type === 'linked-file'
+        ? t('media.linked.deleteConfirm', {
+            name: mediaItem.name,
+            count: unifiedStore.timelineItems.filter((clip) => clip.mediaItemId === mediaId).length,
+          })
+        : t('media.deleteMediaSingleRef', { name: mediaItem.name }),
     positiveText: t('media.confirm'),
     negativeText: t('media.cancel'),
     draggable: true,
@@ -1776,7 +2086,9 @@ function removeAssetItem(mediaId: string): void {
         const result = await unifiedStore.deleteAssetItem(mediaId, currentDir.value!.id)
 
         if (result.success) {
-          if (result.deletedFile) {
+          if (mediaItem.source.type === 'linked-file') {
+            unifiedStore.messageSuccess(t('media.linked.deleted', { name: mediaItem.name }))
+          } else if (result.deletedFile) {
             unifiedStore.messageSuccess(t('media.mediaDeletedWithFile', { name: mediaItem.name }))
           } else {
             unifiedStore.messageSuccess(t('media.mediaRemovedFromFolder', { name: mediaItem.name }))
@@ -2003,6 +2315,22 @@ async function handleBatchDelete(): Promise<void> {
   flex-direction: column;
   min-height: 0;
   transition: background-color var(--transition-fast);
+}
+
+.linked-media-status {
+  font: inherit;
+  font-size: 11px;
+  border: 0;
+  border-radius: 4px;
+  color: var(--color-warning);
+  background: transparent;
+  cursor: pointer;
+  white-space: nowrap;
+  padding: 4px 6px;
+}
+
+.linked-media-status:hover:not(:disabled) {
+  text-decoration: underline;
 }
 
 .media-grid__scroll-viewport {

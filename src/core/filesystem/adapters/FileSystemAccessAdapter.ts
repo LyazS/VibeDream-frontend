@@ -1,3 +1,4 @@
+import { withStorageLock } from '@/core/storage/withStorageLock'
 import type { IFileSystemAdapter, PermissionCheckResult, FileSystemEntry } from '../interfaces'
 import type { WorkspaceInfo } from '../core/types'
 import { FileSystemError } from '../errors/FileSystemError'
@@ -10,6 +11,7 @@ import { indexedDBService } from '@/core/storage/IndexedDBService'
  */
 export class FileSystemAccessAdapter implements IFileSystemAdapter {
   private workspaceHandle: FileSystemDirectoryHandle | null = null
+  private workspaceKey: string | null = null
   private readonly STORAGE_KEY = 'workspace_directory_handle'
   private readonly STORE_NAME = 'handles'
   private readonly debugPrefix = '[LC_TEMP_FOCUS_DEBUG][FSAccess]'
@@ -69,6 +71,7 @@ export class FileSystemAccessAdapter implements IFileSystemAdapter {
       // 权限失效，清除句柄
       console.warn(`${this.debugPrefix} checkPermission in-memory handle lost permission`)
       this.workspaceHandle = null
+      this.workspaceKey = null
     }
 
     // 3. 尝试从 IndexedDB 恢复句柄
@@ -79,7 +82,7 @@ export class FileSystemAccessAdapter implements IFileSystemAdapter {
       })
       const hasPermission = await this.verifyPermission(restoredHandle)
       if (hasPermission) {
-        this.workspaceHandle = restoredHandle
+        await this.activateWorkspace(restoredHandle)
         console.log(`${this.debugPrefix} checkPermission restored handle granted`, {
           accessChanged: !hadAccessBefore,
         })
@@ -106,6 +109,40 @@ export class FileSystemAccessAdapter implements IFileSystemAdapter {
   /**
    * 获取工作空间信息
    */
+  getWorkspaceKey(): string | null {
+    return this.workspaceKey
+  }
+
+  async getManagedProjectsRoot(): Promise<FileSystemDirectoryHandle | null> {
+    const workspace = this.workspaceHandle
+    if (!workspace) throw new Error('工作区不可用')
+    try {
+      return await workspace.getDirectoryHandle('projects')
+    } catch (error) {
+      if (error instanceof DOMException && error.name === 'NotFoundError') return null
+      throw error
+    }
+  }
+
+  private async activateWorkspace(handle: FileSystemDirectoryHandle): Promise<void> {
+    const key = await withStorageLock('disk-workspace-identities', async () => {
+      const records: { key: string; handle: FileSystemDirectoryHandle }[] =
+        await indexedDBService.transaction('workspaceIdentities', 'readonly', (store) =>
+          store.getAll(),
+        )
+      for (const record of records) {
+        if (await handle.isSameEntry(record.handle)) return record.key
+      }
+      const key = `disk:${crypto.randomUUID()}`
+      await indexedDBService.transaction('workspaceIdentities', 'readwrite', (store) =>
+        store.put({ key, handle }, key),
+      )
+      return key
+    })
+    this.workspaceHandle = handle
+    this.workspaceKey = key
+  }
+
   async getWorkspaceInfo(): Promise<WorkspaceInfo | null> {
     if (!this.workspaceHandle) {
       // 尝试恢复句柄
@@ -142,20 +179,20 @@ export class FileSystemAccessAdapter implements IFileSystemAdapter {
       await writable.write(content)
       await writable.close()
     } catch (error) {
-      await writable.abort()
+      await writable.abort().catch(() => {})
       throw error
     }
   }
 
   async deleteFile(path: string): Promise<void> {
-    await this.ensureWorkspaceHandle()
+    const workspace = this.workspaceHandle ?? (await this.requireWorkspaceHandle())
     const pathParts = path.split('/').filter((p) => p)
 
     if (pathParts.length === 0) {
       throw new FileSystemError('无效的文件路径', ErrorCode.INVALID_PATH, path)
     }
 
-    let currentHandle: FileSystemDirectoryHandle = this.workspaceHandle!
+    let currentHandle = workspace
 
     // 遍历到父目录
     for (let i = 0; i < pathParts.length - 1; i++) {
@@ -200,10 +237,10 @@ export class FileSystemAccessAdapter implements IFileSystemAdapter {
   // ==================== 目录操作实现 ====================
 
   async createDirectory(path: string): Promise<void> {
-    await this.ensureWorkspaceHandle()
+    const workspace = this.workspaceHandle ?? (await this.requireWorkspaceHandle())
     const pathParts = path.split('/').filter((p) => p)
 
-    let currentHandle: FileSystemDirectoryHandle = this.workspaceHandle!
+    let currentHandle = workspace
 
     // 递归创建目录
     for (const part of pathParts) {
@@ -213,7 +250,10 @@ export class FileSystemAccessAdapter implements IFileSystemAdapter {
         // 如果是 NotFoundError，说明工作空间句柄已失效（目录被删除/移动）
         // 需要清除失效的句柄，让用户重新选择工作目录
         if (error instanceof Error && error.name === 'NotFoundError') {
-          this.workspaceHandle = null
+          if (this.workspaceHandle === workspace) {
+            this.workspaceHandle = null
+            this.workspaceKey = null
+          }
           await this.clearHandleFromDB()
           throw new FileSystemError(
             '工作目录已失效，请重新选择工作目录',
@@ -233,14 +273,14 @@ export class FileSystemAccessAdapter implements IFileSystemAdapter {
   }
 
   async deleteDirectory(path: string, recursive: boolean = false): Promise<void> {
-    await this.ensureWorkspaceHandle()
+    const workspace = this.workspaceHandle ?? (await this.requireWorkspaceHandle())
     const pathParts = path.split('/').filter((p) => p)
 
     if (pathParts.length === 0) {
       throw new FileSystemError('无效的目录路径', ErrorCode.INVALID_PATH, path)
     }
 
-    let currentHandle: FileSystemDirectoryHandle = this.workspaceHandle!
+    let currentHandle = workspace
 
     // 遍历到父目录
     for (let i = 0; i < pathParts.length - 1; i++) {
@@ -431,7 +471,7 @@ export class FileSystemAccessAdapter implements IFileSystemAdapter {
       }
 
       // 保存句柄
-      this.workspaceHandle = directoryHandle
+      await this.activateWorkspace(directoryHandle)
       await this.persistHandleToDB(directoryHandle)
       console.log(`${this.debugPrefix} promptUserToSelectWorkspace handle persisted`, {
         handleName: directoryHandle.name,
@@ -509,27 +549,28 @@ export class FileSystemAccessAdapter implements IFileSystemAdapter {
 
   // ==================== 文件系统辅助方法 ====================
 
-  private async ensureWorkspaceHandle(): Promise<void> {
+  private async requireWorkspaceHandle(): Promise<FileSystemDirectoryHandle> {
     if (!this.workspaceHandle) {
       const result = await this.checkPermission()
       if (!result.hasAccess) {
         throw new FileSystemError('未设置工作目录', ErrorCode.PERMISSION_DENIED)
       }
     }
+    return this.workspaceHandle!
   }
 
   private async getFileHandle(
     path: string,
     options?: { create?: boolean },
   ): Promise<FileSystemFileHandle> {
-    await this.ensureWorkspaceHandle()
+    const workspace = this.workspaceHandle ?? (await this.requireWorkspaceHandle())
     const pathParts = path.split('/').filter((p) => p)
 
     if (pathParts.length === 0) {
       throw new FileSystemError('无效的文件路径', ErrorCode.INVALID_PATH, path)
     }
 
-    let currentHandle: FileSystemDirectoryHandle = this.workspaceHandle!
+    let currentHandle = workspace
 
     // 遍历路径，获取目录句柄
     for (let i = 0; i < pathParts.length - 1; i++) {
@@ -563,15 +604,15 @@ export class FileSystemAccessAdapter implements IFileSystemAdapter {
     path: string,
     options?: { create?: boolean },
   ): Promise<FileSystemDirectoryHandle> {
-    await this.ensureWorkspaceHandle()
+    const workspace = this.workspaceHandle ?? (await this.requireWorkspaceHandle())
 
     // 空路径返回根目录
     if (!path || path === '.' || path === '/') {
-      return this.workspaceHandle!
+      return workspace
     }
 
     const pathParts = path.split('/').filter((p) => p)
-    let currentHandle: FileSystemDirectoryHandle = this.workspaceHandle!
+    let currentHandle = workspace
 
     // 遍历路径
     for (let i = 0; i < pathParts.length; i++) {

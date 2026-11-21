@@ -1,3 +1,8 @@
+import {
+  extractLinkedFileRecord,
+  type LinkedFileSourceData,
+  type LinkedFileRecord,
+} from '@/core/datasource/providers/linked-file/LinkedFileSource'
 /**
  * 统一数据源联合类型、工厂和查询函数。
  */
@@ -16,12 +21,12 @@ import { extractUserSelectedFileSourceData } from '@/core/datasource/providers/u
 /**
  * 统一数据源联合类型
  */
-export type UnifiedDataSourceData = UserSelectedFileSourceData
+export type UnifiedDataSourceData = UserSelectedFileSourceData | LinkedFileSourceData
 
 /**
  * 可持久化的数据源联合类型。
  */
-export type BaseDataSourcePersistedData = BaseUserSelectedFileSourceData
+export type BaseDataSourcePersistedData = BaseUserSelectedFileSourceData | LinkedFileRecord
 
 // ==================== 统一工厂函数 ====================
 
@@ -52,6 +57,9 @@ export const DataSourceFactory = {
  * 根据数据源类型提取持久化数据
  */
 export function extractSourceData(source: UnifiedDataSourceData): BaseDataSourcePersistedData {
+  if (DataSourceQueries.isLinkedFileSource(source)) {
+    return extractLinkedFileRecord(source)
+  }
   if (DataSourceQueries.isUserSelectedSource(source)) {
     return extractUserSelectedFileSourceData(source)
   } else {
@@ -69,8 +77,12 @@ export const DataSourceQueries = {
   // 继承基础查询函数
   ...BaseDataSourceQueries,
 
-  // 类型查询 - 直接使用具体类型守卫，避免额外封装层
+  // 类型查询
   isUserSelectedSource(source: UnifiedDataSourceData): source is UserSelectedFileSourceData {
     return UserSelectedFileTypeGuards.isUserSelectedSource(source)
+  },
+
+  isLinkedFileSource(source: UnifiedDataSourceData): source is LinkedFileSourceData {
+    return source.type === 'linked-file'
   },
 }

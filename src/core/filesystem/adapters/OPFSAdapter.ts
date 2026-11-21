@@ -49,6 +49,10 @@ export class OPFSAdapter implements IFileSystemAdapter {
     }
   }
 
+  getWorkspaceKey(): string {
+    return `opfs:${this.workspaceId}`
+  }
+
   async getWorkspaceInfo(): Promise<WorkspaceInfo> {
     await this.checkPermission()
     return { name: this.workspaceId, canChangeWorkspace: false }
