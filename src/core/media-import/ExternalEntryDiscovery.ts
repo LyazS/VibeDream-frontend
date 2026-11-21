@@ -5,55 +5,28 @@ import type {
   SkippedImportItem,
 } from './types'
 
-interface CapturedDropItem {
-  file: File | null
-  handle: Promise<FileSystemHandle | null> | null
-}
-
 /**
- * Invoke getAsFileSystemHandle before returning control to the browser. Chromium
- * invalidates the drag permission when this call is deferred past the drop event.
+ * 在 drop 事件同步阶段获取文件系统句柄，供链接素材引入使用。
+ * Chromium 在事件结束后可能会失效拖放权限，因此必须立即调用 getAsFileSystemHandle。
  */
-export function captureDroppedImportRoots(
+export function captureDroppedLinkedRoots(
   items: DataTransferItemList | DataTransferItem[],
-  fallbackFiles: FileList | File[] = [],
-): Promise<ExternalImportRoot[]> {
-  const capturedItems: CapturedDropItem[] = Array.from(items)
+): Promise<(FileSystemFileHandle | FileSystemDirectoryHandle)[]> {
+  const handles = Array.from(items)
     .filter((item) => item.kind === 'file')
     .map((item) => {
       const getAsFileSystemHandle = item.getAsFileSystemHandle
-      return {
-        file: item.getAsFile(),
-        handle:
-          typeof getAsFileSystemHandle === 'function'
-            ? getAsFileSystemHandle.call(item).catch(() => null)
-            : null,
-      }
+      return typeof getAsFileSystemHandle === 'function'
+        ? getAsFileSystemHandle.call(item).catch(() => null)
+        : Promise.resolve(null)
     })
 
-  return Promise.all(
-    capturedItems.map(async ({ file, handle }) => {
-      const fileSystemHandle = handle ? await handle : null
-      if (fileSystemHandle && isDirectoryHandle(fileSystemHandle)) {
-        return { kind: 'directory', handle: fileSystemHandle } satisfies ExternalImportRoot
-      }
-
-      if (fileSystemHandle?.kind === 'file' && file) {
-        return { kind: 'file', file } satisfies ExternalImportRoot
-      }
-
-      return file ? ({ kind: 'file', file } satisfies ExternalImportRoot) : null
-    }),
-  ).then((roots) => {
-    const fallbackRoots =
-      capturedItems.length === 0
-        ? Array.from(fallbackFiles).map(
-            (file) => ({ kind: 'file', file }) satisfies ExternalImportRoot,
-          )
-        : []
-
-    return [...roots.filter((root): root is ExternalImportRoot => root !== null), ...fallbackRoots]
-  })
+  return Promise.all(handles).then((values) =>
+    values.filter(
+      (handle): handle is FileSystemFileHandle | FileSystemDirectoryHandle =>
+        handle?.kind === 'file' || handle?.kind === 'directory',
+    ),
+  )
 }
 
 export async function discoverExternalImportEntries(
@@ -140,8 +113,4 @@ async function discoverDirectory(
 
 function getErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : '无法读取此项目'
-}
-
-function isDirectoryHandle(handle: FileSystemHandle): handle is FileSystemDirectoryHandle {
-  return handle.kind === 'directory' && 'entries' in handle
 }

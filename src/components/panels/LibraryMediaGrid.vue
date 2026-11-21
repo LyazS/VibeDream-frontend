@@ -329,7 +329,7 @@ import {
   MUSIC_ANALYSIS_MIN_DURATION_SECONDS,
 } from '@/core/utils/music-analysis'
 import {
-  captureDroppedImportRoots,
+  captureDroppedLinkedRoots,
   createExternalMediaImportService,
   createMediaFileImportService,
   type DirectoryImportSummary,
@@ -337,6 +337,7 @@ import {
 } from '@/core/media-import'
 
 import type { LinkedFileSourceData } from '@/core/datasource/providers/linked-file/LinkedFileSource'
+import type { LinkedHandle } from '@/core/datasource/providers/linked-file/LinkedMediaBindings'
 import {
   importLinkedMedia,
   type LinkedImportProgress,
@@ -389,6 +390,7 @@ const linkedRecoveryActions = {
 let mediaImportAbortController: AbortController | null = null
 let librarySession = new AbortController()
 let linkedImportStop: AbortController | undefined
+let linkedImportStarting = false
 const linkedImportProgress = ref<LinkedImportProgress>()
 const linkedImportStopping = ref(false)
 const linkedRecoveryBusy = ref(false)
@@ -1298,6 +1300,16 @@ function handleFolderDragOver(event: DragEvent, folderId: string): void {
   event.preventDefault()
   event.stopPropagation()
 
+  // 外部文件和目录拖入文件夹时，按链接素材处理。
+  if (isFileDrag(event)) {
+    event.dataTransfer!.dropEffect = 'link'
+    if (!folderDragState.value[folderId]) {
+      folderDragState.value[folderId] = { isDragOver: true, canDrop: false }
+    }
+    folderDragState.value[folderId].canDrop = true
+    return
+  }
+
   // 创建目标信息
   const targetInfo: DropTargetInfo = {
     targetType: DropTargetType.FOLDER,
@@ -1343,6 +1355,12 @@ async function handleFolderDrop(event: DragEvent, folderId: string): Promise<voi
     folderDragState.value[folderId].canDrop = false
   }
 
+  if (isFileDrag(event)) {
+    const roots = captureDroppedLinkedRoots(event.dataTransfer?.items ?? [])
+    void importCapturedLinkedRoots(roots, folderId)
+    return
+  }
+
   // 创建目标信息
   const targetInfo: DropTargetInfo = {
     targetType: DropTargetType.FOLDER,
@@ -1366,7 +1384,7 @@ function handleDragOver(event: DragEvent): void {
   event.preventDefault()
 
   if (isFileDrag(event)) {
-    event.dataTransfer!.dropEffect = 'copy'
+    event.dataTransfer!.dropEffect = 'link'
     isDragOver.value = true
   } else {
     event.dataTransfer!.dropEffect = 'none'
@@ -1395,9 +1413,8 @@ function handleDrop(event: DragEvent): void {
       return
     }
 
-    const dataTransfer = event.dataTransfer
-    const roots = captureDroppedImportRoots(dataTransfer?.items ?? [], dataTransfer?.files ?? [])
-    void importCapturedDropRoots(roots, targetDirectoryId)
+    const roots = captureDroppedLinkedRoots(event.dataTransfer?.items ?? [])
+    void importCapturedLinkedRoots(roots, targetDirectoryId)
   }
 }
 
@@ -1513,25 +1530,65 @@ function supportsLinkedPicker(kind: ExternalImportKind) {
 async function triggerLinkedImport(kind: ExternalImportKind) {
   const dir = currentDir.value
   if (!dir) return
-  if (linkedImportStop || mediaImportAbortController) {
-    unifiedStore.messageWarning(t('media.directoryImportInProgress'))
+  if (linkedImportStarting || linkedImportStop || mediaImportAbortController) {
+    unifiedStore.messageWarning(t('media.linked.inProgress'))
     return
   }
   if (!supportsLinkedPicker(kind)) {
     unifiedStore.messageWarning(t('media.linked.unsupported'))
     return
   }
-  const session = librarySession.signal
-  const workspaceKey = fileSystemService.workspaceKey
-  const stop = new AbortController()
-  linkedImportStop = stop
+
+  linkedImportStarting = true
   try {
     const roots =
       kind === 'file'
         ? await window.showOpenFilePicker({ multiple: true })
         : [await window.showDirectoryPicker({ mode: 'read' })]
+    const session = librarySession.signal
+    const workspaceKey = fileSystemService.workspaceKey
     if (session.aborted || workspaceKey !== fileSystemService.workspaceKey || !roots.length) return
-    const summary = await importLinkedMedia(unifiedStore, roots, dir.id, {
+    linkedImportStarting = false
+    await runLinkedImport(roots, dir.id)
+  } catch (error) {
+    if (!(error instanceof Error && error.name === 'AbortError')) {
+      showLinkedOperationError(error, t('media.linked.importFailed'))
+    }
+  } finally {
+    linkedImportStarting = false
+  }
+}
+
+async function importCapturedLinkedRoots(
+  rootsPromise: Promise<LinkedHandle[]>,
+  targetDirectoryId: string,
+): Promise<void> {
+  try {
+    const roots = await rootsPromise
+    if (!roots.length) {
+      unifiedStore.messageWarning(t('media.linked.dropUnsupported'))
+      return
+    }
+    await runLinkedImport(roots, targetDirectoryId)
+  } catch (error) {
+    if (!(error instanceof Error && error.name === 'AbortError')) {
+      showLinkedOperationError(error, t('media.linked.importFailed'))
+    }
+  }
+}
+
+async function runLinkedImport(roots: LinkedHandle[], targetDirectoryId: string): Promise<void> {
+  if (linkedImportStarting || linkedImportStop || mediaImportAbortController) {
+    unifiedStore.messageWarning(t('media.linked.inProgress'))
+    return
+  }
+
+  const session = librarySession.signal
+  const workspaceKey = fileSystemService.workspaceKey
+  const stop = new AbortController()
+  linkedImportStop = stop
+  try {
+    const summary = await importLinkedMedia(unifiedStore, roots, targetDirectoryId, {
       signal: session,
       stop: stop.signal,
       onProgress: (progress) => {
@@ -1713,22 +1770,6 @@ async function triggerDirectoryImport(): Promise<void> {
     if (error instanceof DOMException && error.name === 'AbortError') return
 
     console.error('选择导入目录失败:', error)
-    unifiedStore.messageError(
-      t('media.directoryImportFailed', {
-        error: error instanceof Error ? error.message : t('media.unknown'),
-      }),
-    )
-  }
-}
-
-async function importCapturedDropRoots(
-  rootsPromise: Promise<ExternalImportRoot[]>,
-  targetDirectoryId: string,
-): Promise<void> {
-  try {
-    await importExternalRoots(await rootsPromise, targetDirectoryId, 'directory')
-  } catch (error) {
-    console.error('读取拖放项目失败:', error)
     unifiedStore.messageError(
       t('media.directoryImportFailed', {
         error: error instanceof Error ? error.message : t('media.unknown'),

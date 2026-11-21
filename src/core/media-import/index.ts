@@ -1,5 +1,5 @@
 export { buildDirectoryImportPlan, getDirectoryPlanKey } from './DirectoryImportPlanBuilder'
-export { captureDroppedImportRoots, discoverExternalImportEntries } from './ExternalEntryDiscovery'
+export { captureDroppedLinkedRoots, discoverExternalImportEntries } from './ExternalEntryDiscovery'
 export { allocateCopyName, executeDirectoryImportPlan } from './DirectoryImportExecutor'
 export { createExternalMediaImportService } from './ExternalMediaImportService'
 export { createMediaFileImportService } from './MediaFileImportService'
