@@ -275,7 +275,7 @@
       :stage="linkedImportProgressLabel"
       :percentage="linkedImportPercentage"
       :stopping="linkedImportStopping"
-      @cancel="stopLinkedImport"
+      @cancel="stopLinkedOperation"
     />
 
     <Teleport to="body">
@@ -345,6 +345,7 @@ import {
 import {
   reauthorizeLinkedMedia,
   relinkMediaFromPicker,
+  type LinkedRecoveryProgress,
 } from '@/core/datasource/providers/linked-file/LinkedMediaRecovery'
 import {
   LinkedMediaError,
@@ -390,6 +391,7 @@ const linkedRecoveryActions = {
 let mediaImportAbortController: AbortController | null = null
 let librarySession = new AbortController()
 let linkedImportStop: AbortController | undefined
+let linkedRecoveryStop: AbortController | undefined
 let linkedImportStarting = false
 const linkedImportProgress = ref<LinkedImportProgress>()
 const linkedImportStopping = ref(false)
@@ -418,6 +420,7 @@ watch(
     librarySession = new AbortController()
     linkedImportProgress.value = undefined
     mediaImportAbortController?.abort()
+    linkedRecoveryStop?.abort()
   },
   { flush: 'sync' },
 )
@@ -522,6 +525,7 @@ watch(
 onBeforeUnmount(() => {
   librarySession.abort()
   mediaImportAbortController?.abort()
+  linkedRecoveryStop?.abort()
   if (revealedAssetTimer) clearTimeout(revealedAssetTimer)
   librarySelectionSurfaceResizeObserver?.disconnect()
   stopLibraryAutoScroll()
@@ -1517,10 +1521,11 @@ async function processFiles(files: File[]): Promise<void> {
   )
 }
 
-function stopLinkedImport() {
-  if (!linkedImportStop || linkedImportStop.signal.aborted) return
+function stopLinkedOperation() {
+  const controller = linkedImportStop ?? linkedRecoveryStop
+  if (!controller || controller.signal.aborted) return
   linkedImportStopping.value = true
-  linkedImportStop.abort()
+  controller.abort()
 }
 
 function supportsLinkedPicker(kind: ExternalImportKind) {
@@ -1530,7 +1535,12 @@ function supportsLinkedPicker(kind: ExternalImportKind) {
 async function triggerLinkedImport(kind: ExternalImportKind) {
   const dir = currentDir.value
   if (!dir) return
-  if (linkedImportStarting || linkedImportStop || mediaImportAbortController) {
+  if (
+    linkedRecoveryBusy.value ||
+    linkedImportStarting ||
+    linkedImportStop ||
+    mediaImportAbortController
+  ) {
     unifiedStore.messageWarning(t('media.linked.inProgress'))
     return
   }
@@ -1578,7 +1588,12 @@ async function importCapturedLinkedRoots(
 }
 
 async function runLinkedImport(roots: LinkedHandle[], targetDirectoryId: string): Promise<void> {
-  if (linkedImportStarting || linkedImportStop || mediaImportAbortController) {
+  if (
+    linkedRecoveryBusy.value ||
+    linkedImportStarting ||
+    linkedImportStop ||
+    mediaImportAbortController
+  ) {
     unifiedStore.messageWarning(t('media.linked.inProgress'))
     return
   }
@@ -1710,6 +1725,10 @@ async function recoverLinkedFile(id: string, action?: LinkedRecoveryAction) {
   const item = getMediaItem(id)
   const source = item?.source
   if (!item || source?.type !== 'linked-file' || linkedRecoveryBusy.value) return
+  if (linkedImportStarting || linkedImportStop || mediaImportAbortController) {
+    unifiedStore.messageWarning(t('media.linked.inProgress'))
+    return
+  }
   const defaultAction = defaultLinkedRecoveryAction(source)
   if (!defaultAction) {
     unifiedStore.messageWarning(t('media.linked.issue.damaged'))
@@ -1722,16 +1741,25 @@ async function recoverLinkedFile(id: string, action?: LinkedRecoveryAction) {
   }
   showContextMenu.value = false
   linkedRecoveryBusy.value = true
-  const signal = librarySession.signal
+  const session = librarySession.signal
+  const stop = new AbortController()
+  linkedRecoveryStop = stop
+  const abortRecovery = () => stop.abort()
+  session.addEventListener('abort', abortRecovery, { once: true })
+  const onProgress = ({ current, total }: LinkedRecoveryProgress) => {
+    if (!session.aborted && !stop.signal.aborted) {
+      linkedImportProgress.value = { phase: 'processing', current, total }
+    }
+  }
   try {
     if (action === 'file') {
       unifiedStore.messageInfo(t('media.linked.chooseOriginal', { name: item.name }))
     }
     const results =
       action === 'authorize'
-        ? await reauthorizeLinkedMedia(unifiedStore, item, signal)
-        : await relinkMediaFromPicker(unifiedStore, item, action, signal)
-    if (signal.aborted || results.length === 0) return
+        ? await reauthorizeLinkedMedia(unifiedStore, item, stop.signal, onProgress)
+        : await relinkMediaFromPicker(unifiedStore, item, action, stop.signal, onProgress)
+    if (stop.signal.aborted || results.length === 0) return
     const failures = results.flatMap(({ name, issue }) =>
       issue ? [`${name} — ${t(`media.linked.issue.${issue}`)}`] : [],
     )
@@ -1744,10 +1772,16 @@ async function recoverLinkedFile(id: string, action?: LinkedRecoveryAction) {
     if (failures.length) showLinkedReport(message, failures)
     else unifiedStore.messageSuccess(message)
   } catch (error) {
-    if (signal.aborted || (error instanceof Error && error.name === 'AbortError')) return
+    if (stop.signal.aborted || (error instanceof Error && error.name === 'AbortError')) return
     showLinkedOperationError(error, t('media.linked.issue.recoveryFailed'))
   } finally {
+    session.removeEventListener('abort', abortRecovery)
+    if (linkedRecoveryStop === stop) linkedRecoveryStop = undefined
     linkedRecoveryBusy.value = false
+    if (!linkedImportStop) {
+      linkedImportProgress.value = undefined
+      linkedImportStopping.value = false
+    }
   }
 }
 

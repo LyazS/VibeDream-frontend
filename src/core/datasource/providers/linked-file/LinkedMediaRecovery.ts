@@ -32,6 +32,13 @@ interface RecoveryResult {
   issue?: LinkedMediaIssue | 'recoveryFailed'
 }
 
+export interface LinkedRecoveryProgress {
+  current: number
+  total: number
+}
+
+type RecoveryProgressHandler = (progress: LinkedRecoveryProgress) => void
+
 function createRecovery(store: RecoveryStore, media: UnifiedMediaItemData, signal?: AbortSignal) {
   const context = globalMetaFileManager.contextForAsset(media)
   if (!context.workspaceKey) throw new Error('工作区不可用')
@@ -60,6 +67,7 @@ export async function reauthorizeLinkedMedia(
   store: RecoveryStore,
   media: UnifiedMediaItemData,
   signal?: AbortSignal,
+  onProgress?: RecoveryProgressHandler,
 ) {
   const { context, scope, group, assertActive, source } = createRecovery(store, media, signal)
   if (!source.permissionHandle) throw new LinkedMediaError('unbound')
@@ -69,7 +77,8 @@ export async function reauthorizeLinkedMedia(
   }
   const linkedReader = createLinkedMediaReader(scope, fileSystemService)
   const results: RecoveryResult[] = []
-  for (const item of group) {
+  onProgress?.({ current: 0, total: group.length })
+  for (const [index, item] of group.entries()) {
     assertActive(item)
     try {
       const file = await globalMetaFileManager.loadMediaFile(item, {
@@ -84,6 +93,8 @@ export async function reauthorizeLinkedMedia(
       assertActive(item)
       setLinkedMediaIssue(item, error)
       results.push({ name: item.name, issue: toLinkedMediaError(error).issue })
+    } finally {
+      onProgress?.({ current: index + 1, total: group.length })
     }
   }
   return results
@@ -94,6 +105,7 @@ export async function relinkMediaFromPicker(
   media: UnifiedMediaItemData,
   kind: LinkedHandle['kind'],
   signal?: AbortSignal,
+  onProgress?: RecoveryProgressHandler,
 ) {
   const { context, scope, group, assertActive } = createRecovery(store, media, signal)
   const handle =
@@ -107,11 +119,15 @@ export async function relinkMediaFromPicker(
   const handleId = crypto.randomUUID()
   const results: RecoveryResult[] = []
   const items = handle.kind === 'directory' ? group : [media]
+  onProgress?.({ current: 0, total: items.length })
   let registered = false
   try {
-    for (const item of items) {
+    for (const [index, item] of items.entries()) {
       assertActive(item)
-      if (item.source.type !== 'linked-file' || !item.source.record) continue
+      if (item.source.type !== 'linked-file' || !item.source.record) {
+        onProgress?.({ current: index + 1, total: items.length })
+        continue
+      }
       const previous = item.source
       const record = item.source.record
       const label = record.handleKind === 'directory' ? record.relativePath : item.name
@@ -175,6 +191,8 @@ export async function relinkMediaFromPicker(
           name: label,
           issue: failure instanceof LinkedMediaError ? failure.issue : 'recoveryFailed',
         })
+      } finally {
+        onProgress?.({ current: index + 1, total: items.length })
       }
     }
   } finally {
