@@ -13,21 +13,8 @@
         <n-radio-button value="keyframe_edit">{{
           t('aiPanel.devtools.property.keyframe')
         }}</n-radio-button>
-        <n-radio-button value="transition_edit">{{
-          t('aiPanel.devtools.property.transition')
-        }}</n-radio-button>
       </n-radio-group>
 
-      <label v-if="usage === 'transition_edit'" class="field">
-        <span>{{ t('aiPanel.devtools.property.templateId') }}</span>
-        <n-input
-          v-model:value="templateId"
-          :disabled="loading"
-          placeholder="gl-bow-tie-with-parameter"
-          clearable
-          :input-props="{ 'aria-label': t('aiPanel.devtools.property.templateId') }"
-        />
-      </label>
       <label class="field">
         <span>{{ t('aiPanel.devtools.property.propertyId') }}</span>
         <n-input
@@ -186,7 +173,7 @@ const presets = {
     {
       label: 'keyframeBasic',
       value: 'basic',
-      ids: ['visual.position.y', 'mask.ellipse.size.height', 'audio.volume'],
+      ids: ['visual.position.y', 'visual.size.width', 'audio.volume'],
     },
     {
       label: 'nonAnimatable',
@@ -194,36 +181,11 @@ const presets = {
       ids: ['audio.isMuted', 'visual.rotation'],
     },
   ],
-  transition_edit: [
-    {
-      label: 'transitionBasic',
-      value: 'basic',
-      templateId: 'gl-bow-tie-with-parameter',
-      ids: [
-        'timeline.bindingState',
-        'transition.duration',
-        'transition.params.adjust',
-        'transition.params.reverse',
-      ],
-    },
-    {
-      label: 'hidden',
-      value: 'hidden',
-      templateId: 'parameterized-demo',
-      ids: ['timeline.start', 'transition.duration'],
-    },
-    {
-      label: 'missing',
-      value: 'missing',
-      templateId: 'does-not-exist',
-      ids: ['timeline.start'],
-    },
-  ],
+
 }
 const usage = ref<ItemPropertyUsage>('static_edit')
 const presetId = ref<string | null>('basic')
 const propertyText = ref(presets.static_edit[0].ids.join('\n'))
-const templateId = ref('gl-bow-tie-with-parameter')
 const loading = ref(false)
 const response = ref<ItemPropertyResponse | null>(null)
 const lastRequest = ref<ItemPropertyRequest | null>(null)
@@ -235,11 +197,7 @@ const requestId = ref('')
 let controller: AbortController | undefined
 
 const propertyIds = computed(() => propertyText.value.split(/[\r\n,，]/).filter((id) => id.trim()))
-const canQuery = computed(
-  () =>
-    propertyIds.value.length > 0 &&
-    (usage.value !== 'transition_edit' || !!templateId.value.trim()),
-)
+const canQuery = computed(() => propertyIds.value.length > 0)
 const presetOptions = computed(() =>
   presets[usage.value].map(({ label, value }) => ({
     label: t(`aiPanel.devtools.property.presets.${label}`),
@@ -260,9 +218,6 @@ function applyPreset(value: string | null): void {
   const preset = presets[usage.value].find((item) => item.value === value)
   if (!preset) return
   propertyText.value = preset.ids.join('\n')
-  if ('templateId' in preset && typeof preset.templateId === 'string') {
-    templateId.value = preset.templateId
-  }
 }
 
 watch(usage, () => {
@@ -276,7 +231,6 @@ watch(usage, () => {
 async function runQuery(): Promise<void> {
   if (!canQuery.value || loading.value) return
   const body: ItemPropertyRequest = { usage: usage.value, propertyIds: [...propertyIds.value] }
-  if (usage.value === 'transition_edit') body.templateId = templateId.value
   lastRequest.value = body
   response.value = null
   error.value = ''

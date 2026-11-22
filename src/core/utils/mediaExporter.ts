@@ -9,7 +9,6 @@ import type {
   UnifiedTimelineItemData,
   VideoMediaConfig,
 } from '@/core/timelineitem/model/timelineItem'
-import { createDefaultTimelineExtraRenderConfig } from '@/core/timelineitem/model/timelineItem'
 import type { UnifiedMediaItemData } from '@/core/mediaitem/types'
 import { DEFAULT_BLEND_MODE } from '@/core/timelineitem/model/blendMode'
 import { RENDERER_FPS } from '@/core/mediabunny/constant'
@@ -190,10 +189,8 @@ async function exportVideoMediaItem(
       clipEndTime: durationInFrames,
     },
     baseRenderConfig,
-    exRenderConfig: createDefaultTimelineExtraRenderConfig(),
     runtime: {
-      exRenderConfig: createDefaultTimelineExtraRenderConfig(),
-      isInitialized: true,
+        isInitialized: true,
     },
   }
 
@@ -205,7 +202,6 @@ async function exportVideoMediaItem(
     timelineItems: [tempTimelineItem],
     tracks: [{ id: 'temp-track', isVisible: true, isMuted: false }],
     getMediaItem: (id: string) => (id === mediaItem.id ? mediaItem : undefined),
-    getAsset: () => undefined,
     onProgress: onProgress ? (stage, progress) => onProgress(progress) : undefined,
     videoQuality: QUALITY_MEDIUM,
     audioQuality: QUALITY_MEDIUM,
@@ -284,10 +280,8 @@ async function createAudioExportTimelineItem(
             audio: { volume: 1, isMuted: false },
           }
         : { audio: { volume: 1, isMuted: false } },
-    exRenderConfig: createDefaultTimelineExtraRenderConfig(),
     runtime: {
-      exRenderConfig: createDefaultTimelineExtraRenderConfig(),
-      isInitialized: true,
+        isInitialized: true,
     },
   }
 }
@@ -429,10 +423,8 @@ async function exportVideoTimelineItem(
       clipEndTime: timelineItem.timeRange.clipEndTime,
     },
     baseRenderConfig,
-    exRenderConfig: createDefaultTimelineExtraRenderConfig(),
     runtime: {
-      exRenderConfig: createDefaultTimelineExtraRenderConfig(),
-      isInitialized: true,
+        isInitialized: true,
     },
   }
 
@@ -444,7 +436,6 @@ async function exportVideoTimelineItem(
     timelineItems: [cleanTimelineItem],
     tracks: [{ id: 'temp-track', isVisible: true, isMuted: false }],
     getMediaItem: (id: string) => (id === mediaItem.id ? mediaItem : undefined),
-    getAsset: () => undefined,
     onProgress: onProgress ? (stage, progress) => onProgress(progress) : undefined,
     videoQuality: QUALITY_MEDIUM,
     audioQuality: QUALITY_MEDIUM,
@@ -514,10 +505,8 @@ async function exportAudioTimelineItem(
       clipEndTime: timelineItem.timeRange.clipEndTime,
     },
     baseRenderConfig,
-    exRenderConfig: createDefaultTimelineExtraRenderConfig(),
     runtime: {
-      exRenderConfig: createDefaultTimelineExtraRenderConfig(),
-      isInitialized: true,
+        isInitialized: true,
     },
   }
 
@@ -529,7 +518,6 @@ async function exportAudioTimelineItem(
     timelineItems: [cleanTimelineItem],
     tracks: [{ id: 'temp-track', isVisible: true, isMuted: false }],
     getMediaItem: (id: string) => (id === mediaItem.id ? mediaItem : undefined),
-    getAsset: () => undefined,
     onProgress: onProgress ? (stage, progress) => onProgress(progress) : undefined,
     videoQuality: QUALITY_MEDIUM,
     audioQuality: QUALITY_MEDIUM,

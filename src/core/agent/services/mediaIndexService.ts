@@ -5,7 +5,6 @@ import { timecodeToFrames } from '@/core/utils/timeUtils'
 import { fetchClient } from '@/utils/fetchClient'
 import type { UnifiedMediaIndexMetadata, UnifiedMediaItemData } from '@/core/mediaitem/types'
 import type { UnifiedTimelineItemData } from '@/core/timelineitem/model/timelineItem'
-import { createDefaultTimelineExtraRenderConfig } from '@/core/timelineitem/model/timelineItem'
 import { DEFAULT_BLEND_MODE } from '@/core/timelineitem/model/blendMode'
 import { BunnyClip } from '@/core/mediabunny/bunny-clip'
 import {
@@ -295,10 +294,8 @@ function createVideoSegmentTimelineItem(
       clipEndTime: endFrame,
     },
     baseRenderConfig,
-    exRenderConfig: createDefaultTimelineExtraRenderConfig(),
     runtime: {
-      exRenderConfig: createDefaultTimelineExtraRenderConfig(),
-      isInitialized: true,
+        isInitialized: true,
     },
   }
 }

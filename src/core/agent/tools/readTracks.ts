@@ -9,7 +9,6 @@ import { framesToTimecode } from '@/core/utils/timeUtils'
 import type { ToolDefinition } from './types'
 import { isValidAgentToolTimecode, parseAgentToolTimecode } from './utils/timecode'
 import { buildToolError, buildToolSuccess } from './utils/result'
-import { getTransitionSnapshot } from './transitionItemShared'
 
 const MAX_TRACK_IDS = 10
 
@@ -131,42 +130,10 @@ export async function executeReadTracks(args: Record<string, unknown>) {
           mediaType: item.mediaType,
         },
         sortFrame: item.timeRange.timelineStartTime,
-        // A transition at a seam is listed before the right clip at the same frame.
         sortOrder: 1,
       }))
 
-      const transitions = getTimelineItemsByTrack(trackId, timelineItems).flatMap((item) => {
-        const transition = getTransitionSnapshot(item)
-        if (!transition) return []
-        const intersects =
-          transition.startFrame !== null && transition.endFrame !== null
-            ? startFrames < transition.endFrame && endFrames > transition.startFrame
-            : startFrames <= transition.seamFrame && endFrames >= transition.seamFrame
-        return intersects
-          ? [
-              {
-                item: {
-                  itemId: transition.itemId,
-                  itemType: 'transition' as const,
-                  leftClipId: transition.leftClipId,
-                  ...(transition.rightClipId ? { rightClipId: transition.rightClipId } : {}),
-                  ...(transition.startFrame !== null && transition.endFrame !== null
-                    ? {
-                        start: framesToTimecode(transition.startFrame),
-                        end: framesToTimecode(transition.endFrame),
-                      }
-                    : {}),
-                },
-                // Keep this internal seam frame even when seamTime is intentionally omitted.
-                sortFrame: transition.seamFrame,
-                sortOrder: 0,
-              },
-            ]
-          : []
-      })
-      const items = [...clips, ...transitions]
-        .sort((left, right) => left.sortFrame - right.sortFrame || left.sortOrder - right.sortOrder)
-        .map((entry) => entry.item)
+      const items = clips.map((entry) => entry.item)
       return {
         trackId: track.id,
         items,

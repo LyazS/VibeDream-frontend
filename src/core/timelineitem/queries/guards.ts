@@ -5,8 +5,6 @@
 
 import type { MediaType } from '@/core/mediaitem'
 import type { UnifiedTimelineItemData } from '@/core/timelineitem/model/timelineItem'
-import { supportsClipTransitionOut as itemSupportsClipTransitionOut } from '@/core/timelineitem/features/transition'
-import { supportsClipFilter as itemSupportsClipFilter } from '@/core/timelineitem/features/filter'
 
 export function isVideoTimelineItem(
   item: UnifiedTimelineItemData<MediaType>,
@@ -50,16 +48,4 @@ export function hasAudioProperties(
   item: UnifiedTimelineItemData<MediaType>,
 ): item is UnifiedTimelineItemData<'video'> | UnifiedTimelineItemData<'audio'> {
   return isVideoTimelineItem(item) || isAudioTimelineItem(item)
-}
-
-export function supportsClipTransitionOut(
-  item: UnifiedTimelineItemData<MediaType>,
-): item is UnifiedTimelineItemData<'video'> | UnifiedTimelineItemData<'image'> {
-  return itemSupportsClipTransitionOut(item)
-}
-
-export function supportsClipFilter(
-  item: UnifiedTimelineItemData<MediaType>,
-): item is UnifiedTimelineItemData<'video'> | UnifiedTimelineItemData<'image'> {
-  return itemSupportsClipFilter(item)
 }

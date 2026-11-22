@@ -8,8 +8,6 @@ import {
   type MediaItemDragData,
   type TimelineItemDragData,
 } from '@/core/types/drag'
-import { effectTemplateHandlerRegistry } from '@/core/effect-template/registry'
-import type { EffectTemplatePreviewData } from '@/core/effect-template/types'
 import type { SnapPositionInput, SnapPositionResult } from './useTimelineSnap'
 
 interface TimelineSnapFunctions {
@@ -28,7 +26,6 @@ interface TimelineDragPreviewFunctions {
     event: DragEvent,
     targetTrackId: string,
     dropTime: number,
-    effectPreview?: EffectTemplatePreviewData | null,
   ) => void
   hidePreview: () => void
 }
@@ -140,51 +137,8 @@ export function useTimelineDragHandlers(
         // MediaItemDragData 处理
         const mediaData = dragData as MediaItemDragData
 
-        if (mediaData.assetKind === 'effect-template') {
-          const track = unifiedStore.getTrack(targetTrack.trackId)
-          const handler = effectTemplateHandlerRegistry.get(mediaData.effectType)
-          const candidate =
-            track && handler
-              ? handler.resolveDropCandidate({
-                  dragData: mediaData,
-                  targetTrack: track,
-                  trackItems: unifiedStore.getTimelineItemsByTrack(targetTrack.trackId),
-                  hoveredFrame: originalFrame,
-                  thresholdFrames: resolveSnapThresholdFrames(),
-                })
-              : null
-
-          if (candidate?.canDrop && candidate.snappedFrame !== null) {
-            finalFrame = candidate.snappedFrame
-            updateSnapIndicator({
-              snapped: true,
-              frame: finalFrame,
-              snapPoint: {
-                type: 'clip-end',
-                frame: finalFrame,
-                priority: 1,
-                clipId: candidate.sourceItemId!,
-                clipName: '',
-              },
-              distance: Math.abs(finalFrame - originalFrame),
-            })
-            targetInfo.position.time = finalFrame
-          } else {
-            clearSnapIndicator()
-          }
-
-          if (candidate?.canDrop && candidate.preview) {
-            handleDragPreview(event, targetTrack.trackId, finalFrame, candidate.preview)
-          } else {
-            hidePreview()
-          }
-          return
-        }
-
         // 获取素材时长（用于尾部吸附）
-        const mediaItem = mediaData.assetKind === 'media'
-          ? unifiedStore.getMediaItem(mediaData.assetId)
-          : null
+        const mediaItem = unifiedStore.getMediaItem(mediaData.assetId)
         if (mediaItem && mediaItem.duration) {
           clipDuration = mediaItem.duration
         }
@@ -283,43 +237,8 @@ export function useTimelineDragHandlers(
       // MediaItemDragData 处理
       const mediaData = dragData as MediaItemDragData
 
-      if (mediaData.assetKind === 'effect-template') {
-        const track = unifiedStore.getTrack(targetTrack.trackId)
-        const handler = effectTemplateHandlerRegistry.get(mediaData.effectType)
-        const candidate =
-          track && handler
-            ? handler.resolveDropCandidate({
-                dragData: mediaData,
-                targetTrack: track,
-                trackItems: unifiedStore.getTimelineItemsByTrack(targetTrack.trackId),
-                hoveredFrame: unifiedStore.pixelToFrame(mouseX, unifiedStore.TimelineContentWidth),
-                thresholdFrames: resolveSnapThresholdFrames(),
-              })
-            : null
-
-        const targetInfo: DropTargetInfo = {
-          targetType: DropTargetType.TIMELINE_TRACK,
-          targetId: targetTrack.trackId,
-          position: {
-            time: candidate?.canDrop && candidate.snappedFrame !== null
-              ? candidate.snappedFrame
-              : unifiedStore.pixelToFrame(mouseX, unifiedStore.TimelineContentWidth),
-            x: event.clientX,
-            y: event.clientY,
-          },
-        }
-
-        const result = await unifiedStore.handleDrop(event, targetInfo)
-        if (!result.success && result.error) {
-          unifiedStore.messageError(result.error)
-        }
-        return
-      }
-
       // 获取素材时长（用于尾部吸附）
-      const mediaItem = mediaData.assetKind === 'media'
-        ? unifiedStore.getMediaItem(mediaData.assetId)
-        : null
+      const mediaItem = unifiedStore.getMediaItem(mediaData.assetId)
       if (mediaItem && mediaItem.duration) {
         clipDuration = mediaItem.duration
       }
@@ -397,13 +316,6 @@ export function useTimelineDragHandlers(
   function handleTimelineDragEnd(_event: DragEvent) {
     hidePreview()
     clearSnapIndicator()
-  }
-
-  function resolveSnapThresholdFrames(): number {
-    const pixelsPerFrame =
-      (unifiedStore.TimelineContentWidth * unifiedStore.zoomLevel) /
-      Math.max(1, unifiedStore.totalDurationFrames)
-    return unifiedStore.snapConfig.threshold / Math.max(pixelsPerFrame, 0.0001)
   }
 
   return {

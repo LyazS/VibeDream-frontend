@@ -21,7 +21,6 @@
     "clips": "片段",
     "audioTrack": "音频轨道",
     "videoTrack": "视频轨道",
-    "effectTrack": "特效轨道",
     "tracks": "轨道",
     "addNewTrack": "添加新轨道",
     "muteTrack": "静音/取消静音轨道",
@@ -48,10 +47,6 @@
         "revealInLibraryFailed": "未找到源素材或所属文件夹",
         "regenerateThumbnail": "重新生成缩略图",
         "deleteClip": "删除片段"
-      },
-      "transition": {
-        "placeholder": "转场占位",
-        "selectSourceClip": "选中源片段"
       },
       "track": {
         "addText": "添加文本",

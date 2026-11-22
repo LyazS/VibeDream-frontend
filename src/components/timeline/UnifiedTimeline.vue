@@ -195,16 +195,6 @@
                 :key="item.id"
                 :is="renderTimelineItem(item, track)"
               />
-              <UnifiedTimelineTransitionOverlay
-                v-for="overlay in getTransitionOverlaysForTrack(track.id)"
-                :key="overlay.selectionId"
-                :overlay="overlay"
-                :track-height="track.height"
-                :timeline-width="unifiedStore.TimelineContentWidth"
-                @select="handleSelectTransition"
-                @contextmenu="handleTransitionContextMenu"
-                @updateSnapResult="handleTransitionOverlaySnapResult"
-              />
             </div>
           </div>
 
@@ -296,7 +286,6 @@ import type { SnapResultState } from '@/core/composables/useTimelineSnap'
 
 import UnifiedPlayhead from '@/components/timeline/UnifiedPlayhead.vue'
 import UnifiedTimelineClip from '@/components/timeline/UnifiedTimelineClip.vue'
-import UnifiedTimelineTransitionOverlay from '@/components/timeline/UnifiedTimelineTransitionOverlay.vue'
 import UnifiedSnapIndicator from '@/components/timeline/UnifiedSnapIndicator.vue'
 import HoverButton from '@/components/base/HoverButton.vue'
 import {
@@ -323,7 +312,7 @@ import { useTimelineDragPreview } from '@/core/composables/useTimelineDragPrevie
 import { useTimelineSnap } from '@/core/composables/useTimelineSnap'
 import { useTimelineDragHandlers } from '@/core/composables/useTimelineDragHandlers'
 import { useTimelineMarqueeSelection } from '@/core/composables/useTimelineMarqueeSelection'
-import { buildClipSelectionId, type TimelineSelectionId } from '@/core/types/timelineSelection'
+import { buildClipSelectionId } from '@/core/types/timelineSelection'
 
 // Component name for Vue DevTools
 defineOptions({
@@ -403,7 +392,6 @@ const {
   currentMenuItems,
   handleContextMenu,
   handleTimelineItemContextMenu,
-  handleTransitionContextMenu,
   showAddTrackMenu,
 } = useTimelineContextMenu(
   addNewTrack,
@@ -502,14 +490,6 @@ const {
   },
 )
 
-function getTransitionOverlaysForTrack(trackId: string) {
-  return unifiedStore.getTransitionOverlaysByTrack(trackId)
-}
-
-function handleTransitionOverlaySnapResult(snapResult: SnapResultState | null) {
-  currentSnapResult.value = snapResult
-}
-
 // 类型安全的时间轴项目渲染函数 - 优化版本，仅传递必要状态
 function renderTimelineItem(item: UnifiedTimelineItemData, track: UnifiedTrackData) {
   const commonProps = {
@@ -533,15 +513,6 @@ function renderTimelineItem(item: UnifiedTimelineItemData, track: UnifiedTrackDa
 
   // 使用统一的 UnifiedTimelineClip 组件
   return h(UnifiedTimelineClip, commonProps)
-}
-
-function handleSelectTransition(event: MouseEvent, selectionId: TimelineSelectionId) {
-  if (event.ctrlKey || event.metaKey) {
-    unifiedStore.selectTimelineSelections([selectionId], 'toggle')
-    return
-  }
-
-  unifiedStore.selectTimelineSelections([selectionId], 'replace')
 }
 
 // ========== 轨道拖拽排序 ==========

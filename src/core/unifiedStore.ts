@@ -23,8 +23,6 @@ import { createUnifiedMediaBunnyModule } from '@/core/modules/UnifiedMediaBunnyM
 import { createUnifiedUIModule } from '@/core/modules/UnifiedUIModule'
 import { createUnifiedAgentModule } from '@/core/modules/UnifiedAgentModule'
 import {
-  createEffectTemplateReadyRequest,
-  createEffectTemplateReadyResolver,
   createMediaIndexMetadataWritebackRequest,
   createMediaIndexMetadataWritebackResolver,
   createMediaIndexTaskCompleteResolver,
@@ -206,21 +204,6 @@ export const useUnifiedStore = defineStore('unified', () => {
       getMediaItem: unifiedMediaModule.getMediaItem,
     }),
   )
-  jobRuntime.registerResolver(
-    createEffectTemplateReadyResolver({
-      getAsset: (assetId) => {
-        const asset = unifiedMediaModule.getAsset(assetId)
-        return asset?.assetKind === 'effect-template' ? asset : undefined
-      },
-      getProjectId: () => {
-        const projectId = unifiedConfigModule.projectId.value
-        if (!projectId) {
-          throw new Error('当前项目未初始化')
-        }
-        return projectId
-      },
-    }),
-  )
   const jobTaskCenter = useJobTaskCenter(jobRuntime)
 
   function ensureMediaReady(mediaId: string) {
@@ -302,16 +285,6 @@ export const useUnifiedStore = defineStore('unified', () => {
   function ensureTimelineItemReady(timelineItemId: string) {
     return jobRuntime.ensure(createTimelineItemReadyRequest(timelineItemId))
   }
-  function ensureEffectTemplateReady(assetId: string) {
-    return jobRuntime.ensure(createEffectTemplateReadyRequest(assetId))
-  }
-  async function retryEffectTemplateReady(assetId: string) {
-    await jobRuntime.ensure(createEffectTemplateReadyRequest(assetId))
-  }
-  function cancelEffectTemplateReady(assetId: string) {
-    const request = createEffectTemplateReadyRequest(assetId)
-    return jobRuntime.cancel(getResourceId(request.type, assetId))
-  }
   function findMediaProcessingTaskView(mediaId: string) {
     const candidateRootIds = [
       getResourceId(MEDIA_READY_RESOURCE_TYPE, mediaId),
@@ -337,7 +310,6 @@ export const useUnifiedStore = defineStore('unified', () => {
   }
   unifiedProjectModule.setMediaReadyEnsurer(ensureMediaReady)
   unifiedProjectModule.setMediaIndexingEnsurer(ensureMediaIndexing)
-  unifiedProjectModule.setEffectTemplateReadyEnsurer(ensureEffectTemplateReady)
   unifiedProjectModule.setTimelineItemResolvedEnsurer(ensureTimelineItemResolved)
   unifiedDirectoryModule.setMediaReadyEnsurer(ensureMediaReady)
 
@@ -464,10 +436,6 @@ export const useUnifiedStore = defineStore('unified', () => {
     removeTimelineItemWithHistory: historyOperations.removeTimelineItemWithHistory,
     moveTimelineItemWithHistory: historyOperations.moveTimelineItemWithHistory,
     updatePlaybackRateWithHistory: historyOperations.updatePlaybackRateWithHistory,
-    updateTransitionConfigWithHistory: historyOperations.updateTransitionConfigWithHistory,
-    updateFilterConfigWithHistory: historyOperations.updateFilterConfigWithHistory,
-    commitFilterConfigWithHistory: historyOperations.commitFilterConfigWithHistory,
-    removeFilterEffectWithHistory: historyOperations.removeFilterEffectWithHistory,
     splitTimelineItemAtTimeWithHistory: historyOperations.splitTimelineItemAtTimeWithHistory,
     toggleTimelineItemMarkerWithHistory: historyOperations.toggleTimelineItemMarkerWithHistory,
     clearTimelineItemMarkersWithHistory: historyOperations.clearTimelineItemMarkersWithHistory,
@@ -526,12 +494,6 @@ export const useUnifiedStore = defineStore('unified', () => {
     getAllAssets: unifiedMediaModule.getAllAssets,
     updateAssetName: unifiedMediaModule.updateAssetName,
     renameAsset: unifiedMediaModule.renameAsset,
-    createTransitionTemplatePlaceholder: unifiedMediaModule.createTransitionTemplatePlaceholder,
-    createFilterTemplatePlaceholder: unifiedMediaModule.createFilterTemplatePlaceholder,
-    startTemplateProcessing: ensureEffectTemplateReady,
-    retryTemplateProcessing: retryEffectTemplateReady,
-    cancelTemplateProcessing: cancelEffectTemplateReady,
-    ensureEffectTemplateReady,
     updateMediaItemName: unifiedMediaModule.updateMediaItemName,
     updateMediaItem: unifiedMediaModule.updateMediaItem,
     updateMediaItemMetadata: unifiedMediaModule.updateMediaItemMetadata,
@@ -546,7 +508,6 @@ export const useUnifiedStore = defineStore('unified', () => {
 
     // 便捷查询方法
     getReadyMediaItems: unifiedMediaModule.getReadyMediaItems,
-    getReadyEffectTemplateAssets: unifiedMediaModule.getReadyEffectTemplateAssets,
     getProcessingMediaItems: unifiedMediaModule.getProcessingMediaItems,
     getErrorMediaItems: unifiedMediaModule.getErrorMediaItems,
     getMediaItemsBySourceType: unifiedMediaModule.getMediaItemsBySourceType,
@@ -589,12 +550,6 @@ export const useUnifiedStore = defineStore('unified', () => {
     getReadyTimelineItem: unifiedTimelineModule.getReadyTimelineItem,
     updateTimelineItemPosition: unifiedTimelineModule.updateTimelineItemPosition,
     setTimelineItemTimeRangeForCmd: unifiedTimelineModule.setTimelineItemTimeRangeForCmd,
-    setTimelineItemTransitionConfigForCmd:
-      unifiedTimelineModule.setTimelineItemTransitionConfigForCmd,
-    setTimelineItemFilterConfigForCmd: unifiedTimelineModule.setTimelineItemFilterConfigForCmd,
-    refreshTransitionItems: unifiedTimelineModule.refreshTransitionItems,
-    getTransitionOverlay: unifiedTimelineModule.getTransitionOverlay,
-    getTransitionOverlaysByTrack: unifiedTimelineModule.getTransitionOverlaysByTrack,
 
     // ==================== 统一项目模块状态和方法 ====================
 
@@ -776,8 +731,6 @@ export const useUnifiedStore = defineStore('unified', () => {
     hasSelection: unifiedSelectionModule.hasSelection,
     selectedClipTimelineItemId: unifiedSelectionModule.selectedClipTimelineItemId,
     selectedClipTimelineItemIds: unifiedSelectionModule.selectedClipTimelineItemIds,
-    selectedTransitionSourceItemId: unifiedSelectionModule.selectedTransitionSourceItemId,
-    selectedTransitionSourceItemIds: unifiedSelectionModule.selectedTransitionSourceItemIds,
 
     // 统一选择API
     selectTimelineSelections: unifiedSelectionModule.selectTimelineSelections,
@@ -787,7 +740,6 @@ export const useUnifiedStore = defineStore('unified', () => {
     isTimelineSelectionSelected: unifiedSelectionModule.isTimelineSelectionSelected,
     clearSelectionsForTimelineItem: unifiedSelectionModule.clearSelectionsForTimelineItem,
     getSelectedClipTimelineItem: unifiedSelectionModule.getSelectedClipTimelineItem,
-    getSelectedTransitionOverlay: unifiedSelectionModule.getSelectedTransitionOverlay,
     getSelectionSummary: unifiedSelectionModule.getSelectionSummary,
     resetSelectionToDefaults: unifiedSelectionModule.resetToDefaults,
 
@@ -967,7 +919,6 @@ export const useUnifiedStore = defineStore('unified', () => {
     aiPanelActiveTab: unifiedUIModule.aiPanelActiveTab,
     librarySection: unifiedUIModule.librarySection,
     libraryRevealRequest: unifiedUIModule.libraryRevealRequest,
-    effectTemplateCategorySelection: unifiedUIModule.effectTemplateCategorySelection,
     activePropertyTab: unifiedUIModule.activePropertyTab,
 
     // AI 面板状态管理方法
@@ -975,7 +926,6 @@ export const useUnifiedStore = defineStore('unified', () => {
     setLibrarySection: unifiedUIModule.setLibrarySection,
     requestLibraryAssetReveal: unifiedUIModule.requestLibraryAssetReveal,
     revealMediaInLibrary,
-    setEffectTemplateCategory: unifiedUIModule.setEffectTemplateCategory,
     setActivePropertyTab: unifiedUIModule.setActivePropertyTab,
   }
 })

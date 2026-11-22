@@ -25,7 +25,7 @@ import {
 } from '@/core/utils/mediaPathUtils'
 import { extractSourceData } from '@/core/datasource/core/DataSourceTypes'
 import type { UnifiedLibraryAssetData } from '@/core/asset/types'
-import { extractEffectTemplateSourceData, isMediaAsset } from '@/core/asset/types'
+import { isMediaAsset } from '@/core/asset/types'
 
 /**
  * 媒体保存结果接口
@@ -297,38 +297,24 @@ class GlobalMetaFileManager {
       // 定义终态列表
       const terminalStatuses: MediaStatus[] = ['error', 'cancelled', 'missing']
 
-      const metaData: MediaMetaFile = isMediaAsset(asset)
-        ? {
-            version: MEDIA_META_VERSION,
-            id: asset.id,
-            ext: asset.ext,
-            name: asset.name,
-            createdAt: asset.createdAt,
-            assetKind: 'media',
-            parentDirectoryId: asset.parentDirectoryId,
-            mediaType: asset.mediaType,
-            source: extractSourceData(linkedCommit?.source ?? asset.source),
-            duration: asset.duration,
-            ...(terminalStatuses.includes(asset.mediaStatus) && {
-              mediaStatus: asset.mediaStatus as 'error' | 'cancelled' | 'missing',
-            }),
-            ...(asset.metadata && {
-              metadata: JSON.parse(JSON.stringify(asset.metadata)),
-            }),
-          }
-        : {
-            version: '1.0.0',
-            id: asset.id,
-            name: asset.name,
-            createdAt: asset.createdAt,
-            assetKind: 'effect-template',
-            source: extractEffectTemplateSourceData(asset.source),
-            effectType: asset.effectType,
-            templateStatus: asset.templateStatus,
-            ...(asset.templatePayload && {
-              templatePayload: JSON.parse(JSON.stringify(asset.templatePayload)),
-            }),
-          }
+      const metaData: MediaMetaFile = {
+        version: MEDIA_META_VERSION,
+        id: asset.id,
+        ext: asset.ext,
+        name: asset.name,
+        createdAt: asset.createdAt,
+        assetKind: 'media',
+        parentDirectoryId: asset.parentDirectoryId,
+        mediaType: asset.mediaType,
+        source: extractSourceData(linkedCommit?.source ?? asset.source),
+        duration: asset.duration,
+        ...(terminalStatuses.includes(asset.mediaStatus) && {
+          mediaStatus: asset.mediaStatus as 'error' | 'cancelled' | 'missing',
+        }),
+        ...(asset.metadata && {
+          metadata: JSON.parse(JSON.stringify(asset.metadata)),
+        }),
+      }
 
       const permissionResult = await fileSystemService.checkPermission()
       assertActive()
@@ -603,7 +589,6 @@ class GlobalMetaFileManager {
     deletedMeta: boolean
     error?: string
   }> {
-    if (isMediaAsset(asset)) {
       const context = this.contextForAsset(asset)
       const workspaceKey = context.workspaceKey ?? fileSystemService.workspaceKey
       this.assertAssetActive(asset)
@@ -634,38 +619,6 @@ class GlobalMetaFileManager {
         this.deletingAssets.delete(toRaw(asset))
         return { success: false, deletedMedia: false, deletedMeta: false, error: String(error) }
       }
-    }
-
-    try {
-      const packageDirPath = fileSystemService.paths.getProjectEffectPackageDirPath(
-        this.projectId,
-        asset.id,
-      )
-      const packageDirExists = await fileSystemService.directoryExists(packageDirPath)
-      if (packageDirExists) {
-        await fileSystemService.deleteDirectory(packageDirPath, true)
-      }
-
-      const metaPath = fileSystemService.paths.getMetaPath(this.projectId, asset.id)
-      const metaExists = await fileSystemService.fileExists(metaPath)
-      if (metaExists) {
-        await fileSystemService.deleteFile(metaPath)
-      }
-
-      return {
-        success: packageDirExists || metaExists,
-        deletedMedia: packageDirExists,
-        deletedMeta: metaExists,
-      }
-    } catch (error) {
-      console.error(`❌ [globalMetaFileManager] 删除资产 Meta 文件失败: ${asset.id}.meta`, error)
-      return {
-        success: false,
-        deletedMedia: false,
-        deletedMeta: false,
-        error: error instanceof Error ? error.message : String(error),
-      }
-    }
   }
 
   // ==================== 辅助方法 ====================

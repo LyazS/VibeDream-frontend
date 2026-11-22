@@ -61,7 +61,6 @@ export class SplitTimelineItemCommand implements SimpleCommand {
       addTimelineItem: (item: UnifiedTimelineItemData<MediaType>) => Promise<void>
       removeTimelineItem: (id: string) => void
       getTimelineItem: (id: string) => UnifiedTimelineItemData<MediaType> | undefined
-      refreshTransitionItems?: () => void
     },
     private mediaModule: {
       getMediaItem: (id: string | null) => UnifiedMediaItemData | undefined
@@ -333,7 +332,6 @@ export class SplitTimelineItemCommand implements SimpleCommand {
         }
       }
 
-      this.timelineModule.refreshTransitionItems?.()
 
       const mediaItem = this.mediaModule.getMediaItem(this.originalTimelineItemData.mediaItemId)
       const splitPointsDesc = this.splitTimeFrames.map((t) => framesToTimecode(t)).join(', ')
@@ -383,7 +381,6 @@ export class SplitTimelineItemCommand implements SimpleCommand {
         })
       }
 
-      this.timelineModule.refreshTransitionItems?.()
 
       const mediaItem = this.mediaModule.getMediaItem(this.originalTimelineItemData.mediaItemId)
       console.log(`↩️ 已撤销分割时间轴项目: ${mediaItem?.name || '未知素材'}`)

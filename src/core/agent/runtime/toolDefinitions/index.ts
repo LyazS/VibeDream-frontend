@@ -23,8 +23,6 @@ import { moveClipDefinition } from './moveClip'
 import { splitClipDefinition } from './splitClip'
 import { trimClipDefinition } from './trimClip'
 import { removeItemDefinition } from './removeItem'
-import { searchTransitionsDefinition } from './searchTransitions'
-import { applyTransitionDefinition } from './applyTransition'
 import { readItemDefinition } from './readItem'
 import { describeItemPropertyDefinition } from './describeItemProperty'
 import { updateItemDefinition } from './updateItem'
@@ -61,8 +59,6 @@ export const agentTools: ModelTool[] = [
   splitClipDefinition,
   trimClipDefinition,
   removeItemDefinition,
-  searchTransitionsDefinition,
-  applyTransitionDefinition,
   readItemDefinition,
   describeItemPropertyDefinition,
   updateItemDefinition,

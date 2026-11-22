@@ -22,12 +22,6 @@
         :tab="t('aiPanel.devtools.mediaSearch.title')"
       >
       </n-tab>
-      <n-tab
-        v-if="showTransitionTest"
-        name="transition-test"
-        :tab="t('aiPanel.devtools.transition.title')"
-      >
-      </n-tab>
       <template #suffix>
         <div class="header-buttons">
           <template v-if="showAgent && unifiedStore.aiPanelActiveTab === 'agent'">
@@ -65,13 +59,6 @@
       <MediaSearchTestPanel />
     </div>
     <div
-      v-if="showTransitionTest"
-      v-show="unifiedStore.aiPanelActiveTab === 'transition-test'"
-      style="flex: 1; display: flex; flex-direction: column; overflow: hidden"
-    >
-      <TransitionTestPanel />
-    </div>
-    <div
       v-if="showItemPropertyTest"
       v-show="unifiedStore.aiPanelActiveTab === 'item-property-test'"
       style="flex: 1; display: flex; flex-direction: column; overflow: hidden; min-height: 0"
@@ -88,13 +75,11 @@ import { IconComponents } from '@/constants/iconComponents'
 import HoverButton from '@/components/base/HoverButton.vue'
 import AgentPanel from '../agent/AgentPanel.vue'
 import MediaSearchTestPanel from '../devtools/MediaSearchTestPanel.vue'
-import TransitionTestPanel from '../devtools/TransitionTestPanel.vue'
 import ItemPropertyTestPanel from '../devtools/ItemPropertyTestPanel.vue'
 import { useAppI18n } from '@/core/composables/useI18n'
 import { useUnifiedStore } from '@/core/unifiedStore'
 import {
   SHOW_MEDIA_SEARCH_TEST,
-  SHOW_TRANSITION_TEST,
   SHOW_ITEM_PROPERTY_TEST,
 } from '@/config/runtimeConfig'
 import { enabledApiCapabilities } from '@/config/apiCapabilities'
@@ -109,7 +94,6 @@ const showMediaSearchTest =
   enabledApiCapabilities.has('media.retrieval') &&
   enabledApiCapabilities.has('media.rerank') &&
   enabledApiCapabilities.has('media.validate')
-const showTransitionTest = SHOW_TRANSITION_TEST && enabledApiCapabilities.has('transition.search')
 const showItemPropertyTest =
   SHOW_ITEM_PROPERTY_TEST && enabledApiCapabilities.has('item-properties')
 

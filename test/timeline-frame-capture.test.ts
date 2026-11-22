@@ -1,42 +1,20 @@
 import { beforeEach, expect, it, vi } from 'vitest'
-import type { LoadedEffectPackage } from '@/core/effect-package/types'
 import { setupTimelineItemBunny } from '@/core/bunnyUtils/timelineItemSetup'
-import { prepareEffectPackageResources } from '@/core/effect-package/runtime/prepareEffectPackageResources'
 import { TimelineFrameCaptureSession } from '@/core/utils/timelineFrameCapture'
 import type { UnifiedTimelineItemData } from '@/core/timelineitem/model/timelineItem'
 import type { UnifiedMediaItemData } from '@/core/mediaitem/types'
 
 const mocks = vi.hoisted(() => ({
-  readFile: vi.fn(),
-  loadSampledResource: vi.fn(),
-  ensureReady: vi.fn(),
-  getReadyPackage: vi.fn(),
   render: vi.fn(),
   rendererOptions: vi.fn(),
   toBlob: vi.fn(),
   dispose: vi.fn(),
 }))
 
-vi.mock('@/core/managers/filesystem/fileSystemService', () => ({
-  fileSystemService: { readFile: mocks.readFile },
-}))
-vi.mock('@/core/effect-package/runtime/sampledResourceLoader', () => ({
-  loadSampledResource: mocks.loadSampledResource,
-}))
-vi.mock('@/core/effect-template/EffectTemplateRegistry', () => ({
-  effectTemplateRegistry: {
-    ensureReady: mocks.ensureReady,
-    getReadyPackage: mocks.getReadyPackage,
-  },
-}))
+vi.mock('@/core/managers/filesystem/fileSystemService', () => ({ fileSystemService: {} }))
 vi.mock('@/core/bunnyUtils/timelineItemSetup', () => ({ setupTimelineItemBunny: vi.fn() }))
 vi.mock('@/core/timelineitem/runtime/factory', () => ({
   TimelineItemFactory: { clone: (item: unknown) => structuredClone(item) },
-}))
-vi.mock('@/core/webgl2/transition/TransitionEdgeFrameResolver', () => ({
-  TransitionEdgeFrameResolver: class {
-    async prepareItems() {}
-  },
 }))
 vi.mock('@/core/utils/WebGLExportRenderer', () => ({
   WebGLExportRenderer: class {
@@ -55,136 +33,10 @@ function deferred<T>() {
   return { promise, resolve }
 }
 
-function effectPackage() {
-  return {
-    effectPackageId: 'transition/fade@1.0.0',
-    textResourcePaths: new Map([['fade.frag', '/effects/fade.frag']]),
-    textResources: new Map<string, string>(),
-    pendingTextLoads: new Map<string, Promise<string>>(),
-    sampledResourceDescriptors: new Map([
-      [
-        'noise.png',
-        { absolutePath: '/effects/noise.png', dimension: '2d', resourceType: 'image-2d' },
-      ],
-    ]),
-    sampledResources: new Map(),
-    pendingSampledResourceLoads: new Map(),
-  } as LoadedEffectPackage
-}
-
-function session() {
-  const left = {
-    id: 'left',
-    mediaType: 'image',
-    mediaItemId: 'image',
-    trackId: 'track',
-    timeRange: {
-      timelineStartTime: 0,
-      timelineEndTime: 30,
-      clipStartTime: 0,
-      clipEndTime: 30,
-    },
-    baseRenderConfig: { visual: {} },
-    exRenderConfig: {
-      transition: {
-        effectPackageId: 'transition/fade@1.0.0',
-        templateId: 'fade',
-        packageVersion: '1.0.0',
-        catalogVersion: 'catalog-v1',
-        durationFrames: 10,
-        params: {},
-      },
-    },
-    runtime: { exRenderConfig: {} },
-  } as UnifiedTimelineItemData<'image'>
-  const right = structuredClone(left)
-  right.id = 'right'
-  right.timeRange.timelineStartTime = 30
-  right.timeRange.timelineEndTime = 60
-  right.exRenderConfig = {}
-  return new TimelineFrameCaptureSession({
-    videoWidth: 1920,
-    videoHeight: 1080,
-    timelineItems: [left, right],
-    tracks: [{ id: 'track', isVisible: true, isMuted: false }],
-    getMediaItem: () => ({}) as UnifiedMediaItemData,
-    getAsset: () => undefined,
-  })
-}
-
 beforeEach(() => {
   vi.resetAllMocks()
   vi.mocked(setupTimelineItemBunny).mockResolvedValue(undefined)
-  mocks.ensureReady.mockResolvedValue(undefined)
-  mocks.readFile.mockResolvedValue('shader')
-  mocks.loadSampledResource.mockResolvedValue({ kind: 'image-2d' })
   mocks.toBlob.mockImplementation((callback: BlobCallback) => callback(new Blob(['frame'])))
-})
-
-it('waits for cold transition shaders and textures before rendering and capturing', async () => {
-  const loaded = effectPackage()
-  const shader = deferred<string>()
-  const texture = deferred<{ kind: string }>()
-  mocks.getReadyPackage.mockReturnValue(loaded)
-  mocks.readFile.mockReturnValue(shader.promise)
-  mocks.loadSampledResource.mockReturnValue(texture.promise)
-
-  const captureSession = session()
-  const capture = captureSession.captureFrame(29)
-  await vi.waitFor(() => expect(mocks.readFile).toHaveBeenCalledOnce())
-  expect(mocks.render).not.toHaveBeenCalled()
-  expect(mocks.toBlob).not.toHaveBeenCalled()
-  shader.resolve('shader')
-  await vi.waitFor(() => expect(loaded.textResources.get('fade.frag')).toBe('shader'))
-  expect(mocks.render).not.toHaveBeenCalled()
-  texture.resolve({ kind: 'image-2d' })
-  await expect(capture).resolves.toBeInstanceOf(Blob)
-  expect(mocks.ensureReady).toHaveBeenCalledWith({
-    effectType: 'transition',
-    effectPackageId: 'transition/fade@1.0.0',
-    templateId: 'fade',
-    packageVersion: '1.0.0',
-    catalogVersion: 'catalog-v1',
-  })
-  expect(mocks.render).toHaveBeenCalledOnce()
-  expect(mocks.toBlob).toHaveBeenCalledOnce()
-  await captureSession.dispose()
-})
-
-it.each(['missing package', 'missing texture', 'failed shader'])(
-  'does not save an incomplete frame on %s and disposes the renderer',
-  async (failure) => {
-    mocks.getReadyPackage.mockReturnValue(failure === 'missing package' ? null : effectPackage())
-    if (failure === 'missing texture') mocks.loadSampledResource.mockResolvedValue(null)
-    if (failure === 'failed shader') mocks.readFile.mockRejectedValue(new Error('read failed'))
-    await expect(session().captureFrame(29)).rejects.toThrow(
-      failure === 'missing package'
-        ? '效果包未就绪'
-        : failure === 'missing texture'
-          ? '效果包资源加载失败'
-          : 'read failed',
-    )
-    expect(mocks.render).not.toHaveBeenCalled()
-    expect(mocks.toBlob).not.toHaveBeenCalled()
-    expect(mocks.dispose).toHaveBeenCalledOnce()
-  },
-)
-
-it('shares an in-progress shader load with preview and reuses cached text', async () => {
-  const loaded = effectPackage()
-  const shader = deferred<string>()
-  loaded.textResources.set('cached.frag', 'cached shader')
-  loaded.textResourcePaths.set('cached.frag', '/effects/cached.frag')
-  loaded.pendingTextLoads.set('fade.frag', shader.promise)
-  let finished = false
-  const preparation = prepareEffectPackageResources(loaded).then(() => (finished = true))
-  await Promise.resolve()
-  expect(finished).toBe(false)
-  expect(mocks.readFile).not.toHaveBeenCalled()
-  loaded.textResources.set('fade.frag', 'shader')
-  shader.resolve('shader')
-  await preparation
-  expect(finished).toBe(true)
 })
 
 it('fails a visible video frame instead of encoding a blank canvas, but accepts an empty composition', async () => {
@@ -206,12 +58,10 @@ it('fails a visible video frame instead of encoding a blank canvas, but accepts 
             clipEndTime: 60,
           },
           baseRenderConfig: { visual: {} },
-          exRenderConfig: {},
-          runtime: { exRenderConfig: {} },
+          runtime: {},
         } as UnifiedTimelineItemData<'video'>,
       ],
       getMediaItem: () => ({ id: 'media', runtime: {} }) as UnifiedMediaItemData,
-      getAsset: () => undefined,
     })
   vi.mocked(setupTimelineItemBunny).mockImplementation(async (item) => {
     item.runtime.bunnyClip = {
@@ -251,12 +101,10 @@ it('cancels pending frame decoding and closes a late sample without rendering or
         trackId: 'track',
         timeRange: { timelineStartTime: 0, timelineEndTime: 60 },
         baseRenderConfig: { visual: {} },
-        exRenderConfig: {},
-        runtime: { exRenderConfig: {} },
+        runtime: {},
       } as UnifiedTimelineItemData<'video'>,
     ],
     getMediaItem: () => ({ id: 'media', runtime: {} }) as UnifiedMediaItemData,
-    getAsset: () => undefined,
   })
   const pending = capture.captureFrame(0)
   await vi.waitFor(() => expect(tick).toHaveBeenCalledOnce())
@@ -289,8 +137,7 @@ it('keeps borrowed media resources and metadata from the initial snapshot across
     trackId: 'track',
     timeRange: { timelineStartTime: 0, timelineEndTime: 60, clipStartTime: 0, clipEndTime: 60 },
     baseRenderConfig: { visual: {} },
-    exRenderConfig: {},
-    runtime: { exRenderConfig: {} },
+    runtime: {},
   } as UnifiedTimelineItemData<'image'>
   vi.mocked(setupTimelineItemBunny).mockImplementationOnce(async () => {
     await gate.promise
@@ -301,7 +148,6 @@ it('keeps borrowed media resources and metadata from the initial snapshot across
     timelineItems: [item],
     tracks: [{ id: 'track', isVisible: true, isMuted: false }],
     getMediaItem,
-    getAsset: () => undefined,
   })
   const pending = capture.captureFrame(0)
   media.name = 'later edit'
@@ -312,35 +158,6 @@ it('keeps borrowed media resources and metadata from the initial snapshot across
   expect(options.getMediaItem('photo').name).toBe('original')
   expect(options.getMediaItem('photo').runtime.bunny.imageClip).toBe(originalBitmap)
   expect(getMediaItem).toHaveBeenCalledOnce()
-  await capture.dispose()
-  expect(close).not.toHaveBeenCalled()
-})
-
-it('snapshots library media outside the timeline without retaining editable originals or cloning borrowed bitmaps', async () => {
-  const close = vi.fn()
-  const bitmap = { close }
-  const media = {
-    id: 'off-timeline',
-    assetKind: 'media',
-    name: 'original',
-    runtime: { bunny: { imageClip: bitmap } },
-  } as unknown as UnifiedMediaItemData
-  const capture = new TimelineFrameCaptureSession({
-    videoWidth: 100,
-    videoHeight: 100,
-    timelineItems: [],
-    tracks: [],
-    assets: [media],
-    getMediaItem: () => undefined,
-    getAsset: () => media,
-  })
-  media.name = 'later edit'
-  media.runtime.bunny!.imageClip = {} as ImageBitmap
-  await capture.captureFrame(0)
-  const captured = mocks.rendererOptions.mock.calls[0]![0].getAsset(media.id)
-  expect(captured).not.toBe(media)
-  expect(captured.name).toBe('original')
-  expect(captured.runtime.bunny.imageClip).toBe(bitmap)
   await capture.dispose()
   expect(close).not.toHaveBeenCalled()
 })

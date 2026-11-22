@@ -1,11 +1,10 @@
 import { fetchClient, type RequestConfig } from '@/utils/fetchClient'
 
-export type ItemPropertyUsage = 'static_edit' | 'keyframe_edit' | 'transition_edit'
+export type ItemPropertyUsage = 'static_edit' | 'keyframe_edit'
 
 export interface ItemPropertyRequest {
   usage: ItemPropertyUsage
   propertyIds: string[]
-  templateId?: string
 }
 
 export interface ItemPropertyDescription {
@@ -32,7 +31,6 @@ export interface ItemPropertyDescription {
 export interface ItemPropertyResponse {
   tool: 'describe_item_property'
   usage?: ItemPropertyUsage
-  templateId?: string
   propertyIds?: string[]
   propertyDescriptions?: ItemPropertyDescription[]
   error?: string

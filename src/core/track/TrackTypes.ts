@@ -51,24 +51,6 @@ export interface TrackLayout {
 }
 
 /**
- * 轨道渲染配置
- */
-export interface TrackRenderConfig {
-  blendMode?: string // 混合模式
-  filters?: string[] // 应用的滤镜列表
-  transform?: {
-    // 变换属性
-    x: number
-    y: number
-    scaleX: number
-    scaleY: number
-    rotation: number
-  }
-}
-
-// ==================== 核心数据接口 ====================
-
-/**
  * 统一轨道数据接口 - 简化版本
  *
  * 设计理念：

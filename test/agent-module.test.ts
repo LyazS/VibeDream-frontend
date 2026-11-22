@@ -2356,7 +2356,7 @@ describe('text Agent orchestration', () => {
     expect(calls[1].messages.slice(0, 2)).toEqual(calls[0].messages)
     expect(calls[2].messages.slice(0, 2)).toEqual(calls[0].messages)
     expect(new Set(calls.map((call) => call.modelCallId)).size).toBe(3)
-    expect(calls[0].tools).toHaveLength(32)
+    expect(calls[0].tools).toHaveLength(30)
     expect(calls[2].messages.slice(1).map((message) => message.role)).toEqual([
       'user',
       'assistant',
@@ -2738,7 +2738,7 @@ describe('text Agent orchestration', () => {
   })
   it('shares full original schemas and rejects type coercion before executing', () => {
     const runtime = createToolRuntime()
-    expect(agentTools).toHaveLength(32)
+    expect(agentTools).toHaveLength(30)
     expect(agentTools.some((tool) => tool.name === 'inspect_timeline_frames')).toBe(false)
     expect(() =>
       runtime.validate({

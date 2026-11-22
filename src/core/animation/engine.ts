@@ -2,14 +2,13 @@ import type { MediaType } from '@/core/mediaitem'
 import type { UnifiedTimelineItemData } from '@/core/timelineitem/model/timelineItem'
 import { normalizeAnimationGroupId, type AnimateKeyframe, type AnimationChannelKey, type AnimationGroupTrack, type PropertyAnimationGroupId, type PropertyAnimationValueByGroup, type GetAnimation } from '@/core/timelineitem/model/render'
 import { AnimationRegistry } from './registry'
-import { isFilterParamPropertyId } from '@/core/property-system/schema/propertyIds'
 
 export type AnimationButtonState = 'none' | 'on-keyframe' | 'between-keyframes'
 
 function cloneValue<G extends PropertyAnimationGroupId>(
   value: PropertyAnimationValueByGroup<G>,
 ): PropertyAnimationValueByGroup<G> {
-  return { ...(value as Record<string, unknown>) } as PropertyAnimationValueByGroup<G>
+  return structuredClone(value)
 }
 
 function createKeyframeValueAlias<G extends PropertyAnimationGroupId>(
@@ -112,9 +111,7 @@ export function getSupportedAnimationGroups(item: UnifiedTimelineItemData<MediaT
   const staticGroups = AnimationRegistry.list()
     .filter((definition) => definition.supports(item))
     .map((definition) => definition.id)
-  const dynamicGroups = Object.keys(item.animation?.groups ?? {})
-    .filter(isFilterParamPropertyId) as PropertyAnimationGroupId[]
-  return [...new Set([...staticGroups, ...dynamicGroups])]
+  return staticGroups
 }
 
 export function createGroupKeyframe<G extends PropertyAnimationGroupId>(

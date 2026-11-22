@@ -1,23 +1,14 @@
 import { cloneDeep } from 'lodash'
 import { abortable } from './abortable'
-import type { UnifiedLibraryAssetData } from '@/core/asset/types'
 import { setupTimelineItemBunny } from '@/core/bunnyUtils/timelineItemSetup'
-import { prepareEffectPackageResources } from '@/core/effect-package/runtime/prepareEffectPackageResources'
-import { effectTemplateRegistry } from '@/core/effect-template/EffectTemplateRegistry'
-import { parseEffectPackageId } from '@/core/effect-template/commonTypes'
 import { RENDERER_FPS } from '@/core/mediabunny/constant'
 import type { IClip } from '@/core/mediabunny/IClip'
 import type { MediaType, UnifiedMediaItemData } from '@/core/mediaitem/types'
-import {
-  closeClipTransitionEdgeFrames,
-  refreshClipTransitionsForItems,
-} from '@/core/timelineitem/features/transition'
 import type { UnifiedTimelineItemData } from '@/core/timelineitem/model/timelineItem'
 import { TimelineItemQueries } from '@/core/timelineitem/queries'
 import { TimelineItemFactory } from '@/core/timelineitem/runtime/factory'
 import { applyAnimationToConfig } from '@/core/utils/animationInterpolation'
 import { WebGLExportRenderer } from '@/core/utils/WebGLExportRenderer'
-import { TransitionEdgeFrameResolver } from '@/core/webgl2/transition/TransitionEdgeFrameResolver'
 import type { FrameData } from '@/core/webgl2/types'
 
 export interface TimelineFrameCaptureOptions {
@@ -26,9 +17,6 @@ export interface TimelineFrameCaptureOptions {
   timelineItems: UnifiedTimelineItemData<MediaType>[]
   tracks: { id: string; isVisible: boolean; isMuted: boolean }[]
   getMediaItem: (id: string) => UnifiedMediaItemData | undefined
-  getAsset: (id: string | null) => UnifiedLibraryAssetData | undefined
-  /** 用于固定效果和媒体引用的素材快照，避免异步渲染读取后续编辑结果。 */
-  assets?: UnifiedLibraryAssetData[]
   signal?: AbortSignal
   /** 快照缺少解码资源时补齐运行时资源，不重新读取可编辑元数据。 */
   prepareMedia?: (id: string) => Promise<unknown>
@@ -51,7 +39,6 @@ export class TimelineFrameCaptureSession {
   private clonedTimelineItems: UnifiedTimelineItemData<MediaType>[] = []
   private clipsMap = new Map<string, IClip>()
   private bunnyCurFrameMap = new Map<string, FrameData>()
-  private transitionEdgeResolver: TransitionEdgeFrameResolver
   private frameRate: number
   private initialized = false
   private disposed = false
@@ -81,18 +68,11 @@ export class TimelineFrameCaptureSession {
       const original = config.getMediaItem(item.mediaItemId)
       if (original) snapshotMedia(item.mediaItemId, original)
     }
-    const assets = new Map(
-      (config.assets ?? []).map((asset) => [
-        asset.id,
-        asset.assetKind === 'media' ? snapshotMedia(asset.id, asset) : cloneDeep(asset),
-      ]),
-    )
     this.config = {
       ...config,
       timelineItems: items,
       tracks: cloneDeep(config.tracks),
       getMediaItem: (id) => media.get(id),
-      getAsset: (id) => (id ? assets.get(id) : undefined),
     }
     for (const track of this.config.tracks) {
       if (!this.tracksById.has(track.id)) this.tracksById.set(track.id, track)
@@ -102,9 +82,6 @@ export class TimelineFrameCaptureSession {
       AbortSignal.timeout(config.timeoutMs ?? 60_000),
     ])
     this.frameRate = config.frameRate ?? RENDERER_FPS
-    this.transitionEdgeResolver = new TransitionEdgeFrameResolver((id) =>
-      this.config.getMediaItem(id),
-    )
   }
 
   private check() {
@@ -128,18 +105,6 @@ export class TimelineFrameCaptureSession {
         this.config.timelineItems,
         this.config.getMediaItem,
       )
-      await this.prepareEffectResources()
-      refreshClipTransitionsForItems(this.clonedTimelineItems)
-      const capturedItems = this.clonedTimelineItems.filter((item) =>
-        this.isTrackVisible(item.trackId),
-      )
-      await abortable(this.transitionEdgeResolver.prepareItems(capturedItems), this.signal, () => {
-        for (const item of capturedItems) {
-          const edges = item.runtime.transition?.edgeFrames
-          if (edges) closeClipTransitionEdgeFrames(edges)
-          if (item.runtime.transition) item.runtime.transition.edgeFrames = undefined
-        }
-      })
       this.check()
       this.initialized = true
     } catch (error) {
@@ -197,13 +162,6 @@ export class TimelineFrameCaptureSession {
     const clips = [...this.clipsMap.values()]
     this.clipsMap.clear()
 
-    for (const item of this.clonedTimelineItems) {
-      if (item.runtime.transition?.edgeFrames) {
-        closeClipTransitionEdgeFrames(item.runtime.transition.edgeFrames)
-        item.runtime.transition.edgeFrames = undefined
-        item.runtime.transition.edgeSignature = undefined
-      }
-    }
     this.clonedTimelineItems = []
 
     this.webglRenderer?.dispose()
@@ -231,7 +189,6 @@ export class TimelineFrameCaptureSession {
           : undefined
       },
       getMediaItem: this.config.getMediaItem,
-      getAsset: this.config.getAsset,
       trackIndexMap: () => new Map(this.config.tracks.map((track, index) => [track.id, index])),
     })
     this.canvas = this.webglRenderer.canvas
@@ -346,52 +303,9 @@ export class TimelineFrameCaptureSession {
       throw new Error('离屏渲染器未初始化')
     }
 
-    // 活动转场缺少边界帧时明确报错，避免将缺失转场的画面当成最终合成。
-    for (const item of this.clonedTimelineItems) {
-      const transition = item.runtime.transition
-      if (!this.isTrackVisible(item.trackId)) continue
-      if (
-        transition?.bindingState === 'waiting-edge' &&
-        transition.seamFrame !== null &&
-        frameIn30fps >= transition.activeRangeStart! &&
-        frameIn30fps < transition.activeRangeEnd!
-      )
-        throw new Error(`frame_unavailable：转场边界帧不可用 ${item.id}`)
-    }
     this.webglRenderer.render(this.clonedTimelineItems, frameIn30fps, this.bunnyCurFrameMap)
   }
 
-  private async prepareEffectResources(): Promise<void> {
-    const packages = new Map<string, string>()
-    for (const item of this.clonedTimelineItems) {
-      if (!this.isTrackVisible(item.trackId)) continue
-      for (const config of [
-        TimelineItemQueries.getResolvedFilter(item),
-        TimelineItemQueries.getResolvedTransition(item),
-      ]) {
-        if (config?.effectPackageId) {
-          packages.set(config.effectPackageId, config.catalogVersion)
-        }
-      }
-    }
-
-    // 渲染前预加载转场和分支滤镜资源，确保本次截帧包含完整效果。
-    for (const [effectPackageId, catalogVersion] of packages) {
-      this.check()
-      await abortable(
-        effectTemplateRegistry.ensureReady({
-          ...parseEffectPackageId(effectPackageId),
-          catalogVersion,
-        }),
-        this.signal,
-      )
-      const loadedPackage = effectTemplateRegistry.getReadyPackage(effectPackageId)
-      if (!loadedPackage) {
-        throw new Error(`截图所需的效果包未就绪: ${effectPackageId}`)
-      }
-      await abortable(prepareEffectPackageResources(loadedPackage), this.signal)
-    }
-  }
 }
 
 export async function captureTimelineFrames(

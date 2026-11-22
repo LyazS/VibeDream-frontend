@@ -1,11 +1,6 @@
-import { EffectPackageFilterPass } from '@/core/effect-package/runtime/EffectPackageFilterPass'
-import { normalizeEffectRuntimeParams } from '@/core/effect-package/runtimeParams'
-import { effectTemplateRegistry } from '@/core/effect-template/EffectTemplateRegistry'
 import type { UnifiedMediaItemData } from '@/core/mediaitem/types'
-import { TimelineItemQueries } from '@/core/timelineitem/queries'
 import type { TimelineBaseRenderConfig, UnifiedTimelineItemData } from '@/core/timelineitem/model/timelineItem'
 import { ItemLocalRasterPass } from '@/core/webgl2/passes/ItemLocalRasterPass'
-import { MaskPass } from '@/core/webgl2/passes/MaskPass'
 import { RotateSourcePass } from '@/core/webgl2/passes/RotateSourcePass'
 import type { RenderPass } from '@/core/webgl2/renderchain/RenderPass'
 import type { ProgramManager } from '@/core/webgl2/runtime/ProgramManager'
@@ -26,9 +21,6 @@ interface BuildItemPassesOptions<TItem extends BuildableTimelineItem> {
   item: TItem
   getSourceTextureId: () => string | null
   getRenderConfig: () => TimelineBaseRenderConfig<TItem['mediaType']>
-  getRenderMask: () => ReturnType<typeof TimelineItemQueries.getResolvedMask>
-  getRenderFilterConfig: () => ReturnType<typeof TimelineItemQueries.getResolvedFilter>
-  getEffectEvaluationFrame: () => number
 }
 
 export interface ItemPassBuildResult {
@@ -39,25 +31,11 @@ export interface ItemPassBuildResult {
 export class ItemPassBuilder {
   constructor(private readonly params: ItemPassBuilderParams) {}
 
-  private resolveLoadedFilterPackage(
-    getRenderFilterConfig: () => ReturnType<typeof TimelineItemQueries.getResolvedFilter>,
-  ) {
-    const filterConfig = getRenderFilterConfig()
-    return filterConfig?.effectPackageId
-      ? effectTemplateRegistry.getReadyPackage(filterConfig.effectPackageId)
-      : null
-  }
-
   build<TItem extends BuildableTimelineItem>(
     options: BuildItemPassesOptions<TItem>,
   ): ItemPassBuildResult {
     const rotatedTextureId = `${options.prefix}:rotated`
     const itemLocalTextureId = `${options.prefix}:item-local`
-    const maskedTextureId = `${options.prefix}:masked`
-    const filteredTextureId = `${options.prefix}:filtered`
-    const loadedFilterPackage = this.resolveLoadedFilterPackage(options.getRenderFilterConfig)
-    const hasFilter = Boolean(options.getRenderFilterConfig() && loadedFilterPackage)
-    const hasMask = Boolean(options.getRenderMask()?.enabled)
 
     return {
       passes: [
@@ -83,43 +61,13 @@ export class ItemPassBuilder {
             }
           },
         ),
-        ...(hasFilter && loadedFilterPackage
-          ? [new EffectPackageFilterPass(
-              this.params.programs,
-              this.params.targets,
-              `${options.prefix}:filter`,
-              loadedFilterPackage,
-              filteredTextureId,
-              options.getEffectEvaluationFrame,
-              () => options.getRenderFilterConfig()?.intensity ?? 1,
-              () =>
-                normalizeEffectRuntimeParams(loadedFilterPackage.payload, {
-                  ...loadedFilterPackage.payload.defaultParams,
-                  ...(options.getRenderFilterConfig()?.params ?? {}),
-                }),
-              () => itemLocalTextureId,
-              (name) => `${options.prefix}:filter:${name}`,
-            )]
-          : []),
-        ...(hasMask
-          ? [new MaskPass(
-              `${options.prefix}:mask`,
-              this.params.programs,
-              hasFilter ? filteredTextureId : itemLocalTextureId,
-              maskedTextureId,
-              this.params.targets,
-              options.getRenderMask,
-            )]
-          : []),
       ],
-      outputTextureId: hasMask
-        ? maskedTextureId
-        : (hasFilter ? filteredTextureId : itemLocalTextureId),
+      outputTextureId: itemLocalTextureId,
     }
   }
 
   private getClockwiseRotation(item: BuildableTimelineItem): number {
-    if (!TimelineItemQueries.isVideoTimelineItem(item)) {
+    if (item.mediaType !== 'video') {
       return 0
     }
 

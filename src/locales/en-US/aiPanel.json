@@ -63,35 +63,11 @@
           "validate": "Validating candidate media"
         }
       },
-      "transition": {
-        "title": "Transition Test",
-        "catalogLoading": "Loading transition catalog...",
-        "catalogSummary": "Catalog: {count} items · {version}",
-        "catalogUnavailable": "Catalog unavailable",
-        "refresh": "Refresh transition catalog",
-        "placeholder": "Describe the transition effect",
-        "target": "Apply at",
-        "selectSeam": "Select a video cut",
-        "noSeams": "No adjacent video clips on the timeline",
-        "noResults": "No transitions found.",
-        "recheck": "Check again",
-        "install": "Install",
-        "apply": "Apply to cut",
-        "installed": "{name} installed and loaded.",
-        "applied": "{name} applied at {target}.",
-        "catalogFailed": "Unable to load the transition catalog. Please try again.",
-        "catalogMismatch": "The transition catalog does not match its version. Refresh and try again.",
-        "searchFailed": "Transition search failed. Please try again.",
-        "installFailed": "Unable to install the transition. Please try again.",
-        "applyFailed": "Unable to apply the transition. Please try again."
-      },
       "property": {
         "title": "Property Description",
         "usage": "Editing context",
         "static": "Static",
         "keyframe": "Keyframe",
-        "transition": "Transition",
-        "templateId": "Transition template ID",
         "propertyId": "Property ID",
         "example": "Example",
         "examples": "Property examples",
@@ -123,7 +99,6 @@
           "normalize": "Duplicate IDs and whitespace",
           "keyframeBasic": "Compound property components",
           "nonAnimatable": "Non-animatable properties",
-          "transitionBasic": "Timeline and transition parameters",
           "hidden": "Hidden template",
           "missing": "Missing template"
         }
@@ -151,8 +126,6 @@
       "move_library_items": "Move Library Items",
       "delete_empty_folder": "Delete Empty Folder",
       "describe_item_property": "Describe Item Property",
-      "search_transitions": "Search Transitions",
-      "apply_transition": "Apply Transition",
       "remove_item": "Remove Item",
       "add_track": "Add Track",
       "insert_clip": "Insert Clip",

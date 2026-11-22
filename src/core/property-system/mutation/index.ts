@@ -16,4 +16,3 @@ export type {
   PropertyPlanIntent,
   VisualConfigPatchOperation,
 } from './types'
-export type { DynamicFilterParamPropertyId } from '@/core/property-system/schema/propertyIds'

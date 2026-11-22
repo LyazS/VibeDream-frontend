@@ -4,20 +4,12 @@ import type { UnifiedDirectoryConfig } from '@/core/directory/types'
 import { ProjectFileOps } from '@/core/utils'
 import { TimelineItemFactory } from '@/core/timelineitem/runtime/factory'
 import type { UnifiedTimelineItemData } from '@/core/timelineitem/model/timelineItem'
-import { createDefaultTimelineExtraRenderConfig } from '@/core/timelineitem/model/timelineItem'
-import { TimelineItemQueries } from '@/core/timelineitem/queries'
 import type { UnifiedTrackData } from '@/core/track/TrackTypes'
 import { createUnifiedTrackData } from '@/core/track/TrackTypes'
 import type { UnifiedMediaItemData } from '@/core/mediaitem/types'
 import { globalMetaFileManager } from '@/core/managers/media/globalMetaFileManager'
 import { globalMediaItemLoader } from '@/core/managers/media/MediaItemLoader'
 import { isMediaAsset } from '@/core/asset/types'
-import { effectTemplateRegistry } from '@/core/effect-template/EffectTemplateRegistry'
-import {
-  buildEffectPackageId,
-  parseEffectPackageId,
-  type EffectPackageIdentity,
-} from '@/core/effect-template/commonTypes'
 import { shouldRecoverMediaIndexing } from '@/core/jobs'
 import { useProjectThumbnailService } from '@/core/composables/useProjectThumbnailService'
 import { framesToSeconds } from '@/core/utils/timeUtils'
@@ -69,8 +61,6 @@ export function createUnifiedProjectModule(registry: ModuleRegistry) {
 
   let ensureMediaReadyForProjectLoad: ((mediaId: string) => Promise<unknown>) | null = null
   let ensureMediaIndexingForProjectLoad: ((mediaId: string) => Promise<unknown>) | null = null
-  let _ensureEffectTemplateReadyForProjectLoad: ((assetId: string) => Promise<unknown>) | null =
-    null
   let ensureTimelineItemResolvedForProjectLoad:
     | ((timelineItemId: string) => Promise<unknown>)
     | null = null
@@ -123,9 +113,6 @@ export function createUnifiedProjectModule(registry: ModuleRegistry) {
     ensureMediaIndexingForProjectLoad = ensurer
   }
 
-  function setEffectTemplateReadyEnsurer(ensurer: (assetId: string) => Promise<unknown>): void {
-    _ensureEffectTemplateReadyForProjectLoad = ensurer
-  }
 
   function setTimelineItemResolvedEnsurer(
     ensurer: (timelineItemId: string) => Promise<unknown>,
@@ -218,7 +205,6 @@ export function createUnifiedProjectModule(registry: ModuleRegistry) {
             if (clonedItem.runtime) {
               // 清空运行时数据，但保留 isInitialized 字段（必选）
               clonedItem.runtime = {
-                exRenderConfig: createDefaultTimelineExtraRenderConfig(),
                 isInitialized: clonedItem.runtime.isInitialized,
               }
             }
@@ -324,9 +310,6 @@ export function createUnifiedProjectModule(registry: ModuleRegistry) {
       // 2. 初始化 globalMetaFileManager（内部包含扫描媒体目录逻辑）
       updateLoadingProgress(t('project.progress.mediaManager'), 20)
       await globalMetaFileManager.initialize(projectId)
-
-      // 3. 初始化 workspace 级效果模板 registry
-      await effectTemplateRegistry.initialize()
 
       // 4. 🌟 阶段二：从 Meta 文件构建媒体项目（传入 projectTimeline）
       updateLoadingProgress(t('project.progress.rebuildMedia'), 50)
@@ -647,9 +630,6 @@ export function createUnifiedProjectModule(registry: ModuleRegistry) {
         }
       }
 
-      timelineModule.refreshTransitionItems?.()
-      ensureTimelineEffectDependencies(timelineModule.timelineItems.value)
-
       console.log(`✅ 时间轴项目恢复完成: ${timelineModule.timelineItems.value.length}个项目`)
     } catch (error) {
       console.error('❌ 恢复时间轴项目失败:', error)
@@ -709,7 +689,6 @@ export function createUnifiedProjectModule(registry: ModuleRegistry) {
     // 加载进度方法
     setMediaReadyEnsurer,
     setMediaIndexingEnsurer,
-    setEffectTemplateReadyEnsurer,
     setTimelineItemResolvedEnsurer,
     updateLoadingProgress,
     resetLoadingState,
@@ -725,79 +704,4 @@ function isRecoverableMediaIndexing(mediaItem: UnifiedMediaItemData): boolean {
   }
 
   return shouldRecoverMediaIndexing(mediaItem.metadata?.indexing)
-}
-
-function collectTimelineEffectDependencies(
-  timelineItems: UnifiedTimelineItemData[],
-): EffectPackageIdentity[] {
-  const unique = new Map<string, EffectPackageIdentity>()
-
-  for (const item of timelineItems) {
-    const transitionConfig = TimelineItemQueries.getBaseTransition(item)
-    if (transitionConfig?.effectPackageId) {
-      const identity = normalizeEffectIdentity(
-        transitionConfig.effectPackageId,
-        transitionConfig.templateId,
-        transitionConfig.packageVersion,
-        transitionConfig.catalogVersion,
-      )
-      if (identity) {
-        unique.set(identity.effectPackageId, identity)
-      }
-    }
-
-    const filterConfig = item.exRenderConfig?.filter
-    if (filterConfig?.effectPackageId) {
-      const identity = normalizeEffectIdentity(
-        filterConfig.effectPackageId,
-        filterConfig.templateId,
-        filterConfig.packageVersion,
-        filterConfig.catalogVersion,
-      )
-      if (identity) {
-        unique.set(identity.effectPackageId, identity)
-      }
-    }
-  }
-
-  return Array.from(unique.values())
-}
-
-function normalizeEffectIdentity(
-  effectPackageId: string,
-  templateId: string,
-  packageVersion: string,
-  catalogVersion: string,
-): EffectPackageIdentity | null {
-  try {
-    if (effectPackageId) {
-      const parsed = parseEffectPackageId(effectPackageId)
-      return {
-        ...parsed,
-        catalogVersion: catalogVersion || parsed.catalogVersion,
-      }
-    }
-    if (!templateId || !packageVersion || !catalogVersion) {
-      return null
-    }
-    const effectType = effectPackageId.startsWith('filter/') ? 'filter' : 'transition'
-    return {
-      ...parseEffectPackageId(buildEffectPackageId(effectType, templateId, packageVersion)),
-      catalogVersion,
-    }
-  } catch {
-    return null
-  }
-}
-
-function ensureTimelineEffectDependencies(timelineItems: UnifiedTimelineItemData[]): void {
-  const dependencies = collectTimelineEffectDependencies(timelineItems)
-  for (const dependency of dependencies) {
-    void effectTemplateRegistry.ensureReady(dependency).catch((error) => {
-      console.error(
-        `❌ [UnifiedProjectModule] 恢复效果包失败: ${dependency.effectPackageId}`,
-        error,
-      )
-    })
-  }
 }

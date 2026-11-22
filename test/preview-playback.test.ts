@@ -48,12 +48,6 @@ vi.mock('@/core/webgl2/renderer/TimelineWebGLRenderer', () => ({
     dispose = vi.fn()
   },
 }))
-vi.mock('@/core/webgl2/transition/TransitionEdgeFrameResolver', () => ({
-  TransitionEdgeFrameResolver: class {
-    prepareItems = vi.fn()
-  },
-}))
-
 function deferred<T>() {
   let resolve!: (value: T) => void
   const promise = new Promise<T>((done) => {

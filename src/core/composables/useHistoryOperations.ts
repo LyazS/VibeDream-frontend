@@ -22,8 +22,6 @@ import {
   AddTimelineItemCommand,
   RemoveTimelineItemCommand,
   MoveTimelineItemCommand,
-  UpdateTransitionConfigCommand,
-  UpdateFilterConfigCommand,
   SplitTimelineItemCommand,
   ResizeTimelineItemCommand,
   AddTrackCommand,
@@ -50,17 +48,7 @@ import { MoveTrackCommand } from '@/core/modules/commands/MoveTrackCommand'
 import { TimelineItemQueries } from '@/core/timelineitem/queries'
 import { duplicateTimelineItem } from '@/core/timelineitem/runtime/factory'
 import { ClearAllKeyframesCommand } from '@/core/modules/commands/keyframeCommands'
-import type { ClipTransitionOutConfig } from '@/core/transition/types'
 import type { TimelineSelectionId } from '@/core/types/timelineSelection'
-import {
-  areClipTransitionOutConfigsEqual,
-  normalizeClipTransitionOutConfig,
-} from '@/core/timelineitem/features/transition'
-import type { ClipFilterConfig } from '@/core/filter/types'
-import {
-  areClipFilterConfigsEqual,
-  normalizeClipFilterConfig,
-} from '@/core/timelineitem/features/filter'
 import type { ChangePlan } from '@/core/property-system'
 import type { AnimationChannelKey } from '@/core/timelineitem/model/render'
 import type { TrimTimelineItemSide } from '@/core/modules/commands/timelineCommands'
@@ -287,150 +275,6 @@ export function useHistoryOperations(
       unifiedMediaModule,
     )
     await unifiedHistoryModule.executeCommand(command)
-  }
-
-  async function updateTransitionConfigWithHistory(
-    timelineItemId: string,
-    nextTransitionConfig?: ClipTransitionOutConfig,
-  ) {
-    const timelineItem = getEditableTimelineItemOrWarn(timelineItemId, '更新转场')
-    if (!timelineItem) {
-      return
-    }
-
-    const currentTransitionOut = TimelineItemQueries.getBaseTransition(timelineItem)
-      ? normalizeClipTransitionOutConfig(TimelineItemQueries.getBaseTransition(timelineItem))
-      : undefined
-    const normalizedNextTransitionConfig = nextTransitionConfig
-      ? normalizeClipTransitionOutConfig(nextTransitionConfig)
-      : undefined
-
-    const hasSameValue = areClipTransitionOutConfigsEqual(
-      currentTransitionOut,
-      normalizedNextTransitionConfig,
-    )
-
-    if (hasSameValue) {
-      return
-    }
-
-    const command = new UpdateTransitionConfigCommand(
-      timelineItemId,
-      currentTransitionOut,
-      normalizedNextTransitionConfig,
-      unifiedTimelineModule,
-    )
-    await unifiedHistoryModule.executeCommand(command)
-  }
-
-  async function updateFilterConfigWithHistory(
-    timelineItemId: string,
-    nextFilterConfig?: ClipFilterConfig,
-  ) {
-    const timelineItem = getEditableTimelineItemOrWarn(timelineItemId, '更新滤镜')
-    if (!timelineItem) {
-      return
-    }
-
-    const currentFilterConfig = timelineItem.exRenderConfig?.filter
-      ? normalizeClipFilterConfig(timelineItem.exRenderConfig.filter)
-      : undefined
-    const normalizedNextFilterConfig = nextFilterConfig
-      ? normalizeClipFilterConfig(nextFilterConfig)
-      : undefined
-
-    const hasSameValue = areClipFilterConfigsEqual(currentFilterConfig, normalizedNextFilterConfig)
-
-    if (hasSameValue) {
-      return
-    }
-
-    await commitFilterConfigWithHistory(
-      timelineItemId,
-      currentFilterConfig,
-      normalizedNextFilterConfig,
-    )
-  }
-
-  async function commitFilterConfigWithHistory(
-    timelineItemId: string,
-    previousFilterConfig?: ClipFilterConfig,
-    nextFilterConfig?: ClipFilterConfig,
-  ) {
-    const timelineItem = getEditableTimelineItemOrWarn(timelineItemId, '提交滤镜')
-    if (!timelineItem) {
-      return
-    }
-
-    const normalizedPreviousFilterConfig = previousFilterConfig
-      ? normalizeClipFilterConfig(previousFilterConfig)
-      : undefined
-    const normalizedNextFilterConfig = nextFilterConfig
-      ? normalizeClipFilterConfig(nextFilterConfig)
-      : undefined
-
-    const hasSameValue = areClipFilterConfigsEqual(
-      normalizedPreviousFilterConfig,
-      normalizedNextFilterConfig,
-    )
-
-    if (hasSameValue) {
-      return
-    }
-
-    const command = new UpdateFilterConfigCommand(
-      timelineItemId,
-      normalizedPreviousFilterConfig,
-      normalizedNextFilterConfig,
-      unifiedTimelineModule,
-      unifiedMediaModule,
-    )
-    await unifiedHistoryModule.executeCommand(command)
-  }
-
-  async function removeFilterEffectWithHistory(timelineItemId: string) {
-    const timelineItem = getEditableTimelineItemOrWarn(timelineItemId, '移除滤镜')
-    if (!timelineItem) {
-      return
-    }
-
-    const currentFilterEffect = timelineItem.exRenderConfig?.filter
-      ? normalizeClipFilterConfig(timelineItem.exRenderConfig.filter)
-      : undefined
-    const filterIntensityTrack = (
-      timelineItem.animation?.groups as Record<string, { keyframes?: unknown[] }> | undefined
-    )?.['filter.intensity']
-    const hasFilterIntensityKeyframes = Boolean(filterIntensityTrack?.keyframes?.length)
-
-    if (!currentFilterEffect && !hasFilterIntensityKeyframes) {
-      return
-    }
-
-    const batch = unifiedHistoryModule.startBatch(historyLabels.removeFilter())
-
-    if (currentFilterEffect) {
-      batch.addCommand(
-        new UpdateFilterConfigCommand(
-          timelineItemId,
-          currentFilterEffect,
-          undefined,
-          unifiedTimelineModule,
-          unifiedMediaModule,
-        ),
-      )
-    }
-
-    if (hasFilterIntensityKeyframes) {
-      batch.addCommand(
-        new ClearAllKeyframesCommand(timelineItemId, 'filter.intensity', unifiedTimelineModule, {
-          seekTo: (nextFrame: number) => {
-            console.log('🔍 滤镜关键帧清除播放头控制:', nextFrame)
-          },
-        }),
-      )
-    }
-
-    await unifiedHistoryModule.executeBatchCommand(batch.build())
   }
 
   /**
@@ -1001,10 +845,6 @@ export function useHistoryOperations(
     removeTimelineItemWithHistory,
     moveTimelineItemWithHistory,
     updatePlaybackRateWithHistory,
-    updateTransitionConfigWithHistory,
-    updateFilterConfigWithHistory,
-    commitFilterConfigWithHistory,
-    removeFilterEffectWithHistory,
     splitTimelineItemAtTimeWithHistory,
     toggleTimelineItemMarkerWithHistory,
     clearTimelineItemMarkersWithHistory,

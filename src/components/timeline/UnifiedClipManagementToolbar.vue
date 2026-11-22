@@ -422,17 +422,9 @@ const isSplitButtonDisabled = computed(() => {
   return !selectedItemSupportsSplit.value || !isSelectedItemReady.value
 })
 
-const selectedTransitionSourceItemId = computed(() => unifiedStore.selectedTransitionSourceItemId)
+const deletableSelectionId = computed(() => unifiedStore.selectedClipTimelineItemId || null)
 
-const deletableSelectionId = computed(() => {
-  return unifiedStore.selectedClipTimelineItemId || selectedTransitionSourceItemId.value || null
-})
-
-const deleteButtonTooltip = computed(() => {
-  return selectedTransitionSourceItemId.value
-    ? t('toolbar.clip.deleteTooltip')
-    : t('toolbar.clip.deleteTooltip')
-})
+const deleteButtonTooltip = computed(() => t('toolbar.clip.deleteTooltip'))
 
 async function splitSelectedClip() {
   if (unifiedStore.selectedClipTimelineItemId) {
@@ -454,36 +446,27 @@ async function splitSelectedClip() {
 }
 
 async function deleteSelectedSelection() {
-  if (selectedTransitionSourceItemId.value) {
-    await unifiedStore.updateTransitionConfigWithHistory(
-      selectedTransitionSourceItemId.value,
-      undefined,
-    )
-    console.log('✅ 转场删除成功')
-    return
-  }
+  if (!unifiedStore.selectedClipTimelineItemId) return
 
-  if (unifiedStore.selectedClipTimelineItemId) {
-    const item = unifiedStore.getTimelineItem(unifiedStore.selectedClipTimelineItemId)
-    const mediaItem = item ? unifiedStore.getMediaItem(item.mediaItemId) : null
-    console.log(
-      `🗑️ 删除时间轴项目: ${mediaItem?.name || '未知'} (ID: ${unifiedStore.selectedClipTimelineItemId})`,
-    )
+  const item = unifiedStore.getTimelineItem(unifiedStore.selectedClipTimelineItemId)
+  const mediaItem = item ? unifiedStore.getMediaItem(item.mediaItemId) : null
+  console.log(
+    `🗑️ 删除时间轴项目: ${mediaItem?.name || '未知'} (ID: ${unifiedStore.selectedClipTimelineItemId})`,
+  )
 
-    if (item?.timelinePlaceholder) {
-      const command = new DeleteTimelinePlaceholderCommand(item, {
-        getTimelineItem: unifiedStore.getTimelineItem,
-        addTimelineItem: unifiedStore.addTimelineItem,
-        removeTimelineItem: unifiedStore.removeTimelineItem,
-      })
-      const batch = unifiedStore.startBatch(command.historyLabel)
-      batch.addCommand(command)
-      await unifiedStore.executeBatchCommand(batch.build())
-    } else {
-      await unifiedStore.removeTimelineItemWithHistory(unifiedStore.selectedClipTimelineItemId)
-    }
-    console.log('✅ 时间轴项目删除成功')
+  if (item?.timelinePlaceholder) {
+    const command = new DeleteTimelinePlaceholderCommand(item, {
+      getTimelineItem: unifiedStore.getTimelineItem,
+      addTimelineItem: unifiedStore.addTimelineItem,
+      removeTimelineItem: unifiedStore.removeTimelineItem,
+    })
+    const batch = unifiedStore.startBatch(command.historyLabel)
+    batch.addCommand(command)
+    await unifiedStore.executeBatchCommand(batch.build())
+  } else {
+    await unifiedStore.removeTimelineItemWithHistory(unifiedStore.selectedClipTimelineItemId)
   }
+  console.log('✅ 时间轴项目删除成功')
 }
 
 // ==================== 历史管理方法 ====================

@@ -27,18 +27,6 @@ export type {
   PropertyMutationCommitContext,
 } from './commit'
 export {
-  FILTER_PARAM_KEY_PATTERN,
-  FILTER_PARAM_PROPERTY_PREFIX,
-  createFilterParamPropertyId,
-  getFilterParamKey,
-  isFilterParamPropertyId,
-  isValidFilterParamKey,
-  propertySchemaResolver,
-  type PropertySchemaContext,
-  type PropertySchemaProvider,
-  type DynamicFilterParamPropertyId,
-} from './schema'
-export {
   AGENT_TOOL_KEYFRAME_PROPERTY_DEFINITIONS,
   AGENT_TOOL_KEYFRAME_PROPERTY_IDS,
   AGENT_TOOL_KEYFRAME_VALUE_SHAPES,

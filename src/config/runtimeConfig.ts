@@ -7,13 +7,9 @@ function readEnv(name: keyof ImportMetaEnv): string {
 
 export const API_BASE_URL = trimTrailingSlashes(readEnv('VITE_API_BASE_URL'))
 export const ASSET_BASE_URL = trimTrailingSlashes(readEnv('VITE_ASSET_BASE_URL'))
-export const TRANSITION_ASSET_BASE_URL = trimTrailingSlashes(
-  readEnv('VITE_TRANSITION_ASSET_BASE_URL'),
-)
 export const MODEL_MANIFEST_URL = readEnv('VITE_MODEL_MANIFEST_URL')
 export const ENABLE_ORT_CDN_FALLBACK = readEnv('VITE_ENABLE_ORT_CDN_FALLBACK') === 'true'
 export const SHOW_MEDIA_SEARCH_TEST = readEnv('VITE_SHOW_MEDIA_SEARCH_TEST') === 'true'
-export const SHOW_TRANSITION_TEST = readEnv('VITE_SHOW_TRANSITION_TEST') === 'true'
 export const SHOW_ITEM_PROPERTY_TEST = readEnv('VITE_SHOW_ITEM_PROPERTY_TEST') === 'true'
 
 function getAppBaseUrl(): string {

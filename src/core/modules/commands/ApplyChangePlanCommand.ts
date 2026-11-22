@@ -11,12 +11,8 @@ import {
 } from './keyframes/shared'
 import { ensureTrack, removeEmptyTrack, sortGroupKeyframes } from '@/core/animation/engine'
 import { applyAnimationToConfig } from '@/core/utils/animationInterpolation'
-import { normalizeClipFilterConfig } from '@/core/timelineitem/features/filter'
 import { TimelineItemMutations } from '@/core/timelineitem/mutations'
-import { TimelineItemQueries } from '@/core/timelineitem/queries'
-import type { AnimationGroupId } from '@/core/timelineitem/model/render'
 import type { AudioProps, VisualProps } from '@/core/timelineitem/model/timelineItem'
-import { applyMaskGroupValue, getItemLocalSize } from '@/core/timelineitem/features/mask'
 
 export class ApplyChangePlanCommand implements SimpleCommand {
   public readonly id: string
@@ -67,15 +63,6 @@ export class ApplyChangePlanCommand implements SimpleCommand {
         TimelineItemMutations.patchBaseVisualConfig(item, operation.patch)
       } else if (operation.kind === 'audio-config-patch') {
         TimelineItemMutations.patchBaseAudioConfig(item, operation.patch)
-      } else if (operation.kind === 'extra-render-config-patch') {
-        item.exRenderConfig = {
-          ...item.exRenderConfig,
-          ...operation.patch,
-        }
-        item.runtime.exRenderConfig = {
-          ...item.runtime.exRenderConfig,
-          ...operation.patch,
-        }
       } else if (operation.kind === 'animation-keyframe-update') {
         const track = ensureTrack(item, operation.groupId)
         const keyframe = track.keyframes.find((entry) => entry.frame === operation.relativeFrame)
@@ -140,76 +127,6 @@ export class ApplyChangePlanCommand implements SimpleCommand {
       return
     }
 
-    if (operation.target === 'mask') {
-      if (operation.groupId) {
-        this.applyMaskGroupPatch(item, operation.groupId as AnimationGroupId, operation.patch)
-        return
-      }
-
-      const currentMask = TimelineItemQueries.getBaseMask(item)
-      item.exRenderConfig = {
-        ...item.exRenderConfig,
-        mask: {
-          ...currentMask,
-          ...operation.patch,
-        } as never,
-      }
-      item.runtime.exRenderConfig = {
-        ...item.runtime.exRenderConfig,
-        mask: item.exRenderConfig.mask,
-      }
-      return
-    }
-
-    if (operation.target === 'filter') {
-      const currentFilterEffect = TimelineItemQueries.getBaseExtraRenderConfig(item)?.filter
-      if (!currentFilterEffect) {
-        throw new Error(`滤镜效果不存在，无法更新属性: ${operation.timelineItemId}`)
-      }
-      const filterEffectPatch = operation.patch as {
-        intensity?: number
-        params?: Record<string, unknown>
-      }
-      const nextFilterEffect = normalizeClipFilterConfig({
-        ...currentFilterEffect,
-        ...filterEffectPatch,
-        params: {
-          ...currentFilterEffect.params,
-          ...(filterEffectPatch.params ?? {}),
-        },
-      })
-      item.exRenderConfig = {
-        ...item.exRenderConfig,
-        filter: nextFilterEffect,
-      }
-      item.runtime.exRenderConfig = {
-        ...item.runtime.exRenderConfig,
-        filter: nextFilterEffect,
-      }
-      return
-    }
-  }
-
-  private applyMaskGroupPatch(
-    item: UnifiedTimelineItemData,
-    groupId: AnimationGroupId,
-    patch: unknown,
-  ): void {
-    if (!TimelineItemQueries.hasVisualProperties(item)) return
-
-    const currentMask = TimelineItemQueries.getBaseMask(item)
-    const visualConfig = TimelineItemQueries.getBaseVisualConfig(item)
-    const textureSize = getItemLocalSize(visualConfig?.width ?? 0, visualConfig?.height ?? 0)
-    const nextMask = applyMaskGroupValue(currentMask, groupId, patch, textureSize)
-
-    item.exRenderConfig = {
-      ...item.exRenderConfig,
-      mask: nextMask,
-    }
-    item.runtime.exRenderConfig = {
-      ...item.runtime.exRenderConfig,
-      mask: nextMask,
-    }
   }
 
   get isDisposed(): boolean {

@@ -25,7 +25,7 @@ import { readProjectInfoTool } from './readProjectInfo'
 import { readTracksTool } from './readTracks'
 import { readItemTool } from './readItem'
 import { updateItemTool } from './updateItem'
-import { applyTransitionTool, removeItemTool, searchTransitionsTool } from './transitionTools'
+import { removeItemTool } from './removeItem'
 import { removeTrackTool } from './removeTrack'
 import { searchMediaTool } from './searchMedia'
 import { splitClipTool } from './splitClip'
@@ -101,8 +101,6 @@ registerTool(renameLibraryItemTool)
 registerTool(readTracksTool)
 registerTool(readItemTool)
 registerTool(updateItemTool)
-registerTool(searchTransitionsTool)
-registerTool(applyTransitionTool)
 registerTool(removeItemTool)
 registerTool(removeTrackTool)
 registerTool(searchMediaTool)

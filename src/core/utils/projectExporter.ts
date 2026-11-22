@@ -26,23 +26,17 @@ export interface AudioBufferWithVolume {
   volume: number
 }
 import type { UnifiedTimelineItemData } from '@/core/timelineitem/model/timelineItem'
-import type { UnifiedLibraryAssetData } from '@/core/asset/types'
 import type { MediaType } from '@/core/mediaitem'
 import type { UnifiedMediaItemData } from '@/core/mediaitem/types'
 import type { IClip } from '@/core/mediabunny/IClip'
 import { TimelineItemFactory } from '@/core/timelineitem/runtime/factory'
 import { TimelineItemQueries } from '@/core/timelineitem/queries'
-import {
-  closeClipTransitionEdgeFrames,
-  refreshClipTransitionsForItems,
-} from '@/core/timelineitem/features/transition'
 import { AudioSegmentRenderer } from '@/core/mediabunny/audio-segment-renderer'
 import { RENDERER_FPS, AUDIO_DEFAULT_SAMPLE_RATE } from '@/core/mediabunny/constant'
 import { applyAnimationToConfig } from '@/core/utils/animationInterpolation'
 import { setupTimelineItemBunny } from '@/core/bunnyUtils/timelineItemSetup'
 import { WebGLExportRenderer } from '@/core/utils/WebGLExportRenderer'
 import type { FrameData } from '@/core/webgl2/types'
-import { TransitionEdgeFrameResolver } from '@/core/webgl2/transition/TransitionEdgeFrameResolver'
 
 import { globalMetaFileManager } from '@/core/managers/media/globalMetaFileManager'
 import {
@@ -92,7 +86,6 @@ export interface ExportProjectOptions {
   /** 获取媒体项目的函数 */
   getMediaItem: (id: string) => UnifiedMediaItemData | undefined
   /** 获取素材资产的函数 */
-  getAsset: (id: string | null) => UnifiedLibraryAssetData | undefined
   /** 进度更新回调函数（可选） */
   onProgress?: (stage: string, progress: number, details?: string) => void
   /** 视频质量 */
@@ -146,7 +139,6 @@ export class ExportManager {
 
   // 帧数据映射（类似 UnifiedMediaBunnyModule 的 bunnyCurFrameMap）
   private bunnyCurFrameMap: Map<string, FrameData> = new Map()
-  private transitionEdgeResolver: TransitionEdgeFrameResolver
 
   // 导出配置
   private config: ExportProjectOptions
@@ -218,7 +210,6 @@ export class ExportManager {
   constructor(config: ExportProjectOptions) {
     this.config = config
     this.frameRate = config.frameRate ?? RENDERER_FPS
-    this.transitionEdgeResolver = new TransitionEdgeFrameResolver(this.getExportMedia)
     console.log(`✅ 导出帧率设置为: ${this.frameRate}fps`)
   }
 
@@ -239,7 +230,6 @@ export class ExportManager {
           : undefined
       },
       getMediaItem: this.getExportMedia,
-      getAsset: this.config.getAsset,
       trackIndexMap: () => new Map(this.config.tracks.map((track, index) => [track.id, index])),
     })
     this.canvas = this.webglRenderer.canvas
@@ -528,8 +518,6 @@ export class ExportManager {
         this.config.timelineItems,
         this.getExportMedia,
       )
-      refreshClipTransitionsForItems(this.clonedTimelineItems)
-      await this.transitionEdgeResolver.prepareItems(this.clonedTimelineItems)
 
       // 阶段 3: 创建 MediaBunny 组件
       this.reportProgress('准备', 10, '初始化编码器...')
@@ -720,12 +708,6 @@ export class ExportManager {
     await Promise.allSettled([...this.ownedSnapshots].map(disposeVerifiedMedia))
     this.ownedSnapshots.clear()
     this.linkedSnapshots.clear()
-
-    for (const item of this.clonedTimelineItems) {
-      if (item.runtime.transition?.edgeFrames) {
-        closeClipTransitionEdgeFrames(item.runtime.transition.edgeFrames)
-      }
-    }
 
     // Canvas 会被垃圾回收，无需手动清理
     this.webglRenderer?.dispose()

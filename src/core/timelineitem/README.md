@@ -8,7 +8,7 @@
   - 放纯数据结构、类型定义、常量。
   - 不放依赖 store、渲染器、UI 的逻辑。
 - `features/`
-  - 放片段能力域逻辑，例如 `transition`、`filter`、`mask`。
+  - 放片段能力域逻辑。
   - 每个文件尽量自包含，暴露 `normalize`、`supports`、`runtime` 一类能力。
 - `runtime/`
   - 放片段实例生命周期相关逻辑，例如 `factory`。
@@ -22,7 +22,7 @@
 ## 文件放置建议
 
 - 新增基础类型：优先放 `model/`
-- 新增滤镜/转场/mask 规则：优先放 `features/`
+- 新增片段规则：优先放 `features/`
 - 新增片段创建、重建、恢复流程：优先放 `runtime/`
 - 新增状态展示或时间轴展示派生：优先放 `ui/`
 

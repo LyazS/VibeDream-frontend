@@ -12,8 +12,6 @@ interface CachedChainEntry {
  *
  * 当前每个 item 只生成一条固定结构的链：
  * - ItemLocalRasterPass
- * - EffectPackageFilterPass（可选）
- * - MaskPass（可选）
  * - CompositeToMainPass
  *
  * 适配器缓存链对象，避免每帧重新 new pass / chain。

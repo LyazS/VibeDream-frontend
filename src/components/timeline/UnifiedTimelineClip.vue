@@ -12,10 +12,6 @@
     @dragstart="handleDragStart"
     @dragend="handleDragEnd"
   >
-    <div v-if="hasEffectWarning" class="clip-effect-warning">
-      <component :is="IconComponents.WARNING" size="12px" />
-    </div>
-
     <!-- 左侧调整把手 -->
     <div
       v-if="data.timelineStatus === 'ready' && isSelected && !isMultiSelected"
@@ -83,9 +79,7 @@ import {
 import type { UnifiedTimeRange } from '@/core/types/timeRange'
 import type { TrimTimelineItemSide } from '@/core/modules/commands/timelineCommands'
 import { ContentRendererFactory } from '@/components/cliprenderers/ContentRendererFactory'
-import { effectTemplateRegistry } from '@/core/effect-template/EffectTemplateRegistry'
 import type { SnapResultState } from '@/core/composables/useTimelineSnap'
-import { TimelineItemQueries } from '@/core/timelineitem/queries'
 import { useUnifiedStore } from '@/core/unifiedStore'
 import { useAppI18n } from '@/core/composables/useI18n'
 import { alignFramesToFrame } from '@/core/utils/timeUtils'
@@ -94,7 +88,6 @@ import {
   relativeFrameToAbsoluteFrame,
 } from '@/core/utils/unifiedKeyframeUtils'
 import { DEFAULT_TRACK_PADDING } from '@/constants/TrackConstants'
-import { IconComponents } from '@/constants/iconComponents'
 import { getDefaultTrackHeight, mapMediaTypeToTrackType } from '@/core/track/TrackUtils'
 import { DragSourceType, type TimelineItemDragParams } from '@/core/types/drag'
 import { buildClipSelectionId } from '@/core/types/timelineSelection'
@@ -131,21 +124,6 @@ const tempResizePositionFrames = ref(0)
 const isDragging = ref(false)
 
 const timelineEdgeEditMode = computed(() => unifiedStore.timelineEdgeEditMode)
-
-const hasEffectWarning = computed(() => {
-  const transitionPackageId = TimelineItemQueries.getBaseTransition(props.data)?.effectPackageId
-  if (
-    transitionPackageId &&
-    effectTemplateRegistry.getPackageState(transitionPackageId)?.status !== 'ready'
-  ) {
-    return true
-  }
-
-  const filterPackageId = props.data.exRenderConfig?.filter?.effectPackageId
-  return Boolean(
-    filterPackageId && effectTemplateRegistry.getPackageState(filterPackageId)?.status !== 'ready',
-  )
-})
 
 // 定义组件事件
 const emit = defineEmits<{
@@ -741,18 +719,4 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
-.clip-effect-warning {
-  position: absolute;
-  top: 6px;
-  right: 6px;
-  z-index: 4;
-  width: 18px;
-  height: 18px;
-  border-radius: 999px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: rgba(255, 184, 77, 0.95);
-  color: #2f1900;
-}
 </style>

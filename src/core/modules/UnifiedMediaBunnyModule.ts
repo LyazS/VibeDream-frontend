@@ -25,7 +25,6 @@ import { TimelineItemQueries } from '@/core/timelineitem/queries'
 import { type FrameData } from '@/core/webgl2/types'
 import { TimelineItemsBufferManager } from '@/core/mediabunny/TimelineItemsBufferManager'
 import { TimelineWebGLRenderer } from '@/core/webgl2/renderer/TimelineWebGLRenderer'
-import { TransitionEdgeFrameResolver } from '@/core/webgl2/transition/TransitionEdgeFrameResolver'
 import {
   downloadBlob,
   type CaptureTimelineFrameOptions,
@@ -65,7 +64,6 @@ export function createUnifiedMediaBunnyModule(
   // Canvas 相关（由外部传入）
   let mCanvas: HTMLCanvasElement | null = null
   let mWebGLRenderer: TimelineWebGLRenderer | null = null
-  let mTransitionEdgeFrameResolver: TransitionEdgeFrameResolver | null = null
 
   // 渲染循环相关
   let mRenderLoopCleanup: (() => void) | null = null
@@ -116,14 +114,9 @@ export function createUnifiedMediaBunnyModule(
         canvas: mCanvas,
         getTrack: (trackId: string) => trackModule.getTrack(trackId),
         getMediaItem: (mediaItemId: string) => mediaModule.getMediaItem(mediaItemId),
-        getAsset: (assetId: string | null) => mediaModule.getAsset(assetId),
         trackIndexMap: () => trackModule.trackIndexMap.value,
         getSelectedTimelineItemId: () => selectionModule.selectedClipTimelineItemId.value,
       })
-      mTransitionEdgeFrameResolver = new TransitionEdgeFrameResolver((mediaItemId: string) =>
-        mediaModule.getMediaItem(mediaItemId),
-      )
-
       console.log('✅ Canvas 元素已设置', {
         width: mCanvas.width,
         height: mCanvas.height,
@@ -191,7 +184,6 @@ export function createUnifiedMediaBunnyModule(
     // 清理引用（不删除 canvas 元素，由 Vue 组件管理）
     mWebGLRenderer?.dispose()
     mWebGLRenderer = null
-    mTransitionEdgeFrameResolver = null
     mCanvas = null
     mGainNode = null
 
@@ -443,7 +435,6 @@ export function createUnifiedMediaBunnyModule(
         .updateBackBuffer(timelineItems, currentTimeN)
         .then(({ bufferedItems, newlyPreparedItems }) => {
           mWebGLRenderer?.prepareRenderChains(bufferedItems)
-          void mTransitionEdgeFrameResolver?.prepareItems(bufferedItems)
           void warmPreparedClipStartFrames(newlyPreparedItems, currentTimeN)
         })
     }
@@ -519,7 +510,6 @@ export function createUnifiedMediaBunnyModule(
     // 切换为 WebGL2 RenderChain 后端。
     // 这里保留一次直接准备路径，覆盖暂停、seek、首帧渲染和缓冲未命中时的即时渲染。
     if (!mCanvas || !mWebGLRenderer) return
-    void mTransitionEdgeFrameResolver?.prepareItems(timelineItems)
     mWebGLRenderer.render(timelineItems, currentTimeN, mBunnyCurFrameMap)
   }
 
@@ -709,7 +699,6 @@ export function createUnifiedMediaBunnyModule(
       videoWidth: configModule.videoResolution.value.width,
       videoHeight: configModule.videoResolution.value.height,
       timelineItems: timelineModule.timelineItems.value,
-      assets: mediaModule.getAllAssets(),
       signal: options.signal,
       timeoutMs: options.timeoutMs,
       prepareMedia: options.prepareMedia,
@@ -719,7 +708,6 @@ export function createUnifiedMediaBunnyModule(
         isMuted: track.isMuted,
       })),
       getMediaItem: (mediaItemId: string) => mediaModule.getMediaItem(mediaItemId),
-      getAsset: (assetId: string | null) => mediaModule.getAsset(assetId),
     })
   }
 

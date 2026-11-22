@@ -11,8 +11,6 @@ import type { UnifiedTrackModule } from '@/core/modules/UnifiedTrackModule'
 import type { UnifiedTrackData } from '@/core/track/TrackTypes'
 import { useTimelineItemOperations } from '@/core/composables/useTimelineItemOperations'
 import { alignFramesToFrame } from '@/core/utils/timeUtils'
-import { effectTemplateHandlerRegistry } from '@/core/effect-template/registry'
-import { useUnifiedStore } from '@/core/unifiedStore'
 
 export class TimelineTrackTargetHandler implements DropTargetHandler {
   readonly targetType: DropTargetType = TargetType.TIMELINE_TRACK
@@ -51,10 +49,6 @@ export class TimelineTrackTargetHandler implements DropTargetHandler {
     // 2. 根据拖拽源类型处理
     if (dragData.sourceType === DragSourceType.ASSET || dragData.sourceType === DragSourceType.MEDIA_ITEM) {
       const mediaData = dragData as MediaItemDragData
-
-      if (mediaData.assetKind === 'effect-template') {
-        return this.canDropEffectTemplate(mediaData, trackTargetInfo, targetTrack)
-      }
 
       // 检查轨道兼容性
       const isCompatible = this.isMediaCompatibleWithTrack(mediaData.mediaType || 'unknown', targetTrack.type)
@@ -126,10 +120,6 @@ export class TimelineTrackTargetHandler implements DropTargetHandler {
     targetTrack: UnifiedTrackData,
   ): Promise<DropResult> {
     // 1. 检查兼容性
-    if (mediaData.assetKind === 'effect-template') {
-      return this.handleEffectTemplateDrop(mediaData, targetInfo, targetTrack)
-    }
-
     const isCompatible = this.isMediaCompatibleWithTrack(mediaData.mediaType || 'unknown', targetTrack.type)
 
     if (!isCompatible) {
@@ -148,10 +138,6 @@ export class TimelineTrackTargetHandler implements DropTargetHandler {
 
     // 5. 调用 createTimelineItemFromMediaItem 创建片段
     try {
-      if (mediaData.assetKind !== 'media') {
-        return { success: false }
-      }
-
       await this.timelineItemOperations.createTimelineItemFromMediaItem(
         mediaData.assetId,
         finalDropTime,
@@ -169,60 +155,6 @@ export class TimelineTrackTargetHandler implements DropTargetHandler {
       console.error('创建时间轴片段失败:', error)
       return { success: false }
     }
-  }
-
-  private canDropEffectTemplate(
-    mediaData: MediaItemDragData,
-    targetInfo: TimelineTrackDropTargetInfo,
-    targetTrack: UnifiedTrackData,
-  ): boolean {
-    const store = useUnifiedStore()
-    const handler = effectTemplateHandlerRegistry.get(mediaData.effectType)
-    if (!handler) {
-      return false
-    }
-
-    const candidate = handler.resolveDropCandidate({
-      dragData: mediaData,
-      targetTrack,
-      trackItems: store.getTimelineItemsByTrack(targetInfo.targetId),
-      hoveredFrame: targetInfo.position.time,
-      thresholdFrames: this.resolveSnapThresholdFrames(),
-    })
-
-    return candidate.canDrop
-  }
-
-  private async handleEffectTemplateDrop(
-    mediaData: MediaItemDragData,
-    targetInfo: TimelineTrackDropTargetInfo,
-    targetTrack: UnifiedTrackData,
-  ): Promise<DropResult> {
-    const store = useUnifiedStore()
-    const handler = effectTemplateHandlerRegistry.get(mediaData.effectType)
-    if (!handler) {
-      return { success: false }
-    }
-
-    const candidate = handler.resolveDropCandidate({
-      dragData: mediaData,
-      targetTrack,
-      trackItems: store.getTimelineItemsByTrack(targetInfo.targetId),
-      hoveredFrame: targetInfo.position.time,
-      thresholdFrames: this.resolveSnapThresholdFrames(),
-    })
-
-    if (!candidate.canDrop) {
-      return candidate.invalidReason
-        ? { success: false, error: candidate.invalidReason }
-        : { success: false }
-    }
-
-    return handler.applyTemplate({
-      dragData: mediaData,
-      targetTrack,
-      candidate,
-    })
   }
 
   /**
@@ -294,13 +226,4 @@ export class TimelineTrackTargetHandler implements DropTargetHandler {
     return false
   }
 
-  private resolveSnapThresholdFrames(): number {
-    const store = useUnifiedStore()
-    const totalDurationFrames = store.totalDurationFrames
-    const timelineWidth = store.TimelineContentWidth
-    const zoomLevel = store.zoomLevel
-    const pixelsPerFrame = (timelineWidth * zoomLevel) / Math.max(1, totalDurationFrames)
-    const threshold = store.snapConfig.threshold
-    return threshold / Math.max(pixelsPerFrame, 0.0001)
-  }
 }

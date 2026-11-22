@@ -13,7 +13,6 @@ import type {
   UnifiedTimelineItemData,
   VideoMediaConfig,
 } from '@/core/timelineitem/model/timelineItem'
-import { createDefaultTimelineExtraRenderConfig } from '@/core/timelineitem/model/timelineItem'
 import { DEFAULT_BLEND_MODE } from '@/core/timelineitem/model/blendMode'
 import type { UploadFileExportOptions } from '@/core/utils/mediaExporter'
 import type { ResourcePolicy, ResourceRequest } from '../ResourceTypes'
@@ -441,10 +440,8 @@ export function createTemporaryVideoTimelineItem(
       clipEndTime: endFrame,
     },
     baseRenderConfig,
-    exRenderConfig: createDefaultTimelineExtraRenderConfig(),
     runtime: {
-      exRenderConfig: createDefaultTimelineExtraRenderConfig(),
-      isInitialized: true,
+        isInitialized: true,
     },
   }
 }

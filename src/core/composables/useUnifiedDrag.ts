@@ -29,7 +29,6 @@ import {
   FolderTargetHandler,
   TabTargetHandler,
   TimelineTrackTargetHandler,
-  ClipFilterDropTargetHandler,
 } from '@/core/drag/targets'
 
 /**
@@ -223,7 +222,6 @@ export function useUnifiedDrag(
   registerTargetHandler(
     new TimelineTrackTargetHandler(timelineModule, selectionModule, trackModule),
   )
-  registerTargetHandler(new ClipFilterDropTargetHandler(timelineModule, mediaModule))
 
   console.log(
     `✅ [UnifiedDrag] 所有处理器注册完成 (${sourceHandlers.size}个源处理器, ${targetHandlers.size}个目标处理器)`,

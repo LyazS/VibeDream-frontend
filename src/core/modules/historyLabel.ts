@@ -17,9 +17,6 @@ export type HistoryLabelKey =
   | 'notification.history.command.unmuteTrack'
   | 'notification.history.command.showTrack'
   | 'notification.history.command.hideTrack'
-  | 'notification.history.command.updateFilter'
-  | 'notification.history.command.removeFilter'
-  | 'notification.history.command.updateTransition'
   | 'notification.history.command.addMarker'
   | 'notification.history.command.removeMarker'
   | 'notification.history.command.clearAllMarkers'
@@ -41,7 +38,6 @@ export type HistoryLabelKey =
   | 'notification.history.command.batchDeleteTimelineItems'
   | 'notification.history.command.autoArrangeTrack'
   | 'notification.history.command.updateProperties'
-  | 'notification.history.command.updateMask'
   | 'notification.history.command.scriptedBatch'
   | 'notification.history.command.deleteClips'
   | 'notification.history.command.deleteTimelineItems'
@@ -84,9 +80,6 @@ export const historyLabels = {
   unmuteTrack: (name: string) => label('notification.history.command.unmuteTrack', { name }),
   showTrack: (name: string) => label('notification.history.command.showTrack', { name }),
   hideTrack: (name: string) => label('notification.history.command.hideTrack', { name }),
-  updateFilter: () => label('notification.history.command.updateFilter'),
-  removeFilter: () => label('notification.history.command.removeFilter'),
-  updateTransition: () => label('notification.history.command.updateTransition'),
   addMarker: () => label('notification.history.command.addMarker'),
   removeMarker: () => label('notification.history.command.removeMarker'),
   clearAllMarkers: () => label('notification.history.command.clearAllMarkers'),
@@ -119,7 +112,6 @@ export const historyLabels = {
       'notification.history.command.updateProperties',
       count === undefined ? undefined : { count },
     ),
-  updateMask: (count: number) => label('notification.history.command.updateMask', { count }),
   scriptedBatch: () => label('notification.history.command.scriptedBatch'),
   deleteClips: (count: number) => label('notification.history.command.deleteClips', { count }),
   deleteTimelineItems: (count: number) =>

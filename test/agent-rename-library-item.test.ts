@@ -12,7 +12,6 @@ import {
 import { ModuleRegistry, MODULE_NAMES } from '../src/core/modules/ModuleRegistry'
 import { createUnifiedMediaItemData } from '../src/core/mediaitem/types'
 import { UserSelectedFileSourceFactory } from '../src/core/datasource/providers/user-selected/UserSelectedFileSource'
-import { createTransitionTemplateAssetData } from '../src/core/asset/types'
 
 const mocks = vi.hoisted(() => ({ save: vi.fn<(asset: { name: string }) => Promise<boolean>>() }))
 vi.mock('../src/core/managers/media/globalMetaFileManager', () => ({
@@ -29,9 +28,6 @@ vi.mock('../src/core', async () => ({
   UnifiedMediaItemActions: {},
 }))
 vi.mock('../src/core/datasource/registry', () => ({ getDataSourceRegistry: vi.fn() }))
-vi.mock('../src/core/effect-template/EffectTemplateManager', () => ({
-  EffectTemplateManager: class {},
-}))
 vi.mock('../src/core/utils/unifiedKeyframeUtils', () => ({ clearChannelKeyframes: vi.fn() }))
 vi.mock('../src/core/timelineitem/queries', () => ({ TimelineItemQueries: {} }))
 vi.mock('../src/core/unifiedStore', () => ({ useUnifiedStore: () => store }))
@@ -301,12 +297,7 @@ describe('rename_library_item ID contract', () => {
     expectNoHistory()
   })
 
-  it('rejects unsupported effects and cross-kind ambiguous IDs', async () => {
-    const effect = createTransitionTemplateAssetData('effect_x', '转场', null)
-    media.effectTemplateAssets.value.push(effect)
-    expect((await rename(request(effect.id, effect.name))).output.code).toBe(
-      'unsupported_item_kind',
-    )
+  it('rejects cross-kind ambiguous IDs', async () => {
     addMedia(folderId)
     expect((await rename()).output.code).toBe('ambiguous_item_id')
     expectNoHistory()

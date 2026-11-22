@@ -24,7 +24,6 @@ export type ResourceType =
   | 'media-index-metadata-writeback'
   | 'music-structure-analysis'
   | 'timeline-item-ready'
-  | 'effect-template-ready'
 
 /**
  * ResourceNode 的运行态状态。

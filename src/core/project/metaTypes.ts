@@ -2,11 +2,6 @@ import { isLinkedFileRecord } from '@/core/datasource/providers/linked-file/Link
 import type { BaseDataSourcePersistedData } from '@/core/datasource/core/DataSourceTypes'
 import { isMediaExtension } from '@/core/utils/mediaPathUtils'
 import type {
-  BaseEffectTemplateSourceData,
-  EffectTemplateStatus,
-  EffectType,
-} from '@/core/asset/types'
-import type {
   MediaStatus,
   MediaTypeOrUnknown,
   MusicAnalysisMetadata,
@@ -21,10 +16,10 @@ export interface BaseLibraryAssetMetaFile {
   id: string
   name: string
   createdAt: string
-  assetKind: 'media' | 'effect-template'
+  assetKind: 'media'
 }
 
-export const MEDIA_META_VERSION = '3.0.0'
+export const MEDIA_META_VERSION = '4.0.0'
 
 export interface MediaLibraryAssetMetaFile extends BaseLibraryAssetMetaFile {
   version: typeof MEDIA_META_VERSION
@@ -38,15 +33,7 @@ export interface MediaLibraryAssetMetaFile extends BaseLibraryAssetMetaFile {
   metadata?: UnifiedMediaItemMetadata
 }
 
-export interface EffectTemplateLibraryAssetMetaFile extends BaseLibraryAssetMetaFile {
-  assetKind: 'effect-template'
-  source: BaseEffectTemplateSourceData
-  effectType: EffectType
-  templateStatus: EffectTemplateStatus
-  templatePayload?: unknown
-}
-
-export type LibraryAssetMetaFile = MediaLibraryAssetMetaFile | EffectTemplateLibraryAssetMetaFile
+export type LibraryAssetMetaFile = MediaLibraryAssetMetaFile
 export type MediaMetaFile = LibraryAssetMetaFile
 
 export function isMediaLibraryAssetMetaFile(
@@ -55,11 +42,6 @@ export function isMediaLibraryAssetMetaFile(
   return metaFile?.assetKind === 'media'
 }
 
-export function isEffectTemplateLibraryAssetMetaFile(
-  metaFile: LibraryAssetMetaFile | null | undefined,
-): metaFile is EffectTemplateLibraryAssetMetaFile {
-  return metaFile?.assetKind === 'effect-template'
-}
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null
@@ -265,9 +247,6 @@ function isMediaStatus(value: unknown): value is MediaStatus {
   ].includes(String(value))
 }
 
-function isEffectType(value: unknown): value is EffectType {
-  return ['transition', 'filter', 'animation'].includes(String(value))
-}
 
 function isUnifiedMediaItemMetadata(value: unknown): value is UnifiedMediaItemMetadata {
   if (!isRecord(value)) {
@@ -280,18 +259,6 @@ function isUnifiedMediaItemMetadata(value: unknown): value is UnifiedMediaItemMe
   )
 }
 
-function isBaseEffectTemplateSourceData(value: unknown): value is BaseEffectTemplateSourceData {
-  if (!isRecord(value)) {
-    return false
-  }
-
-  return (
-    value.type === 'effect-template' &&
-    typeof value.templateId === 'string' &&
-    isOptionalString(value.packageVersion) &&
-    isOptionalString(value.catalogVersion)
-  )
-}
 
 function isMediaPersistedSourceData(value: unknown): value is BaseDataSourcePersistedData {
   if (!isRecord(value) || typeof value.type !== 'string') {
@@ -318,7 +285,7 @@ function isBaseLibraryAssetMetaFile(value: unknown): value is BaseLibraryAssetMe
     typeof value.id === 'string' &&
     typeof value.name === 'string' &&
     typeof value.createdAt === 'string' &&
-    (value.assetKind === 'media' || value.assetKind === 'effect-template')
+    value.assetKind === 'media'
   )
 }
 
@@ -343,30 +310,12 @@ export function isMediaLibraryAssetMetaFileValue(
   )
 }
 
-export function isEffectTemplateLibraryAssetMetaFileValue(
-  value: unknown,
-): value is EffectTemplateLibraryAssetMetaFile {
-  if (!isBaseLibraryAssetMetaFile(value) || value.assetKind !== 'effect-template') {
-    return false
-  }
-
-  const candidate = value as unknown as Record<string, unknown>
-
-  return (
-    isBaseEffectTemplateSourceData(candidate.source) &&
-    isEffectType(candidate.effectType) &&
-    isMediaStatus(candidate.templateStatus)
-  )
-}
 
 export function parseLibraryAssetMetaFile(value: unknown): LibraryAssetMetaFile {
   if (isMediaLibraryAssetMetaFileValue(value)) {
     return value
   }
 
-  if (isEffectTemplateLibraryAssetMetaFileValue(value)) {
-    return value
-  }
 
   console.error('[MediaIdentity] meta:invalid', {
     version: isRecord(value) ? value.version : undefined,

@@ -9,7 +9,6 @@ import { ModuleRegistry, MODULE_NAMES } from '../src/core/modules/ModuleRegistry
 import { createUnifiedMediaItemData } from '../src/core/mediaitem/types'
 import { UserSelectedFileSourceFactory } from '../src/core/datasource/providers/user-selected/UserSelectedFileSource'
 import {
-  createTransitionTemplateAssetData,
   isMediaAsset,
   type UnifiedLibraryAssetData,
 } from '../src/core/asset/types'
@@ -206,12 +205,8 @@ describe('delete_empty_folder ID contract', () => {
 
   it('only resolves directories even when an asset has the supplied ID', async () => {
     const asset = addMedia(parentId)
-    const effect = createTransitionTemplateAssetData('effect', '转场', null)
-    assets.set(effect.id, effect)
-    for (const dirId of [asset.id, effect.id]) {
-      expect((await remove({ ...request(), dirId })).output.code).toBe('directory_not_found')
-      expect(assets.has(dirId)).toBe(true)
-    }
+    expect((await remove({ ...request(), dirId: asset.id })).output.code).toBe('directory_not_found')
+    expect(assets.has(asset.id)).toBe(true)
     expectNoDeletion()
   })
 

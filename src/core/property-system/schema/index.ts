@@ -1,14 +1,5 @@
 export {
-  filterIntensitySchema,
   audioVolumeSchema,
-  maskCenterSchema,
-  maskRectangleSizeSchema,
-  maskRectangleCornerRadiusSchema,
-  maskEllipseSizeSchema,
-  maskFeatherSchema,
-  maskIntensitySchema,
-  maskRotationSchema,
-  maskMirrorLengthSchema,
   visualBlendIntensitySchema,
   visualPositionSchema,
   visualRotationSchema,
@@ -17,19 +8,9 @@ export {
   type AnimatablePropertyTarget,
 } from './animatablePropertySchemas'
 export {
-  DynamicFilterParameterSchemaProvider,
   PropertySchemaResolver,
   StaticPropertySchemaProvider,
   propertySchemaResolver,
   type PropertySchemaContext,
   type PropertySchemaProvider,
 } from './resolver'
-export {
-  FILTER_PARAM_KEY_PATTERN,
-  FILTER_PARAM_PROPERTY_PREFIX,
-  createFilterParamPropertyId,
-  getFilterParamKey,
-  isFilterParamPropertyId,
-  isValidFilterParamKey,
-  type DynamicFilterParamPropertyId,
-} from './propertyIds'

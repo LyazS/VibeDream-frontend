@@ -40,7 +40,7 @@ it('isolates v3 sessions without loading or deleting v2 history, questions or at
     table.put(attachment),
   )
   expect(store.owner('user', 'project')).toBe(
-    JSON.stringify(['user', 'project', 'editor-tools-v3']),
+    JSON.stringify(['user', 'project', 'editor-tools-v4']),
   )
   expect(await store.load('user', 'project')).toEqual([])
   const session: AgentSession = {

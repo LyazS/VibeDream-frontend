@@ -5,4 +5,3 @@
 export { FolderTargetHandler } from './FolderTargetHandler'
 export { TabTargetHandler } from './TabTargetHandler'
 export { TimelineTrackTargetHandler } from './TimelineTrackTargetHandler'
-export { ClipFilterDropTargetHandler } from './ClipFilterDropTargetHandler'

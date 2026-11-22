@@ -12,7 +12,6 @@ import MessageList from '../src/components/agent/MessageList.vue'
 import SessionHistoryPanel from '../src/components/agent/SessionHistoryPanel.vue'
 import ItemPropertyTestPanel from '../src/components/devtools/ItemPropertyTestPanel.vue'
 import MediaSearchTestPanel from '../src/components/devtools/MediaSearchTestPanel.vue'
-import TransitionTestPanel from '../src/components/devtools/TransitionTestPanel.vue'
 
 const mocks = vi.hoisted(() => ({
   store: {
@@ -43,14 +42,6 @@ vi.mock('@/components/agent/ThinkingIndicator.vue', () => ({ default: { render: 
 vi.mock('@/components/agent/InteractionCard.vue', () => ({ default: { render: () => null } }))
 vi.mock('@/core/agent/services/itemPropertyService', () => ({ describeItemProperties: vi.fn() }))
 vi.mock('@/core/agent/services/mediaIndexService', () => ({ searchMedia: vi.fn() }))
-vi.mock('@/core/effect-template/TransitionTemplateCatalogService', () => ({
-  transitionTemplateCatalogService: {},
-}))
-vi.mock('@/core/agent/tools/transitionTools', () => ({ executeApplyTransition: vi.fn() }))
-vi.mock('@/core/agent/tools/transitionItemShared', () => ({
-  getTrackItems: vi.fn(),
-  resolveTransitionTemplate: vi.fn(),
-}))
 vi.mock('naive-ui', async () => {
   const { defineComponent, h } = await import('vue')
   const wrapper = defineComponent({
@@ -153,10 +144,7 @@ it('renders test panel labels, presets, placeholders and notices in both languag
     const media = await render(MediaSearchTestPanel)
     expect(media).toContain(messages.mediaSearch.placeholder)
     expect(media).toContain(messages.mediaSearch.openProject)
-    const transition = await render(TransitionTestPanel)
-    expect(transition).toContain(messages.transition.placeholder)
-    expect(transition).toContain(messages.transition.noSeams)
-    if (language === 'en-US') expect(property + media + transition).not.toMatch(/\p{Script=Han}/u)
+    if (language === 'en-US') expect(property + media).not.toMatch(/\p{Script=Han}/u)
   }
 })
 

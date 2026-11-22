@@ -32,13 +32,12 @@ afterEach(() => {
 
 describe('migrated property API access', () => {
   it('sends property queries with the existing same-origin session', async () => {
-    const payload = { tool: 'describe_item_property', error: '转场模板不存在。' }
+    const payload = { tool: 'describe_item_property', propertyDescriptions: [] }
     const request = vi.fn(async () => Response.json(payload))
     vi.stubGlobal('fetch', request)
     const body = {
-      usage: 'transition_edit' as const,
-      templateId: 'missing',
-      propertyIds: ['timeline.start'],
+      usage: 'static_edit' as const,
+      propertyIds: ['visual.position.x'],
     }
     const result = await describeItemProperties(body)
     expect(result.data).toEqual(payload)

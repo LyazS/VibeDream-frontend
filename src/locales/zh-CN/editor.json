@@ -104,8 +104,7 @@
       "titles": {
         "mediaReady": "准备素材",
         "mediaIndexing": "索引素材",
-        "timelineItemReady": "准备时间轴素材",
-        "effectTemplateReady": "下载效果素材"
+        "timelineItemReady": "准备时间轴素材"
       },
       "statuses": {
         "idle": "等待依赖",

@@ -21,7 +21,6 @@
     "clips": "Clips",
     "audioTrack": "Audio Track",
     "videoTrack": "Video Track",
-    "effectTrack": "Effect Track",
     "tracks": "Tracks",
     "addNewTrack": "Add new track",
     "muteTrack": "Mute/unmute track",
@@ -48,10 +47,6 @@
         "revealInLibraryFailed": "Source media or its folder was not found",
         "regenerateThumbnail": "Regenerate Thumbnail",
         "deleteClip": "Delete Clip"
-      },
-      "transition": {
-        "placeholder": "Transition Placeholder",
-        "selectSourceClip": "Select Source Clip"
       },
       "track": {
         "addText": "Add Text",

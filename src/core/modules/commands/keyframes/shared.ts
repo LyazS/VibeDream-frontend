@@ -7,7 +7,6 @@ import type { UnifiedTimelineItemData } from '@/core/timelineitem/model/timeline
 import type { AnimateKeyframe, GetAnimation } from '@/core/timelineitem/model/render'
 import type { TimelineBaseRenderConfig } from '@/core/timelineitem/model/timelineItem'
 import type { MediaType } from '@/core/mediaitem'
-import { createDefaultTimelineExtraRenderConfig } from '@/core/timelineitem/model/timelineItem'
 import { isPlayheadInTimelineItem as checkPlayheadInTimelineItem } from '@/core/utils/timelineSearchUtils'
 import { cloneDeep } from 'lodash'
 import { useUnifiedStore } from '@/core/unifiedStore'
@@ -24,8 +23,6 @@ export interface KeyframeSnapshot {
   animationConfig: GetAnimation<MediaType> | undefined
   /** 时间轴项目的属性快照 */
   itemProperties: TimelineBaseRenderConfig<MediaType>
-  /** 扩展渲染配置快照 */
-  exRenderConfig: UnifiedTimelineItemData['exRenderConfig']
 }
 
 // ==================== 通用接口定义 ====================
@@ -53,7 +50,6 @@ export function createSnapshot(item: UnifiedTimelineItemData): KeyframeSnapshot 
   return {
     animationConfig: item.animation ? cloneDeep(item.animation) : undefined,
     itemProperties: cloneDeep(TimelineItemQueries.getBaseRenderConfig(item)),
-    exRenderConfig: cloneDeep(item.exRenderConfig),
   }
 }
 
@@ -96,13 +92,6 @@ export async function applyKeyframeSnapshot(
   if (snapshot.itemProperties) {
     item.baseRenderConfig = cloneDeep(snapshot.itemProperties) as never
   }
-
-  item.exRenderConfig = snapshot.exRenderConfig
-    ? cloneDeep(snapshot.exRenderConfig)
-    : createDefaultTimelineExtraRenderConfig()
-  item.runtime.exRenderConfig = snapshot.exRenderConfig
-    ? cloneDeep(snapshot.exRenderConfig)
-    : createDefaultTimelineExtraRenderConfig()
 
 }
 

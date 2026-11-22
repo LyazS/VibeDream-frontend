@@ -2,7 +2,6 @@ import { markRaw } from 'vue'
 import type { UnifiedTimelineItemData } from '@/core/timelineitem/model/timelineItem'
 import type { UnifiedMediaItemData } from '@/core/mediaitem/types'
 import { BunnyClip } from '@/core/mediabunny/bunny-clip'
-import { closeClipTransitionEdgeFrames } from '@/core/timelineitem/features/transition'
 
 /**
  * 为时间轴项目设置对应的 Bunny 对象（会自动清理旧的对象）
@@ -82,10 +81,4 @@ export async function cleanupTimelineItemBunny(
   await timelineItem.runtime.bunnyClip?.dispose()
   timelineItem.runtime.bunnyClip = undefined
 
-  // 清理转场边界帧缓存
-  if (timelineItem.runtime.transition?.edgeFrames) {
-    closeClipTransitionEdgeFrames(timelineItem.runtime.transition.edgeFrames)
-    timelineItem.runtime.transition.edgeFrames = undefined
-    timelineItem.runtime.transition.edgeSignature = undefined
-  }
 }

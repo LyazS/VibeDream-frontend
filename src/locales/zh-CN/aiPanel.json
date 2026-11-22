@@ -63,35 +63,11 @@
           "validate": "正在校验候选素材"
         }
       },
-      "transition": {
-        "title": "转场测试",
-        "catalogLoading": "正在读取转场目录...",
-        "catalogSummary": "目录 {count} 项 · {version}",
-        "catalogUnavailable": "目录不可用",
-        "refresh": "刷新转场目录",
-        "placeholder": "描述想要的画面过渡效果",
-        "target": "应用位置",
-        "selectSeam": "选择视频拼接点",
-        "noSeams": "当前时间线没有相邻视频片段",
-        "noResults": "未找到转场。",
-        "recheck": "重新检查",
-        "install": "安装",
-        "apply": "应用到拼接点",
-        "installed": "{name} 已安装并加载。",
-        "applied": "{name} 已应用到 {target}。",
-        "catalogFailed": "读取转场目录失败，请重试。",
-        "catalogMismatch": "转场目录与版本信息不一致，请刷新后重试。",
-        "searchFailed": "转场搜索失败，请重试。",
-        "installFailed": "转场安装失败，请重试。",
-        "applyFailed": "转场应用失败，请重试。"
-      },
       "property": {
         "title": "属性描述",
         "usage": "编辑场景",
         "static": "静态",
         "keyframe": "关键帧",
-        "transition": "转场",
-        "templateId": "转场模板 ID",
         "propertyId": "属性 ID",
         "example": "示例",
         "examples": "属性示例",
@@ -123,7 +99,6 @@
           "normalize": "重复 ID 和空白",
           "keyframeBasic": "复合属性分量",
           "nonAnimatable": "不可动画属性",
-          "transitionBasic": "时间轴与转场参数",
           "hidden": "隐藏模板",
           "missing": "不存在的模板"
         }
@@ -151,8 +126,6 @@
       "move_library_items": "移动素材库项目",
       "delete_empty_folder": "删除空文件夹",
       "describe_item_property": "查看属性说明",
-      "search_transitions": "检索转场",
-      "apply_transition": "应用转场",
       "remove_item": "删除时间轴项目",
       "add_track": "新增轨道",
       "insert_clip": "插入片段",

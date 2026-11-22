@@ -1,4 +1,3 @@
-import { toPackageVersionPathSegment } from '@/core/effect-template/commonTypes'
 import { getMediaFileName, type MediaFileReference } from '@/core/utils/mediaPathUtils'
 import type { ParsedPath } from './types'
 
@@ -8,9 +7,6 @@ import type { ParsedPath } from './types'
  */
 export class PathResolver {
   private readonly PROJECTS_DIR = 'projects'
-  private readonly COMMON_EFFECTS_DIR = 'common_effects'
-  private readonly EFFECT_CATALOGS_DIR = 'catalogs'
-  private readonly EFFECT_PACKAGES_DIR = 'packages'
   private readonly MEDIA_DIR = 'media'
   private readonly THUMBNAILS_DIR = 'thumbnails'
 
@@ -97,47 +93,6 @@ export class PathResolver {
     if (!/^[a-zA-Z0-9_-]+$/.test(segment)) throw new Error('INVALID_AGENT_ATTACHMENT_PATH')
   }
 
-  getCommonEffectsDirPath(): string {
-    return this.COMMON_EFFECTS_DIR
-  }
-
-  getEffectCatalogDirPath(): string {
-    return this.join(this.getCommonEffectsDirPath(), this.EFFECT_CATALOGS_DIR)
-  }
-
-  getEffectCatalogPath(effectType: 'transition' | 'filter'): string {
-    return this.join(this.getEffectCatalogDirPath(), `${effectType}.json`)
-  }
-
-  getEffectIndexPath(): string {
-    return this.join(this.getCommonEffectsDirPath(), 'index.json')
-  }
-
-  getEffectPackageDirPath(
-    effectType: 'transition' | 'filter',
-    templateId: string,
-    packageVersion: string,
-  ): string {
-    return this.join(
-      this.getCommonEffectsDirPath(),
-      this.EFFECT_PACKAGES_DIR,
-      effectType,
-      templateId,
-      toPackageVersionPathSegment(packageVersion),
-    )
-  }
-
-  getEffectPackageMetaPath(
-    effectType: 'transition' | 'filter',
-    templateId: string,
-    packageVersion: string,
-  ): string {
-    return this.join(
-      this.getEffectPackageDirPath(effectType, templateId, packageVersion),
-      '.effect-template-meta.json',
-    )
-  }
-
   /**
    * 获取项目配置文件路径
    */
@@ -177,12 +132,6 @@ export class PathResolver {
       ext: media.ext,
       path,
     })
-    return path
-  }
-
-  getProjectEffectPackageDirPath(projectId: string, assetId: string): string {
-    const path = this.join(this.getMediaDirPath(projectId), assetId)
-    console.info('[MediaIdentity] resolve-effect-directory', { projectId, assetId, path })
     return path
   }
 

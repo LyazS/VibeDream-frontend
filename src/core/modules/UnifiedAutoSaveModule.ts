@@ -154,8 +154,7 @@ export function createUnifiedAutoSaveModule(
       () => ({
         name: mediaItem.name,
         parentDirectoryId: isMediaAsset(mediaItem) ? mediaItem.parentDirectoryId : undefined,
-        metadata: isMediaAsset(mediaItem) ? mediaItem.metadata : undefined,
-        templatePayload: !isMediaAsset(mediaItem) ? mediaItem.templatePayload : undefined,
+        metadata: mediaItem.metadata,
       }),
       (newValues, oldValues) => {
         // 检查是否有变化
@@ -163,15 +162,11 @@ export function createUnifiedAutoSaveModule(
         const parentDirectoryChanged = newValues.parentDirectoryId !== oldValues.parentDirectoryId
         const metadataChanged =
           JSON.stringify(newValues.metadata) !== JSON.stringify(oldValues.metadata)
-        const templatePayloadChanged =
-          JSON.stringify(newValues.templatePayload) !== JSON.stringify(oldValues.templatePayload)
-
-        if (nameChanged || parentDirectoryChanged || metadataChanged || templatePayloadChanged) {
+        if (nameChanged || parentDirectoryChanged || metadataChanged) {
           console.log(`📝 [AutoSave] 检测到 mediaItem 变化: ${mediaItem.id}`, {
             nameChanged,
             parentDirectoryChanged,
             metadataChanged,
-            templatePayloadChanged,
             oldName: oldValues.name,
             newName: newValues.name,
           })
@@ -467,7 +462,6 @@ export function createUnifiedAutoSaveModule(
           anchorSource: item.anchorSource,
           musicStructureOverlay: item.musicStructureOverlay,
           baseRenderConfig: item.baseRenderConfig, // ✅ 监听
-          exRenderConfig: item.exRenderConfig, // ✅ 监听
           animation: item.animation, // ✅ 监听
           // ❌ 不监听 runtime（包括 runtime.renderConfig）
         })),

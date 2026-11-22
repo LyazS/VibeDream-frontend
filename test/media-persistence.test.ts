@@ -5,8 +5,7 @@ import { MediaItemLoader } from '@/core/managers/media/MediaItemLoader'
 import { createUnifiedMediaItemData } from '@/core/mediaitem/types'
 import { UserSelectedFileSourceFactory } from '@/core/datasource/providers/user-selected/UserSelectedFileSource'
 import { UserSelectedFileProcessor } from '@/core/datasource/providers/user-selected/UserSelectedFileProcessor'
-import { createTransitionTemplateAssetData, isMediaAsset } from '@/core/asset/types'
-import { EffectPackageRegistry } from '@/core/effect-package/EffectPackageRegistry'
+import { isMediaAsset } from '@/core/asset/types'
 import { generateMediaId } from '@/core/utils/idGenerator'
 import { extractExtension, getMediaFileName } from '@/core/utils/mediaPathUtils'
 
@@ -103,7 +102,7 @@ describe('media file identity persistence', () => {
     item.name = 'Renamed display.wav'
     await expect(globalMetaFileManager.saveMetaFile(item)).resolves.toBe(true)
     const meta = JSON.parse(await fileSystemService.readFile(metaPath))
-    expect(meta).toMatchObject({ version: '3.0.0', id: item.id, ext, name: item.name })
+    expect(meta).toMatchObject({ version: '4.0.0', id: item.id, ext, name: item.name })
     expect(meta).not.toHaveProperty('storagePath')
 
     const [restored] = await new MediaItemLoader().loadMediaItemsFromMeta('project')
@@ -159,55 +158,5 @@ describe('media file identity persistence', () => {
       'projects/project/media/media_image.png',
       'projects/project/media/media_image.meta',
     ])
-  })
-})
-
-describe('effect package paths', () => {
-  const packageFiles = [
-    {
-      path: 'manifest.json',
-      encoding: 'utf-8' as const,
-      content: JSON.stringify({
-        apiVersion: '1.0',
-        packageId: 'fade',
-        version: '1.0.0',
-        effectType: 'transition',
-        entry: 'index.js',
-        name: 'Fade',
-        host: { transition: { defaultDurationFrames: 12 } },
-      }),
-    },
-    { path: 'index.js', encoding: 'utf-8' as const, content: 'export default {}' },
-  ]
-
-  it('installs and cleans up an effect directory without requiring a media extension', async () => {
-    const registry = new EffectPackageRegistry()
-    const installed = await registry.installDownloadedPackage(
-      'project',
-      'effect_fade',
-      packageFiles,
-    )
-    expect(installed.name).toBe('Fade')
-    expect(installed.templatePayload.packageDir).toBe('projects/project/media/effect_fade')
-    expect(memory.files.has('projects/project/media/effect_fade/index.js')).toBe(true)
-
-    await registry.cleanupInstalledPackage('project', 'effect_fade')
-    expect(registry.getPackage('effect_fade')).toBeNull()
-    expect(memory.files.size).toBe(0)
-  })
-
-  it('deletes effect files and their meta using the directory path', async () => {
-    const asset = createTransitionTemplateAssetData('effect_fade', 'Fade', null)
-    const packagePath = fileSystemService.paths.getProjectEffectPackageDirPath('project', asset.id)
-    await fileSystemService.createDirectory(packagePath)
-    await fileSystemService.writeFile(`${packagePath}/index.js`, 'export default {}')
-    await expect(globalMetaFileManager.saveMetaFile(asset)).resolves.toBe(true)
-
-    await expect(globalMetaFileManager.deleteAssetFiles(asset)).resolves.toEqual({
-      success: true,
-      deletedMedia: true,
-      deletedMeta: true,
-    })
-    expect(memory.files.size).toBe(0)
   })
 })

@@ -1,49 +1,35 @@
 import type { MediaType } from '@/core/mediaitem'
 import type { AnimationGroupId } from '@/core/timelineitem/model/render'
-import type { DynamicFilterParamPropertyId } from './schema/propertyIds'
 
 export const STATIC_ANIMATABLE_PROPERTY_IDS = [
   'visual.rotation',
   'visual.position',
   'visual.size',
   'visual.blendIntensity',
-  'filter.intensity',
   'audio.volume',
-  'mask.rotation',
-  'mask.center',
-  'mask.rectangle.size',
-  'mask.rectangle.cornerRadius',
-  'mask.ellipse.size',
-  'mask.mirror.length',
-  'mask.feather',
-  'mask.intensity',
-] as const satisfies readonly Exclude<AnimationGroupId, 'mask.linear'>[]
+] as const satisfies readonly AnimationGroupId[]
 
 export type StaticAnimatablePropertyId = (typeof STATIC_ANIMATABLE_PROPERTY_IDS)[number]
-export type AnimatablePropertyId = StaticAnimatablePropertyId | DynamicFilterParamPropertyId
+export type AnimatablePropertyId = StaticAnimatablePropertyId
 
 export const CONFIG_PROPERTY_IDS = [
   'visual.blendMode',
   'visual.proportionalScale',
   'audio.isMuted',
-  'mask.enabled',
-  'mask.type',
-  'mask.inverted',
 ] as const
 
 export type ConfigPropertyId = (typeof CONFIG_PROPERTY_IDS)[number]
 
 export const DIRECT_ONLY_PROPERTY_IDS = [] as const
-
 export type DirectOnlyPropertyId = (typeof DIRECT_ONLY_PROPERTY_IDS)[number]
 export type DirectPropertyId = AnimatablePropertyId | DirectOnlyPropertyId
 
-export type ClipPropertyGroupId = 'visual' | 'audio' | 'mask'
+export type ClipPropertyGroupId = 'visual' | 'audio'
 export type StaticPropertyId = StaticAnimatablePropertyId | ConfigPropertyId | DirectOnlyPropertyId
 
 export const CLIP_PROPERTY_GROUP_SUPPORT = {
-  video: ['visual', 'audio', 'mask'],
-  image: ['visual', 'mask'],
+  video: ['visual', 'audio'],
+  image: ['visual'],
   audio: ['audio'],
 } as const satisfies Record<MediaType, readonly ClipPropertyGroupId[]>
 
@@ -59,144 +45,16 @@ type ClipPropertyPathDefinition = {
 }
 
 export const CLIP_PROPERTY_PATH_DEFINITIONS = [
-  {
-    path: 'visual.position.x',
-    propertyId: 'visual.position',
-    groupId: 'visual',
-    animationGroupId: 'visual.position',
-  },
-  {
-    path: 'visual.position.y',
-    propertyId: 'visual.position',
-    groupId: 'visual',
-    animationGroupId: 'visual.position',
-  },
-  {
-    path: 'visual.size.width',
-    propertyId: 'visual.size',
-    groupId: 'visual',
-    animationGroupId: 'visual.size',
-  },
-  {
-    path: 'visual.size.height',
-    propertyId: 'visual.size',
-    groupId: 'visual',
-    animationGroupId: 'visual.size',
-  },
-  {
-    path: 'visual.rotation',
-    propertyId: 'visual.rotation',
-    groupId: 'visual',
-    animationGroupId: 'visual.rotation',
-  },
-  {
-    path: 'visual.blendIntensity',
-    propertyId: 'visual.blendIntensity',
-    groupId: 'visual',
-    animationGroupId: 'visual.blendIntensity',
-  },
-  {
-    path: 'visual.blendMode',
-    propertyId: 'visual.blendMode',
-    groupId: 'visual',
-  },
-  {
-    path: 'visual.proportionalScale',
-    propertyId: 'visual.proportionalScale',
-    groupId: 'visual',
-  },
-  {
-    path: 'audio.volume',
-    propertyId: 'audio.volume',
-    groupId: 'audio',
-    animationGroupId: 'audio.volume',
-  },
-  {
-    path: 'audio.isMuted',
-    propertyId: 'audio.isMuted',
-    groupId: 'audio',
-  },
-  {
-    path: 'mask.enabled',
-    propertyId: 'mask.enabled',
-    groupId: 'mask',
-  },
-  {
-    path: 'mask.type',
-    propertyId: 'mask.type',
-    groupId: 'mask',
-  },
-  {
-    path: 'mask.inverted',
-    propertyId: 'mask.inverted',
-    groupId: 'mask',
-  },
-  {
-    path: 'mask.center.x',
-    propertyId: 'mask.center',
-    groupId: 'mask',
-    animationGroupId: 'mask.center',
-  },
-  {
-    path: 'mask.center.y',
-    propertyId: 'mask.center',
-    groupId: 'mask',
-    animationGroupId: 'mask.center',
-  },
-  {
-    path: 'mask.rotation',
-    propertyId: 'mask.rotation',
-    groupId: 'mask',
-    animationGroupId: 'mask.rotation',
-  },
-  {
-    path: 'mask.feather',
-    propertyId: 'mask.feather',
-    groupId: 'mask',
-    animationGroupId: 'mask.feather',
-  },
-  {
-    path: 'mask.intensity',
-    propertyId: 'mask.intensity',
-    groupId: 'mask',
-    animationGroupId: 'mask.intensity',
-  },
-  {
-    path: 'mask.rectangle.size.width',
-    propertyId: 'mask.rectangle.size',
-    groupId: 'mask',
-    animationGroupId: 'mask.rectangle.size',
-  },
-  {
-    path: 'mask.rectangle.size.height',
-    propertyId: 'mask.rectangle.size',
-    groupId: 'mask',
-    animationGroupId: 'mask.rectangle.size',
-  },
-  {
-    path: 'mask.rectangle.cornerRadius',
-    propertyId: 'mask.rectangle.cornerRadius',
-    groupId: 'mask',
-    animationGroupId: 'mask.rectangle.cornerRadius',
-  },
-  {
-    path: 'mask.ellipse.size.width',
-    propertyId: 'mask.ellipse.size',
-    groupId: 'mask',
-    animationGroupId: 'mask.ellipse.size',
-  },
-  {
-    path: 'mask.ellipse.size.height',
-    propertyId: 'mask.ellipse.size',
-    groupId: 'mask',
-    animationGroupId: 'mask.ellipse.size',
-  },
-  {
-    path: 'mask.mirror.length',
-    propertyId: 'mask.mirror.length',
-    groupId: 'mask',
-    animationGroupId: 'mask.mirror.length',
-  },
+  { path: 'visual.position.x', propertyId: 'visual.position', groupId: 'visual', animationGroupId: 'visual.position' },
+  { path: 'visual.position.y', propertyId: 'visual.position', groupId: 'visual', animationGroupId: 'visual.position' },
+  { path: 'visual.size.width', propertyId: 'visual.size', groupId: 'visual', animationGroupId: 'visual.size' },
+  { path: 'visual.size.height', propertyId: 'visual.size', groupId: 'visual', animationGroupId: 'visual.size' },
+  { path: 'visual.rotation', propertyId: 'visual.rotation', groupId: 'visual', animationGroupId: 'visual.rotation' },
+  { path: 'visual.blendIntensity', propertyId: 'visual.blendIntensity', groupId: 'visual', animationGroupId: 'visual.blendIntensity' },
+  { path: 'visual.blendMode', propertyId: 'visual.blendMode', groupId: 'visual' },
+  { path: 'visual.proportionalScale', propertyId: 'visual.proportionalScale', groupId: 'visual' },
+  { path: 'audio.volume', propertyId: 'audio.volume', groupId: 'audio', animationGroupId: 'audio.volume' },
+  { path: 'audio.isMuted', propertyId: 'audio.isMuted', groupId: 'audio' },
 ] as const satisfies readonly ClipPropertyPathDefinition[]
 
 export type ClipPropertyPath = (typeof CLIP_PROPERTY_PATH_DEFINITIONS)[number]['path']
@@ -236,14 +94,6 @@ export const AGENT_TOOL_KEYFRAME_PROPERTY_DEFINITIONS = [
   { propertyId: 'visual.rotation', kind: 'scalar', keys: ['rotation'] },
   { propertyId: 'visual.blendIntensity', kind: 'scalar', keys: ['blendIntensity'] },
   { propertyId: 'audio.volume', kind: 'scalar', keys: ['volume'] },
-  { propertyId: 'mask.center', kind: 'object', keys: ['centerX', 'centerY'] },
-  { propertyId: 'mask.rotation', kind: 'scalar', keys: ['rotation'] },
-  { propertyId: 'mask.feather', kind: 'scalar', keys: ['outerRange'] },
-  { propertyId: 'mask.intensity', kind: 'scalar', keys: ['decayRate'] },
-  { propertyId: 'mask.rectangle.size', kind: 'object', keys: ['width', 'height'] },
-  { propertyId: 'mask.rectangle.cornerRadius', kind: 'scalar', keys: ['cornerRadius'] },
-  { propertyId: 'mask.ellipse.size', kind: 'object', keys: ['ellipseWidth', 'ellipseHeight'] },
-  { propertyId: 'mask.mirror.length', kind: 'scalar', keys: ['length'] },
 ] as const satisfies readonly AgentToolKeyframePropertyDefinition[]
 
 export type AgentToolKeyframePropertyId =

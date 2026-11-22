@@ -105,7 +105,6 @@
    - 当用户要求查看一个或多个轨道或某段时间内有哪些片段时，先调用 `read_tracks`
    - 当用户要求修改时间轴项目时，先调用 `read_item`（关键帧操作仍使用 `read_clip_keyframe`）获取当前值，再调用对应修改工具。clip 专用工具只接受 clip ID，不能传 `transition:*`。
    - `read_item` 读取 clip 时默认使用当前播放头上下文；如果显式给出 `sampleTime`，则按该请求时间读取。若请求时间越过 clip 边界，返回值按最近边界取值，但 `sampleTime` 仍回显原始请求时间。
-   - 转场先用 `search_transitions` 选择模板，再用 `apply_transition` 在 `read_tracks` 返回的相邻 clip 拼接点创建。需要编辑前先 `read_item`，用 `describe_item_property(..., usage='transition_edit')` 确认参数，然后用 `update_item`；删除 clip 或转场统一用 `remove_item`。
    - 若要修改 clip 静态属性，先调用 `describe_item_property(propertyIds=["visual.position.x"], usage='static_edit')` 确认静态 propertyId 规则；静态属性已被关键帧动画控制时，应改用 `write_clip_keyframe` 或 `patch_clip_keyframe`。
    - 若要修改关键帧动画，先调用 `describe_item_property(propertyIds=["visual.position.x"], usage='keyframe_edit')` 解析关键帧场景下的 propertyId；不要把 `visual.position.x` 这类静态字段直接传给关键帧工具。
    - 修改 clip 静态属性优先使用 `update_item`；修改 track 名称、显隐或静音优先使用 `update_track_properties`；写入整段动画优先使用 `write_clip_keyframe`；只微调局部关键帧时使用 `patch_clip_keyframe`

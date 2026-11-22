@@ -67,8 +67,8 @@ export class PropertyPlanner {
     })
 
     return {
-      propertyId: 'filter.batch',
-      historyLabel: intent.historyLabel ?? historyLabels.updateFilter(),
+      propertyId: intent.entries[0]?.propertyId ?? 'visual.position',
+      historyLabel: intent.historyLabel ?? historyLabels.updateProperties(),
       operations,
     }
   }

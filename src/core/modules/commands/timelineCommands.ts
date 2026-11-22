@@ -30,8 +30,6 @@ export { UpdateAIMarksCommand } from './UpdateAIMarksCommand'
 export { UpdateTimelineAnchorSourceCommand } from './UpdateTimelineAnchorSourceCommand'
 export { UpdateMusicStructureOverlayCommand } from './UpdateMusicStructureOverlayCommand'
 export { SelectTimelineSelectionsCommand } from './SelectTimelineItemsCommand' // ok
-export { UpdateTransitionConfigCommand } from './UpdateTransitionOutCommand'
-export { UpdateFilterConfigCommand } from './UpdateFilterEffectCommand'
 export {
   CreateDirectoryCommand,
   RenameDirectoryCommand,

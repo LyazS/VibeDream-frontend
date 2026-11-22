@@ -9,8 +9,6 @@ import {
   hasTimelinePlaceholder,
   hasVisualProperties,
   hasAudioProperties,
-  supportsClipTransitionOut,
-  supportsClipFilter,
 } from './guards'
 import {
   isReady,
@@ -25,15 +23,7 @@ import {
   getBaseRenderConfig,
   getBaseVisualConfig,
   getBaseAudioConfig,
-  getBaseExtraRenderConfig,
-  getMergedExtraRenderConfig,
-  getBaseTransition,
-  getBaseFilter,
-  getBaseMask,
   getMergedRenderConfig,
-  getResolvedTransition,
-  getResolvedFilter,
-  getResolvedMask,
   getResolvedRenderConfig,
 } from './render'
 
@@ -44,8 +34,6 @@ export const TimelineItemQueries = {
   hasTimelinePlaceholder,
   hasVisualProperties,
   hasAudioProperties,
-  supportsClipTransitionOut,
-  supportsClipFilter,
   isReady,
   isLoading,
   hasError,
@@ -56,14 +44,6 @@ export const TimelineItemQueries = {
   getBaseRenderConfig,
   getBaseVisualConfig,
   getBaseAudioConfig,
-  getBaseExtraRenderConfig,
-  getMergedExtraRenderConfig,
-  getBaseTransition,
-  getBaseFilter,
-  getBaseMask,
   getMergedRenderConfig,
-  getResolvedTransition,
-  getResolvedFilter,
-  getResolvedMask,
   getResolvedRenderConfig,
 }

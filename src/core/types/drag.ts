@@ -3,8 +3,7 @@
  * 基于新架构从零开始实现
  */
 
-import type { AssetKind, EffectType } from '@/core/asset/types'
-import type { AnyEffectPackagePayload } from '@/core/effect-package/types'
+import type { AssetKind } from '@/core/asset/types'
 import type { MediaTypeOrUnknown } from '@/core/mediaitem/types'
 
 // ==================== 拖拽源类型 ====================
@@ -55,7 +54,6 @@ export enum DropTargetType {
   FOLDER = 'folder', // 文件夹
   TAB = 'tab', // 垂直标签页
   TIMELINE_TRACK = 'timeline-track', // 时间轴轨道
-  CLIP_FILTER_DROPZONE = 'clip-filter-dropzone', // 片段滤镜专用投放区
 }
 
 // ==================== 拖拽数据类型 ====================
@@ -80,12 +78,6 @@ export interface AssetDragData extends BaseDragData {
   assetKind: AssetKind
   duration?: number
   mediaType?: MediaTypeOrUnknown
-  effectType?: EffectType
-  templatePayload?: AnyEffectPackagePayload | unknown
-  effectPackageId?: string
-  templateId?: string
-  packageVersion?: string
-  catalogVersion?: string
   type?: 'media-item' // 兼容旧代码
 }
 
@@ -148,19 +140,12 @@ export interface FolderOrTabDropTargetInfo {
   position?: never // 不允许有position
 }
 
-export interface ClipFilterDropTargetInfo {
-  targetType: DropTargetType.CLIP_FILTER_DROPZONE
-  timelineItemId: string
-  position?: never
-}
-
 /**
  * 拖拽目标信息联合类型
  */
 export type DropTargetInfo =
   | TimelineTrackDropTargetInfo
   | FolderOrTabDropTargetInfo
-  | ClipFilterDropTargetInfo
 
 // ==================== 拖拽预览数据（保留现有定义） ====================
 

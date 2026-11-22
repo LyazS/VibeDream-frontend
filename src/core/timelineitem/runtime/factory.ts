@@ -10,7 +10,6 @@ import type { MediaType, UnifiedMediaItemData } from '@/core/mediaitem'
 import type { TimelineBaseRenderConfig } from '@/core/timelineitem/model/timelineItem'
 import type { UnifiedTimeRange } from '@/core/types/timeRange'
 import type { UnifiedTimelineItemData } from '@/core/timelineitem/model/timelineItem'
-import { createDefaultTimelineExtraRenderConfig } from '@/core/timelineitem/model/timelineItem'
 import type { GetAnimation } from '../model/render'
 import { MediaItemQueries } from '@/core/mediaitem'
 import { setupTimelineItemBunny } from '@/core/bunnyUtils/timelineItemSetup'
@@ -40,10 +39,8 @@ export function cloneTimelineItem<T extends MediaType>(
     // Legacy projects stored markers as timeline-local offsets. Convert them while
     // their original time range is still available.
     markers: normalizeTimelineMarkers(original.markers, original.timeRange),
-    exRenderConfig: original.exRenderConfig ?? createDefaultTimelineExtraRenderConfig(),
     runtime: {
       // 只保留 isInitialized，媒体运行时资源会在后续重建。
-      exRenderConfig: original.runtime.exRenderConfig ?? createDefaultTimelineExtraRenderConfig(),
       isInitialized: original.runtime.isInitialized,
     },
     timelinePlaceholder: original.timelinePlaceholder

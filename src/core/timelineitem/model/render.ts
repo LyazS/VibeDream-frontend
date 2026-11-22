@@ -1,26 +1,9 @@
 /**
- * 渲染配置与动画类型定义
- * 从历史 bunnytype.ts 中拆出，保留原有类型语义与注释。
+ * 渲染配置与动画类型定义。
  */
 
 import type { MediaType } from '@/core/mediaitem'
-import { isFilterParamPropertyId } from '@/core/property-system/schema/propertyIds'
 import type { BlendMode } from './blendMode'
-import type { FilterParamColorValue } from '@/core/filter/color'
-import type { MaskCenterValue, MaskEllipseSizeValue, MaskFeatherValue, MaskIntensityValue, MaskMirrorValue, MaskRectangleCornerRadiusValue, MaskRectangleSizeValue, MaskRotationValue } from '../features/mask'
-
-export type {
-  MaskConfig,
-  MaskCenterValue,
-  MaskRotationValue,
-  MaskFeatherValue,
-  MaskIntensityValue,
-  MaskRectangleSizeValue,
-  MaskRectangleCornerRadiusValue,
-  MaskEllipseSizeValue,
-  MaskMirrorValue,
-  MaskType,
-} from '../features/mask'
 
 export interface VisualProps {
   x: number
@@ -60,68 +43,28 @@ export interface AudioAnimatableProps {
   volume: number
 }
 
-export interface FilterIntensityValue {
-  intensity: number
-}
-
-export type DynamicFilterParamAnimationGroupId = `filter.param.${string}`
-
-export interface DynamicFilterParamNumberValue {
-  value: number
-}
-
-export interface DynamicFilterParamVec2Value {
-  x: number
-  y: number
-}
-
-export type DynamicFilterParamColorValue = FilterParamColorValue
-
-export type DynamicFilterParamValue =
-  | DynamicFilterParamNumberValue
-  | DynamicFilterParamVec2Value
-  | DynamicFilterParamColorValue
-
 export type AnimationGroupValueMap = {
   'visual.position': PositionAnimatableProps
   'visual.size': SizeAnimatableProps
   'visual.rotation': RotationAnimatableProps
   'visual.blendIntensity': BlendIntensityAnimatableProps
   'audio.volume': AudioAnimatableProps
-  'filter.intensity': FilterIntensityValue
-  'mask.center': MaskCenterValue
-  'mask.rotation': MaskRotationValue
-  'mask.feather': MaskFeatherValue
-  'mask.intensity': MaskIntensityValue
-  'mask.rectangle.size': MaskRectangleSizeValue
-  'mask.rectangle.cornerRadius': MaskRectangleCornerRadiusValue
-  'mask.ellipse.size': MaskEllipseSizeValue
-  'mask.linear': Record<string, never>
-  'mask.mirror.length': MaskMirrorValue
 }
 
 export type AnimationGroupId = keyof AnimationGroupValueMap
-export type DynamicAnimationGroupId = DynamicFilterParamAnimationGroupId
-export type PropertyAnimationGroupId = AnimationGroupId | DynamicAnimationGroupId
+export type PropertyAnimationGroupId = AnimationGroupId
 export type AnimationChannelKey = PropertyAnimationGroupId
-
-export function isDynamicFilterParamAnimationGroupId(
-  groupId: string,
-): groupId is DynamicFilterParamAnimationGroupId {
-  return isFilterParamPropertyId(groupId)
-}
 
 export function normalizeAnimationGroupId(groupId: AnimationChannelKey): PropertyAnimationGroupId {
   return groupId
 }
 
+export type AnimationValueByGroup<G extends AnimationGroupId> = AnimationGroupValueMap[G]
+export type PropertyAnimationValueByGroup<G extends PropertyAnimationGroupId> = AnimationGroupValueMap[G]
+
 export interface EasingSpec {
   type: 'linear'
 }
-
-export type AnimationValueByGroup<G extends AnimationGroupId> = AnimationGroupValueMap[G]
-export type PropertyAnimationValueByGroup<G extends PropertyAnimationGroupId> =
-  G extends AnimationGroupId ? AnimationGroupValueMap[G] : DynamicFilterParamValue
 
 export interface AnimateKeyframe<
   _T extends MediaType,
@@ -151,32 +94,12 @@ export type MediaAnimationGroupMap = {
     'visual.rotation': RotationAnimatableProps
     'visual.blendIntensity': BlendIntensityAnimatableProps
     'audio.volume': AudioAnimatableProps
-    'filter.intensity': FilterIntensityValue
-    'mask.center': MaskCenterValue
-    'mask.rotation': MaskRotationValue
-    'mask.feather': MaskFeatherValue
-    'mask.intensity': MaskIntensityValue
-    'mask.rectangle.size': MaskRectangleSizeValue
-    'mask.rectangle.cornerRadius': MaskRectangleCornerRadiusValue
-    'mask.ellipse.size': MaskEllipseSizeValue
-    'mask.linear': Record<string, never>
-    'mask.mirror.length': MaskMirrorValue
   }
   image: {
     'visual.position': PositionAnimatableProps
     'visual.size': SizeAnimatableProps
     'visual.rotation': RotationAnimatableProps
     'visual.blendIntensity': BlendIntensityAnimatableProps
-    'filter.intensity': FilterIntensityValue
-    'mask.center': MaskCenterValue
-    'mask.rotation': MaskRotationValue
-    'mask.feather': MaskFeatherValue
-    'mask.intensity': MaskIntensityValue
-    'mask.rectangle.size': MaskRectangleSizeValue
-    'mask.rectangle.cornerRadius': MaskRectangleCornerRadiusValue
-    'mask.ellipse.size': MaskEllipseSizeValue
-    'mask.linear': Record<string, never>
-    'mask.mirror.length': MaskMirrorValue
   }
   audio: {
     'audio.volume': AudioAnimatableProps
@@ -233,16 +156,6 @@ export const ALL_ANIMATION_GROUPS = [
   'visual.rotation',
   'visual.blendIntensity',
   'audio.volume',
-  'filter.intensity',
-  'mask.center',
-  'mask.rotation',
-  'mask.feather',
-  'mask.intensity',
-  'mask.rectangle.size',
-  'mask.rectangle.cornerRadius',
-  'mask.ellipse.size',
-  'mask.linear',
-  'mask.mirror.length',
 ] as const satisfies readonly AnimationGroupId[]
 
 export const PROPERTY_TO_GROUP_MAP = {
@@ -253,18 +166,6 @@ export const PROPERTY_TO_GROUP_MAP = {
   rotation: 'visual.rotation',
   blendIntensity: 'visual.blendIntensity',
   volume: 'audio.volume',
-  'filter.intensity': 'filter.intensity',
-  'mask.centerX': 'mask.center',
-  'mask.centerY': 'mask.center',
-  'mask.rotation': 'mask.rotation',
-  'mask.outerRange': 'mask.feather',
-  'mask.decayRate': 'mask.intensity',
-  'mask.width': 'mask.rectangle.size',
-  'mask.height': 'mask.rectangle.size',
-  'mask.cornerRadius': 'mask.rectangle.cornerRadius',
-  'mask.ellipseWidth': 'mask.ellipse.size',
-  'mask.ellipseHeight': 'mask.ellipse.size',
-  'mask.length': 'mask.mirror.length',
 } as const satisfies Record<string, AnimationGroupId>
 
 export type AnimatablePropertyKey = keyof typeof PROPERTY_TO_GROUP_MAP

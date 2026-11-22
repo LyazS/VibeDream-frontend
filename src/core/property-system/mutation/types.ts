@@ -15,15 +15,12 @@ import type {
   DirectPropertyId,
 } from '@/core/property-system/catalog'
 import type { MediaType } from '@/core/mediaitem'
-import type {
-  TimelineExtraRenderConfig,
-  UnifiedTimelineItemData,
-} from '@/core/timelineitem/model/timelineItem'
+import type { UnifiedTimelineItemData } from '@/core/timelineitem/model/timelineItem'
 import type { HistoryLabel } from '@/core/modules/historyLabel'
 
 export type { AnimatablePropertyId, ConfigPropertyId, DirectOnlyPropertyId, DirectPropertyId }
 
-export type ChangePlanPropertyId = DirectPropertyId | ConfigPropertyId | 'filter.batch'
+export type ChangePlanPropertyId = DirectPropertyId | ConfigPropertyId
 
 export interface DirectPropertyPlanIntent<TValue = unknown> {
   kind: 'direct'
@@ -57,11 +54,6 @@ export interface PropertyKeyframeTogglePlanIntent {
 
 export type PropertyPlanIntent = DirectPropertyPlanIntent | PropertyKeyframeTogglePlanIntent
 
-export type FilterEffectPatch = {
-  intensity?: number
-  params?: Record<string, unknown>
-}
-
 export interface NoAnimationGroupPatchOperation<
   G extends PropertyAnimationGroupId = PropertyAnimationGroupId,
 > {
@@ -70,9 +62,7 @@ export interface NoAnimationGroupPatchOperation<
   frame: number
   groupId?: G
   target: AnimatablePropertyTarget
-  patch: G extends AnimationGroupId
-    ? Partial<AnimationGroupValueMap[G]> | FilterEffectPatch
-    : FilterEffectPatch
+  patch: G extends AnimationGroupId ? Partial<AnimationGroupValueMap[G]> : Partial<AnimationGroupValueMap[G]>
 }
 
 export interface VisualConfigPatchOperation {
@@ -87,13 +77,6 @@ export interface AudioConfigPatchOperation {
   timelineItemId: string
   frame: number
   patch: Partial<AudioProps>
-}
-
-export interface ExtraRenderConfigPatchOperation {
-  kind: 'extra-render-config-patch'
-  timelineItemId: string
-  frame: number
-  patch: Partial<TimelineExtraRenderConfig>
 }
 
 export interface AnimationKeyframeUpdateOperation<
@@ -131,7 +114,6 @@ export type ChangeOperation =
   | NoAnimationGroupPatchOperation
   | VisualConfigPatchOperation
   | AudioConfigPatchOperation
-  | ExtraRenderConfigPatchOperation
   | AnimationKeyframeUpdateOperation
   | AnimationKeyframeCreateOperation
   | AnimationKeyframeDeleteOperation

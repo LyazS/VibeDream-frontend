@@ -35,7 +35,6 @@ const VISIBLE_ROOT_TYPES = new Set([
   'media-ready',
   'media-index-metadata-writeback',
   'music-structure-analysis',
-  'effect-template-ready',
 ])
 
 const unifiedStore = useUnifiedStore()
@@ -84,8 +83,6 @@ function formatTaskTitle(task: TaskView) {
       return `${t('editor.taskCenter.titles.mediaIndexing')}：${name}`
     case 'music-structure-analysis':
       return `${t('media.musicAnalysisTaskTitle')}：${name}`
-    case 'effect-template-ready':
-      return `${t('editor.taskCenter.titles.effectTemplateReady')}：${name}`
     default:
       return task.title || task.id
   }
@@ -114,8 +111,6 @@ function resolveTaskObjectName(task: TaskView) {
     case 'media-index-metadata-writeback':
     case 'music-structure-analysis':
       return unifiedStore.getMediaItem(key)?.name || key
-    case 'effect-template-ready':
-      return unifiedStore.getAsset(key)?.name || key
     case 'timeline-item-ready':
       return resolveTimelineItemName(key) || key
     default:

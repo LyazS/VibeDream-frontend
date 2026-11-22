@@ -9,7 +9,6 @@ import { MoveLibraryItemsCommand } from '../src/core/modules/commands/LibraryCom
 import { ModuleRegistry, MODULE_NAMES } from '../src/core/modules/ModuleRegistry'
 import { createUnifiedMediaItemData } from '../src/core/mediaitem/types'
 import { UserSelectedFileSourceFactory } from '../src/core/datasource/providers/user-selected/UserSelectedFileSource'
-import { createTransitionTemplateAssetData } from '../src/core/asset/types'
 import type { DisplayItem } from '../src/core/directory/types'
 
 const mocks = vi.hoisted(() => ({
@@ -31,9 +30,6 @@ vi.mock('../src/core', async () => ({
   UnifiedMediaItemActions: {},
 }))
 vi.mock('../src/core/datasource/registry', () => ({ getDataSourceRegistry: vi.fn() }))
-vi.mock('../src/core/effect-template/EffectTemplateManager', () => ({
-  EffectTemplateManager: class {},
-}))
 vi.mock('../src/core/utils/unifiedKeyframeUtils', () => ({ clearChannelKeyframes: vi.fn() }))
 vi.mock('../src/core/timelineitem/queries', () => ({ TimelineItemQueries: {} }))
 vi.mock('../src/core/unifiedStore', () => ({ useUnifiedStore: () => store }))
@@ -326,19 +322,9 @@ describe('move_library_items ID contract', () => {
     expectNoMutation()
   })
 
-  it('rejects ambiguous IDs and unsupported template assets', async () => {
+  it('rejects ambiguous IDs', async () => {
     addMedia(folderId)
     expect((await move(request([folderId]))).output.code).toBe('ambiguous_item_id')
-    const template = createTransitionTemplateAssetData('template', '转场', null)
-    media.effectTemplateAssets.value.push(template)
-    expect(
-      (
-        await move({
-          items: [{ itemId: template.id, match: { name: template.name, parentDirId: parentId } }],
-          targetDirId: targetId,
-        })
-      ).output.code,
-    ).toBe('unsupported_item_kind')
     expectNoMutation()
   })
 

@@ -13,11 +13,7 @@ import type { Raw } from 'vue'
 import type { MediaType } from '@/core/mediaitem'
 import type { UnifiedTimeRange } from '@/core/types/timeRange'
 import type { BunnyClip } from '@/core/mediabunny/bunny-clip'
-import type { ClipTransitionOutConfig } from '@/core/transition/types'
-import type { ClipFilterConfig } from '@/core/filter/types'
 import type { GetAnimation, TimelineBaseRenderConfig } from './render'
-import type { ClipTransitionRuntime } from '../features/transition'
-import type { MaskConfig } from '../features/mask'
 
 export type {
   AnimationChannelKey,
@@ -30,7 +26,6 @@ export type {
   AudioMediaConfig,
 } from './render'
 export type { BlendMode } from './blendMode'
-export type { MaskConfig, MaskType } from '../features/mask'
 
 import type { VisualProps, AudioProps } from './render'
 
@@ -76,16 +71,6 @@ export type VisualPropPatch = Partial<VisualProps>
  */
 export type AudioPropPatch = Partial<AudioProps>
 
-export interface TimelineExtraRenderConfig {
-  filter?: ClipFilterConfig
-  transition?: ClipTransitionOutConfig
-  mask?: MaskConfig
-}
-
-export function createDefaultTimelineExtraRenderConfig(): TimelineExtraRenderConfig {
-  return {}
-}
-
 // ==================== 统一时间轴项目运行时数据接口 ====================
 /**
  * 设计理念：
@@ -98,10 +83,6 @@ export interface UnifiedTimelineItemRuntime<T extends MediaType = MediaType> {
   bunnyClip?: Raw<BunnyClip>
   /** 动画插值后的临时配置（运行时数据，不持久化） */
   renderConfig?: TimelineBaseRenderConfig<T>
-  /** 扩展渲染配置的运行时结果（运行时数据，不持久化） */
-  exRenderConfig: TimelineExtraRenderConfig
-  /** 片段出场转场的运行时绑定与边界帧缓存 */
-  transition?: ClipTransitionRuntime
   /**
    * 标识时间轴项目是否已经从 mediaItem 初始化过（必选字段）
    * - true: 已经初始化，不应该再从 mediaItem 同步数据
@@ -194,8 +175,6 @@ export interface UnifiedTimelineItemData<T extends MediaType = MediaType> {
   musicStructureOverlay?: MusicStructureOverlay
   // ==================== 配置（类型安全） ====================
   baseRenderConfig: TimelineBaseRenderConfig<T>
-  /** schema v2 迁移期扩展渲染配置 */
-  exRenderConfig: TimelineExtraRenderConfig
   // ==================== 动画配置（类型安全） ====================
   animation?: GetAnimation<T>
   // ==================== 片段滤镜配置（持久化） ====================

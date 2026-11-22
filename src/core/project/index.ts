@@ -12,14 +12,11 @@ export {
 } from './types'
 export type {
   BaseLibraryAssetMetaFile,
-  EffectTemplateLibraryAssetMetaFile,
   LibraryAssetMetaFile,
   MediaLibraryAssetMetaFile,
   MediaMetaFile,
 } from './metaTypes'
 export {
-  isEffectTemplateLibraryAssetMetaFile,
-  isEffectTemplateLibraryAssetMetaFileValue,
   isMediaLibraryAssetMetaFile,
   isMediaLibraryAssetMetaFileValue,
   parseLibraryAssetMetaFile,

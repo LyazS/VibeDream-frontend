@@ -1,4 +1,3 @@
-import { createDefaultTimelineExtraRenderConfig } from '@/core/timelineitem/model/timelineItem'
 import type {
   AudioMediaConfig,
   ImageMediaConfig,
@@ -338,12 +337,10 @@ export function buildTimelineItemFromMedia(params: {
       clipEndTime: clipEnd,
     },
     baseRenderConfig: createDefaultTimelineItemConfig(mediaItem.mediaType, originalResolution),
-    exRenderConfig: createDefaultTimelineExtraRenderConfig(),
     animation: undefined,
     timelineStatus: 'loading' as const,
     runtime: {
-      exRenderConfig: createDefaultTimelineExtraRenderConfig(),
-      isInitialized: false,
+        isInitialized: false,
     },
   } satisfies UnifiedTimelineItemData
 }

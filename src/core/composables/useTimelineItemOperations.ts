@@ -9,7 +9,6 @@ import type {
   AudioMediaConfig,
 } from '@/core/timelineitem/model/timelineItem'
 import { DEFAULT_BLEND_MODE } from '@/core/timelineitem/model/blendMode'
-import { createDefaultTimelineExtraRenderConfig } from '@/core/timelineitem/model/timelineItem'
 
 /**
  * 时间轴项目操作模块
@@ -76,7 +75,6 @@ export function useTimelineItemOperations() {
         storeMediaItem.mediaType,
         originalResolution,
       )
-      const exRenderConfig = createDefaultTimelineExtraRenderConfig()
 
       // 创建时间轴项目数据
       const timelineItemData: UnifiedTimelineItemData = {
@@ -91,11 +89,9 @@ export function useTimelineItemOperations() {
           clipEndTime: availableDuration,
         },
         baseRenderConfig,
-        exRenderConfig,
         animation: undefined, // 新创建的项目默认没有动画
         timelineStatus: timelineStatus, // 根据素材状态设置时间轴项目状态
         runtime: {
-          exRenderConfig: createDefaultTimelineExtraRenderConfig(),
           // ✅ 新创建的项目，未初始化，需要从 mediaItem 同步数据
           isInitialized: false,
         },

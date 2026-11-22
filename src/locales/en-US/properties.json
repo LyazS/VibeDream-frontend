@@ -64,84 +64,6 @@
       "fitToCanvas": "Fit to Canvas",
       "fillCanvas": "Fill Canvas"
     },
-    "transition": {
-      "title": "Transition",
-      "enabled": "Enable Transition",
-      "preset": "Preset",
-      "durationFrames": "Duration (Frames)",
-      "status": "Status",
-      "targetClip": "Target Clip: {name}",
-      "effectiveDuration": "Effective Duration: {frames} frames",
-      "presets": {
-        "crossfade": "Crossfade"
-      },
-      "statuses": {
-        "bound": "Bound to the clip on the right",
-        "unbound": "No seam on the right",
-        "invalidTarget": "Right clip type is unsupported or too short",
-        "invalidOverlap": "Overlaps with a neighboring transition",
-        "waitingEdge": "Preparing edge frames"
-      }
-    },
-    "transitionSelection": {
-      "effectAsset": "Effect Asset",
-      "sourceClip": "Source Clip",
-      "placeholder": "This panel is reserved for transition properties. Editing controls will be added later."
-    },
-    "filter": {
-      "title": "Filter",
-      "dropHint": "Drag a filter asset here",
-      "intensity": "Intensity",
-      "ready": "Ready"
-    },
-    "mask": {
-      "enabled": "Enabled",
-      "type": "Type",
-      "inverted": "Inverted",
-      "center": "Center",
-      "outerRange": "Feather",
-      "decayRate": "Strength",
-      "size": "Size",
-      "widthShort": "W",
-      "heightShort": "H",
-      "cornerRadius": "Corner",
-      "length": "Length",
-      "types": {
-        "rectangle": "Rectangle",
-        "ellipse": "Ellipse",
-        "linear": "Linear",
-        "mirror": "Mirror",
-        "rectangleUpper": "RECTANGLE",
-        "ellipseUpper": "ELLIPSE",
-        "mirrorUpper": "MIRROR"
-      }
-    },
-    "effects": {
-      "shadow": "Shadow",
-      "stroke": "Stroke",
-      "glow": "Glow",
-      "shadowColor": "Shadow Color",
-      "shadowBlur": "Shadow Blur",
-      "shadowOffsetX": "Shadow Offset X",
-      "shadowOffsetY": "Shadow Offset Y",
-      "strokeColor": "Stroke Color",
-      "strokeWidth": "Stroke Width",
-      "glowColor": "Glow Color",
-      "glowBlur": "Glow Blur",
-      "glowSpread": "Glow Spread",
-      "textAlignLeft": "Align Left",
-      "textAlignCenter": "Center Align",
-      "textAlignRight": "Align Right",
-      "effectColor": "Color",
-      "blur": "Blur",
-      "offset": "Offset",
-      "width": "Width",
-      "spread": "Spread",
-      "normal": "Normal",
-      "bold": "Bold",
-      "lighter": "Lighter",
-      "italic": "Italic"
-    },
     "keyframes": {
       "keyframeAnimation": "Keyframe Animation",
       "keyframes": "Keyframes",
@@ -214,9 +136,6 @@
     },
     "tabs": {
       "basic": "Basic",
-      "transition": "Transition",
-      "mask": "Mask",
-      "filter": "Filter",
       "animation": "Animation",
       "placeholderTitle": "{tab} is not available yet",
       "placeholderDescription": "The {tab} panel will be added later. This is a placeholder for now."

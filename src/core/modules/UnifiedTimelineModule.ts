@@ -7,17 +7,6 @@ import { ModuleRegistry, MODULE_NAMES } from './ModuleRegistry'
 import type { UnifiedSelectionModule } from './UnifiedSelectionModule'
 
 import { TimelineItemFactory } from '@/core/timelineitem/runtime/factory'
-import {
-  normalizeClipTransitionOutConfig,
-  refreshClipTransitionsForItems,
-} from '@/core/timelineitem/features/transition'
-import { normalizeClipFilterConfig } from '@/core/timelineitem/features/filter'
-import type { ClipTransitionOutConfig } from '@/core/transition/types'
-import type { ClipFilterConfig } from '@/core/filter/types'
-import {
-  createTimelineTransitionOverlay,
-  type TimelineTransitionOverlayViewModel,
-} from '@/core/timelineitem/ui/transitionOverlay'
 
 /**
  * 统一时间轴核心管理模块
@@ -34,9 +23,6 @@ export function createUnifiedTimelineModule(registry: ModuleRegistry) {
 
   const timelineItems = ref<UnifiedTimelineItemData<MediaType>[]>([])
 
-  function refreshTransitionItems() {
-    refreshClipTransitionsForItems(timelineItems.value)
-  }
 
   // ==================== 时间轴管理方法 ====================
 
@@ -46,7 +32,6 @@ export function createUnifiedTimelineModule(registry: ModuleRegistry) {
    */
   async function addTimelineItem(timelineItem: UnifiedTimelineItemData<MediaType>) {
     timelineItems.value.push(timelineItem)
-    refreshTransitionItems()
   }
 
   /**
@@ -72,8 +57,7 @@ export function createUnifiedTimelineModule(registry: ModuleRegistry) {
 
       // 从数组中移除
       timelineItems.value.splice(index, 1)
-      refreshTransitionItems()
-    }
+      }
   }
 
   /**
@@ -127,8 +111,7 @@ export function createUnifiedTimelineModule(registry: ModuleRegistry) {
         item.trackId = newTrackId
       }
 
-      refreshTransitionItems()
-    }
+      }
   }
 
   function setTimelineItemTimeRangeForCmd(
@@ -139,85 +122,6 @@ export function createUnifiedTimelineModule(registry: ModuleRegistry) {
     if (!item) return
 
     TimelineItemFactory.setTimeRange(item, timeRange)
-    refreshTransitionItems()
-  }
-
-  function setTimelineItemTransitionConfigForCmd(
-    timelineItemId: string,
-    transitionConfig?: ClipTransitionOutConfig,
-  ) {
-    const item = getTimelineItem(timelineItemId)
-    if (!item) return
-
-    const nextTransitionConfig = transitionConfig
-      ? normalizeClipTransitionOutConfig({
-          effectPackageId: transitionConfig.effectPackageId,
-          templateId: transitionConfig.templateId,
-          packageVersion: transitionConfig.packageVersion,
-          catalogVersion: transitionConfig.catalogVersion,
-          durationFrames: transitionConfig.durationFrames,
-          params: transitionConfig.params,
-          ...(transitionConfig.packagePayload ? { packagePayload: transitionConfig.packagePayload } : {}),
-        })
-      : undefined
-    item.exRenderConfig = {
-      ...item.exRenderConfig,
-      transition: nextTransitionConfig,
-    }
-    item.runtime.exRenderConfig = {
-      ...item.runtime.exRenderConfig,
-      transition: nextTransitionConfig
-        ? normalizeClipTransitionOutConfig(nextTransitionConfig)
-        : undefined,
-    }
-
-    refreshTransitionItems()
-  }
-
-  function setTimelineItemFilterConfigForCmd(
-    timelineItemId: string,
-    filterConfig?: ClipFilterConfig,
-  ) {
-    const item = getTimelineItem(timelineItemId)
-    if (!item) return
-
-    const nextFilterConfig = filterConfig
-      ? normalizeClipFilterConfig({
-          effectPackageId: filterConfig.effectPackageId,
-          templateId: filterConfig.templateId,
-          packageVersion: filterConfig.packageVersion,
-          catalogVersion: filterConfig.catalogVersion,
-          intensity: filterConfig.intensity,
-          params: filterConfig.params,
-          packagePayload: filterConfig.packagePayload,
-        })
-      : undefined
-    item.exRenderConfig = {
-      ...item.exRenderConfig,
-      filter: nextFilterConfig,
-    }
-    item.runtime.exRenderConfig = {
-      ...item.runtime.exRenderConfig,
-      filter: nextFilterConfig
-        ? normalizeClipFilterConfig(nextFilterConfig)
-        : undefined,
-    }
-  }
-
-  function getTransitionOverlay(sourceItemId: string): TimelineTransitionOverlayViewModel | null {
-    const item = getTimelineItem(sourceItemId)
-    if (!item) {
-      return null
-    }
-
-    return createTimelineTransitionOverlay(item)
-  }
-
-  function getTransitionOverlaysByTrack(trackId: string): TimelineTransitionOverlayViewModel[] {
-    return timelineItems.value
-      .filter((item) => item.trackId === trackId)
-      .map((item) => createTimelineTransitionOverlay(item))
-      .filter((overlay): overlay is TimelineTransitionOverlayViewModel => overlay !== null)
   }
 
   // ==================== 导出接口 ====================
@@ -233,11 +137,6 @@ export function createUnifiedTimelineModule(registry: ModuleRegistry) {
     getReadyTimelineItem,
     updateTimelineItemPosition,
     setTimelineItemTimeRangeForCmd,
-    setTimelineItemTransitionConfigForCmd,
-    setTimelineItemFilterConfigForCmd,
-    refreshTransitionItems,
-    getTransitionOverlay,
-    getTransitionOverlaysByTrack,
   }
 }
 
