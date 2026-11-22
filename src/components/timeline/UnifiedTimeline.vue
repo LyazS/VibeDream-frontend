@@ -161,9 +161,8 @@
                     </template>
                   </HoverButton>
 
-                  <!-- 静音切换按钮 - 文本轨道不显示 -->
+                  <!-- 静音切换按钮 -->
                   <HoverButton
-                    v-if="track.type !== 'text'"
                     variant="small"
                     :class="!track.isMuted ? 'active' : ''"
                     :title="track.isMuted ? t('timeline.unmuteTrack') : t('timeline.muteTrack')"
@@ -370,10 +369,7 @@ const {
 } = useTimelineTimeScale(scaleContainer)
 
 // 初始化项目操作模块
-const {
-  handleTimelineItemRemove,
-  createTextAtPosition,
-} = useTimelineItemOperations()
+const { handleTimelineItemRemove } = useTimelineItemOperations()
 
 // 初始化轨道管理模块
 const {
@@ -417,10 +413,8 @@ const {
   startRename,
   removeTrack,
   handleTimelineItemRemove,
-  createTextAtPosition,
   tracks,
   getClipsForTrack,
-  timelineBody,
 )
 
 // 初始化事件处理模块

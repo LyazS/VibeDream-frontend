@@ -1,7 +1,6 @@
 {
   "properties": {
     "basic": {
-      "textContent": "文本内容",
       "fontFamily": "字体",
       "fontSize": "字体大小",
       "fontStyle": "字体样式",
@@ -117,12 +116,7 @@
         "mirrorUpper": "镜面"
       }
     },
-    "text": {
-      "textProperties": "文本属性"
-    },
     "effects": {
-      "textStyle": "文本样式",
-      "textEffects": "文本效果",
       "shadow": "阴影",
       "stroke": "描边",
       "glow": "发光",
@@ -135,9 +129,6 @@
       "glowColor": "发光颜色",
       "glowBlur": "发光模糊",
       "glowSpread": "发光扩散",
-      "backgroundColor": "背景颜色",
-      "textColor": "文字颜色",
-      "textAlign": "文本对齐",
       "textAlignLeft": "左对齐",
       "textAlignCenter": "居中对齐",
       "textAlignRight": "右对齐",
@@ -184,7 +175,6 @@
       "frameRate": "帧率"
     },
     "placeholders": {
-      "enterText": "输入文本内容...",
       "fontSize": "字号",
       "speed": "倍速",
       "volume": "音量",
@@ -196,10 +186,6 @@
       "spread": "扩散"
     },
     "errors": {
-      "textContentUpdateFailed": "文本内容更新失败，请重试",
-      "textStyleUpdateFailed": "文本样式更新失败，请重试",
-      "textUpdateSuccess": "文本内容更新成功",
-      "textStyleSuccess": "文本样式更新成功",
       "invalidTimecodeFormat": "请使用正确的时间码格式：HH:MM:SS+FF",
       "formatError": "格式错误",
       "example": "示例",
@@ -217,21 +203,9 @@
     },
     "singleSelect": {
       "emptyHint": "选择时间轴项目以查看属性",
-      "emptyHintDetail": "选择音频、视频、图片或文本片段来编辑其设置",
+      "emptyHintDetail": "选择音频、视频或图片片段来编辑其设置",
       "loading": "加载中...",
-      "loadingStatus": "素材状态：{status}",
-      "asrPlaceholder": {
-        "title": "字幕识别",
-        "sourceMedia": "源素材",
-        "range": "识别范围",
-        "hint": "识别完成后，这个占位符会替换为字幕片段。",
-        "status": {
-          "active": "正在识别字幕",
-          "paused": "等待识别恢复",
-          "error": "字幕识别失败",
-          "orphaned": "等待恢复字幕识别"
-        }
-      }
+      "loadingStatus": "素材状态：{status}"
     },
     "multiSelect": {
       "title": "已选择 {count} 个项目",
@@ -340,7 +314,6 @@
       "video": "视频",
       "image": "图片",
       "audio": "音频",
-      "text": "文本",
       "unknown": "未知"
     },
     "panelTitle": "属性",

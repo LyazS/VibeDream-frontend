@@ -19,11 +19,9 @@
     },
     "hideTrack": "隐藏轨道",
     "clips": "片段",
-    "textTrack": "文本轨道",
     "audioTrack": "音频轨道",
     "videoTrack": "视频轨道",
     "effectTrack": "特效轨道",
-    "subtitleTrack": "字幕轨道",
     "tracks": "轨道",
     "addNewTrack": "添加新轨道",
     "muteTrack": "静音/取消静音轨道",
@@ -33,11 +31,9 @@
     "contextMenu": {
       "emptyArea": {
         "addVideoTrack": "添加视频轨道",
-        "addAudioTrack": "添加音频轨道",
-        "addTextTrack": "添加文本轨道"
+        "addAudioTrack": "添加音频轨道"
       },
       "clip": {
-        "generateSubtitles": "识别字幕",
         "smartSceneDetection": "智能分镜头",
         "autoBeatMarks": "自动节拍",
         "regenerateBeatMarks": "重新识别节拍",
@@ -69,7 +65,6 @@
         "addNewTrack": "添加新轨道",
         "addVideoTrack": "视频轨道",
         "addAudioTrack": "音频轨道",
-        "addTextTrack": "文本轨道",
         "deleteTrack": "删除轨道"
       }
     },

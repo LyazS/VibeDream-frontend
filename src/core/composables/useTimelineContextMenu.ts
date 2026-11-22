@@ -9,15 +9,11 @@ import {
 } from '@/constants/iconComponents'
 import type { UnifiedTrackType, UnifiedTrackData } from '@/core/track/TrackTypes'
 import type { UnifiedTimelineItemData } from '@/core/timelineitem/model/timelineItem'
-import { LayoutConstants } from '@/constants/LayoutConstants'
 import { detectSceneAdv } from '@/core/utils/scene-detector-adv'
 import { detectSceneTransNetV2 } from '@/core/utils/scene-detector-transnetv2'
 import type { TransNetV2ProgressEvent } from '@/core/utils/transnetv2/types'
 import { buildClipSelectionId } from '@/core/types/timelineSelection'
 import { canRevealTimelineSource } from '@/core/timelineitem/TimelineSourceReveal'
-import { GenerateSubtitlesCommand } from '@/core/modules/commands/GenerateSubtitlesCommand'
-import { expandAsrRange } from '@/core/asr/cache'
-import { RENDERER_FPS } from '@/core/mediabunny/constant'
 
 /**
  * 菜单项类型定义
@@ -58,10 +54,8 @@ export function useTimelineContextMenu(
   startRename: (track: { id: string; name: string }) => Promise<void>,
   removeTrack: (trackId: string) => Promise<void>,
   handleTimelineItemRemove: (timelineItemId: string) => Promise<void>,
-  createTextAtPosition: (trackId: string, timePosition: number) => Promise<void>,
   tracks: Ref<UnifiedTrackData[]>,
   getClipsForTrack: (trackId: string) => UnifiedTimelineItemData[],
-  timelineBody: Ref<HTMLElement | undefined>,
 ) {
   const unifiedStore = useUnifiedStore()
   const { t } = useAppI18n()
@@ -113,11 +107,6 @@ export function useTimelineContextMenu(
         icon: getTrackTypeIcon('audio'),
         onClick: () => addNewTrack('audio'),
       },
-      {
-        label: t('timeline.contextMenu.emptyArea.addTextTrack'),
-        icon: getTrackTypeIcon('text'),
-        onClick: () => addNewTrack('text'),
-      },
     ]
   }
 
@@ -146,16 +135,6 @@ export function useTimelineContextMenu(
     // 只有 ready 状态的 timelineItem 才有各种右键选项
     // 非 ready 状态（loading 或 error）只有删除选项
     if (timelineItem.timelineStatus === 'ready') {
-      if (canGenerateSubtitles(timelineItem)) {
-        menuItems.push({
-          label: t('timeline.contextMenu.clip.generateSubtitles'),
-          icon: IconComponents.TRANSLATE,
-          onClick: () => void generateSubtitles(),
-        })
-
-        appendMenuSeparator(menuItems)
-      }
-
       // 智能分镜头 - 仅视频类型支持
       if (timelineItem.mediaType === 'video') {
         menuItems.push({
@@ -227,58 +206,6 @@ export function useTimelineContextMenu(
     return menuItems
   }
 
-  function canGenerateSubtitles(timelineItem: UnifiedTimelineItemData): boolean {
-    if (timelineItem.timelineStatus !== 'ready') return false
-    if (timelineItem.mediaType !== 'audio' && timelineItem.mediaType !== 'video') return false
-    const media = unifiedStore.getMediaItem(timelineItem.mediaItemId)
-    return media?.mediaStatus === 'ready' && !timelineItem.timelinePlaceholder
-  }
-
-  async function generateSubtitles(): Promise<void> {
-    const clipId = contextMenuTarget.value.clipId
-    const item = clipId ? unifiedStore.getTimelineItem(clipId) : undefined
-    if (!item || !canGenerateSubtitles(item)) return
-
-    const media = unifiedStore.getMediaItem(item.mediaItemId)
-    if (!media) return
-
-    const requestedRange = {
-      start_ms: Math.round((item.timeRange.clipStartTime / RENDERER_FPS) * 1000),
-      end_ms: Math.round((item.timeRange.clipEndTime / RENDERER_FPS) * 1000),
-    }
-    const durationMs =
-      typeof media.duration === 'number'
-        ? Math.round((media.duration / RENDERER_FPS) * 1000)
-        : requestedRange.end_ms
-    const recognitionRange = expandAsrRange(requestedRange, durationMs)
-
-    showContextMenu.value = false
-    try {
-      const command = new GenerateSubtitlesCommand({
-        mediaId: media.id,
-        sourceTimelineItemId: item.id,
-        requestedRange,
-        recognitionRange,
-        ensureAsr: unifiedStore.ensureMediaAsr,
-        getTimelineItem: unifiedStore.getTimelineItem,
-        getTimelineItems: () => unifiedStore.timelineItems,
-        addTimelineItem: unifiedStore.addTimelineItem,
-        removeTimelineItem: unifiedStore.removeTimelineItem,
-        getTrack: unifiedStore.getTrack,
-        getTracks: () => unifiedStore.tracks,
-        addTrack: unifiedStore.addTrack,
-        removeTrack: unifiedStore.removeTrack,
-        hasTimelineItemsOnTrack: (trackId) =>
-          unifiedStore.timelineItems.some((candidate) => candidate.trackId === trackId),
-      })
-      const batch = unifiedStore.startBatch(command.historyLabel)
-      batch.addCommand(command)
-      await unifiedStore.executeBatchCommand(batch.build())
-    } catch (error) {
-      console.error('字幕识别失败', error)
-    }
-  }
-
   function revealClipInLibrary(): void {
     const clipId = contextMenuTarget.value.clipId
     const timelineItem = clipId ? unifiedStore.getTimelineItem(clipId) : undefined
@@ -333,22 +260,6 @@ export function useTimelineContextMenu(
 
     const menuItems: MenuItem[] = []
 
-    // 文本轨道专用菜单项
-    if (track.type === 'text') {
-      menuItems.push({
-        label: t('timeline.contextMenu.track.addText'),
-        icon: IconComponents.TEXT_LINE,
-        onClick: () => {
-          const timePosition = getTimePositionFromContextMenu(contextMenuOptions.value)
-          createTextAtPosition(trackId, timePosition)
-        },
-      })
-
-      if (hasClips) {
-        menuItems.push({ type: 'separator' } as MenuItem)
-      }
-    }
-
     // 通用菜单项
     menuItems.push(
       {
@@ -376,16 +287,14 @@ export function useTimelineContextMenu(
       })
     }
 
-    // 静音控制 - 文本轨道不显示
-    if (track.type !== 'text') {
-      menuItems.push({
-        label: track.isMuted
-          ? t('timeline.contextMenu.track.unmuteTrack')
-          : t('timeline.contextMenu.track.muteTrack'),
-        icon: getMuteIcon(track.isMuted),
-        onClick: () => toggleMute(trackId),
-      })
-    }
+    // 静音控制
+    menuItems.push({
+      label: track.isMuted
+        ? t('timeline.contextMenu.track.unmuteTrack')
+        : t('timeline.contextMenu.track.muteTrack'),
+      icon: getMuteIcon(track.isMuted),
+      onClick: () => toggleMute(trackId),
+    })
 
     // 添加新轨道子菜单
     menuItems.push({ type: 'separator' } as MenuItem, {
@@ -401,11 +310,6 @@ export function useTimelineContextMenu(
           label: t('timeline.contextMenu.track.addAudioTrack'),
           icon: getTrackTypeIcon('audio'),
           onClick: () => addNewTrack('audio', trackId),
-        },
-        {
-          label: t('timeline.contextMenu.track.addTextTrack'),
-          icon: getTrackTypeIcon('text'),
-          onClick: () => addNewTrack('text', trackId),
         },
       ],
     })
@@ -777,32 +681,6 @@ export function useTimelineContextMenu(
     contextMenuType.value = 'empty'
     contextMenuTarget.value = {}
     showContextMenu.value = true
-  }
-
-  /**
-   * 从右键菜单上下文获取时间位置
-   * 将右键点击的屏幕坐标转换为时间轴上的帧数位置
-   * @returns 时间位置（帧数）
-   */
-  function getTimePositionFromContextMenu(contextMenuOptions: { x: number }): number {
-    // 获取右键点击的位置
-    const clickX = contextMenuOptions.x
-
-    // 计算相对于时间轴内容区域的位置
-    const timelineBodyRect = timelineBody.value?.getBoundingClientRect()
-    if (!timelineBodyRect) {
-      console.warn('⚠️ 无法获取时间轴主体边界，使用默认位置')
-      return 0
-    }
-
-    // 减去轨道控制区域的宽度
-    const relativeX = clickX - timelineBodyRect.left - LayoutConstants.TRACK_CONTROL_WIDTH
-
-    // 转换为帧数
-    const timeFrames = unifiedStore.pixelToFrame(relativeX, unifiedStore.TimelineContentWidth)
-
-    // 确保时间位置不为负数
-    return Math.max(0, Math.round(timeFrames))
   }
 
   return {

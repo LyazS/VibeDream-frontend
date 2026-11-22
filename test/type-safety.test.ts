@@ -4,7 +4,7 @@ import { parseLibraryAssetMetaFile } from '@/core/project/metaTypes'
 
 describe('media source persistence', () => {
   const meta = {
-    version: '2.0.0',
+    version: '3.0.0',
     id: 'media_music',
     ext: '.wav',
     name: 'music.wav',
@@ -43,7 +43,7 @@ describe('media source persistence', () => {
     expect(parseLibraryAssetMetaFile(meta)).toEqual(meta)
   })
 
-  it.each(['1.0', '1.1.0', '3.0.0'])(
+  it.each(['1.0', '1.1.0', '2.0.0', '4.0.0'])(
     'rejects unsupported media meta version %s without migration',
     (version) => {
       expect(() => parseLibraryAssetMetaFile({ ...meta, version })).toThrow()

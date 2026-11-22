@@ -15,7 +15,6 @@ import { readTracksDefinition } from './readTracks'
 import { moveTrackDefinition } from './moveTrack'
 import { updateTrackPropertiesDefinition } from './updateTrackProperties'
 import { removeTrackDefinition } from './removeTrack'
-import { createSubtitleClipDefinition } from './createSubtitleClip'
 import { insertClipDefinition } from './insertClip'
 import { importAttachmentDefinition } from './importAttachment'
 import { viewMediaDefinition } from './viewMedia'
@@ -54,7 +53,6 @@ export const agentTools: ModelTool[] = [
   moveTrackDefinition,
   updateTrackPropertiesDefinition,
   removeTrackDefinition,
-  createSubtitleClipDefinition,
   insertClipDefinition,
   importAttachmentDefinition,
   viewMediaDefinition,

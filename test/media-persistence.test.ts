@@ -103,7 +103,7 @@ describe('media file identity persistence', () => {
     item.name = 'Renamed display.wav'
     await expect(globalMetaFileManager.saveMetaFile(item)).resolves.toBe(true)
     const meta = JSON.parse(await fileSystemService.readFile(metaPath))
-    expect(meta).toMatchObject({ version: '2.0.0', id: item.id, ext, name: item.name })
+    expect(meta).toMatchObject({ version: '3.0.0', id: item.id, ext, name: item.name })
     expect(meta).not.toHaveProperty('storagePath')
 
     const [restored] = await new MediaItemLoader().loadMediaItemsFromMeta('project')

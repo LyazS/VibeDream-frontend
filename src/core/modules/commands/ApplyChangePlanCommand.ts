@@ -14,7 +14,6 @@ import { applyAnimationToConfig } from '@/core/utils/animationInterpolation'
 import { normalizeClipFilterConfig } from '@/core/timelineitem/features/filter'
 import { TimelineItemMutations } from '@/core/timelineitem/mutations'
 import { TimelineItemQueries } from '@/core/timelineitem/queries'
-import { rebuildTextRuntime } from '@/core/timelineitem/runtime/textRuntime'
 import type { AnimationGroupId } from '@/core/timelineitem/model/render'
 import type { AudioProps, VisualProps } from '@/core/timelineitem/model/timelineItem'
 import { applyMaskGroupValue, getItemLocalSize } from '@/core/timelineitem/features/mask'
@@ -77,14 +76,6 @@ export class ApplyChangePlanCommand implements SimpleCommand {
           ...item.runtime.exRenderConfig,
           ...operation.patch,
         }
-      } else if (operation.kind === 'text-rebuild') {
-        if (!TimelineItemQueries.isTextTimelineItem(item)) {
-          throw new Error(`文本属性仅支持 text timeline item: ${operation.timelineItemId}`)
-        }
-        await rebuildTextRuntime(item, {
-          content: operation.content,
-          stylePatch: operation.stylePatch as never,
-        })
       } else if (operation.kind === 'animation-keyframe-update') {
         const track = ensureTrack(item, operation.groupId)
         const keyframe = track.keyframes.find((entry) => entry.frame === operation.relativeFrame)

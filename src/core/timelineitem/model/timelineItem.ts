@@ -25,11 +25,9 @@ export type {
   TimelineBaseRenderConfig,
   VisualProps,
   AudioProps,
-  TextProps,
   VideoMediaConfig,
   ImageMediaConfig,
   AudioMediaConfig,
-  TextMediaConfig,
 } from './render'
 export type { BlendMode } from './blendMode'
 export type { MaskConfig, MaskType } from '../features/mask'
@@ -98,8 +96,6 @@ export function createDefaultTimelineExtraRenderConfig(): TimelineExtraRenderCon
 export interface UnifiedTimelineItemRuntime<T extends MediaType = MediaType> {
   /** 与时间轴项目生命周期一致 */
   bunnyClip?: Raw<BunnyClip>
-  textBitmap?: ImageBitmap
-  textBitmapVersion?: number
   /** 动画插值后的临时配置（运行时数据，不持久化） */
   renderConfig?: TimelineBaseRenderConfig<T>
   /** 扩展渲染配置的运行时结果（运行时数据，不持久化） */
@@ -119,9 +115,8 @@ export interface UnifiedTimelineItemRuntime<T extends MediaType = MediaType> {
 /**
  * 条件类型：根据 MediaType 确定 mediaItemId 的类型
  * - video/image/audio: mediaItemId 必须是 string
- * - text: mediaItemId 可以是 string | null
  */
-export type MediaItemIdType<T extends MediaType> = T extends 'text' ? string | null : string
+export type MediaItemIdType = string
 
 export type AIMarkMode = 'none' | 'beat1' | 'beat1234'
 
@@ -178,7 +173,7 @@ export interface MusicStructureOverlay {
 export interface UnifiedTimelineItemData<T extends MediaType = MediaType> {
   // ==================== 核心属性 ====================
   readonly id: string
-  mediaItemId: MediaItemIdType<T>
+  mediaItemId: MediaItemIdType
   trackId: string
   // ==================== 状态管理 ====================
   timelineStatus: TimelineItemStatus

@@ -34,7 +34,7 @@ export class DeleteTimelinePlaceholderCommand implements SimpleCommand {
       await this.module.addTimelineItem(restored)
       if (this.module.onRestore) {
         void this.module.onRestore(restored).catch((error) => {
-          console.error('恢复字幕占位符失败', error)
+          console.error('恢复时间轴占位符失败', error)
         })
       }
     }

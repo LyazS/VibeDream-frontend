@@ -19,11 +19,9 @@
     },
     "hideTrack": "Hide Track",
     "clips": "Clips",
-    "textTrack": "Text Track",
     "audioTrack": "Audio Track",
     "videoTrack": "Video Track",
     "effectTrack": "Effect Track",
-    "subtitleTrack": "Subtitle Track",
     "tracks": "Tracks",
     "addNewTrack": "Add new track",
     "muteTrack": "Mute/unmute track",
@@ -33,11 +31,9 @@
     "contextMenu": {
       "emptyArea": {
         "addVideoTrack": "Add Video Track",
-        "addAudioTrack": "Add Audio Track",
-        "addTextTrack": "Add Text Track"
+        "addAudioTrack": "Add Audio Track"
       },
       "clip": {
-        "generateSubtitles": "Recognize Subtitles",
         "smartSceneDetection": "Scene Detection",
         "autoBeatMarks": "Auto Beat Marks",
         "regenerateBeatMarks": "Regenerate Beat Marks",
@@ -69,7 +65,6 @@
         "addNewTrack": "Add New Track",
         "addVideoTrack": "Video Track",
         "addAudioTrack": "Audio Track",
-        "addTextTrack": "Text Track",
         "deleteTrack": "Delete Track"
       }
     },

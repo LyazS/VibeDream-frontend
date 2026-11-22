@@ -79,15 +79,12 @@ export class UnifiedProjectManager {
     const trackNames = {
       video: i18n.global.t('timeline.videoTrack'),
       audio: i18n.global.t('timeline.audioTrack'),
-      text: i18n.global.t('timeline.textTrack'),
     }
 
     const videoTrack = createUnifiedTrackData('video', { name: trackNames.video })
     const audioTrack = createUnifiedTrackData('audio', { name: trackNames.audio })
-    const textTrack = createUnifiedTrackData('text', { name: trackNames.text })
-
-    // 轨道按底层到顶层保存；时间轴界面会反向展示为文本、视频、音频。
-    return [audioTrack, videoTrack, textTrack]
+    // 轨道按底层到顶层保存。
+    return [audioTrack, videoTrack]
   }
 
   /**

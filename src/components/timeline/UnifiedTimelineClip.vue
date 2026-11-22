@@ -317,11 +317,7 @@ const visibleKeyframes = computed(() => {
  * 获取关键帧标记样式
  */
 function getKeyframeMarkerStyles(pixelPosition: number): Record<string, string> {
-  // 根据媒体类型使用不同的偏移量
-  let offset = -6.5 // 视频/图片/音频的默认偏移
-  if (props.data.mediaType === 'text') {
-    offset = -6.5 // 文本的偏移量与旧架构保持一致
-  }
+  const offset = -6.5
 
   return {
     left: `${pixelPosition + offset}px`,

@@ -61,23 +61,17 @@ export {
 export { DEFAULT_CLIP_TRANSITION_DURATION_FRAMES } from '@/core/transition/types'
 export { DEFAULT_CLIP_FILTER_INTENSITY } from '@/core/filter/types'
 
-// 文本相关类型导出
-export type { TextStyleConfig } from './model/textStyle'
-export { DEFAULT_TEXT_STYLE } from './model/textStyle'
-
 // 动画类型导出
 export type { KeyframeButtonState, KeyframeUIState } from './model/keyframeUi'
 
 // 新结构导出
 export * as TimelineItemModel from './model/timelineItem'
 export * as TimelineItemRenderModel from './model/render'
-export * as TimelineItemTextModel from './model/textStyle'
 export * as TimelineItemAnimationModel from './model/keyframeUi'
 export * as TimelineItemFeatureFilter from './features/filter'
 export * as TimelineItemFeatureMask from './features/mask'
 export * as TimelineItemFeatureTransition from './features/transition'
 export * as TimelineItemRuntimeFactory from './runtime/factory'
-export * as TimelineItemRuntimeText from './runtime/textRuntime'
 export * as TimelineItemUiStatus from './ui/statusDisplay'
 export * as TimelineItemUiTransitionOverlay from './ui/transitionOverlay'
 

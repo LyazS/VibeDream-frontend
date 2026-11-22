@@ -9,7 +9,6 @@ import type { FrameData } from '@/core/webgl2/types'
 export type VisualRenderableItem =
   | UnifiedTimelineItemData<'video'>
   | UnifiedTimelineItemData<'image'>
-  | UnifiedTimelineItemData<'text'>
 
 /**
  * 可见性筛选所需的外部上下文。
@@ -115,8 +114,6 @@ export function getVisibleRenderableItems(
             return false
           }
         }
-      } else if (TimelineItemQueries.isTextTimelineItem(item)) {
-        if (!item.runtime.textBitmap) return false
       } else if (TimelineItemQueries.isImageTimelineItem(item)) {
         if (!context.getMediaItem(item.mediaItemId)?.runtime.bunny?.imageClip) return false
       } else {

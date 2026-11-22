@@ -16,7 +16,6 @@ import { ItemPassBuilder } from '@/core/webgl2/chains/ItemPassBuilder'
 export type VisualTimelineItem =
   | UnifiedTimelineItemData<'video'>
   | UnifiedTimelineItemData<'image'>
-  | UnifiedTimelineItemData<'text'>
 
 interface ChainBuilderParams {
   programs: Pick<ProgramManager, 'createProgram'>

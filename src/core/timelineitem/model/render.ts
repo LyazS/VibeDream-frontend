@@ -5,7 +5,6 @@
 
 import type { MediaType } from '@/core/mediaitem'
 import { isFilterParamPropertyId } from '@/core/property-system/schema/propertyIds'
-import type { TextStyleConfig } from './textStyle'
 import type { BlendMode } from './blendMode'
 import type { FilterParamColorValue } from '@/core/filter/color'
 import type { MaskCenterValue, MaskEllipseSizeValue, MaskFeatherValue, MaskIntensityValue, MaskMirrorValue, MaskRectangleCornerRadiusValue, MaskRectangleSizeValue, MaskRotationValue } from '../features/mask'
@@ -37,11 +36,6 @@ export interface VisualProps {
 export interface AudioProps {
   volume: number
   isMuted: boolean
-}
-
-export interface TextProps {
-  content: string
-  style: TextStyleConfig
 }
 
 export interface PositionAnimatableProps {
@@ -187,21 +181,6 @@ export type MediaAnimationGroupMap = {
   audio: {
     'audio.volume': AudioAnimatableProps
   }
-  text: {
-    'visual.position': PositionAnimatableProps
-    'visual.size': SizeAnimatableProps
-    'visual.rotation': RotationAnimatableProps
-    'visual.blendIntensity': BlendIntensityAnimatableProps
-    'mask.center': MaskCenterValue
-    'mask.rotation': MaskRotationValue
-    'mask.feather': MaskFeatherValue
-    'mask.intensity': MaskIntensityValue
-    'mask.rectangle.size': MaskRectangleSizeValue
-    'mask.rectangle.cornerRadius': MaskRectangleCornerRadiusValue
-    'mask.ellipse.size': MaskEllipseSizeValue
-    'mask.linear': Record<string, never>
-    'mask.mirror.length': MaskMirrorValue
-  }
 }
 
 export type GroupKeyForMedia<T extends MediaType> = Extract<
@@ -230,17 +209,12 @@ export type TimelineBaseRenderConfigMap = {
   audio: {
     audio: AudioProps
   }
-  text: {
-    visual: VisualProps
-    text: TextProps
-  }
 }
 
 type GetAnimationMap = {
   video: AnimationProps<'video'>
   image: AnimationProps<'image'>
   audio: AnimationProps<'audio'>
-  text: AnimationProps<'text'>
 }
 
 export type TimelineBaseRenderConfig<T extends MediaType> = TimelineBaseRenderConfigMap[T]
@@ -302,4 +276,3 @@ export function getAnimationGroupForProperty(property: string): AnimationGroupId
 export type VideoMediaConfig = TimelineBaseRenderConfig<'video'>
 export type ImageMediaConfig = TimelineBaseRenderConfig<'image'>
 export type AudioMediaConfig = TimelineBaseRenderConfig<'audio'>
-export type TextMediaConfig = TimelineBaseRenderConfig<'text'>

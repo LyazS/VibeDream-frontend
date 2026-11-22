@@ -78,7 +78,7 @@ export function resolveRenderConfigAtFrame<T extends MediaType>(
       if (!TimelineItemQueries.hasVisualProperties(item)) {
         continue
       }
-      const visualConfig = (renderConfig as TimelineBaseRenderConfig<'video' | 'image' | 'text'>).visual
+      const visualConfig = (renderConfig as TimelineBaseRenderConfig<'video' | 'image'>).visual
       if (!visualConfig) continue
       definition.applyValueToConfig(
         visualConfig as object,

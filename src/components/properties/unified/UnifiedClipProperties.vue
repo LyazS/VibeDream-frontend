@@ -7,14 +7,7 @@
       :show-speed-control="showSpeedControl"
     />
 
-    <!-- 文本属性组 - 仅 text（包含文本内容编辑） -->
-    <TextPropertiesGroup
-      v-if="selectedTimelineItem && isTextTimelineItem(selectedTimelineItem)"
-      :selected-timeline-item="selectedTimelineItem"
-      :current-frame="currentFrame"
-    />
-
-    <!-- 视觉属性组 - video/image/text -->
+    <!-- 视觉属性组 - video/image -->
     <VisualPropertiesGroup
       v-if="selectedTimelineItem && hasVisualProperties(selectedTimelineItem)"
       :selected-timeline-item="selectedTimelineItem"
@@ -35,14 +28,12 @@ import { computed } from 'vue'
 import {
   hasVisualProperties,
   hasAudioProperties,
-  isTextTimelineItem,
   isVideoTimelineItem,
   isAudioTimelineItem,
 } from '@/core/timelineitem/queries'
 import type { UnifiedTimelineItemData } from '@/core/timelineitem/model/timelineItem'
 
 import PlaybackSettingsSection from './PlaybackSettingsSection.vue'
-import TextPropertiesGroup from '../groups/TextPropertiesGroup.vue'
 import VisualPropertiesGroup from '../groups/VisualPropertiesGroup.vue'
 import AudioPropertiesGroup from '../groups/AudioPropertiesGroup.vue'
 

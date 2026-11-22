@@ -34,7 +34,6 @@ const ACTIVE_STATUSES = new Set(['idle', 'queued', 'running'] as const)
 const VISIBLE_ROOT_TYPES = new Set([
   'media-ready',
   'media-index-metadata-writeback',
-  'media-asr',
   'music-structure-analysis',
   'effect-template-ready',
 ])
@@ -83,8 +82,6 @@ function formatTaskTitle(task: TaskView) {
       return `${t('editor.taskCenter.titles.timelineItemReady')}：${name}`
     case 'media-index-metadata-writeback':
       return `${t('editor.taskCenter.titles.mediaIndexing')}：${name}`
-    case 'media-asr':
-      return `${t('editor.taskCenter.titles.mediaAsr')}：${name}`
     case 'music-structure-analysis':
       return `${t('media.musicAnalysisTaskTitle')}：${name}`
     case 'effect-template-ready':
@@ -115,7 +112,6 @@ function resolveTaskObjectName(task: TaskView) {
   switch (getTaskType(task)) {
     case 'media-ready':
     case 'media-index-metadata-writeback':
-    case 'media-asr':
     case 'music-structure-analysis':
       return unifiedStore.getMediaItem(key)?.name || key
     case 'effect-template-ready':

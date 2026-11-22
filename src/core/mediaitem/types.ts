@@ -25,9 +25,9 @@ export type MediaStatus =
   | 'missing' // 缺失（加载工程时本地文件不存在）
 
 /**
- * 核心媒体类型 - 支持视频、图片、音频和文本
+ * 核心媒体类型 - 支持视频、图片和音频
  */
-export type MediaType = 'video' | 'image' | 'audio' | 'text'
+export type MediaType = 'video' | 'image' | 'audio'
 
 /**
  * 异步处理素材在处理前使用 'unknown' 类型，处理后使用实际检测到的类型
@@ -83,32 +83,6 @@ export interface UnifiedMediaItemMetadata {
   indexing?: UnifiedMediaIndexMetadata
   /** 本地 All-In-One 音乐结构分析结果 */
   musicAnalysis?: MusicAnalysisMetadata
-  /** 已完成和活动的素材级字幕识别结果。 */
-  asr?: AsrMetadata
-}
-
-export interface AsrRange {
-  start_ms: number
-  end_ms: number
-}
-
-export interface AsrSegment {
-  start_ms: number
-  end_ms: number
-  text: string
-  words?: Array<{ start_ms: number; end_ms: number; text: string }>
-}
-
-export interface AsrTaskRecord {
-  taskId: string
-  recognitionRange: AsrRange
-  createdAt: string
-}
-
-export interface AsrMetadata {
-  completedRanges: AsrRange[]
-  segments: AsrSegment[]
-  tasks: AsrTaskRecord[]
 }
 
 export interface MusicAnalysisSegment {
@@ -262,14 +236,6 @@ export type ImageMediaItem = UnifiedMediaItemData & {
  */
 export type AudioMediaItem = UnifiedMediaItemData & {
   mediaType: 'audio'
-}
-
-/**
- * 文本媒体项目类型
- * 当媒体项目为文本类型时，保证 mediaType 为 'text'
- */
-export type TextMediaItem = UnifiedMediaItemData & {
-  mediaType: 'text'
 }
 
 /**

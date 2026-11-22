@@ -85,14 +85,6 @@ export function useUnifiedKeyframeVisualControls(options: UnifiedKeyframeVisualC
       return { width: 0, height: 0 }
     }
 
-    if (TimelineItemQueries.isTextTimelineItem(item)) {
-      const currentRenderConfig = visualRenderConfig.value
-      return {
-        width: item.runtime.textBitmap?.width ?? currentRenderConfig?.width ?? 0,
-        height: item.runtime.textBitmap?.height ?? currentRenderConfig?.height ?? 0,
-      }
-    }
-
     const mediaItem = unifiedStore.getMediaItem(item.mediaItemId)
     const currentRenderConfig = visualRenderConfig.value
     return {

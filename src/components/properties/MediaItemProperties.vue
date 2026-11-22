@@ -356,8 +356,6 @@ function getMediaTypeLabel(mediaType: string): string {
       return t('media.audio')
     case 'image':
       return t('media.image')
-    case 'text':
-      return t('media.text')
     default:
       return t('media.unknown')
   }

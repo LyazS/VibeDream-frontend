@@ -4,7 +4,6 @@
  */
 
 import { addTrackTool } from './addTrack'
-import { createSubtitleClipTool } from './createSubtitleClip'
 import { createFolderTool } from './createFolder'
 import { deleteEmptyFolderTool } from './deleteEmptyFolder'
 import { patchClipKeyframeTool } from './patchClipKeyframe'
@@ -81,7 +80,6 @@ function registerTool(tool: ToolDefinition): void {
 
 // 注册内置工具
 registerTool(addTrackTool)
-registerTool(createSubtitleClipTool)
 registerTool(createFolderTool)
 registerTool(deleteEmptyFolderTool)
 registerTool(patchClipKeyframeTool)

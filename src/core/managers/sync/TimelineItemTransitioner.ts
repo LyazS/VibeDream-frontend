@@ -65,22 +65,13 @@ export class TimelineItemTransitioner {
       return
     }
 
-    // 检查是否为文本类型
-    if (TimelineItemQueries.isTextTimelineItem(timelineItem)) {
-      // 不应该出现文本类型的
-      console.warn(
-        `⚠️ [TimelineItemTransitioner] 文本类型时间轴项目不需要状态转换: ${this.timelineItemId}`,
-      )
-    } else {
-      // 媒体类型的状态转换
-      // 🔧 直接检查 isInitialized，而不是使用 shouldUpdateTimelineItem
-      // 只有未初始化的项目才需要从媒体项目同步数据
-      if (!timelineItem.runtime.isInitialized) {
-        this.updateTimelineItem(timelineItem)
-      }
-
-      await setupTimelineItemBunny(timelineItem, this.mediaItem)
+    // 直接检查 isInitialized，而不是使用 shouldUpdateTimelineItem。
+    // 只有未初始化的项目才需要从媒体项目同步数据。
+    if (!timelineItem.runtime.isInitialized) {
+      this.updateTimelineItem(timelineItem)
     }
+
+    await setupTimelineItemBunny(timelineItem, this.mediaItem)
 
     // 通用的后续处理
     timelineItem.timelineStatus = 'ready'

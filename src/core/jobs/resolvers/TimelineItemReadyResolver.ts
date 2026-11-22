@@ -59,10 +59,7 @@ export class TimelineItemReadyResolver
       }
     }
 
-    if (
-      timelineItem.timelineStatus === 'ready' ||
-      TimelineItemQueries.isTextTimelineItem(timelineItem)
-    ) {
+    if (timelineItem.timelineStatus === 'ready') {
       return {
         timelineItemId: timelineItem.id,
         status: 'ready',
@@ -79,14 +76,12 @@ export class TimelineItemReadyResolver
       exists: !!timelineItem,
       timelineStatus: timelineItem?.timelineStatus,
       mediaItemId: timelineItem?.mediaItemId,
-      isText: timelineItem ? TimelineItemQueries.isTextTimelineItem(timelineItem) : false,
     })
 
     if (
       !timelineItem ||
       TimelineItemQueries.hasTimelinePlaceholder(timelineItem) ||
       timelineItem.timelineStatus === 'ready' ||
-      TimelineItemQueries.isTextTimelineItem(timelineItem) ||
       !timelineItem.mediaItemId
     ) {
       return []
@@ -138,17 +133,6 @@ export class TimelineItemReadyResolver
       }
     }
 
-    if (TimelineItemQueries.isTextTimelineItem(timelineItem)) {
-      ctx.update({
-        progress: 1,
-        stage: 'skipped',
-        message: `Text timeline item does not need ready transition: ${timelineItem.id}`,
-      })
-      return {
-        timelineItemId: timelineItem.id,
-        status: 'skipped',
-      }
-    }
 
     if (!timelineItem.mediaItemId) {
       throw new Error(`Timeline item missing mediaItemId: ${timelineItem.id}`)

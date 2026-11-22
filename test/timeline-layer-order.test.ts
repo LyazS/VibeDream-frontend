@@ -5,8 +5,8 @@ vi.mock('@/core/unifiedStore', () => ({ useUnifiedStore: () => ({}) }))
 import { sortTimelineItemsByTrackIndex } from '@/core/utils/timelineVisibilityUtils'
 import type { UnifiedTimelineItemData } from '@/core/timelineitem/model/timelineItem'
 
-function item(id: string, trackId: string): UnifiedTimelineItemData<'text'> {
-  return { id, trackId } as UnifiedTimelineItemData<'text'>
+function item(id: string, trackId: string): UnifiedTimelineItemData<'video'> {
+  return { id, trackId } as UnifiedTimelineItemData<'video'>
 }
 
 describe('timeline layer order', () => {

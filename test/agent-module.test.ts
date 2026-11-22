@@ -2321,7 +2321,7 @@ describe('text Agent orchestration', () => {
       {
         role: 'assistant',
         content: '读取后编辑',
-        tool_calls: [{ id: 'call2', name: 'add_track', args: { trackType: 'text' } }],
+        tool_calls: [{ id: 'call2', name: 'add_track', args: { trackType: 'audio' } }],
       },
       { role: 'assistant', content: 'done' },
     ]
@@ -2356,7 +2356,7 @@ describe('text Agent orchestration', () => {
     expect(calls[1].messages.slice(0, 2)).toEqual(calls[0].messages)
     expect(calls[2].messages.slice(0, 2)).toEqual(calls[0].messages)
     expect(new Set(calls.map((call) => call.modelCallId)).size).toBe(3)
-    expect(calls[0].tools).toHaveLength(33)
+    expect(calls[0].tools).toHaveLength(32)
     expect(calls[2].messages.slice(1).map((message) => message.role)).toEqual([
       'user',
       'assistant',
@@ -2738,7 +2738,7 @@ describe('text Agent orchestration', () => {
   })
   it('shares full original schemas and rejects type coercion before executing', () => {
     const runtime = createToolRuntime()
-    expect(agentTools).toHaveLength(33)
+    expect(agentTools).toHaveLength(32)
     expect(agentTools.some((tool) => tool.name === 'inspect_timeline_frames')).toBe(false)
     expect(() =>
       runtime.validate({
@@ -2755,7 +2755,7 @@ describe('text Agent orchestration', () => {
       }),
     ).not.toThrow()
     expect(() =>
-      runtime.validate({ id: '3', name: 'add_track', args: { trackType: 'text', position: '0' } }),
+      runtime.validate({ id: '3', name: 'add_track', args: { trackType: 'unsupported', position: '0' } }),
     ).toThrow('TOOL_ARGUMENTS_INVALID')
     expect(toolExecution).not.toHaveBeenCalled()
   })
@@ -2902,7 +2902,7 @@ describe('text Agent orchestration', () => {
           message: {
             role: 'assistant',
             content: '开始编辑',
-            tool_calls: [{ id: 'edit', name: 'add_track', args: { trackType: 'text' } }],
+            tool_calls: [{ id: 'edit', name: 'add_track', args: { trackType: 'audio' } }],
           },
         }),
       ),
@@ -3111,7 +3111,7 @@ describe('text Agent orchestration', () => {
           message: {
             role: 'assistant',
             content: 'model completed',
-            tool_calls: [{ id: 'not-started', name: 'add_track', args: { trackType: 'text' } }],
+            tool_calls: [{ id: 'not-started', name: 'add_track', args: { trackType: 'unsupported' } }],
           },
         }),
       ),
@@ -3362,7 +3362,7 @@ describe('text Agent orchestration', () => {
           message: {
             role: 'assistant',
             content: 'editing',
-            tool_calls: [{ id: 'edit-delete', name: 'add_track', args: { trackType: 'text' } }],
+            tool_calls: [{ id: 'edit-delete', name: 'add_track', args: { trackType: 'audio' } }],
           },
         }),
       ),

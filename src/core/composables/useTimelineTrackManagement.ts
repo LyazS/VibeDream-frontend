@@ -43,9 +43,7 @@ export function useTimelineTrackManagement() {
       }
 
       // 显示成功提示
-      if (type === 'text') {
-        unifiedStore.messageSuccess('文本轨道创建成功！现在可以右键点击轨道添加文本内容。')
-      } else if (type === 'audio') {
+      if (type === 'audio') {
         unifiedStore.messageSuccess('音频轨道创建成功！现在可以拖拽音频文件到轨道中。')
       } else if (type === 'video') {
         unifiedStore.messageSuccess('视频轨道创建成功！现在可以拖拽视频文件到轨道中。')

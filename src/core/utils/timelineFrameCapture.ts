@@ -198,8 +198,6 @@ export class TimelineFrameCaptureSession {
     this.clipsMap.clear()
 
     for (const item of this.clonedTimelineItems) {
-      item.runtime.textBitmap?.close()
-      item.runtime.textBitmap = undefined
       if (item.runtime.transition?.edgeFrames) {
         closeClipTransitionEdgeFrames(item.runtime.transition.edgeFrames)
         item.runtime.transition.edgeFrames = undefined
@@ -275,7 +273,6 @@ export class TimelineFrameCaptureSession {
         mediaItem.runtime.bunny = { ...source?.runtime.bunny }
       }
       await abortable(setupTimelineItemBunny(clonedItem, mediaItem), this.signal, () => {
-        clonedItem.runtime.textBitmap?.close()
         void clonedItem.runtime.bunnyClip?.dispose()
       })
       this.check()

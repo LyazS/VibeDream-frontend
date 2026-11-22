@@ -14,10 +14,6 @@ import type {
   UnifiedImageMediaIndexMetadata,
   UnifiedVideoIndexSegmentSummary,
   UnifiedMediaItemMetadata,
-  AsrMetadata,
-  AsrRange,
-  AsrSegment,
-  AsrTaskRecord,
 } from '@/core/mediaitem/types'
 
 export interface BaseLibraryAssetMetaFile {
@@ -28,7 +24,7 @@ export interface BaseLibraryAssetMetaFile {
   assetKind: 'media' | 'effect-template'
 }
 
-export const MEDIA_META_VERSION = '2.0.0'
+export const MEDIA_META_VERSION = '3.0.0'
 
 export interface MediaLibraryAssetMetaFile extends BaseLibraryAssetMetaFile {
   version: typeof MEDIA_META_VERSION
@@ -186,56 +182,6 @@ function isUnifiedMediaIndexMetadata(
   return false
 }
 
-function isAsrRange(value: unknown): value is AsrRange {
-  return (
-    isRecord(value) &&
-    isInteger(value.start_ms) &&
-    isInteger(value.end_ms) &&
-    value.start_ms >= 0 &&
-    value.end_ms > value.start_ms
-  )
-}
-
-function isAsrSegment(value: unknown): value is AsrSegment {
-  const record = isRecord(value) ? value : undefined
-  return (
-    isAsrRange(value) &&
-    !!record &&
-    typeof record.text === 'string' &&
-    (record.words === undefined ||
-      (Array.isArray(record.words) &&
-        record.words.every(
-          (word: unknown) =>
-            isRecord(word) &&
-            isInteger(word.start_ms) &&
-            isInteger(word.end_ms) &&
-            word.end_ms > word.start_ms &&
-            typeof word.text === 'string',
-        )))
-  )
-}
-
-function isAsrTaskRecord(value: unknown): value is AsrTaskRecord {
-  return (
-    isRecord(value) &&
-    typeof value.taskId === 'string' &&
-    isAsrRange(value.recognitionRange) &&
-    typeof value.createdAt === 'string'
-  )
-}
-
-function isAsrMetadata(value: unknown): value is AsrMetadata {
-  return (
-    isRecord(value) &&
-    Array.isArray(value.completedRanges) &&
-    value.completedRanges.every(isAsrRange) &&
-    Array.isArray(value.segments) &&
-    value.segments.every(isAsrSegment) &&
-    Array.isArray(value.tasks) &&
-    value.tasks.every(isAsrTaskRecord)
-  )
-}
-
 function isFiniteNumber(value: unknown): value is number {
   return typeof value === 'number' && Number.isFinite(value)
 }
@@ -304,7 +250,7 @@ function isOptionalNumber(value: unknown): value is number | undefined {
 }
 
 function isMediaTypeOrUnknown(value: unknown): value is MediaTypeOrUnknown {
-  return ['video', 'image', 'audio', 'text', 'unknown'].includes(String(value))
+  return ['video', 'image', 'audio', 'unknown'].includes(String(value))
 }
 
 function isMediaStatus(value: unknown): value is MediaStatus {
@@ -330,8 +276,7 @@ function isUnifiedMediaItemMetadata(value: unknown): value is UnifiedMediaItemMe
 
   return (
     (value.indexing === undefined || isUnifiedMediaIndexMetadata(value.indexing)) &&
-    (value.musicAnalysis === undefined || isMusicAnalysisMetadata(value.musicAnalysis)) &&
-    (value.asr === undefined || isAsrMetadata(value.asr))
+    (value.musicAnalysis === undefined || isMusicAnalysisMetadata(value.musicAnalysis))
   )
 }
 

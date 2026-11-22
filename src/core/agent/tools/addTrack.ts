@@ -4,15 +4,15 @@ import { createTrackCommandHelpers, executeSingleTrackCommand } from './trackEdi
 export async function executeAddTrack(args: Record<string, unknown>) {
   const { trackType, position } = args
 
-  if (trackType !== 'video' && trackType !== 'audio' && trackType !== 'text') {
+  if (trackType !== 'video' && trackType !== 'audio') {
     return {
       success: false,
       output: JSON.stringify(
-        { tool: 'add_track', error: 'trackType 必须是 video、audio 或 text。' },
+        { tool: 'add_track', error: 'trackType 必须是 video 或 audio。' },
         null,
         2,
       ),
-      error: 'trackType 必须是 video、audio 或 text。',
+      error: 'trackType 必须是 video 或 audio。',
     }
   }
 

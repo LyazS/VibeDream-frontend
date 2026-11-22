@@ -30,8 +30,6 @@ export function mapMediaTypeToTrackType(mediaType: MediaType): UnifiedTrackType 
       return 'video'
     case 'audio':
       return 'audio'
-    case 'text':
-      return 'text'
     default:
       return 'video' // 默认视频轨道
   }

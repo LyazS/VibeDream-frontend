@@ -238,10 +238,6 @@ export function useTimelineDragPreview(deps: TimelineDragPreviewDeps) {
     if (mediaType === 'audio' && trackType === 'audio') {
       return true
     }
-    // 文本只能放到文本轨道
-    if (mediaType === 'text' && trackType === 'text') {
-      return true
-    }
     return false
   }
 

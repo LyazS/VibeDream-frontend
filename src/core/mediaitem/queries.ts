@@ -13,7 +13,6 @@ import type {
   VideoMediaItem,
   ImageMediaItem,
   AudioMediaItem,
-  TextMediaItem,
   UnknownMediaItem,
   KnownMediaItem,
   VisualMediaItem,
@@ -90,10 +89,6 @@ export const MediaItemQueries = {
 
   isAudio(item: UnifiedMediaItemData): item is AudioMediaItem {
     return item.mediaType === 'audio'
-  },
-
-  isText(item: UnifiedMediaItemData): item is TextMediaItem {
-    return item.mediaType === 'text'
   },
 
   isUnknownType(item: UnifiedMediaItemData): item is UnknownMediaItem {

@@ -191,8 +191,7 @@ export class TimelineWebGLRenderer {
     for (const item of timelineItems) {
       if (
         TimelineItemQueries.isVideoTimelineItem(item) ||
-        TimelineItemQueries.isImageTimelineItem(item) ||
-        TimelineItemQueries.isTextTimelineItem(item)
+        TimelineItemQueries.isImageTimelineItem(item)
       ) {
         this.chainAdapter.prepareChain(item)
       }

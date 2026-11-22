@@ -58,7 +58,7 @@ Returns
 Limitations
 -----------
 match 和 apply 的 key 集合必须一致。
-audio 轨道不支持 visible，text 轨道不支持 muted。`,
+audio 轨道不支持 visible。`,
   parameters: {
     type: 'object',
     properties: {

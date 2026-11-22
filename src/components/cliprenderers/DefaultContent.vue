@@ -43,7 +43,6 @@ const shortMediaType = computed(() => {
     video: 'V',
     image: 'I',
     audio: 'A',
-    text: 'T',
   }
   return typeMap[props.data.mediaType] || props.data.mediaType.charAt(0).toUpperCase()
 })
@@ -158,9 +157,6 @@ const shortStatus = computed(() => {
   background: rgba(123, 31, 162, 0.3);
 }
 
-.default-renderer-content[data-media-type='text'] .media-type-indicator {
-  background: rgba(16, 150, 24, 0.3);
-}
 
 @keyframes pulse {
   0% {

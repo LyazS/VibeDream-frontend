@@ -32,7 +32,7 @@ export async function executeListTracks(args: Record<string, unknown>) {
     const trackInfos = tracks.map((track, index) => ({
       trackId: track.id,
       name: track.name,
-      type: track.type as 'video' | 'audio' | 'text',
+      type: track.type,
       index,
       visible: track.isVisible,
       muted: track.isMuted,

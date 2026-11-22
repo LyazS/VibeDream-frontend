@@ -12,7 +12,6 @@ Use When
 
 Do NOT Use When
 ---------------
-- 需要创建文字/字幕 clip 时，应使用 create_subtitle_clip
 - 需要移动已有片段时，应使用 move_clip
 - 聊天图片尚未导入素材库时，应先使用 import_attachment
 

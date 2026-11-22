@@ -33,31 +33,18 @@ export const CONFIG_PROPERTY_IDS = [
 
 export type ConfigPropertyId = (typeof CONFIG_PROPERTY_IDS)[number]
 
-export const DIRECT_ONLY_PROPERTY_IDS = [
-  'text.content',
-  'text.style.fontSize',
-  'text.style.fontFamily',
-  'text.style.fontWeight',
-  'text.style.fontStyle',
-  'text.style.color',
-  'text.style.backgroundColor',
-  'text.style.textAlign',
-  'text.style.textShadow',
-  'text.style.textStroke',
-  'text.style.textGlow',
-] as const
+export const DIRECT_ONLY_PROPERTY_IDS = [] as const
 
 export type DirectOnlyPropertyId = (typeof DIRECT_ONLY_PROPERTY_IDS)[number]
 export type DirectPropertyId = AnimatablePropertyId | DirectOnlyPropertyId
 
-export type ClipPropertyGroupId = 'visual' | 'audio' | 'text' | 'mask'
+export type ClipPropertyGroupId = 'visual' | 'audio' | 'mask'
 export type StaticPropertyId = StaticAnimatablePropertyId | ConfigPropertyId | DirectOnlyPropertyId
 
 export const CLIP_PROPERTY_GROUP_SUPPORT = {
   video: ['visual', 'audio', 'mask'],
   image: ['visual', 'mask'],
   audio: ['audio'],
-  text: ['visual', 'text', 'mask'],
 } as const satisfies Record<MediaType, readonly ClipPropertyGroupId[]>
 
 export function getSupportedClipPropertyGroups(mediaType: MediaType): readonly ClipPropertyGroupId[] {
@@ -209,61 +196,6 @@ export const CLIP_PROPERTY_PATH_DEFINITIONS = [
     propertyId: 'mask.mirror.length',
     groupId: 'mask',
     animationGroupId: 'mask.mirror.length',
-  },
-  {
-    path: 'text.content',
-    propertyId: 'text.content',
-    groupId: 'text',
-  },
-  {
-    path: 'text.style.fontFamily',
-    propertyId: 'text.style.fontFamily',
-    groupId: 'text',
-  },
-  {
-    path: 'text.style.fontSize',
-    propertyId: 'text.style.fontSize',
-    groupId: 'text',
-  },
-  {
-    path: 'text.style.color',
-    propertyId: 'text.style.color',
-    groupId: 'text',
-  },
-  {
-    path: 'text.style.fontWeight',
-    propertyId: 'text.style.fontWeight',
-    groupId: 'text',
-  },
-  {
-    path: 'text.style.fontStyle',
-    propertyId: 'text.style.fontStyle',
-    groupId: 'text',
-  },
-  {
-    path: 'text.style.backgroundColor',
-    propertyId: 'text.style.backgroundColor',
-    groupId: 'text',
-  },
-  {
-    path: 'text.style.textAlign',
-    propertyId: 'text.style.textAlign',
-    groupId: 'text',
-  },
-  {
-    path: 'text.style.textShadow',
-    propertyId: 'text.style.textShadow',
-    groupId: 'text',
-  },
-  {
-    path: 'text.style.textStroke',
-    propertyId: 'text.style.textStroke',
-    groupId: 'text',
-  },
-  {
-    path: 'text.style.textGlow',
-    propertyId: 'text.style.textGlow',
-    groupId: 'text',
   },
 ] as const satisfies readonly ClipPropertyPathDefinition[]
 

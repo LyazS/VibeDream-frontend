@@ -63,7 +63,7 @@ describe('tool runtime', () => {
     const runtime = createToolRuntime()
     await expect(
       runtime.execute(
-        { id: 'c3', name: 'add_track', args: { trackType: 'text', position: '1' } },
+        { id: 'c3', name: 'add_track', args: { trackType: 'unsupported', position: '1' } },
         context('c3'),
       ),
     ).rejects.toThrow('TOOL_ARGUMENTS_INVALID')
@@ -72,9 +72,9 @@ describe('tool runtime', () => {
     ).rejects.toThrow('TOOL_NOT_FOUND')
     expect(mocks.execute).not.toHaveBeenCalled()
   })
-  it('exposes all 33 definitions including complete nested move arguments', () => {
-    expect(agentTools).toHaveLength(33)
-    expect(new Set(agentTools.map((tool) => tool.name)).size).toBe(33)
+  it('exposes all 32 definitions including complete nested move arguments', () => {
+    expect(agentTools).toHaveLength(32)
+    expect(new Set(agentTools.map((tool) => tool.name)).size).toBe(32)
     const move = agentTools.find((tool) => tool.name === 'move_clip')!
     expect(move.parameters).toMatchObject({
       properties: {

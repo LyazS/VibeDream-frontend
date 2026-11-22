@@ -12,7 +12,7 @@ import { generateTrackId } from '@/core/utils/idGenerator'
 /**
  * 轨道类型枚举
  */
-export type UnifiedTrackType = 'video' | 'audio' | 'text'
+export type UnifiedTrackType = 'video' | 'audio'
 
 /**
  * 轨道状态枚举
@@ -99,13 +99,6 @@ export function isVideoTrack(track: UnifiedTrackData): boolean {
  */
 export function isAudioTrack(track: UnifiedTrackData): boolean {
   return track.type === 'audio'
-}
-
-/**
- * 检查是否为文本轨道
- */
-export function isTextTrack(track: UnifiedTrackData): boolean {
-  return track.type === 'text'
 }
 
 // ==================== 工厂函数 ====================

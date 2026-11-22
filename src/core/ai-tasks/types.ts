@@ -3,7 +3,6 @@ export const AI_TASK_TYPES = [
   'media.retrieval',
   'media.rerank',
   'media.validate',
-  'media.asr',
   'transition.search',
 ] as const
 

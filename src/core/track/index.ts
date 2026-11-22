@@ -13,7 +13,7 @@ export type {
 } from './TrackTypes'
 
 // ==================== 类型守卫函数导出 ====================
-export { isVideoTrack, isAudioTrack, isTextTrack, createUnifiedTrackData } from './TrackTypes'
+export { isVideoTrack, isAudioTrack, createUnifiedTrackData } from './TrackTypes'
 
 // ==================== 工具函数导出 ====================
 export {

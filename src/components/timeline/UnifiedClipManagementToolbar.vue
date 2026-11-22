@@ -222,13 +222,13 @@ const overlappingCount = computed(() => {
   return countOverlappingItems(unifiedStore.timelineItems)
 })
 
-// 检查选中的项目是否支持裁剪（视频和音频支持，图片和文本不支持）
+// 检查选中的项目是否支持裁剪（视频和音频支持，图片不支持）
 const selectedItemSupportsSplit = computed(() => {
   if (!unifiedStore.selectedClipTimelineItemId) return false
   const item = unifiedStore.getTimelineItem(unifiedStore.selectedClipTimelineItemId)
   if (!item) return false
 
-  // 视频和音频支持裁剪，图片和文本不支持
+  // 视频和音频支持裁剪，图片不支持
   return item.mediaType === 'video' || item.mediaType === 'audio'
 })
 
@@ -475,7 +475,6 @@ async function deleteSelectedSelection() {
         getTimelineItem: unifiedStore.getTimelineItem,
         addTimelineItem: unifiedStore.addTimelineItem,
         removeTimelineItem: unifiedStore.removeTimelineItem,
-        onRestore: (restored) => unifiedStore.restoreMediaAsrPlaceholder(restored.id),
       })
       const batch = unifiedStore.startBatch(command.historyLabel)
       batch.addCommand(command)

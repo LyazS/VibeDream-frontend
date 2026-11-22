@@ -55,7 +55,7 @@ export type StatusRendererType = 'loading' | 'error'
 /**
  * 媒体类型渲染器类型（仅用于ready状态）
  */
-export type MediaTypeRendererType = 'video' | 'image' | 'audio' | 'text'
+export type MediaTypeRendererType = 'video' | 'image' | 'audio'
 
 /**
  * 所有渲染器类型的联合

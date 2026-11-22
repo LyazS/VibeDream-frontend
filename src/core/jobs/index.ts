@@ -146,9 +146,3 @@ export {
   type EffectTemplateReadyInput,
   type EffectTemplateReadyResult,
 } from './resolvers/EffectTemplateReadyResolver'
-export {
-  MEDIA_ASR_RESOURCE_TYPE,
-  MediaAsrResolver,
-  createMediaAsrRequest,
-  createMediaAsrResolver,
-} from './resolvers/MediaAsrResolver'

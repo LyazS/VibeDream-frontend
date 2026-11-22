@@ -2,9 +2,7 @@ import { markRaw } from 'vue'
 import type { UnifiedTimelineItemData } from '@/core/timelineitem/model/timelineItem'
 import type { UnifiedMediaItemData } from '@/core/mediaitem/types'
 import { BunnyClip } from '@/core/mediabunny/bunny-clip'
-import { textToImageBitmap2 } from './ToBitmap'
 import { closeClipTransitionEdgeFrames } from '@/core/timelineitem/features/transition'
-import { TimelineItemQueries } from '@/core/timelineitem/queries'
 
 /**
  * 为时间轴项目设置对应的 Bunny 对象（会自动清理旧的对象）
@@ -26,25 +24,12 @@ export async function setupTimelineItemBunny(
 
   try {
     // 检查并清理已存在的旧资源
-    if (timelineItem.runtime.bunnyClip || timelineItem.runtime.textBitmap) {
+    if (timelineItem.runtime.bunnyClip) {
       // console.log(`🧹 [timelineItemSetup] 检测到已存在的 bunny 对象，先清理旧资源`)
       await cleanupTimelineItemBunny(timelineItem)
     }
 
     switch (timelineItem.mediaType) {
-      case 'text': {
-        // 文本类型：创建 textBitmap
-        const textConfig = TimelineItemQueries.getBaseTextConfig(timelineItem)
-        if (!textConfig) {
-          throw new Error(`文本时间轴项目缺少文本配置: ${timelineItem.id}`)
-        }
-        const bmap = await textToImageBitmap2(textConfig.content, textConfig.style)
-        timelineItem.runtime.textBitmap = bmap
-        timelineItem.runtime.textBitmapVersion = (timelineItem.runtime.textBitmapVersion ?? 0) + 1
-        // console.log(`✅ [timelineItemSetup] 文本 bunny 对象创建完成`)
-        break
-      }
-
       case 'video':
       case 'audio': {
         // 音视频类型：创建 BunnyClip
@@ -96,10 +81,6 @@ export async function cleanupTimelineItemBunny(
   // 清理 BunnyClip（音视频类型）
   await timelineItem.runtime.bunnyClip?.dispose()
   timelineItem.runtime.bunnyClip = undefined
-
-  // 清理 textBitmap（文本类型）
-  timelineItem.runtime.textBitmap?.close()
-  timelineItem.runtime.textBitmap = undefined
 
   // 清理转场边界帧缓存
   if (timelineItem.runtime.transition?.edgeFrames) {

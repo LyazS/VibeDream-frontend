@@ -4,7 +4,6 @@ import type { MediaType } from '@/core/mediaitem'
 import type {
   AudioProps,
   MaskConfig,
-  TextProps,
   TimelineBaseRenderConfig,
   TimelineExtraRenderConfig,
   UnifiedTimelineItemData,
@@ -53,7 +52,7 @@ import {
   isRectangleMaskConfig,
   normalizeMaskConfig,
 } from '@/core/timelineitem/features/mask'
-import { hasAudioProperties, hasVisualProperties, isTextTimelineItem, supportsClipFilter } from './guards'
+import { hasAudioProperties, hasVisualProperties, supportsClipFilter } from './guards'
 
 export function getBaseRenderConfig<T extends MediaType>(
   item: UnifiedTimelineItemData<T>,
@@ -62,7 +61,7 @@ export function getBaseRenderConfig<T extends MediaType>(
 }
 
 function getTypedVisualRenderConfig(
-  item: UnifiedTimelineItemData<'video'> | UnifiedTimelineItemData<'image'> | UnifiedTimelineItemData<'text'>,
+  item: UnifiedTimelineItemData<'video'> | UnifiedTimelineItemData<'image'>,
 ): VisualProps {
   return item.baseRenderConfig.visual
 }
@@ -73,10 +72,6 @@ function getTypedAudioRenderConfig(
   return item.baseRenderConfig.audio
 }
 
-function getTypedTextRenderConfig(item: UnifiedTimelineItemData<'text'>): TextProps {
-  return item.baseRenderConfig.text
-}
-
 export function getBaseVisualConfig(item: UnifiedTimelineItemData<MediaType>): VisualProps | undefined {
   if (!hasVisualProperties(item)) return undefined
   return getTypedVisualRenderConfig(item)
@@ -85,11 +80,6 @@ export function getBaseVisualConfig(item: UnifiedTimelineItemData<MediaType>): V
 export function getBaseAudioConfig(item: UnifiedTimelineItemData<MediaType>): AudioProps | undefined {
   if (!hasAudioProperties(item)) return undefined
   return getTypedAudioRenderConfig(item)
-}
-
-export function getBaseTextConfig(item: UnifiedTimelineItemData<MediaType>): TextProps | undefined {
-  if (!isTextTimelineItem(item)) return undefined
-  return getTypedTextRenderConfig(item)
 }
 
 export function getBaseExtraRenderConfig(item: UnifiedTimelineItemData<MediaType>) {
@@ -185,7 +175,7 @@ export function getResolvedRenderConfig<T extends MediaType>(
   }
 
   const visualRenderConfig = hasVisualProperties(item)
-    ? (mergedRenderConfig as TimelineBaseRenderConfig<'video' | 'image' | 'text'>).visual
+    ? (mergedRenderConfig as TimelineBaseRenderConfig<'video' | 'image'>).visual
     : null
   const audioRenderConfig = hasAudioProperties(item)
     ? (mergedRenderConfig as TimelineBaseRenderConfig<'video' | 'audio'>).audio

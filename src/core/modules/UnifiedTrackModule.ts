@@ -188,12 +188,6 @@ export function createUnifiedTrackModule(registry: ModuleRegistry) {
       return
     }
 
-    // 检查轨道类型是否支持静音操作
-    if (track.type === 'text') {
-      console.warn('⚠️ 文本轨道不支持静音操作')
-      return
-    }
-
     // 设置静音状态：如果有外部指定状态则使用，否则切换当前状态
     if (targetMuteState !== undefined) {
       track.isMuted = targetMuteState

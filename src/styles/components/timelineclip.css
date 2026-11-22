@@ -100,7 +100,6 @@
 .unified-timeline-clip.media-type-video,
 .unified-timeline-clip.media-type-image,
 .unified-timeline-clip.media-type-audio,
-.unified-timeline-clip.media-type-text,
 .unified-timeline-clip.media-type-unknown {
   background: var(--clip-bg-media-type);
 }

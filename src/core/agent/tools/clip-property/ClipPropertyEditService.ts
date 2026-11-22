@@ -97,17 +97,6 @@ const PATH_VALIDATORS = {
   'mask.ellipse.size.width': validateNonNegativeNumber('mask.ellipse.size.width'),
   'mask.ellipse.size.height': validateNonNegativeNumber('mask.ellipse.size.height'),
   'mask.mirror.length': validateNonNegativeNumber('mask.mirror.length'),
-  'text.content': validateString('text.content'),
-  'text.style.fontFamily': validateString('text.style.fontFamily'),
-  'text.style.fontSize': validatePositiveNumber('text.style.fontSize'),
-  'text.style.color': validateString('text.style.color'),
-  'text.style.fontWeight': validateFontWeight,
-  'text.style.fontStyle': validateFontStyle,
-  'text.style.backgroundColor': validateOptionalString('text.style.backgroundColor'),
-  'text.style.textAlign': validateTextAlign,
-  'text.style.textShadow': validateOptionalString('text.style.textShadow'),
-  'text.style.textStroke': validateTextStroke,
-  'text.style.textGlow': validateTextGlow,
 } as const satisfies Record<ClipPropertyPath, PathDefinition['validate']>
 
 const PATH_DEFINITIONS = Object.fromEntries(
@@ -263,7 +252,7 @@ export class ClipPropertyEditService {
 
   private ensureGroupSupported(item: UnifiedTimelineItemData, groupId: ClipPropertyGroupId) {
     const supportedGroups = getSupportedGroups(item.mediaType)
-    if (!['visual', 'audio', 'text', 'mask'].includes(groupId)) {
+    if (!['visual', 'audio', 'mask'].includes(groupId)) {
       throw toolError('invalid_group', `无效的属性组: ${groupId}`, { groupId })
     }
     if (!supportedGroups.includes(groupId)) {
@@ -411,22 +400,11 @@ export class ClipPropertyEditService {
       }
     }
 
-    const text = TimelineItemQueries.getBaseTextConfig(item)
-    return {
-      content: String(text?.content ?? ''),
-      style: {
-        fontFamily: nullIfUndefined(text?.style?.fontFamily),
-        fontSize: nullIfUndefined(roundMaybeNumber(text?.style?.fontSize)),
-        fontWeight: nullIfUndefined(text?.style?.fontWeight),
-        fontStyle: nullIfUndefined(text?.style?.fontStyle),
-        color: nullIfUndefined(text?.style?.color),
-        backgroundColor: nullIfUndefined(text?.style?.backgroundColor),
-        textAlign: nullIfUndefined(text?.style?.textAlign),
-        textShadow: nullIfUndefined(text?.style?.textShadow),
-        textStroke: nullIfUndefined(text?.style?.textStroke),
-        textGlow: nullIfUndefined(text?.style?.textGlow),
-      },
-    }
+    throw toolError('group_not_supported', `该 clip 不支持属性组 ${groupId}`, {
+      clipId: item.id,
+      mediaType: item.mediaType,
+      groupId,
+    })
   }
 
   private buildMaskConfig(item: UnifiedTimelineItemData, frame?: number) {
@@ -512,21 +490,6 @@ export class ClipPropertyEditService {
       result['mask.ellipse.size.width'] = roundNumeric(ellipse.ellipseWidth)
       result['mask.ellipse.size.height'] = roundNumeric(ellipse.ellipseHeight)
       result['mask.mirror.length'] = roundNumeric(mirror.length)
-    }
-
-    if (getSupportedGroups(item.mediaType).includes('text')) {
-      const text = this.buildGroupProperties(item, 'text')
-      result['text.content'] = text.content
-      result['text.style.fontFamily'] = text.style?.fontFamily
-      result['text.style.fontSize'] = text.style?.fontSize
-      result['text.style.color'] = text.style?.color
-      result['text.style.fontWeight'] = text.style?.fontWeight
-      result['text.style.fontStyle'] = text.style?.fontStyle
-      result['text.style.backgroundColor'] = text.style?.backgroundColor
-      result['text.style.textAlign'] = text.style?.textAlign
-      result['text.style.textShadow'] = text.style?.textShadow
-      result['text.style.textStroke'] = text.style?.textStroke
-      result['text.style.textGlow'] = text.style?.textGlow
     }
 
     return result as Record<ClipPropertyPath, unknown>
@@ -649,39 +612,6 @@ export class ClipPropertyEditService {
         case 'mask.mirror.length':
           directEntries.push({ propertyId: 'mask.mirror.length', value })
           break
-        case 'text.content':
-          directEntries.push({ propertyId: 'text.content', value })
-          break
-        case 'text.style.fontFamily':
-          directEntries.push({ propertyId: 'text.style.fontFamily', value })
-          break
-        case 'text.style.fontSize':
-          directEntries.push({ propertyId: 'text.style.fontSize', value })
-          break
-        case 'text.style.color':
-          directEntries.push({ propertyId: 'text.style.color', value })
-          break
-        case 'text.style.fontWeight':
-          directEntries.push({ propertyId: 'text.style.fontWeight', value })
-          break
-        case 'text.style.fontStyle':
-          directEntries.push({ propertyId: 'text.style.fontStyle', value })
-          break
-        case 'text.style.backgroundColor':
-          directEntries.push({ propertyId: 'text.style.backgroundColor', value })
-          break
-        case 'text.style.textAlign':
-          directEntries.push({ propertyId: 'text.style.textAlign', value })
-          break
-        case 'text.style.textShadow':
-          directEntries.push({ propertyId: 'text.style.textShadow', value })
-          break
-        case 'text.style.textStroke':
-          directEntries.push({ propertyId: 'text.style.textStroke', value })
-          break
-        case 'text.style.textGlow':
-          directEntries.push({ propertyId: 'text.style.textGlow', value })
-          break
         case 'visual.blendMode':
           visualConfigPatch.blendMode = value
           break
@@ -772,7 +702,7 @@ function normalizeReadGroupIds(groupIds: unknown): ReadGroupId[] {
   }
 
   for (const groupId of groupIds) {
-    if (!['visual', 'audio', 'text', 'mask', 'timeline'].includes(groupId)) {
+    if (!['visual', 'audio', 'mask', 'timeline'].includes(groupId)) {
       throw toolError('invalid_group', `无效的属性组: ${groupId}`, { groupId })
     }
   }
@@ -804,7 +734,6 @@ function mergeDirectEntries(
 }
 
 function getPlanPropertyId(keys: ClipPropertyPath[]): ChangePlan['propertyId'] {
-  if (keys.some((key) => key.startsWith('text.'))) return 'text.content'
   if (keys.some((key) => key.startsWith('audio.'))) return 'audio.volume'
   if (keys.some((key) => key.startsWith('mask.'))) {
     const firstMaskKey = keys.find((key) => key.startsWith('mask.'))
@@ -987,121 +916,6 @@ function validateBoolean(path: string) {
   }
 }
 
-function validateString(path: string) {
-  return (value: unknown) => {
-    if (typeof value !== 'string') {
-      return { ok: false as const, code: 'invalid_value_type', message: `${path} 必须是字符串` }
-    }
-    return { ok: true as const, value }
-  }
-}
-
-function validateOptionalString(path: string) {
-  return (value: unknown) => {
-    if (value !== undefined && typeof value !== 'string') {
-      return {
-        ok: false as const,
-        code: 'invalid_value_type',
-        message: `${path} 必须是字符串或 undefined`,
-      }
-    }
-    return { ok: true as const, value }
-  }
-}
-
-function validateFontWeight(value: unknown) {
-  if (typeof value !== 'string' && typeof value !== 'number') {
-    return {
-      ok: false as const,
-      code: 'invalid_value_type',
-      message: 'text.style.fontWeight 必须是字符串或数字',
-    }
-  }
-  return { ok: true as const, value }
-}
-
-function validateFontStyle(value: unknown) {
-  if (value !== 'normal' && value !== 'italic') {
-    return {
-      ok: false as const,
-      code: 'invalid_enum_value',
-      message: 'text.style.fontStyle 必须是 normal 或 italic',
-    }
-  }
-  return { ok: true as const, value }
-}
-
-function validateTextAlign(value: unknown) {
-  if (value !== 'left' && value !== 'center' && value !== 'right') {
-    return {
-      ok: false as const,
-      code: 'invalid_enum_value',
-      message: 'text.style.textAlign 必须是 left、center 或 right',
-    }
-  }
-  return { ok: true as const, value }
-}
-
-function validateTextStroke(value: unknown) {
-  if (!isPlainObject(value)) {
-    return {
-      ok: false as const,
-      code: 'invalid_value_type',
-      message: 'text.style.textStroke 必须是对象',
-    }
-  }
-  if (typeof value.width !== 'number' || !Number.isFinite(value.width)) {
-    return {
-      ok: false as const,
-      code: 'invalid_value_type',
-      message: 'text.style.textStroke.width 必须是数字',
-    }
-  }
-  if (typeof value.color !== 'string') {
-    return {
-      ok: false as const,
-      code: 'invalid_value_type',
-      message: 'text.style.textStroke.color 必须是字符串',
-    }
-  }
-  return { ok: true as const, value }
-}
-
-function validateTextGlow(value: unknown) {
-  if (!isPlainObject(value)) {
-    return {
-      ok: false as const,
-      code: 'invalid_value_type',
-      message: 'text.style.textGlow 必须是对象',
-    }
-  }
-  if (typeof value.color !== 'string') {
-    return {
-      ok: false as const,
-      code: 'invalid_value_type',
-      message: 'text.style.textGlow.color 必须是字符串',
-    }
-  }
-  if (typeof value.blur !== 'number' || !Number.isFinite(value.blur)) {
-    return {
-      ok: false as const,
-      code: 'invalid_value_type',
-      message: 'text.style.textGlow.blur 必须是数字',
-    }
-  }
-  if (
-    value.spread !== undefined &&
-    (typeof value.spread !== 'number' || !Number.isFinite(value.spread))
-  ) {
-    return {
-      ok: false as const,
-      code: 'invalid_value_type',
-      message: 'text.style.textGlow.spread 必须是数字',
-    }
-  }
-  return { ok: true as const, value }
-}
-
 function validateBlendMode(value: unknown) {
   if (!isBlendMode(value)) {
     return {
@@ -1187,17 +1001,6 @@ function isEqualValue(a: unknown, b: unknown): boolean {
 
 function roundNumeric(value: number): number {
   return Number(value.toFixed(NUMERIC_DISPLAY_DECIMALS))
-}
-
-function roundMaybeNumber(value: number | undefined): number | undefined {
-  if (typeof value !== 'number' || !Number.isFinite(value)) {
-    return value
-  }
-  return roundNumeric(value)
-}
-
-function nullIfUndefined<T>(value: T | undefined): T | null {
-  return value === undefined ? null : value
 }
 
 function isNullish(value: unknown): value is null | undefined {

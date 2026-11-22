@@ -9,11 +9,6 @@ import type {
   AudioMediaConfig,
 } from '@/core/timelineitem/model/timelineItem'
 import { DEFAULT_BLEND_MODE } from '@/core/timelineitem/model/blendMode'
-import { TimelineItemQueries } from '@/core/timelineitem/queries'
-import { TimelineItemMutations } from '@/core/timelineitem/mutations'
-import { createTextTimelineItem } from '@/core/utils/textTimelineUtils'
-import { setupTimelineItemBunny } from '@/core/bunnyUtils/timelineItemSetup'
-import { buildClipSelectionId } from '@/core/types/timelineSelection'
 import { createDefaultTimelineExtraRenderConfig } from '@/core/timelineitem/model/timelineItem'
 
 /**
@@ -55,10 +50,6 @@ export function useTimelineItemOperations() {
       if (storeMediaItem.mediaType === 'unknown') {
         throw new Error('素材类型未确定，请等待检测完成')
       }
-      if (storeMediaItem.mediaType === 'text') {
-        throw new Error('不支持文本类型')
-      }
-
       // 检查是否有可用的时长信息
       const availableDuration = storeMediaItem.duration
       if (!availableDuration || availableDuration <= 0) {
@@ -78,9 +69,6 @@ export function useTimelineItemOperations() {
         console.log('📐 [UnifiedTimeline] 图片原始分辨率:', originalResolution)
       } else if (MediaItemQueries.isAudio(storeMediaItem)) {
         console.log('🎵 [UnifiedTimeline] 音频类型，无需设置分辨率')
-      } else if (MediaItemQueries.isText(storeMediaItem)) {
-        console.log('🎵 [UnifiedTimeline] 文本类型，不应该出现在这里')
-        throw new Error('文本类型不应该出现在这里')
       }
 
       // 创建增强的默认配置
@@ -129,7 +117,7 @@ export function useTimelineItemOperations() {
    * @returns 增强的默认配置
    */
   function createDefaultTimelineItemConfig(
-    mediaType: Exclude<MediaType, 'text'>,
+    mediaType: MediaType,
     originalResolution: { width: number; height: number } | null,
   ): VideoMediaConfig | ImageMediaConfig | AudioMediaConfig {
     // 根据媒体类型创建对应的默认配置
@@ -272,56 +260,6 @@ export function useTimelineItemOperations() {
     }
   }
 
-  /**
-   * 在指定位置创建文本项目
-   * @param trackId 轨道ID
-   * @param timePosition 时间位置（帧数）
-   */
-  async function createTextAtPosition(trackId: string, timePosition: number) {
-    try {
-      console.log('🔄 [UnifiedTimeline] 开始创建文本项目:', { trackId })
-
-      // 创建文本时间轴项目（使用工具函数，对齐旧架构）
-      const textItem = await createTextTimelineItem(
-        '默认文本', // 默认文本内容
-        { fontSize: 64, color: '#ffffff' }, // 默认样式
-        timePosition, // 开始时间（帧数）
-        trackId, // 轨道ID
-        150, // 默认时长（5秒@30fps）
-      )
-
-      // ✅ 为文本项目设置 bunny 对象（创建 textBitmap）
-      await setupTimelineItemBunny(textItem)
-
-      // ✅ 从 textBitmap 获取实际宽高并设置到 config
-      if (textItem.runtime.textBitmap) {
-        TimelineItemMutations.patchBaseVisualConfig(textItem, {
-          width: textItem.runtime.textBitmap.width,
-          height: textItem.runtime.textBitmap.height,
-        })
-      }
-
-      // 设置状态为 ready（文本项目不依赖外部媒体，可直接就绪）
-      textItem.timelineStatus = 'ready'
-      textItem.runtime.isInitialized = true
-
-      // 添加到时间轴（带历史记录）
-      await unifiedStore.addTimelineItemWithHistory(textItem)
-
-      console.log('✅ [UnifiedTimeline] 文本项目创建成功:', {
-        id: textItem.id,
-        content: TimelineItemQueries.getBaseTextConfig(textItem)?.content,
-        position: timePosition,
-      })
-
-      // 选中新创建的文本项目
-      unifiedStore.selectTimelineSelection(buildClipSelectionId(textItem.id))
-    } catch (error) {
-      console.error('❌ [UnifiedTimeline] 创建文本项目失败:', error)
-      unifiedStore.messageError(`创建文本项目失败：${(error as Error).message}`)
-    }
-  }
-
   return {
     // 方法
     createTimelineItemFromMediaItem,
@@ -330,6 +268,5 @@ export function useTimelineItemOperations() {
     moveMultipleItems,
     handleTimelineItemPositionUpdate,
     handleTimelineItemRemove,
-    createTextAtPosition,
   }
 }

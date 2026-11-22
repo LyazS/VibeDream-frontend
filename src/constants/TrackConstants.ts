@@ -10,17 +10,15 @@ import type { UnifiedTrackType } from '@/core/track/TrackTypes'
 export const DEFAULT_TRACK_NAMES: Record<UnifiedTrackType, string> = {
   video: '默认视频轨道',
   audio: '默认音频轨道',
-  text: '默认文本轨道',
 }
 
 /**
  * 默认轨道高度映射
- * 视频轨道: 70px, 音频轨道: 60px, 文本轨道: 55px
+ * 视频轨道: 70px, 音频轨道: 60px
  */
 export const DEFAULT_TRACK_HEIGHTS: Record<UnifiedTrackType, number> = {
   video: 70,
   audio: 60,
-  text: 55,
 }
 
 /**

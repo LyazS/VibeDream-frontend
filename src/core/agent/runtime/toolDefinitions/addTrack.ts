@@ -9,7 +9,7 @@ export const addTrackDefinition: ModelTool = {
 Use When
 ---------
 - 需要新增轨道
-- 插入素材或字幕前发现没有合适类型的目标轨道，且用户意图允许创建
+- 插入素材前发现没有合适类型的目标轨道，且用户意图允许创建
 
 Do NOT Use When
 ---------------
@@ -33,9 +33,9 @@ Returns
     properties: {
       trackType: {
         type: 'string',
-        enum: ['video', 'audio', 'text'],
+        enum: ['video', 'audio'],
         description:
-          '要新增的轨道类型。video 用于 video/image 素材；audio 用于音频；text 用于字幕/文字。',
+          '要新增的轨道类型。video 用于 video/image 素材；audio 用于音频。',
       },
       position: {
         type: 'integer',

@@ -59,9 +59,6 @@ export function getExpectedTrackTypeForMedia(mediaType: MediaType): UnifiedTrack
     return 'audio'
   }
 
-  if (mediaType === 'text') {
-    return 'text'
-  }
 
   return 'video'
 }
@@ -286,9 +283,6 @@ export function buildTimelineItemFromMedia(params: {
     throw new Error('素材类型未确定，请等待检测完成')
   }
 
-  if (mediaItem.mediaType === 'text') {
-    throw new Error('insert_clip 暂不支持 text 素材')
-  }
 
   if (mediaItem.mediaStatus !== 'ready') {
     throw new Error(`素材尚未就绪，当前状态为 ${mediaItem.mediaStatus}`)
@@ -355,7 +349,7 @@ export function buildTimelineItemFromMedia(params: {
 }
 
 function createDefaultTimelineItemConfig(
-  mediaType: Exclude<MediaType, 'text' | 'unknown'>,
+  mediaType: Exclude<MediaType, 'unknown'>,
   originalResolution: { width: number; height: number } | null,
 ): VideoMediaConfig | ImageMediaConfig | AudioMediaConfig {
   if (mediaType === 'audio') {

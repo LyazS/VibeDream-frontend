@@ -9,7 +9,7 @@ export const listTracksDefinition: ModelTool = {
 Use When
 ---------
 - 需要查看时间轴结构或当前有哪些轨道
-- 需要选择 video/audio/text 目标轨道
+- 需要选择 video/audio 目标轨道
 
 Do NOT Use When
 ---------------

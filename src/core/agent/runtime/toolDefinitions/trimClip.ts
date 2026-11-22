@@ -64,7 +64,7 @@ Limitations
 一次只调整一侧边界。
 newValue 是由 side 指定的时间轴边界新值，不是素材 source 时间。
 video/audio 保持当前播放倍速并同步 source 区间；
-image/text 只调整 timeline 边界。
+image 只调整 timeline 边界。
 超出素材可用范围或时间轴合法边界会报错。`,
   parameters: {
     type: 'object',

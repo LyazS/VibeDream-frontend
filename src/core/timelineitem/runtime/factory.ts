@@ -12,7 +12,6 @@ import type { UnifiedTimeRange } from '@/core/types/timeRange'
 import type { UnifiedTimelineItemData } from '@/core/timelineitem/model/timelineItem'
 import { createDefaultTimelineExtraRenderConfig } from '@/core/timelineitem/model/timelineItem'
 import type { GetAnimation } from '../model/render'
-import { TimelineItemQueries } from '@/core/timelineitem/queries'
 import { MediaItemQueries } from '@/core/mediaitem'
 import { setupTimelineItemBunny } from '@/core/bunnyUtils/timelineItemSetup'
 import { normalizeTimelineMarkers } from '@/core/utils/timelineMarkerUtils'
@@ -43,7 +42,7 @@ export function cloneTimelineItem<T extends MediaType>(
     markers: normalizeTimelineMarkers(original.markers, original.timeRange),
     exRenderConfig: original.exRenderConfig ?? createDefaultTimelineExtraRenderConfig(),
     runtime: {
-      // ✅ 只保留 isInitialized，其他 runtime 字段（bunnyClip、textBitmap 等）会在后续重建
+      // 只保留 isInitialized，媒体运行时资源会在后续重建。
       exRenderConfig: original.runtime.exRenderConfig ?? createDefaultTimelineExtraRenderConfig(),
       isInitialized: original.runtime.isInitialized,
     },
@@ -184,30 +183,6 @@ export interface BuildTimelineItemForReadyDagResult {
 }
 
 /**
- * 重建文本时间轴项目的选项接口
- */
-export interface RebuildTextTimelineItemOptions {
-  /** 原始时间轴项目数据 */
-  originalTimelineItemData: UnifiedTimelineItemData<'text'>
-  /** 视频分辨率配置 */
-  videoResolution: { width: number; height: number }
-  /** 日志标识符，用于区分不同调用方的日志 */
-  logIdentifier: string
-}
-
-/**
- * 重建文本时间轴项目的结果接口
- */
-export interface RebuildTextTimelineItemResult {
-  /** 重建后的时间轴项目 */
-  timelineItem: UnifiedTimelineItemData<'text'>
-  /** 是否成功 */
-  success: boolean
-  /** 错误信息（如果有） */
-  error?: string
-}
-
-/**
  * 为 ready DAG 构建时间轴项目。
  *
  * - 只根据结构快照和当前 media 状态生成 ready/loading 初始形态
@@ -232,19 +207,6 @@ export async function buildTimelineItemForDag(
       })
       placeholderItem.runtime.isInitialized = false
       return { timelineItem: placeholderItem, success: true }
-    }
-
-    if (TimelineItemQueries.isTextTimelineItem(originalTimelineItemData)) {
-      const newTimelineItem = cloneTimelineItem(originalTimelineItemData, {
-        timelineStatus: 'ready',
-      })
-      await setupTimelineItemBunny(newTimelineItem)
-      newTimelineItem.runtime.isInitialized = true
-
-      return {
-        timelineItem: newTimelineItem,
-        success: true,
-      }
     }
 
     const mediaItem = getMediaItem(originalTimelineItemData.mediaItemId)

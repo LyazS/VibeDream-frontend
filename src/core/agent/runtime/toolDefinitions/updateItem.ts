@@ -8,7 +8,7 @@ export const updateItemDefinition: ModelTool = {
 
 Use When
 ---------
-- 需要修改 clip 的位置、尺寸、旋转、透明度、音量、静音、文本或文本样式等静态属性
+- 需要修改 clip 的位置、尺寸、旋转、透明度、音量、静音等静态属性
 - 已通过 read_item 读取目标 item 的当前属性值，准备将其作为 match 条件
 - 已通过 describe_item_property(propertyIds=["visual.position.x"], usage="static_edit") 确认 clip 静态属性的 propertyId、值类型和限制
 - 已读取转场的 transition group，准备修改 transition.duration 或 transition.params.<parameterKey>
@@ -29,13 +29,6 @@ clip 静态属性：
   "itemId": "clip_123",
   "match": { "visual.opacity": 1 },
   "apply": { "visual.opacity": 0.6 }
-}
-
-clip 文本内容：
-{
-  "itemId": "clip_text_1",
-  "match": { "text.content": "旧字幕" },
-  "apply": { "text.content": "新字幕" }
 }
 
 转场配置时长：

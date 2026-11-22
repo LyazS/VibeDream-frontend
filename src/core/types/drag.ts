@@ -176,7 +176,7 @@ export interface DragPreviewData {
   isMultiple?: boolean
   count?: number
   height?: number // 预览高度（像素）
-  mediaType?: 'video' | 'image' | 'audio' | 'text'
+  mediaType?: 'video' | 'image' | 'audio'
   statusInfo?: {
     isReady: boolean
     isLoading: boolean

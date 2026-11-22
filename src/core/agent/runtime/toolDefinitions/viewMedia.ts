@@ -105,7 +105,7 @@ Use When
 
 Do NOT Use When
 ---------------
-- 需要查看字幕、滤镜、动画、转场或多轨叠加后的最终画面时，应使用 view_timeline
+- 需要查看滤镜、动画、转场或多轨叠加后的最终画面时，应使用 view_timeline
 - 需要读取素材名称、尺寸、时长、摘要或分镜时，应使用 read_media
 - 需要把聊天图片加入素材库时，应使用 import_attachment
 

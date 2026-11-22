@@ -1,7 +1,6 @@
 {
   "properties": {
     "basic": {
-      "textContent": "Text Content",
       "fontFamily": "Font",
       "fontSize": "Font Size",
       "fontStyle": "Font Style",
@@ -117,12 +116,7 @@
         "mirrorUpper": "MIRROR"
       }
     },
-    "text": {
-      "textProperties": "Text Properties"
-    },
     "effects": {
-      "textStyle": "Text Style",
-      "textEffects": "Text Effects",
       "shadow": "Shadow",
       "stroke": "Stroke",
       "glow": "Glow",
@@ -135,9 +129,6 @@
       "glowColor": "Glow Color",
       "glowBlur": "Glow Blur",
       "glowSpread": "Glow Spread",
-      "backgroundColor": "Background Color",
-      "textColor": "Text Color",
-      "textAlign": "Text Align",
       "textAlignLeft": "Align Left",
       "textAlignCenter": "Center Align",
       "textAlignRight": "Align Right",
@@ -184,7 +175,6 @@
       "frameRate": "fps"
     },
     "placeholders": {
-      "enterText": "Enter text content...",
       "fontSize": "Font Size",
       "speed": "Speed",
       "volume": "Volume",
@@ -196,10 +186,6 @@
       "spread": "Spread"
     },
     "errors": {
-      "textContentUpdateFailed": "Text content update failed, please try again",
-      "textStyleUpdateFailed": "Text style update failed, please try again",
-      "textUpdateSuccess": "Text content update successful",
-      "textStyleSuccess": "Text style update successful",
       "invalidTimecodeFormat": "Please use correct timecode format: HH:MM:SS+FF",
       "formatError": "Format error",
       "example": "Example",
@@ -217,21 +203,9 @@
     },
     "singleSelect": {
       "emptyHint": "Select a timeline item to view properties",
-      "emptyHintDetail": "Choose audio, video, image, or text clips to edit their settings",
+      "emptyHintDetail": "Choose audio, video, or image clips to edit their settings",
       "loading": "Loading...",
-      "loadingStatus": "Media status: {status}",
-      "asrPlaceholder": {
-        "title": "Subtitle recognition",
-        "sourceMedia": "Source media",
-        "range": "Recognition range",
-        "hint": "This placeholder will be replaced by subtitle clips when recognition finishes.",
-        "status": {
-          "active": "Recognizing subtitles",
-          "paused": "Waiting for recognition to resume",
-          "error": "Subtitle recognition failed",
-          "orphaned": "Waiting to recover subtitle recognition"
-        }
-      }
+      "loadingStatus": "Media status: {status}"
     },
     "multiSelect": {
       "title": "Multiple Items Selected ({count})",
@@ -340,7 +314,6 @@
       "video": "Video",
       "image": "Image",
       "audio": "Audio",
-      "text": "Text",
       "unknown": "Unknown"
     },
     "panelTitle": "Properties",

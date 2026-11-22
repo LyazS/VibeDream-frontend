@@ -61,12 +61,6 @@ export class SourceTextureUploader {
 
     if (TimelineItemQueries.isVideoTimelineItem(item)) {
       textureId = this.uploadVideoTexture(item, bunnyCurFrameMap.get(item.id))
-    } else if (TimelineItemQueries.isTextTimelineItem(item)) {
-      textureId = this.uploadStaticTexture(
-        `text:${item.id}`,
-        item.runtime.textBitmap,
-        item.runtime.textBitmapVersion,
-      )
     } else if (TimelineItemQueries.isImageTimelineItem(item)) {
       const mediaItem = this.getMediaItem(item.mediaItemId)
       textureId = this.uploadStaticTexture(`image:${item.id}`, mediaItem?.runtime.bunny?.imageClip)

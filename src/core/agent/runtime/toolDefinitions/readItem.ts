@@ -9,7 +9,7 @@ export const readItemDefinition: ModelTool = {
 Use When
 ---------
 - 修改 clip 或转场前，需要读取当前值作为 update_item 的 match 条件
-- 准备修改 clip 静态属性，需要读取 visual、audio、text、mask 或 timeline 属性组
+- 准备修改 clip 静态属性，需要读取 visual、audio、mask 或 timeline 属性组
 - 需要在当前播放头或指定时间点读取受关键帧动画影响后的 clip 实际属性值
 - 需要确认 clip 所在轨道、时间范围或源区间，再进行 move_clip、trim_clip 或 split_clip
 - 需要确认转场绑定的左右 clip、有效时长、实际展示范围或参数
@@ -32,7 +32,6 @@ clip item 示例：
   "groups": {                            // 按请求 propertyGroups 返回的属性组
     "visual": { ... },                   // 画面属性组
     "audio": { ... },                    // 音量和静音状态
-    "text": { ... },                     // 文本内容和文本样式
     "mask": { ... },                     // 蒙版属性组
     "timeline": { ... }                  // 轨道归属、时间轴区间和素材源区间
   }
@@ -56,7 +55,7 @@ transition item 示例：
 
 Limitations
 -----------
-clip 支持 visual、audio、text、mask、timeline；读取多个 group 时，只要任一 group 无效或不受支持则整次失败。未传 sampleTime 时，clip 默认使用当前播放头时间；请求时间越过 clip 边界时，内部在最近边界取值，但 sampleTime 仍回显原始请求时间。当前只有受支持的 visual/audio 动画属性会按采样时间返回实际值，关键帧记录本身仍应使用 read_clip_keyframe。
+clip 支持 visual、audio、mask、timeline；读取多个 group 时，只要任一 group 无效或不受支持则整次失败。未传 sampleTime 时，clip 默认使用当前播放头时间；请求时间越过 clip 边界时，内部在最近边界取值，但 sampleTime 仍回显原始请求时间。当前只有受支持的 visual/audio 动画属性会按采样时间返回实际值，关键帧记录本身仍应使用 read_clip_keyframe。
 
 transition itemId 必须使用 read_tracks/apply_transition 返回的完整 ID。转场只允许 timeline 和 transition；其 duration 是配置时长，timeline.effectiveDuration 才是受 clip 可用帧数限制后的实际时长。`,
   parameters: {
@@ -74,7 +73,7 @@ transition itemId 必须使用 read_tracks/apply_transition 返回的完整 ID�
         },
         minItems: 1,
         description:
-          '要读取的属性组。clip 支持 visual、audio、text、mask、timeline；transition 只支持 timeline、transition。多个 group 中任一项无效会使整次读取失败。',
+          '要读取的属性组。clip 支持 visual、audio、mask、timeline；transition 只支持 timeline、transition。多个 group 中任一项无效会使整次读取失败。',
       },
       sampleTime: {
         type: 'string',

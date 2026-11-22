@@ -50,7 +50,7 @@ export class MediaItemLoader {
         } catch (error) {
           setLinkedMediaIssue(item, error)
         }
-      } else if (item.mediaType !== 'text' && item.mediaStatus === 'ready') {
+      } else if (item.mediaStatus === 'ready') {
         if (!(await globalMetaFileManager.verifyMediaFileExists(item))) item.mediaStatus = 'missing'
       }
       context.assertActive?.()

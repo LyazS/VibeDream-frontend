@@ -167,7 +167,6 @@ export class ExportManager {
   private async prepareLinkedMedia(): Promise<void> {
     const usedIds = new Set(
       this.config.timelineItems
-        .filter((item) => item.mediaType !== 'text')
         .map((item) => item.mediaItemId),
     )
     const linkedMedia = [...usedIds].flatMap((id) => {
@@ -722,11 +721,7 @@ export class ExportManager {
     this.ownedSnapshots.clear()
     this.linkedSnapshots.clear()
 
-    // 清理 textBitmap
     for (const item of this.clonedTimelineItems) {
-      if (item.runtime.textBitmap) {
-        item.runtime.textBitmap.close()
-      }
       if (item.runtime.transition?.edgeFrames) {
         closeClipTransitionEdgeFrames(item.runtime.transition.edgeFrames)
       }

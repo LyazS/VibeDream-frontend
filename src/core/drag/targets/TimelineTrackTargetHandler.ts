@@ -291,11 +291,6 @@ export class TimelineTrackTargetHandler implements DropTargetHandler {
       return mediaType === 'audio'
     }
 
-    // 文本轨道：只接受文本
-    if (trackType === 'text' || trackType === 'subtitle') {
-      return mediaType === 'text'
-    }
-
     return false
   }
 

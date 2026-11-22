@@ -98,15 +98,6 @@ export async function executeUpdateTrackProperties(args: Record<string, unknown>
       )
     }
 
-    if (matchKeys.includes('muted') && track.type === 'text') {
-      return buildToolError(
-        'update_track_properties',
-        'invalid_operation',
-        'text 轨道不支持 muted 属性。',
-        { trackId, trackType: track.type, property: 'muted' },
-      )
-    }
-
     const before: Record<string, string | boolean> = {}
     const after: Record<string, string | boolean> = {}
 

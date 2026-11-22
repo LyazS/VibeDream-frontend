@@ -95,12 +95,6 @@ export {
   isPlayheadInTimelineItem,
 } from './timelineSearchUtils'
 
-// ==================== 统一文本时间轴工具 ====================
-export {
-  // 文本时间轴项目创建
-  createTextTimelineItem,
-} from './textTimelineUtils'
-
 // ==================== 统一关键帧工具 ====================
 export {
   // 关键帧位置转换工具函数

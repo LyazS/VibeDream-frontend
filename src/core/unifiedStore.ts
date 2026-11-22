@@ -46,8 +46,6 @@ import {
   createVideoSceneSegmentsResolver,
   createVideoSegmentExportsResolver,
   createVideoSegmentOssUploadsResolver,
-  createMediaAsrResolver,
-  createMediaAsrRequest,
   persistMediaItem,
   setIndexingMetadata,
   canResumeMediaIndexingFromRemote,
@@ -55,7 +53,6 @@ import {
 } from '@/core/jobs'
 import { ModuleRegistry, MODULE_NAMES } from '@/core/modules/ModuleRegistry'
 import { useHistoryOperations } from '@/core/composables/useHistoryOperations'
-import { materializeAsrSubtitles } from '@/core/asr/materializeSubtitles'
 import { useUnifiedDrag } from '@/core/composables/useUnifiedDrag'
 import { revealMediaInLibrary as coordinateMediaReveal } from '@/core/directory/LibraryReveal'
 import type { UnifiedTimelineItemData } from '@/core/timelineitem/model/timelineItem'
@@ -163,17 +160,6 @@ export const useUnifiedStore = defineStore('unified', () => {
   jobRuntime.registerResolver(createMediaSourceProcessedResolver(unifiedMediaModule))
   jobRuntime.registerResolver(createMediaReadyResolver(unifiedMediaModule))
   jobRuntime.registerResolver(
-    createMediaAsrResolver({
-      getMediaItem: unifiedMediaModule.getMediaItem,
-      getTimelineItem: unifiedTimelineModule.getTimelineItem,
-      getProjectId: () => {
-        const projectId = unifiedConfigModule.projectId.value
-        if (!projectId) throw new Error('当前项目未初始化')
-        return projectId
-      },
-    }),
-  )
-  jobRuntime.registerResolver(
     createMusicStructureAnalysisResolver({
       getMediaItem: unifiedMediaModule.getMediaItem,
     }),
@@ -241,43 +227,6 @@ export const useUnifiedStore = defineStore('unified', () => {
     return jobRuntime.ensure(createMediaReadyRequest(mediaId))
   }
 
-  function ensureMediaAsr(
-    input: import('@/core/asr/types').MediaAsrInput,
-  ): Promise<import('@/core/asr/types').MediaAsrResult> {
-    return jobRuntime.ensure<import('@/core/asr/types').MediaAsrResult>(
-      createMediaAsrRequest(input),
-    )
-  }
-
-  async function restoreMediaAsrPlaceholder(timelineItemId: string): Promise<void> {
-    const item = unifiedTimelineModule.getTimelineItem(timelineItemId)
-    const payload = item?.timelinePlaceholder?.payload
-    if (
-      !item ||
-      item.timelinePlaceholder?.kind !== 'asr' ||
-      !payload ||
-      typeof payload !== 'object'
-    ) {
-      return
-    }
-    const asrPayload = payload as import('@/core/asr/types').AsrPlaceholderPayload
-    const result = await ensureMediaAsr({
-      mediaId: asrPayload.sourceMediaId,
-      timelineItemId,
-      requestedRange: asrPayload.requestedRange,
-      recognitionRange: asrPayload.recognitionRange,
-    })
-    if (unifiedTimelineModule.getTimelineItem(timelineItemId)?.timelinePlaceholder) {
-      await materializeAsrSubtitles({
-        placeholderId: timelineItemId,
-        result,
-        getTimelineItem: unifiedTimelineModule.getTimelineItem,
-        getTimelineItems: () => unifiedTimelineModule.timelineItems.value,
-        removeTimelineItem: unifiedTimelineModule.removeTimelineItem,
-        addTimelineItem: unifiedTimelineModule.addTimelineItem,
-      })
-    }
-  }
   async function ensureMediaIndexing(mediaId: string) {
     const mediaItem = unifiedMediaModule.getMediaItem(mediaId)
     if (mediaItem && (mediaItem.mediaType === 'video' || mediaItem.mediaType === 'image')) {
@@ -388,17 +337,6 @@ export const useUnifiedStore = defineStore('unified', () => {
   }
   unifiedProjectModule.setMediaReadyEnsurer(ensureMediaReady)
   unifiedProjectModule.setMediaIndexingEnsurer(ensureMediaIndexing)
-  unifiedProjectModule.setMediaAsrEnsurer((input) => ensureMediaAsr(input))
-  unifiedProjectModule.setMediaAsrResultApplier(async (timelineItemId, result) => {
-    await materializeAsrSubtitles({
-      placeholderId: timelineItemId,
-      result,
-      getTimelineItem: unifiedTimelineModule.getTimelineItem,
-      getTimelineItems: () => unifiedTimelineModule.timelineItems.value,
-      removeTimelineItem: unifiedTimelineModule.removeTimelineItem,
-      addTimelineItem: unifiedTimelineModule.addTimelineItem,
-    })
-  })
   unifiedProjectModule.setEffectTemplateReadyEnsurer(ensureEffectTemplateReady)
   unifiedProjectModule.setTimelineItemResolvedEnsurer(ensureTimelineItemResolved)
   unifiedDirectoryModule.setMediaReadyEnsurer(ensureMediaReady)
@@ -570,8 +508,6 @@ export const useUnifiedStore = defineStore('unified', () => {
     findMediaProcessingTaskView,
     ensureMediaReady,
     reloadLinkedMedia,
-    ensureMediaAsr,
-    restoreMediaAsrPlaceholder,
     ensureMusicStructureAnalysis,
     ensureMediaIndexing,
     cancelMediaIndexing,

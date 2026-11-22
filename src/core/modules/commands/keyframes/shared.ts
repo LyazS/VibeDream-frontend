@@ -11,9 +11,7 @@ import { createDefaultTimelineExtraRenderConfig } from '@/core/timelineitem/mode
 import { isPlayheadInTimelineItem as checkPlayheadInTimelineItem } from '@/core/utils/timelineSearchUtils'
 import { cloneDeep } from 'lodash'
 import { useUnifiedStore } from '@/core/unifiedStore'
-import { isTextTimelineItem } from '@/core/timelineitem/queries'
 import { TimelineItemQueries } from '@/core/timelineitem/queries'
-import { rebuildTextRuntime } from '@/core/timelineitem/runtime/textRuntime'
 
 // ==================== 关键帧数据快照接口 ====================
 
@@ -106,13 +104,6 @@ export async function applyKeyframeSnapshot(
     ? cloneDeep(snapshot.exRenderConfig)
     : createDefaultTimelineExtraRenderConfig()
 
-  if (isTextTimelineItem(item)) {
-    const textConfig = TimelineItemQueries.getBaseTextConfig(item)
-    await rebuildTextRuntime(item, {
-      content: textConfig?.content,
-      stylePatch: textConfig?.style,
-    })
-  }
 }
 
 /**

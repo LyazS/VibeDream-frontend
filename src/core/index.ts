@@ -77,7 +77,6 @@ export {
   type VideoMediaItem,
   type ImageMediaItem,
   type AudioMediaItem,
-  type TextMediaItem,
   type UnknownMediaItem,
   type KnownMediaItem,
   type VisualMediaItem,
@@ -125,7 +124,6 @@ export {
   createUnifiedTrackData,
   isVideoTrack,
   isAudioTrack,
-  isTextTrack,
 } from './track'
 
 // ==================== 统一时间轴项目系统 ====================

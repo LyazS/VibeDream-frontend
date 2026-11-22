@@ -14,7 +14,6 @@ import type { RenderTargetPool } from '@/core/webgl2/runtime/RenderTargetPool'
 export type BuildableTimelineItem =
   | UnifiedTimelineItemData<'video'>
   | UnifiedTimelineItemData<'image'>
-  | UnifiedTimelineItemData<'text'>
 
 interface ItemPassBuilderParams {
   programs: Pick<ProgramManager, 'createProgram'>

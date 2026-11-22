@@ -191,7 +191,7 @@ const presets = {
     {
       label: 'nonAnimatable',
       value: 'mixed',
-      ids: ['audio.isMuted', 'text.content', 'visual.rotation'],
+      ids: ['audio.isMuted', 'visual.rotation'],
     },
   ],
   transition_edit: [

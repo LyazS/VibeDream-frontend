@@ -187,47 +187,6 @@ it('shares an in-progress shader load with preview and reuses cached text', asyn
   expect(finished).toBe(true)
 })
 
-// 用可控异步等待模拟截帧期间继续编辑，后续帧仍须读取最初快照。
-it('freezes nested edits, media metadata, canvas and track visibility before any async setup', async () => {
-  const gate = deferred<void>()
-  vi.mocked(setupTimelineItemBunny).mockImplementationOnce(async () => {
-    await gate.promise
-  })
-  const item = {
-    id: 'text',
-    mediaType: 'text',
-    mediaItemId: null,
-    trackId: 'track',
-    timeRange: { timelineStartTime: 0, timelineEndTime: 60 },
-    baseRenderConfig: { text: { content: 'original caption' } },
-    exRenderConfig: {},
-    runtime: { exRenderConfig: {} },
-  } as unknown as UnifiedTimelineItemData<'text'>
-  const track = { id: 'track', isVisible: true, isMuted: false }
-  const config = {
-    videoWidth: 1920,
-    videoHeight: 1080,
-    timelineItems: [item],
-    tracks: [track],
-    getMediaItem: () => undefined,
-    getAsset: () => undefined,
-  }
-  const capture = new TimelineFrameCaptureSession(config)
-  const pending = capture.captureFrame(0)
-  item.baseRenderConfig.text.content = 'subsequent edit'
-  track.isVisible = false
-  config.videoWidth = 100
-  gate.resolve()
-  await pending
-  const rendered = mocks.render.mock.calls[0]![0]
-  expect(rendered[0].baseRenderConfig.text.content).toBe('original caption')
-  expect(mocks.rendererOptions.mock.calls[0]![0].width).toBe(1920)
-  expect(mocks.rendererOptions.mock.calls[0]![0].getTrack('track')).toEqual({ isVisible: true })
-  await capture.captureFrame(30)
-  expect(mocks.render.mock.calls[1]![0][0].baseRenderConfig.text.content).toBe('original caption')
-  await capture.dispose()
-})
-
 it('fails a visible video frame instead of encoding a blank canvas, but accepts an empty composition', async () => {
   const make = (visible = true) =>
     new TimelineFrameCaptureSession({

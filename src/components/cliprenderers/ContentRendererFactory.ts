@@ -19,7 +19,6 @@ import type { TimelineItemStatus } from '@/core/timelineitem/model/timelineItem'
 // 导入模板组件
 import VideoContent from '@/components/cliprenderers/VideoContent.vue'
 import AudioContent from '@/components/cliprenderers/AudioContent.vue'
-import TextContent from '@/components/cliprenderers/TextContent.vue'
 import LoadingContent from '@/components/cliprenderers/LoadingContent.vue'
 import ErrorContent from '@/components/cliprenderers/ErrorContent.vue'
 import DefaultContent from '@/components/cliprenderers/DefaultContent.vue'
@@ -112,7 +111,6 @@ export class ContentRendererFactory {
     this.mediaTypeTemplates.set('video', VideoContent)
     this.mediaTypeTemplates.set('image', VideoContent) // 视频和图片使用同一个模板
     this.mediaTypeTemplates.set('audio', AudioContent)
-    this.mediaTypeTemplates.set('text', TextContent)
 
     console.log('🎨 ContentRendererFactory: 默认模板组件已初始化')
   }

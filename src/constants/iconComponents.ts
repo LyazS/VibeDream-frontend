@@ -144,7 +144,6 @@ export const IconComponents = {
   // 轨道类型
   TRACK_VIDEO: RiVidiconLine,
   TRACK_AUDIO: RiVolumeUpLine,
-  TRACK_TEXT: RiText,
 
   // 控制按钮
   ADD: RiAddLine,
@@ -283,11 +282,10 @@ export const IconComponents = {
 /**
  * 轨道类型图标映射
  */
-export function getTrackTypeIcon(type: 'video' | 'audio' | 'text') {
+export function getTrackTypeIcon(type: 'video' | 'audio') {
   const map = {
     video: IconComponents.TRACK_VIDEO,
     audio: IconComponents.TRACK_AUDIO,
-    text: IconComponents.TRACK_TEXT,
   }
   return map[type] || IconComponents.TRACK_VIDEO
 }
@@ -341,16 +339,3 @@ export function getEffectTypeIcon(effectType: string) {
 /**
  * 轨道类型标签映射
  */
-const TRACK_TYPE_LABELS = {
-  video: '视频',
-  audio: '音频',
-  text: '文本',
-  subtitle: '字幕',
-} as const
-
-/**
- * 获取轨道类型标签
- */
-export function getTrackTypeLabel(type: string): string {
-  return TRACK_TYPE_LABELS[type as keyof typeof TRACK_TYPE_LABELS] || '视频'
-}

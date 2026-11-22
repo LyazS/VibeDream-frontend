@@ -71,12 +71,12 @@ export const viewTimelineDefinition: ModelTool = {
   name: 'view_timeline',
   description: `What It Does
 -------------
-查看当前工程时间轴的最终合成画面，包含可见轨道、字幕、动画、滤镜和转场。
+查看当前工程时间轴的最终合成画面，包含可见轨道、动画、滤镜和转场。
 
 Use When
 ---------
 - 用户需要检查剪辑后的最终视觉结果
-- 需要确认多轨叠加、字幕、动画、滤镜或转场的实际效果
+- 需要确认多轨叠加、动画、滤镜或转场的实际效果
 - 需要在修改时间轴后验证合成画面
 
 Do NOT Use When

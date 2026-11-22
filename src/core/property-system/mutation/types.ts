@@ -127,14 +127,6 @@ export interface AnimationKeyframeDeleteOperation<
   relativeFrame: number
 }
 
-export interface TextRebuildOperation {
-  kind: 'text-rebuild'
-  timelineItemId: string
-  frame: number
-  content?: string
-  stylePatch?: Record<string, unknown>
-}
-
 export type ChangeOperation =
   | NoAnimationGroupPatchOperation
   | VisualConfigPatchOperation
@@ -143,7 +135,6 @@ export type ChangeOperation =
   | AnimationKeyframeUpdateOperation
   | AnimationKeyframeCreateOperation
   | AnimationKeyframeDeleteOperation
-  | TextRebuildOperation
 
 export interface ChangePlan {
   propertyId: ChangePlanPropertyId

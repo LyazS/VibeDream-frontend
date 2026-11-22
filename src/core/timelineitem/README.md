@@ -11,7 +11,7 @@
   - 放片段能力域逻辑，例如 `transition`、`filter`、`mask`。
   - 每个文件尽量自包含，暴露 `normalize`、`supports`、`runtime` 一类能力。
 - `runtime/`
-  - 放片段实例生命周期相关逻辑，例如 `factory`、`textRebuild`。
+  - 放片段实例生命周期相关逻辑，例如 `factory`。
   - 允许依赖 `bunny`、bitmap、初始化流程。
 - `ui/`
   - 放面向界面展示的派生逻辑，例如状态文案、overlay view model。

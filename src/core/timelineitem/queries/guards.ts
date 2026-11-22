@@ -26,12 +26,6 @@ export function isAudioTimelineItem(
   return item.mediaType === 'audio'
 }
 
-export function isTextTimelineItem(
-  item: UnifiedTimelineItemData<MediaType>,
-): item is UnifiedTimelineItemData<'text'> {
-  return item.mediaType === 'text'
-}
-
 export function hasTimelinePlaceholder(
   item: UnifiedTimelineItemData<MediaType>,
 ): boolean {
@@ -39,15 +33,14 @@ export function hasTimelinePlaceholder(
 }
 
 /**
- * 检查是否为具有视觉属性的时间轴项目（video, image, text）
+ * 检查是否为具有视觉属性的时间轴项目（video, image）
  */
 export function hasVisualProperties(
   item: UnifiedTimelineItemData<MediaType>,
 ): item is
   | UnifiedTimelineItemData<'video'>
-  | UnifiedTimelineItemData<'image'>
-  | UnifiedTimelineItemData<'text'> {
-  return isVideoTimelineItem(item) || isImageTimelineItem(item) || isTextTimelineItem(item)
+  | UnifiedTimelineItemData<'image'> {
+  return isVideoTimelineItem(item) || isImageTimelineItem(item)
 }
 
 /**
