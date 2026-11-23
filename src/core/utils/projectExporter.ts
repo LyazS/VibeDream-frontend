@@ -33,10 +33,10 @@ import { TimelineItemFactory } from '@/core/timelineitem/runtime/factory'
 import { TimelineItemQueries } from '@/core/timelineitem/queries'
 import { AudioSegmentRenderer } from '@/core/mediabunny/audio-segment-renderer'
 import { RENDERER_FPS, AUDIO_DEFAULT_SAMPLE_RATE } from '@/core/mediabunny/constant'
+import { VideoFrameMap } from '@/core/mediabunny/VideoFrameMap'
 import { applyAnimationToConfig } from '@/core/utils/animationInterpolation'
 import { setupTimelineItemBunny } from '@/core/bunnyUtils/timelineItemSetup'
 import { WebGLExportRenderer } from '@/core/utils/WebGLExportRenderer'
-import type { FrameData } from '@/core/webgl2/types'
 
 import { globalMetaFileManager } from '@/core/managers/media/globalMetaFileManager'
 import {
@@ -138,7 +138,7 @@ export class ExportManager {
   private clipsMap: Map<string, IClip> = new Map()
 
   // 帧数据映射（类似 UnifiedMediaBunnyModule 的 bunnyCurFrameMap）
-  private bunnyCurFrameMap: Map<string, FrameData> = new Map()
+  private bunnyCurFrameMap = new VideoFrameMap()
 
   // 导出配置
   private config: ExportProjectOptions
@@ -329,8 +329,6 @@ export class ExportManager {
           if (state === 'success') {
             // 更新视频帧
             if (video) {
-              const oldFrame = this.bunnyCurFrameMap.get(item.id)
-              oldFrame?.videoSample.close()
               this.bunnyCurFrameMap.set(item.id, {
                 timeRange: { ...item.timeRange },
                 frameNumber: frameIn30fps,
@@ -351,8 +349,6 @@ export class ExportManager {
             }
           } else {
             // 清理无效帧
-            const oldFrame = this.bunnyCurFrameMap.get(item.id)
-            oldFrame?.videoSample.close()
             this.bunnyCurFrameMap.delete(item.id)
           }
         }
@@ -693,9 +689,6 @@ export class ExportManager {
     console.log('🧹 清理导出资源...')
 
     // 清理帧数据
-    for (const frameData of this.bunnyCurFrameMap.values()) {
-      frameData.videoSample.close()
-    }
     this.bunnyCurFrameMap.clear()
 
     // 清理音频渲染器

@@ -15,6 +15,7 @@ export default defineConfig({
       'test/media-analysis.test.ts',
       'test/preview-playback.test.ts',
       'test/source-texture-uploader.test.ts',
+      'test/video-frame-map.test.ts',
     ],
   },
 })

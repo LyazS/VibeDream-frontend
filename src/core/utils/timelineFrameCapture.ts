@@ -9,7 +9,7 @@ import { TimelineItemQueries } from '@/core/timelineitem/queries'
 import { TimelineItemFactory } from '@/core/timelineitem/runtime/factory'
 import { applyAnimationToConfig } from '@/core/utils/animationInterpolation'
 import { WebGLExportRenderer } from '@/core/utils/WebGLExportRenderer'
-import type { FrameData } from '@/core/webgl2/types'
+import { VideoFrameMap } from '@/core/mediabunny/VideoFrameMap'
 
 export interface TimelineFrameCaptureOptions {
   videoWidth: number
@@ -38,7 +38,7 @@ export class TimelineFrameCaptureSession {
   private webglRenderer: WebGLExportRenderer | null = null
   private clonedTimelineItems: UnifiedTimelineItemData<MediaType>[] = []
   private clipsMap = new Map<string, IClip>()
-  private bunnyCurFrameMap = new Map<string, FrameData>()
+  private bunnyCurFrameMap = new VideoFrameMap()
   private frameRate: number
   private initialized = false
   private disposed = false
@@ -154,9 +154,6 @@ export class TimelineFrameCaptureSession {
 
   async dispose(): Promise<void> {
     this.disposed = true
-    for (const frameData of this.bunnyCurFrameMap.values()) {
-      frameData.videoSample.close()
-    }
     this.bunnyCurFrameMap.clear()
 
     const clips = [...this.clipsMap.values()]
@@ -258,8 +255,6 @@ export class TimelineFrameCaptureSession {
           frameIn30fps < item.timeRange.timelineStartTime ||
           frameIn30fps >= item.timeRange.timelineEndTime
         ) {
-          const oldFrame = this.bunnyCurFrameMap.get(item.id)
-          oldFrame?.videoSample.close()
           this.bunnyCurFrameMap.delete(item.id)
           return
         }
@@ -277,8 +272,6 @@ export class TimelineFrameCaptureSession {
         }
 
         if (state === 'success' && video) {
-          const oldFrame = this.bunnyCurFrameMap.get(item.id)
-          oldFrame?.videoSample.close()
           this.bunnyCurFrameMap.set(item.id, {
             timeRange: { ...item.timeRange },
             frameNumber: frameIn30fps,
@@ -289,8 +282,6 @@ export class TimelineFrameCaptureSession {
         }
 
         video?.close()
-        const oldFrame = this.bunnyCurFrameMap.get(item.id)
-        oldFrame?.videoSample.close()
         this.bunnyCurFrameMap.delete(item.id)
         throw new Error(`frame_unavailable：必要视频帧不可用 ${item.id}`)
       }),

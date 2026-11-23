@@ -24,6 +24,7 @@ import { applyAnimationToConfig } from '@/core/utils/animationInterpolation'
 import { TimelineItemQueries } from '@/core/timelineitem/queries'
 import { areUnifiedTimeRangesEqual } from '@/core/types/timeRange'
 import { type FrameData } from '@/core/webgl2/types'
+import { VideoFrameMap } from '@/core/mediabunny/VideoFrameMap'
 import { TimelineItemsBufferManager } from '@/core/mediabunny/TimelineItemsBufferManager'
 import { TimelineWebGLRenderer } from '@/core/webgl2/renderer/TimelineWebGLRenderer'
 import {
@@ -95,7 +96,7 @@ export function createUnifiedMediaBunnyModule(
   let mTimelineDurationN: number = 0
 
   // bunnyCurFrame 映射表（key: timelineItemId, value: FrameData）
-  const mBunnyCurFrameMap = new Map<string, FrameData>()
+  const mBunnyCurFrameMap = new VideoFrameMap()
 
   // ==================== 画布管理 ====================
 
@@ -171,9 +172,6 @@ export function createUnifiedMediaBunnyModule(
     mAudioContextStartTimeS = null
 
     // 清理 bunnyCurFrameMap 中的所有 VideoSample
-    for (const [_itemId, frameData] of mBunnyCurFrameMap) {
-      frameData.videoSample.close()
-    }
     mBunnyCurFrameMap.clear()
 
     // ✨ 清理缓冲管理器
@@ -261,8 +259,6 @@ export function createUnifiedMediaBunnyModule(
   }
 
   function removeCurrentVideoFrame(itemId: string): void {
-    const oldFrame = mBunnyCurFrameMap.get(itemId)
-    oldFrame?.videoSample.close()
     mBunnyCurFrameMap.delete(itemId)
   }
 
@@ -273,7 +269,6 @@ export function createUnifiedMediaBunnyModule(
     clockwiseRotation: number,
     videoSample: FrameData['videoSample'],
   ): void {
-    removeCurrentVideoFrame(itemId)
     mBunnyCurFrameMap.set(itemId, {
       timeRange: { ...timeRange },
       frameNumber: frameNumberN,
@@ -349,13 +344,7 @@ export function createUnifiedMediaBunnyModule(
       return
     }
 
-    for (const [itemId] of mBunnyCurFrameMap) {
-      if (bufferedItemIds.has(itemId)) {
-        continue
-      }
-
-      removeCurrentVideoFrame(itemId)
-    }
+    mBunnyCurFrameMap.retain(bufferedItemIds)
   }
 
   /**
