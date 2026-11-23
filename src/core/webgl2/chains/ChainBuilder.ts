@@ -16,7 +16,7 @@ export type VisualTimelineItem =
 interface ChainBuilderParams {
   programs: Pick<ProgramManager, 'createProgram'>
   targets: Pick<RenderTargetPool, 'releaseRenderTarget' | 'ensureRenderTarget'>
-  getSourceTextureId: (itemId: string) => string | null
+  getSourceTextureId: (itemId: string) => string
   getMediaItem: (mediaItemId: string) => UnifiedMediaItemData | undefined
 }
 

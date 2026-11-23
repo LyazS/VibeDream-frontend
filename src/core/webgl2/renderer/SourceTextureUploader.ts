@@ -3,7 +3,7 @@ import type { UnifiedTimelineItemData } from '@/core/timelineitem/model/timeline
 import type { MediaType, UnifiedMediaItemData } from '@/core/mediaitem/types'
 import { areUnifiedTimeRangesEqual } from '@/core/types/timeRange'
 import { WebGL2Runtime } from '@/core/webgl2/runtime/WebGL2Runtime'
-import type { FrameData } from '@/core/webgl2/types'
+import type { FrameData, TextureResource } from '@/core/webgl2/types'
 
 type UploadableSource = ImageBitmap | VideoFrame
 
@@ -21,20 +21,33 @@ function getUploadableSourceSize(source: UploadableSource): { width: number; hei
   }
 }
 
+function getSourceTextureId(itemId: string): string {
+  return `source:${itemId}`
+}
+
 /**
- * source texture 的 CPU 侧缓存记录。
+ * 单个时间轴 item 的 source texture 状态。
  *
- * 这里只缓存“是否需要重新上传”的判断依据，不持有 GPU 所有权；
- * GPU texture 仍然由 `TextureManager` 统一管理。
+ * `resource` 是 `TextureManager` 返回的同一个资源引用，GPU 资源的实际
+ * 创建和删除仍然由 `TextureManager` 负责。这里同时保存上传判断所需的
+ * source 元数据，避免再维护 itemId 到 textureId 的额外映射。
  */
-interface UploadEntry {
-  objectRef: UploadableSource | null
-  frameNumber?: number
-  timeRange?: FrameData['timeRange']
-  contentVersion?: number
+interface SourceTextureEntryBase {
+  resource: TextureResource
   width: number
   height: number
 }
+
+type SourceTextureEntry =
+  | (SourceTextureEntryBase & {
+      sourceKind: 'video'
+      frameNumber: number
+      timeRange: FrameData['timeRange']
+    })
+  | (SourceTextureEntryBase & {
+      sourceKind: 'image'
+      sourceRef: ImageBitmap
+    })
 
 /**
  * 把时间轴 item 的 source 数据同步到 GPU texture。
@@ -44,8 +57,7 @@ interface UploadEntry {
  * - `TextureManager` 负责“texture 本身怎么创建和保存”
  */
 export class SourceTextureUploader {
-  private readonly cache = new Map<string, UploadEntry>()
-  private readonly sourceTextureIds = new Map<string, string | null>()
+  private readonly entries = new Map<string, SourceTextureEntry>()
 
   constructor(
     private readonly runtime: WebGL2Runtime,
@@ -59,36 +71,32 @@ export class SourceTextureUploader {
     item: UnifiedTimelineItemData<MediaType>,
     bunnyCurFrameMap: Map<string, FrameData>,
   ): string | null {
-    let textureId: string | null = null
-
     if (TimelineItemQueries.isVideoTimelineItem(item)) {
-      textureId = this.uploadVideoTexture(item, bunnyCurFrameMap.get(item.id))
-    } else if (TimelineItemQueries.isImageTimelineItem(item)) {
-      const mediaItem = this.getMediaItem(item.mediaItemId)
-      textureId = this.uploadStaticTexture(`image:${item.id}`, mediaItem?.runtime.bunny?.imageClip)
+      return this.uploadVideoTexture(item, bunnyCurFrameMap.get(item.id))
     }
 
-    this.sourceTextureIds.set(item.id, textureId)
-    return textureId
+    if (TimelineItemQueries.isImageTimelineItem(item)) {
+      const mediaItem = this.getMediaItem(item.mediaItemId)
+      return this.uploadStaticTexture(item.id, mediaItem?.runtime.bunny?.imageClip)
+    }
+
+    return null
   }
 
   /**
-   * 返回当前 item 绑定的 source textureId。
+   * 返回 item 对应的稳定 source textureId。
    */
-  getTextureIdForItem(itemId: string): string | null {
-    return this.sourceTextureIds.get(itemId) || null
-  }
-
-  ensureTextureForSource(
-    textureId: string,
-    source?: UploadableSource,
-    contentVersion?: number,
-  ): string | null {
-    return this.uploadStaticTexture(textureId, source, contentVersion)
+  getTextureIdForItem(itemId: string): string {
+    return getSourceTextureId(itemId)
   }
 
   removeTexture(textureId: string): void {
-    this.cache.delete(textureId)
+    for (const [itemId, entry] of this.entries) {
+      if (entry.resource.id === textureId) {
+        this.entries.delete(itemId)
+      }
+    }
+
     this.runtime.textures.remove(textureId)
   }
 
@@ -96,11 +104,10 @@ export class SourceTextureUploader {
    * 释放 uploader 自己维护的缓存关系，并同步删除对应的 source texture。
    */
   dispose(): void {
-    for (const textureId of this.cache.keys()) {
-      this.runtime.textures.remove(textureId)
+    for (const entry of this.entries.values()) {
+      this.runtime.textures.remove(entry.resource.id)
     }
-    this.cache.clear()
-    this.sourceTextureIds.clear()
+    this.entries.clear()
   }
 
   /**
@@ -116,22 +123,28 @@ export class SourceTextureUploader {
       return null
     }
 
-    const textureId = `video:${item.id}`
-    const cached = this.cache.get(textureId)
+    const cached = this.entries.get(item.id)
     if (
-      cached?.frameNumber === frameData.frameNumber &&
-      cached.timeRange &&
+      cached?.sourceKind === 'video' &&
+      cached.frameNumber === frameData.frameNumber &&
       areUnifiedTimeRangesEqual(cached.timeRange, frameData.timeRange)
     ) {
       // 视频按 frameNumber 判定是否需要重新上传，避免每帧重复走 VideoFrame -> GPU。
-      return textureId
+      return cached.resource.id
     }
 
+    const textureId = getSourceTextureId(item.id)
     const videoFrame = frameData.videoSample.toVideoFrame()
     try {
-      this.runtime.textures.uploadSource(textureId, videoFrame, videoFrame.displayWidth, videoFrame.displayHeight)
-      this.cache.set(textureId, {
-        objectRef: videoFrame,
+      const resource = this.runtime.textures.uploadSource(
+        textureId,
+        videoFrame,
+        videoFrame.displayWidth,
+        videoFrame.displayHeight,
+      )
+      this.entries.set(item.id, {
+        resource,
+        sourceKind: 'video',
         frameNumber: frameData.frameNumber,
         timeRange: { ...frameData.timeRange },
         width: videoFrame.displayWidth,
@@ -150,9 +163,8 @@ export class SourceTextureUploader {
    * - 尺寸变化会触发重新上传
    */
   private uploadStaticTexture(
-    textureId: string,
-    source?: UploadableSource,
-    contentVersion?: number,
+    itemId: string,
+    source?: ImageBitmap,
   ): string | null {
     if (!source) {
       return null
@@ -160,24 +172,30 @@ export class SourceTextureUploader {
 
     const { width, height } = getUploadableSourceSize(source)
 
-    const cached = this.cache.get(textureId)
+    const cached = this.entries.get(itemId)
     if (
-      cached?.objectRef === source &&
-      cached.contentVersion === contentVersion &&
+      cached?.sourceKind === 'image' &&
+      cached.sourceRef === source &&
       cached.width === width &&
       cached.height === height
     ) {
       // 图片和文本位图通常是稳定对象，直接按对象引用命中缓存即可。
-      return textureId
+      return cached.resource.id
     }
 
-    this.runtime.textures.uploadSource(textureId, source, width, height)
-    this.cache.set(textureId, {
-      objectRef: source,
-      contentVersion,
+    const resource = this.runtime.textures.uploadSource(
+      getSourceTextureId(itemId),
+      source,
+      width,
+      height,
+    )
+    this.entries.set(itemId, {
+      resource,
+      sourceKind: 'image',
+      sourceRef: source,
       width,
       height,
     })
-    return textureId
+    return resource.id
   }
 }
