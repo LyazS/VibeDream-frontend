@@ -1,4 +1,5 @@
 import { TimelineItemQueries } from '@/core/timelineitem/queries'
+import { areUnifiedTimeRangesEqual } from '@/core/types/timeRange'
 import type { UnifiedTimelineItemData } from '@/core/timelineitem/model/timelineItem'
 import type { MediaType, UnifiedMediaItemData } from '@/core/mediaitem/types'
 import type { FrameData } from '@/core/webgl2/types'
@@ -101,6 +102,7 @@ export function getVisibleRenderableItems(
       if (TimelineItemQueries.isVideoTimelineItem(item)) {
         const frameData = context.bunnyCurFrameMap.get(item.id)
         if (!frameData) return false
+        if (!areUnifiedTimeRangesEqual(frameData.timeRange, item.timeRange)) return false
 
         if (isSelectedBoundaryItem) {
           const clipTailFrame = Math.max(

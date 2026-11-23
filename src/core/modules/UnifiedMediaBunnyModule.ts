@@ -22,6 +22,7 @@ import type { MediaType } from '@/core/mediaitem/types'
 import type { WrappedAudioBuffer } from 'mediabunny'
 import { applyAnimationToConfig } from '@/core/utils/animationInterpolation'
 import { TimelineItemQueries } from '@/core/timelineitem/queries'
+import { areUnifiedTimeRangesEqual } from '@/core/types/timeRange'
 import { type FrameData } from '@/core/webgl2/types'
 import { TimelineItemsBufferManager } from '@/core/mediabunny/TimelineItemsBufferManager'
 import { TimelineWebGLRenderer } from '@/core/webgl2/renderer/TimelineWebGLRenderer'
@@ -268,11 +269,13 @@ export function createUnifiedMediaBunnyModule(
   function storeCurrentVideoFrame(
     itemId: string,
     frameNumberN: number,
+    timeRange: FrameData['timeRange'],
     clockwiseRotation: number,
     videoSample: FrameData['videoSample'],
   ): void {
     removeCurrentVideoFrame(itemId)
     mBunnyCurFrameMap.set(itemId, {
+      timeRange: { ...timeRange },
       frameNumber: frameNumberN,
       clockwiseRotation,
       videoSample,
@@ -302,8 +305,10 @@ export function createUnifiedMediaBunnyModule(
         continue
       }
 
+      const frameTimeRange = { ...item.timeRange }
+
       const warmTask = bunnyClip
-        .tickN(BigInt(item.timeRange.timelineStartTime), false, true)
+        .tickN(BigInt(frameTimeRange.timelineStartTime), false, true)
         .then(({ video, state }) => {
           if (state !== 'success' || !video) {
             return
@@ -314,7 +319,8 @@ export function createUnifiedMediaBunnyModule(
           // 这样播放头真正走到 clip 首帧时，render 不会先看到一个空洞。
           storeCurrentVideoFrame(
             item.id,
-            item.timeRange.timelineStartTime,
+            frameTimeRange.timelineStartTime,
+            frameTimeRange,
             bunnyClip.clockwiseRotation,
             video,
           )
@@ -371,9 +377,14 @@ export function createUnifiedMediaBunnyModule(
     const bunnyClip = item.runtime.bunnyClip
     if (!bunnyClip) return
 
+    const frameTimeRange = { ...item.timeRange }
+
     // 检查当前帧数是否需要更新
     const frameData = mBunnyCurFrameMap.get(item.id)
-    if (frameData?.frameNumber === currentTimeN) {
+    if (
+      frameData?.frameNumber === currentTimeN &&
+      areUnifiedTimeRangesEqual(frameData.timeRange, frameTimeRange)
+    ) {
       // 帧数相同，跳过更新
       return
     }
@@ -394,7 +405,13 @@ export function createUnifiedMediaBunnyModule(
     } else if (state === 'success') {
       // 更新 bunnyCurFrameMap
       if (video) {
-        storeCurrentVideoFrame(item.id, currentTimeN, bunnyClip.clockwiseRotation, video)
+        storeCurrentVideoFrame(
+          item.id,
+          currentTimeN,
+          frameTimeRange,
+          bunnyClip.clockwiseRotation,
+          video,
+        )
       }
 
       // 调度音频（只在需要播放音频时）

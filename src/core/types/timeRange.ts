@@ -8,3 +8,15 @@ export interface UnifiedTimeRange {
   /** 素材内部结束时间（帧数，右开） - 播放到素材的哪个帧结束 */
   clipEndTime: number
 }
+
+export function areUnifiedTimeRangesEqual(
+  left: Readonly<UnifiedTimeRange>,
+  right: Readonly<UnifiedTimeRange>,
+): boolean {
+  return (
+    left.timelineStartTime === right.timelineStartTime &&
+    left.timelineEndTime === right.timelineEndTime &&
+    left.clipStartTime === right.clipStartTime &&
+    left.clipEndTime === right.clipEndTime
+  )
+}

@@ -1,4 +1,5 @@
 import type { VideoSample } from 'mediabunny'
+import type { UnifiedTimeRange } from '@/core/types/timeRange'
 
 /**
  * WebGL2 渲染层共享类型。
@@ -22,9 +23,12 @@ export interface TextureResource {
  * MediaBunny 解码后、在预览/导出间共享的当前帧数据。
  */
 export interface FrameData {
-  frameNumber: number
-  videoSample: VideoSample
-  clockwiseRotation: number
+  /** 当前 VideoSample 对应的时间轴片段范围快照。 */
+  readonly timeRange: Readonly<UnifiedTimeRange>
+  /** 这份帧在时间轴上的展示位置。 */
+  readonly frameNumber: number
+  readonly videoSample: VideoSample
+  readonly clockwiseRotation: number
 }
 
 /**

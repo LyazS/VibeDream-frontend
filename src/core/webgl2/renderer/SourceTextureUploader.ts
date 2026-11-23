@@ -1,6 +1,7 @@
 import { TimelineItemQueries } from '@/core/timelineitem/queries'
 import type { UnifiedTimelineItemData } from '@/core/timelineitem/model/timelineItem'
 import type { MediaType, UnifiedMediaItemData } from '@/core/mediaitem/types'
+import { areUnifiedTimeRangesEqual } from '@/core/types/timeRange'
 import { WebGL2Runtime } from '@/core/webgl2/runtime/WebGL2Runtime'
 import type { FrameData } from '@/core/webgl2/types'
 
@@ -29,6 +30,7 @@ function getUploadableSourceSize(source: UploadableSource): { width: number; hei
 interface UploadEntry {
   objectRef: UploadableSource | null
   frameNumber?: number
+  timeRange?: FrameData['timeRange']
   contentVersion?: number
   width: number
   height: number
@@ -104,7 +106,7 @@ export class SourceTextureUploader {
   /**
    * 视频 source 的上传策略：
    * - 每帧从 `VideoSample` 生成一次短生命周期 `VideoFrame`
-   * - 仅在 frameNumber 变化时重新上传
+   * - 仅在 frameNumber 或时间轴片段范围变化时重新上传
    */
   private uploadVideoTexture(
     item: UnifiedTimelineItemData<'video'>,
@@ -116,7 +118,11 @@ export class SourceTextureUploader {
 
     const textureId = `video:${item.id}`
     const cached = this.cache.get(textureId)
-    if (cached?.frameNumber === frameData.frameNumber) {
+    if (
+      cached?.frameNumber === frameData.frameNumber &&
+      cached.timeRange &&
+      areUnifiedTimeRangesEqual(cached.timeRange, frameData.timeRange)
+    ) {
       // 视频按 frameNumber 判定是否需要重新上传，避免每帧重复走 VideoFrame -> GPU。
       return textureId
     }
@@ -127,6 +133,7 @@ export class SourceTextureUploader {
       this.cache.set(textureId, {
         objectRef: videoFrame,
         frameNumber: frameData.frameNumber,
+        timeRange: { ...frameData.timeRange },
         width: videoFrame.displayWidth,
         height: videoFrame.displayHeight,
       })

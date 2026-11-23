@@ -332,6 +332,7 @@ export class ExportManager {
               const oldFrame = this.bunnyCurFrameMap.get(item.id)
               oldFrame?.videoSample.close()
               this.bunnyCurFrameMap.set(item.id, {
+                timeRange: { ...item.timeRange },
                 frameNumber: frameIn30fps,
                 clockwiseRotation: bunnyClip.clockwiseRotation,
                 videoSample: video,
